@@ -1,7 +1,8 @@
 import * as Haptics from 'expo-haptics';
 import React, { useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, View } from 'react-native';
+import { Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import octoberFixture from '../../fixtures/october-2026.json';
+import { FirestoreBudgetRepository } from '../data/repositories/budgetRepository';
 import {
   AppText,
   CurrencyText,
@@ -18,6 +19,7 @@ import {
   calculateMotoIdealSummary,
   Concept,
   Debt,
+  DebtPayment,
   formatCop,
   formatMonthKeyLabelEs,
   getAvailableConcepts,
@@ -27,6 +29,14 @@ import {
   SavingsBucket,
   uncompleteMovement,
 } from '../domain';
+import {
+  BFlowAuthUser,
+  DEMO_OWNER_USER,
+  registerWithEmail,
+  signInWithEmail,
+  signInWithGoogle,
+  signOutCurrentUser,
+} from '../platform/auth/authAdapter';
 import { resolveRuntimeCapabilities } from '../platform/mode/runtimeMode';
 
 const INITIAL_CONCEPTS = octoberFixture.concepts as unknown as Concept[];
@@ -38,8 +48,24 @@ const ACTIVE_MONTH_KEY = '2026-10';
 
 export default function PhaseOneHomeScreen(): React.JSX.Element {
   const { colors, spacing, radius, mode, toggleTheme } = useBFlowTheme();
+  const [concepts, setConcepts] = useState<Concept[]>(INITIAL_CONCEPTS);
   const [entries, setEntries] = useState<MonthEntry[]>(INITIAL_ENTRIES);
+  const [debts, setDebts] = useState<Debt[]>(INITIAL_DEBTS);
+  const [debtPayments, setDebtPayments] = useState<DebtPayment[] | undefined>(undefined);
+  const [savingsBuckets, setSavingsBuckets] = useState<SavingsBucket[]>(INITIAL_SAVINGS_BUCKETS);
+  const [idealMotoPlan, setIdealMotoPlan] = useState<IdealMotoPlan>(INITIAL_IDEAL_MOTO_PLAN);
   const [pulseCount, setPulseCount] = useState(0);
+
+  // Phase 3: Firebase Auth & Cloud Firestore Sync state
+  const [authUser, setAuthUser] = useState<BFlowAuthUser>(DEMO_OWNER_USER);
+  const [showAuthForm, setShowAuthForm] = useState(false);
+  const [emailInput, setEmailInput] = useState('abernalg2303@gmail.com');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [syncMessage, setSyncMessage] = useState<string>(
+    'Proyecto Firebase vinculado: bflow-deaeb (Toca para sincronizar en la nube)'
+  );
+  const [isSyncing, setIsSyncing] = useState(false);
+
   const runtime = resolveRuntimeCapabilities();
   const activeMonthLabel = formatMonthKeyLabelEs(ACTIVE_MONTH_KEY);
 
@@ -48,46 +74,46 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     [entries]
   );
   const checklist = useMemo(
-    () => calculateChecklistProgress(INITIAL_CONCEPTS, entries, ACTIVE_MONTH_KEY),
-    [entries]
+    () => calculateChecklistProgress(concepts, entries, ACTIVE_MONTH_KEY),
+    [concepts, entries]
   );
   const debtSummary = useMemo(
-    () => calculateFunfamiDebtSummary(INITIAL_DEBTS, entries, ACTIVE_MONTH_KEY),
-    [entries]
+    () => calculateFunfamiDebtSummary(debts, entries, ACTIVE_MONTH_KEY, debtPayments),
+    [debts, entries, debtPayments]
   );
   const savingsSummary = useMemo(
     () =>
       calculateMonthlySavingsSummary(
-        INITIAL_SAVINGS_BUCKETS,
-        INITIAL_CONCEPTS,
+        savingsBuckets,
+        concepts,
         entries,
         budget,
         ACTIVE_MONTH_KEY
       ),
-    [budget, entries]
+    [savingsBuckets, concepts, entries, budget]
   );
   const motoIdealSummary = useMemo(
     () =>
       calculateMotoIdealSummary(
-        INITIAL_IDEAL_MOTO_PLAN,
+        idealMotoPlan,
         entries,
         savingsSummary.moto.paidContributionsThisMonth,
         ACTIVE_MONTH_KEY
       ),
-    [entries, savingsSummary.moto.paidContributionsThisMonth]
+    [idealMotoPlan, entries, savingsSummary.moto.paidContributionsThisMonth]
   );
   const availableExpenseConcepts = useMemo(
-    () => getAvailableConcepts(INITIAL_CONCEPTS, entries, ACTIVE_MONTH_KEY, 'expense'),
-    [entries]
+    () => getAvailableConcepts(concepts, entries, ACTIVE_MONTH_KEY, 'expense'),
+    [concepts, entries]
   );
 
   const trackableEntries = useMemo(
     () =>
       entries.filter((e) => {
-        const c = INITIAL_CONCEPTS.find((concept) => concept.id === e.conceptId);
+        const c = concepts.find((concept) => concept.id === e.conceptId);
         return e.monthKey === ACTIVE_MONTH_KEY && !c?.allowMultiplePerMonth;
       }),
-    [entries]
+    [concepts, entries]
   );
 
   const triggerHaptic = async (type: 'success' | 'light') => {
@@ -103,13 +129,60 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     }
   };
 
+  const syncCloudWorkspace = async (user: BFlowAuthUser) => {
+    const repo = new FirestoreBudgetRepository();
+    const workspace = await repo.loadMonthWorkspace(user.uid, ACTIVE_MONTH_KEY);
+    setConcepts(workspace.concepts);
+    setEntries(workspace.entries);
+    setDebts(workspace.debts);
+    setDebtPayments(workspace.debtPayments);
+    setSavingsBuckets(workspace.savingsBuckets);
+    setIdealMotoPlan(workspace.provisionPlan);
+    setSyncMessage(
+      `Sincronizado en Cloud Firestore (bflow-deaeb · ${workspace.entries.length} movimientos)`
+    );
+  };
+
+  const handleAuthSubmit = async (modeAction: 'signin' | 'register' | 'google') => {
+    setIsSyncing(true);
+    try {
+      const user =
+        modeAction === 'google'
+          ? await signInWithGoogle()
+          : modeAction === 'register'
+            ? await registerWithEmail(emailInput, passwordInput)
+            : await signInWithEmail(emailInput, passwordInput);
+
+      setAuthUser(user);
+      setShowAuthForm(false);
+      await syncCloudWorkspace(user);
+      await triggerHaptic('success');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error de autenticación';
+      setSyncMessage(`Aviso Firebase: ${message}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleSignOutToLocal = async () => {
+    try {
+      await signOutCurrentUser();
+    } catch {
+      // Ignore if already signed out
+    }
+    setAuthUser(DEMO_OWNER_USER);
+    setDebtPayments(undefined);
+    setSyncMessage('Modo Local Activo (Semilla Octubre 2026)');
+  };
+
   const handleToggleEntry = async (entry: MonthEntry) => {
     if (entry.status === 'completed') {
       setEntries((prev) => uncompleteMovement(prev, entry.id));
       await triggerHaptic('light');
     } else {
       setEntries((prev) =>
-        registerMovement(prev, INITIAL_CONCEPTS, {
+        registerMovement(prev, concepts, {
           monthKey: ACTIVE_MONTH_KEY,
           conceptId: entry.conceptId,
           actualAmount: entry.plannedAmount,
@@ -117,6 +190,22 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         })
       );
       await triggerHaptic('success');
+    }
+
+    if (authUser.provider === 'firebase') {
+      try {
+        const repo = new FirestoreBudgetRepository();
+        await repo.toggleEntryCompletion(authUser.uid, entry.id, ACTIVE_MONTH_KEY, {
+          actualAmount: entry.plannedAmount,
+          completedAtDateIso: '2026-10-28',
+        });
+        const refreshed = await repo.loadMonthWorkspace(authUser.uid, ACTIVE_MONTH_KEY);
+        setEntries(refreshed.entries);
+        setDebtPayments(refreshed.debtPayments);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Error al guardar en Firestore';
+        setSyncMessage(`Aviso Firestore: ${message}`);
+      }
     }
   };
 
@@ -170,6 +259,157 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
           <AppText variant="caption">{mode === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}</AppText>
         </Pressable>
       </View>
+
+      <GlassSurface testID="firebase-sync-card">
+        <View style={{ gap: spacing.sm }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <View style={{ flex: 1, gap: spacing.xxs }}>
+              <AppText variant="headline">
+                {authUser.provider === 'firebase'
+                  ? `☁️ Cloud Firestore (${authUser.email ?? authUser.uid})`
+                  : '📱 Modo Local + Nube Firebase (bflow-deaeb)'}
+              </AppText>
+              <AppText variant="micro" color={colors.text.secondary}>
+                {syncMessage}
+              </AppText>
+            </View>
+            <Pressable
+              testID="toggle-auth-panel-button"
+              accessibilityRole="button"
+              accessibilityLabel="Configurar cuenta de Firebase"
+              onPress={() =>
+                authUser.provider === 'firebase'
+                  ? handleSignOutToLocal()
+                  : setShowAuthForm((prev) => !prev)
+              }
+              style={{
+                minHeight: MIN_TOUCH_TARGET_PT,
+                paddingHorizontal: spacing.md,
+                borderRadius: radius.pill,
+                backgroundColor: colors.glass.surfaceElevatedTint,
+                borderWidth: 1,
+                borderColor: colors.glass.specularBorder,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <AppText variant="caption">
+                {authUser.provider === 'firebase'
+                  ? 'Cerrar Sesión'
+                  : showAuthForm
+                    ? 'Ocultar'
+                    : 'Conectar Nube'}
+              </AppText>
+            </Pressable>
+          </View>
+
+          {showAuthForm && authUser.provider !== 'firebase' ? (
+            <View style={{ gap: spacing.xs, paddingTop: spacing.xs }}>
+              <TextInput
+                testID="firebase-email-input"
+                value={emailInput}
+                onChangeText={setEmailInput}
+                placeholder="Correo electrónico"
+                placeholderTextColor={colors.text.muted}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                style={{
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.md,
+                  backgroundColor: colors.glass.surfaceTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.subtleBorder,
+                  color: colors.text.primary,
+                }}
+              />
+              <TextInput
+                testID="firebase-password-input"
+                value={passwordInput}
+                onChangeText={setPasswordInput}
+                placeholder="Contraseña (mín. 6 caracteres)"
+                placeholderTextColor={colors.text.muted}
+                secureTextEntry
+                style={{
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.md,
+                  backgroundColor: colors.glass.surfaceTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.subtleBorder,
+                  color: colors.text.primary,
+                }}
+              />
+              <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                <Pressable
+                  testID="firebase-register-button"
+                  accessibilityRole="button"
+                  disabled={isSyncing}
+                  onPress={() => handleAuthSubmit('register')}
+                  style={{
+                    flex: 1,
+                    minHeight: MIN_TOUCH_TARGET_PT,
+                    borderRadius: radius.md,
+                    backgroundColor: colors.semantic.incomeSoft,
+                    borderWidth: 1,
+                    borderColor: colors.semantic.income,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <AppText variant="caption" color={colors.semantic.income}>
+                    {isSyncing ? 'Sincronizando...' : 'Crear Cuenta + Seed'}
+                  </AppText>
+                </Pressable>
+                <Pressable
+                  testID="firebase-signin-button"
+                  accessibilityRole="button"
+                  disabled={isSyncing}
+                  onPress={() => handleAuthSubmit('signin')}
+                  style={{
+                    flex: 1,
+                    minHeight: MIN_TOUCH_TARGET_PT,
+                    borderRadius: radius.md,
+                    backgroundColor: colors.glass.surfaceElevatedTint,
+                    borderWidth: 1,
+                    borderColor: colors.glass.specularBorder,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <AppText variant="caption">Iniciar Sesión</AppText>
+                </Pressable>
+                {Platform.OS === 'web' ? (
+                  <Pressable
+                    testID="firebase-google-button"
+                    accessibilityRole="button"
+                    disabled={isSyncing}
+                    onPress={() => handleAuthSubmit('google')}
+                    style={{
+                      flex: 1,
+                      minHeight: MIN_TOUCH_TARGET_PT,
+                      borderRadius: radius.md,
+                      backgroundColor: colors.glass.surfaceElevatedTint,
+                      borderWidth: 1,
+                      borderColor: colors.glass.specularBorder,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <AppText variant="caption">Google</AppText>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
+        </View>
+      </GlassSurface>
 
       <GlassSurface elevated testID="net-flow-hero-card">
         <View style={{ gap: spacing.xs }}>

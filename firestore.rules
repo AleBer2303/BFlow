@@ -1,0 +1,490 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model — BFlow Personal Budget App
+// ===============================================================
+//
+// All user data is strictly isolated under:
+//   /databases/{database}/documents/users/{uid}
+//
+// 1. Document: /users/{uid}
+//    Fields:
+//      - uid: string (optional, immutable, == uid)
+//      - email: string | null (optional, <= 254 chars)
+//      - displayName: string | null (optional, <= 120 chars)
+//      - seededOctober2026: bool (optional)
+//      - activeMonthKey: string (optional, YYYY-MM)
+//      - updatedAt: timestamp | string (optional)
+//
+// 2. Collection: /users/{uid}/concepts/{conceptId}
+//    Fields:
+//      - id: string (required, immutable, == conceptId)
+//      - name: string (required, 1..120 chars)
+//      - type: 'income' | 'expense' (required)
+//      - group: 'fixed' | 'variable' (required)
+//      - defaultAmount: int (required, >= 0, COP integer)
+//      - allowMultiplePerMonth: bool (required)
+//      - recurrence: map (required, { kind: 'monthly' | 'specific_months', months?: list })
+//      - archived: bool (required)
+//      - order: int (required, >= 0)
+//      - icon, color, linkedDebtGroup, defaultTargetDebtId,
+//        savingsContribution, idealMotoCategoryKey, updatedAt: optional
+//
+// 3. Collection: /users/{uid}/entries/{entryId}
+//    Fields:
+//      - id: string (required, immutable, == entryId)
+//      - monthKey: string (required, matches ^\d{4}-(0[1-9]|1[0-2])$)
+//      - conceptId: string (required, 1..120 chars)
+//      - conceptName: string (required, 1..120 chars)
+//      - type: 'income' | 'expense' (required)
+//      - group: 'fixed' | 'variable' (required)
+//      - plannedAmount: int (required, >= 0, COP integer)
+//      - actualAmount: int (required, >= 0, COP integer)
+//      - status: 'pending' | 'completed' (required)
+//      - completedAt, note, updatedAt: optional
+//
+// 4. Collection: /users/{uid}/debts/{debtId}
+//    Fields:
+//      - id: string (required, immutable, == debtId)
+//      - groupKey: string (required, 1..64 chars)
+//      - name: string (required, 1..120 chars)
+//      - lender: string (required, 1..120 chars)
+//      - openingBalance: int (required, >= 0, COP integer)
+//      - monthKey: string (required, matches ^\d{4}-(0[1-9]|1[0-2])$)
+//      - updatedAt: optional
+//
+// 5. Collection: /users/{uid}/debtPayments/{paymentId}
+//    Fields:
+//      - id: string (required, immutable, == paymentId)
+//      - entryId: string (required, 1..160 chars)
+//      - monthKey: string (required, matches ^\d{4}-(0[1-9]|1[0-2])$)
+//      - debtId: string (required, 1..120 chars)
+//      - principalAmount: int (required, >= 0, COP integer)
+//      - interestAmount: int (required, >= 0, COP integer)
+//      - totalApplied: int (required, >= 0, == principalAmount + interestAmount)
+//      - active: bool (required)
+//      - completedAt, updatedAt: optional
+//
+// 6. Collection: /users/{uid}/savingsBuckets/{bucketId}
+//    Fields:
+//      - id: 'moto' | 'savings' (required, immutable, == bucketId)
+//      - name: string (required, 1..120 chars)
+//      - openingBalance: int (required, >= 0, COP integer)
+//      - updatedAt: optional
+//
+// 7. Collection: /users/{uid}/provisionPlans/{planId}
+//    Fields:
+//      - items: list (required, <= 50 items)
+//      - recurringMonthlyTotalCop: int (required, >= 0, COP integer)
+//      - totalWithTargetGoalCop: int (required, >= 0, COP integer)
+//      - id, updatedAt: optional
+//
+// 8. Collection: /users/{uid}/monthSnapshots/{snapshotId}
+//    Fields:
+//      - monthKey: string (required, immutable, == snapshotId, YYYY-MM)
+//      - closedAtIso: string (required, 1..64 chars)
+//      - budget: map (required)
+//      - checklist: map (required)
+//      - closingDebts: list (required, <= 50 items)
+//      - totalClosingDebt: int (required, >= 0, COP integer)
+//      - closingSavings: map (required)
+//      - updatedAt: optional
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    function hasRequiredFields(data, fields) {
+      return data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(data, fields) {
+      return data.keys().hasOnly(fields);
+    }
+
+    function isNonEmptyString(val, maxLen) {
+      return val is string && val.size() >= 1 && val.size() <= maxLen;
+    }
+
+    function isOptionalString(data, field, maxLen) {
+      return !(field in data) ||
+        data[field] == null ||
+        (data[field] is string && data[field].size() <= maxLen);
+    }
+
+    function isNonNegativeInt(val) {
+      return val is int && val >= 0 && val <= 9007199254740991;
+    }
+
+    function isValidMonthKey(val) {
+      return val is string && val.matches("^\\d{4}-(0[1-9]|1[0-2])$");
+    }
+
+    function isValidConceptType(val) {
+      return val in ['income', 'expense'];
+    }
+
+    function isValidConceptGroup(val) {
+      return val in ['fixed', 'variable'];
+    }
+
+    function isValidEntryStatus(val) {
+      return val in ['pending', 'completed'];
+    }
+
+    function isValidUpdatedAt(data) {
+      return !('updatedAt' in data) ||
+        data.updatedAt == null ||
+        data.updatedAt is timestamp ||
+        (data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 64);
+    }
+
+    function isValidRecurrence(rec) {
+      return rec is map &&
+        rec.keys().hasAll(['kind']) &&
+        rec.keys().hasOnly(['kind', 'months']) &&
+        rec.kind in ['monthly', 'specific_months'] &&
+        (!('months' in rec) || (rec.months is list && rec.months.size() <= 12));
+    }
+
+    function isValidSavingsContribution(data) {
+      return !('savingsContribution' in data) ||
+        data.savingsContribution == null ||
+        (data.savingsContribution is map &&
+          data.savingsContribution.keys().hasAll(['bucketId', 'onlyWhenCompleted']) &&
+          data.savingsContribution.keys().hasOnly(['bucketId', 'onlyWhenCompleted']) &&
+          data.savingsContribution.bucketId in ['moto', 'savings'] &&
+          data.savingsContribution.onlyWhenCompleted is bool);
+    }
+
+    // ===============================================================
+    // Domain Validators (Used in BOTH create and update)
+    // ===============================================================
+
+    function isValidUserProfile(data, uid) {
+      return hasOnlyAllowedFields(data, [
+          'uid',
+          'email',
+          'displayName',
+          'seededOctober2026',
+          'activeMonthKey',
+          'updatedAt'
+        ]) &&
+        (!('uid' in data) || data.uid == uid) &&
+        isOptionalString(data, 'email', 254) &&
+        isOptionalString(data, 'displayName', 120) &&
+        (!('seededOctober2026' in data) || data.seededOctober2026 is bool) &&
+        (!('activeMonthKey' in data) || isValidMonthKey(data.activeMonthKey)) &&
+        isValidUpdatedAt(data);
+    }
+
+    function isValidConcept(data, conceptId) {
+      return hasRequiredFields(data, [
+          'id',
+          'name',
+          'type',
+          'group',
+          'defaultAmount',
+          'allowMultiplePerMonth',
+          'recurrence',
+          'archived',
+          'order'
+        ]) &&
+        hasOnlyAllowedFields(data, [
+          'id',
+          'name',
+          'type',
+          'group',
+          'defaultAmount',
+          'icon',
+          'color',
+          'allowMultiplePerMonth',
+          'recurrence',
+          'linkedDebtGroup',
+          'defaultTargetDebtId',
+          'savingsContribution',
+          'idealMotoCategoryKey',
+          'archived',
+          'order',
+          'updatedAt'
+        ]) &&
+        data.id is string &&
+        data.id == conceptId &&
+        isNonEmptyString(data.name, 120) &&
+        isValidConceptType(data.type) &&
+        isValidConceptGroup(data.group) &&
+        isNonNegativeInt(data.defaultAmount) &&
+        data.allowMultiplePerMonth is bool &&
+        isValidRecurrence(data.recurrence) &&
+        data.archived is bool &&
+        data.order is int &&
+        data.order >= 0 &&
+        data.order <= 10000 &&
+        isOptionalString(data, 'icon', 64) &&
+        isOptionalString(data, 'color', 32) &&
+        isOptionalString(data, 'linkedDebtGroup', 64) &&
+        isOptionalString(data, 'defaultTargetDebtId', 120) &&
+        isValidSavingsContribution(data) &&
+        isOptionalString(data, 'idealMotoCategoryKey', 64) &&
+        isValidUpdatedAt(data);
+    }
+
+    function isValidEntry(data, entryId) {
+      return hasRequiredFields(data, [
+          'id',
+          'monthKey',
+          'conceptId',
+          'conceptName',
+          'type',
+          'group',
+          'plannedAmount',
+          'actualAmount',
+          'status'
+        ]) &&
+        hasOnlyAllowedFields(data, [
+          'id',
+          'monthKey',
+          'conceptId',
+          'conceptName',
+          'type',
+          'group',
+          'plannedAmount',
+          'actualAmount',
+          'status',
+          'completedAt',
+          'note',
+          'updatedAt'
+        ]) &&
+        data.id is string &&
+        data.id == entryId &&
+        isValidMonthKey(data.monthKey) &&
+        isNonEmptyString(data.conceptId, 120) &&
+        isNonEmptyString(data.conceptName, 120) &&
+        isValidConceptType(data.type) &&
+        isValidConceptGroup(data.group) &&
+        isNonNegativeInt(data.plannedAmount) &&
+        isNonNegativeInt(data.actualAmount) &&
+        isValidEntryStatus(data.status) &&
+        isOptionalString(data, 'completedAt', 64) &&
+        isOptionalString(data, 'note', 500) &&
+        isValidUpdatedAt(data);
+    }
+
+    function isValidDebt(data, debtId) {
+      return hasRequiredFields(data, [
+          'id',
+          'groupKey',
+          'name',
+          'lender',
+          'openingBalance',
+          'monthKey'
+        ]) &&
+        hasOnlyAllowedFields(data, [
+          'id',
+          'groupKey',
+          'name',
+          'lender',
+          'openingBalance',
+          'monthKey',
+          'updatedAt'
+        ]) &&
+        data.id is string &&
+        data.id == debtId &&
+        isNonEmptyString(data.groupKey, 64) &&
+        isNonEmptyString(data.name, 120) &&
+        isNonEmptyString(data.lender, 120) &&
+        isNonNegativeInt(data.openingBalance) &&
+        isValidMonthKey(data.monthKey) &&
+        isValidUpdatedAt(data);
+    }
+
+    function isValidDebtPayment(data, paymentId) {
+      return hasRequiredFields(data, [
+          'id',
+          'entryId',
+          'monthKey',
+          'debtId',
+          'principalAmount',
+          'interestAmount',
+          'totalApplied',
+          'active'
+        ]) &&
+        hasOnlyAllowedFields(data, [
+          'id',
+          'entryId',
+          'monthKey',
+          'debtId',
+          'principalAmount',
+          'interestAmount',
+          'totalApplied',
+          'completedAt',
+          'active',
+          'updatedAt'
+        ]) &&
+        data.id is string &&
+        data.id == paymentId &&
+        isNonEmptyString(data.entryId, 160) &&
+        isValidMonthKey(data.monthKey) &&
+        isNonEmptyString(data.debtId, 120) &&
+        isNonNegativeInt(data.principalAmount) &&
+        isNonNegativeInt(data.interestAmount) &&
+        isNonNegativeInt(data.totalApplied) &&
+        data.totalApplied == data.principalAmount + data.interestAmount &&
+        data.active is bool &&
+        isOptionalString(data, 'completedAt', 64) &&
+        isValidUpdatedAt(data);
+    }
+
+    function isValidSavingsBucket(data, bucketId) {
+      return hasRequiredFields(data, [
+          'id',
+          'name',
+          'openingBalance'
+        ]) &&
+        hasOnlyAllowedFields(data, [
+          'id',
+          'name',
+          'openingBalance',
+          'updatedAt'
+        ]) &&
+        data.id in ['moto', 'savings'] &&
+        data.id == bucketId &&
+        isNonEmptyString(data.name, 120) &&
+        isNonNegativeInt(data.openingBalance) &&
+        isValidUpdatedAt(data);
+    }
+
+    function isValidProvisionPlan(data, planId) {
+      return hasRequiredFields(data, [
+          'items',
+          'recurringMonthlyTotalCop',
+          'totalWithTargetGoalCop'
+        ]) &&
+        hasOnlyAllowedFields(data, [
+          'id',
+          'items',
+          'recurringMonthlyTotalCop',
+          'totalWithTargetGoalCop',
+          'updatedAt'
+        ]) &&
+        (!('id' in data) || (data.id is string && data.id == planId && data.id.size() <= 120)) &&
+        data.items is list &&
+        data.items.size() <= 50 &&
+        isNonNegativeInt(data.recurringMonthlyTotalCop) &&
+        isNonNegativeInt(data.totalWithTargetGoalCop) &&
+        isValidUpdatedAt(data);
+    }
+
+    function isValidMonthSnapshot(data, snapshotId) {
+      return hasRequiredFields(data, [
+          'monthKey',
+          'closedAtIso',
+          'budget',
+          'checklist',
+          'closingDebts',
+          'totalClosingDebt',
+          'closingSavings'
+        ]) &&
+        hasOnlyAllowedFields(data, [
+          'monthKey',
+          'closedAtIso',
+          'budget',
+          'checklist',
+          'closingDebts',
+          'totalClosingDebt',
+          'closingSavings',
+          'updatedAt'
+        ]) &&
+        isValidMonthKey(data.monthKey) &&
+        data.monthKey == snapshotId &&
+        isNonEmptyString(data.closedAtIso, 64) &&
+        data.budget is map &&
+        data.budget.size() <= 20 &&
+        data.checklist is map &&
+        data.checklist.size() <= 20 &&
+        data.closingDebts is list &&
+        data.closingDebts.size() <= 50 &&
+        isNonNegativeInt(data.totalClosingDebt) &&
+        data.closingSavings is map &&
+        data.closingSavings.size() <= 10 &&
+        isValidUpdatedAt(data);
+    }
+
+    // ===============================================================
+    // User Scope: /users/{uid} and Subcollections
+    // ===============================================================
+
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid) && isValidUserProfile(request.resource.data, uid);
+      allow update: if isOwner(uid) && isValidUserProfile(request.resource.data, uid);
+      allow delete: if isOwner(uid);
+
+      match /concepts/{conceptId} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && isValidConcept(request.resource.data, conceptId);
+        allow update: if isOwner(uid) && isValidConcept(request.resource.data, conceptId);
+        allow delete: if isOwner(uid);
+      }
+
+      match /entries/{entryId} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && isValidEntry(request.resource.data, entryId);
+        allow update: if isOwner(uid) && isValidEntry(request.resource.data, entryId);
+        allow delete: if isOwner(uid);
+      }
+
+      match /debts/{debtId} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && isValidDebt(request.resource.data, debtId);
+        allow update: if isOwner(uid) && isValidDebt(request.resource.data, debtId);
+        allow delete: if isOwner(uid);
+      }
+
+      match /debtPayments/{paymentId} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && isValidDebtPayment(request.resource.data, paymentId);
+        allow update: if isOwner(uid) && isValidDebtPayment(request.resource.data, paymentId);
+        allow delete: if isOwner(uid);
+      }
+
+      match /savingsBuckets/{bucketId} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && isValidSavingsBucket(request.resource.data, bucketId);
+        allow update: if isOwner(uid) && isValidSavingsBucket(request.resource.data, bucketId);
+        allow delete: if isOwner(uid);
+      }
+
+      match /provisionPlans/{planId} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && isValidProvisionPlan(request.resource.data, planId);
+        allow update: if isOwner(uid) && isValidProvisionPlan(request.resource.data, planId);
+        allow delete: if isOwner(uid);
+      }
+
+      match /monthSnapshots/{snapshotId} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && isValidMonthSnapshot(request.resource.data, snapshotId);
+        allow update: if isOwner(uid) && isValidMonthSnapshot(request.resource.data, snapshotId);
+        allow delete: if isOwner(uid);
+      }
+    }
+
+    // Default deny for all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

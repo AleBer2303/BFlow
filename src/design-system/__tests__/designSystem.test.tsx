@@ -17,7 +17,7 @@ describe('design-system & PhaseOneHomeScreen (RNTL)', () => {
     expect(screen.getByText('CB300F - MOTO: $ 2.600.000 · ESP. IA: $ 3.600.000')).toBeTruthy();
   });
 
-  it('toggles theme mode between dark and light and handles interaction button presses', () => {
+  it('toggles theme mode, completes/uncompletes checklist items live, and updates FUNFAMI debt', () => {
     render(
       <BFlowThemeProvider initialMode="dark">
         <PhaseOneHomeScreen />
@@ -28,6 +28,17 @@ describe('design-system & PhaseOneHomeScreen (RNTL)', () => {
     expect(screen.getByText('Modo Claro')).toBeTruthy();
     fireEvent.press(themeBtn);
     expect(screen.getByText('Modo Oscuro')).toBeTruthy();
+
+    // Unchecking Cuota FUNFAMI restores total debt to $ 8.000.000 and checklist to 5 de 12
+    const funfamiRow = screen.getByTestId('checklist-item-exp_cuota_funfami');
+    fireEvent.press(funfamiRow);
+    expect(screen.getByTestId('total-debt-amount')).toHaveTextContent('$ 8.000.000');
+    expect(screen.getByText('Checklist 5 de 12')).toBeTruthy();
+
+    // Re-checking Cuota FUNFAMI brings total debt back to $ 6.200.000 and checklist to 6 de 12
+    fireEvent.press(funfamiRow);
+    expect(screen.getByTestId('total-debt-amount')).toHaveTextContent('$ 6.200.000');
+    expect(screen.getByText('Checklist 6 de 12')).toBeTruthy();
 
     const hapticBtn = screen.getByTestId('haptic-verification-button');
     fireEvent.press(hapticBtn);

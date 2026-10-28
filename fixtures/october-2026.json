@@ -1,0 +1,1522 @@
+{
+  "meta": {
+    "sourceFile": "docs/reference/Control_Ingresos_y_gastos_mensuales.xlsx",
+    "sheetName": "Octubre 2026",
+    "monthKey": "2026-10",
+    "currency": "COP",
+    "timezone": "America/Bogota",
+    "generatedBy": "scripts/extract-excel-fixture.mjs"
+  },
+  "goldenValues": {
+    "B2_ingresosRecibidosrotuladoPrevistos": {
+      "cell": "B2",
+      "label": "Total Ingresos Previstos",
+      "formula": "B17",
+      "excelValue": 4000000,
+      "correctedPlannedIncome": 6000000,
+      "correctedReceivedIncome": 4000000
+    },
+    "B3_gastosPrevistos": {
+      "cell": "B3",
+      "label": "Total Gastos Previstos",
+      "formula": "SUM(H10:H17)+SUM(H21:H23)",
+      "excelValue": 3370000
+    },
+    "B4_gastosPagados": {
+      "cell": "B4",
+      "label": "Total Gastos Pagados",
+      "formula": "H25",
+      "excelValue": 2920000
+    },
+    "B5_gastosPendientes": {
+      "cell": "B5",
+      "label": "Total Gastos Pendientes",
+      "formula": "SUMIF(I10:I17, FALSE, H10:H17) + SUMIF(I21:I23, FALSE, H21:H23)",
+      "excelValue": 450000
+    },
+    "B6_flujoNeto": {
+      "cell": "B6",
+      "label": "Flujo Neto (Saldo)",
+      "formula": "B2-B4",
+      "excelValue": 1080000,
+      "projectedNetFlow": 2630000
+    },
+    "H18_totalGastosFijosPagados": {
+      "cell": "H18",
+      "label": "Total Gastos Fijos",
+      "formula": "SUMIF(I10:I17, TRUE, H10:H17)",
+      "excelValue": 2620000,
+      "plannedFixedExpenses": 2970000,
+      "pendingFixedExpenses": 350000
+    },
+    "H24_totalGastosVariablesPagados": {
+      "cell": "H24",
+      "label": "Total Gastos Variables",
+      "formula": "SUMIF(I21:I23, TRUE, H21:H23)",
+      "excelValue": 300000,
+      "plannedVariableExpenses": 400000,
+      "pendingVariableExpenses": 100000
+    },
+    "H6_totalDeudaFunfami": {
+      "cell": "H6",
+      "label": "Total Deuda",
+      "formula": "SUM(H2:H3)-H11",
+      "excelValue": 6200000,
+      "openingDebtTotal": 8000000,
+      "installmentApplied": 1800000,
+      "cb300fMotoRemaining": 2600000,
+      "espIaRemaining": 3600000
+    },
+    "K4_motoAhora": {
+      "cell": "K4",
+      "label": "Moto - Ahora",
+      "formula": "K2+H10+H16",
+      "excelValue": 2300000
+    },
+    "K5_ahorrosAhora": {
+      "cell": "K5",
+      "label": "Ahorros . Ahora",
+      "formula": "K3+B6",
+      "excelValue": 2080000,
+      "projectedAfterPendingExpenses": 1630000
+    },
+    "K6_totalAhorros": {
+      "cell": "K6",
+      "label": "Total Ahorros",
+      "formula": "SUM(K4:K5)",
+      "excelValue": 4380000
+    },
+    "B43_idealMotoTotal": {
+      "cell": "B43",
+      "label": "TOTAL",
+      "excelRawTextValue": "$ 872.666,67",
+      "excelNumericFloat": 872666.67,
+      "recurringSumCopInteger": 872667,
+      "fullSumIncludingKitCopInteger": 1372667
+    },
+    "checklistProgress": {
+      "completedCount": 6,
+      "totalTrackableCount": 12,
+      "excludedMultiplePerMonthConceptIds": [
+        "inc_otros_ingresos_variables",
+        "exp_otro"
+      ]
+    }
+  },
+  "concepts": [
+    {
+      "id": "inc_salario_principal",
+      "name": "Salario Principal",
+      "type": "income",
+      "group": "fixed",
+      "defaultAmount": 4000000,
+      "allowMultiplePerMonth": false,
+      "recurrence": {
+        "kind": "monthly"
+      },
+      "archived": false,
+      "order": 1,
+      "excelRow": 10
+    },
+    {
+      "id": "inc_prima",
+      "name": "Prima",
+      "type": "income",
+      "group": "fixed",
+      "defaultAmount": 2000000,
+      "allowMultiplePerMonth": false,
+      "recurrence": {
+        "kind": "specific_months",
+        "months": [
+          6,
+          12
+        ]
+      },
+      "archived": false,
+      "order": 2,
+      "excelRow": 11
+    },
+    {
+      "id": "inc_otros_ingresos_variables",
+      "name": "Otros Ingresos Variables",
+      "type": "income",
+      "group": "variable",
+      "defaultAmount": 0,
+      "allowMultiplePerMonth": true,
+      "recurrence": {
+        "kind": "monthly"
+      },
+      "archived": false,
+      "order": 3,
+      "excelRow": 15
+    },
+    {
+      "id": "exp_cb300f",
+      "name": "CB300F",
+      "type": "expense",
+      "group": "fixed",
+      "defaultAmount": 500000,
+      "allowMultiplePerMonth": false,
+      "recurrence": {
+        "kind": "monthly"
+      },
+      "savingsContribution": {
+        "bucketId": "moto",
+        "onlyWhenCompleted": true
+      },
+      "archived": false,
+      "order": 1,
+      "excelRow": 10
+    },
+    {
+      "id": "exp_cuota_funfami",
+      "name": "Cuota FUNFAMI",
+      "type": "expense",
+      "group": "fixed",
+      "defaultAmount": 1800000,
+      "allowMultiplePerMonth": false,
+      "recurrence": {
+        "kind": "monthly"
+      },
+      "linkedDebtGroup": "FUNFAMI",
+      "defaultTargetDebtId": "debt_cb300f_moto",
+      "archived": false,
+      "order": 2,
+      "excelRow": 11
+    },
+    {
+      "id": "exp_plan_de_datos_y_bano_kabir",
+      "name": "Plan de datos y baño kabir",
+      "type": "expense",
+      "group": "fixed",
+      "defaultAmount": 100000,
+      "allowMultiplePerMonth": false,
+      "recurrence": {
+        "kind": "monthly"
+      },
+      "archived": false,
+      "order": 3,
+      "excelRow": 12
+    },
+    {
+      "id": "exp_seguro_tr_sura",
+      "name": "Seguro TR SURA",
+      "type": "expense",
+      "group": "fixed",
+      "defaultAmount": 130000,
+      "allowMultiplePerMonth": false,
+      "recurrence": {
+        "kind": "monthly"
+      },
+      "archived": false,
+      "order": 4,
+      "excelRow": 13
+    },
+    {
+      "id": "exp_etb_o_alexandra",
+      "name": "ETB O Alexandra",
+      "type": "expense",
+      "group": "fixed",
+      "defaultAmount": 100000,
+      "allowMultiplePerMonth": false,
+      "recurrence": {
+        "kind": "monthly"
+      },
+      "archived": false,
+      "order": 5,
+      "excelRow": 14
+    },
+    {
+      "id": "exp_parqueadero_cem",
+      "name": "Parqueadero CEM",
+      "type": "expense",
+      "group": "fixed",
+      "defaultAmount": 120000,
+      "allowMultiplePerMonth": false,
+      "recurrence": {
+        "kind": "monthly"
+      },
+      "archived": false,
+      "order": 6,
+      "excelRow": 15
+    },
+    {
+      "id": "exp_gasolina_moto_carro",
+      "name": "Gasolina Moto/Carro",
+      "type": "expense",
+      "group": "fixed",
+      "defaultAmount": 200000,
+      "allowMultiplePerMonth": false,
+      "recurrence": {
+        "kind": "monthly"
+      },
+      "savingsContribution": {
+        "bucketId": "moto",
+        "onlyWhenCompleted": true
+      },
+      "idealMotoCategoryKey": "GASOLINA",
+      "archived": false,
+      "order": 7,
+      "excelRow": 16
+    },
+    {
+      "id": "exp_gemini_pro",
+      "name": "Gemini Pro",
+      "type": "expense",
+      "group": "fixed",
+      "defaultAmount": 20000,
+      "allowMultiplePerMonth": false,
+      "recurrence": {
+        "kind": "monthly"
+      },
+      "archived": false,
+      "order": 8,
+      "excelRow": 17
+    },
+    {
+      "id": "exp_tarjeta_nu",
+      "name": "Tarjeta Nu",
+      "type": "expense",
+      "group": "variable",
+      "defaultAmount": 300000,
+      "allowMultiplePerMonth": false,
+      "recurrence": {
+        "kind": "monthly"
+      },
+      "archived": false,
+      "order": 9,
+      "excelRow": 21
+    },
+    {
+      "id": "exp_smart_fit",
+      "name": "Smart Fit",
+      "type": "expense",
+      "group": "variable",
+      "defaultAmount": 100000,
+      "allowMultiplePerMonth": false,
+      "recurrence": {
+        "kind": "monthly"
+      },
+      "archived": false,
+      "order": 10,
+      "excelRow": 22
+    },
+    {
+      "id": "exp_otro",
+      "name": "Otro",
+      "type": "expense",
+      "group": "variable",
+      "defaultAmount": 0,
+      "allowMultiplePerMonth": true,
+      "recurrence": {
+        "kind": "monthly"
+      },
+      "archived": false,
+      "order": 11,
+      "excelRow": 23
+    }
+  ],
+  "monthEntries": [
+    {
+      "id": "2026-10_inc_salario_principal",
+      "monthKey": "2026-10",
+      "conceptId": "inc_salario_principal",
+      "conceptName": "Salario Principal",
+      "type": "income",
+      "group": "fixed",
+      "plannedAmount": 4000000,
+      "actualAmount": 4000000,
+      "status": "completed",
+      "completedAt": "2026-10-21",
+      "excelCoords": {
+        "nameCell": "A10",
+        "amountCell": "B10",
+        "statusCell": "C10",
+        "dateCell": "D10"
+      }
+    },
+    {
+      "id": "2026-10_inc_prima",
+      "monthKey": "2026-10",
+      "conceptId": "inc_prima",
+      "conceptName": "Prima",
+      "type": "income",
+      "group": "fixed",
+      "plannedAmount": 2000000,
+      "actualAmount": 2000000,
+      "status": "pending",
+      "excelCoords": {
+        "nameCell": "A11",
+        "amountCell": "B11",
+        "statusCell": "C11",
+        "dateCell": "D11"
+      }
+    },
+    {
+      "id": "2026-10_inc_otros_ingresos_variables",
+      "monthKey": "2026-10",
+      "conceptId": "inc_otros_ingresos_variables",
+      "conceptName": "Otros Ingresos Variables",
+      "type": "income",
+      "group": "variable",
+      "plannedAmount": 0,
+      "actualAmount": 0,
+      "status": "pending",
+      "excelCoords": {
+        "nameCell": "A15",
+        "amountCell": "B15",
+        "statusCell": "C15",
+        "dateCell": "D15"
+      }
+    },
+    {
+      "id": "2026-10_exp_cb300f",
+      "monthKey": "2026-10",
+      "conceptId": "exp_cb300f",
+      "conceptName": "CB300F",
+      "type": "expense",
+      "group": "fixed",
+      "plannedAmount": 500000,
+      "actualAmount": 500000,
+      "status": "completed",
+      "excelDerivedState": "Pagado",
+      "completedAt": "2026-10-21",
+      "excelCoords": {
+        "nameCell": "G10",
+        "amountCell": "H10",
+        "statusCell": "I10",
+        "derivedStateCell": "J10",
+        "dateCell": "K10"
+      }
+    },
+    {
+      "id": "2026-10_exp_cuota_funfami",
+      "monthKey": "2026-10",
+      "conceptId": "exp_cuota_funfami",
+      "conceptName": "Cuota FUNFAMI",
+      "type": "expense",
+      "group": "fixed",
+      "plannedAmount": 1800000,
+      "actualAmount": 1800000,
+      "status": "completed",
+      "excelDerivedState": "Pagado",
+      "completedAt": "2026-10-27",
+      "excelCoords": {
+        "nameCell": "G11",
+        "amountCell": "H11",
+        "statusCell": "I11",
+        "derivedStateCell": "J11",
+        "dateCell": "K11"
+      }
+    },
+    {
+      "id": "2026-10_exp_plan_de_datos_y_bano_kabir",
+      "monthKey": "2026-10",
+      "conceptId": "exp_plan_de_datos_y_bano_kabir",
+      "conceptName": "Plan de datos y baño kabir",
+      "type": "expense",
+      "group": "fixed",
+      "plannedAmount": 100000,
+      "actualAmount": 100000,
+      "status": "pending",
+      "excelDerivedState": "Pendiente",
+      "excelCoords": {
+        "nameCell": "G12",
+        "amountCell": "H12",
+        "statusCell": "I12",
+        "derivedStateCell": "J12",
+        "dateCell": "K12"
+      }
+    },
+    {
+      "id": "2026-10_exp_seguro_tr_sura",
+      "monthKey": "2026-10",
+      "conceptId": "exp_seguro_tr_sura",
+      "conceptName": "Seguro TR SURA",
+      "type": "expense",
+      "group": "fixed",
+      "plannedAmount": 130000,
+      "actualAmount": 130000,
+      "status": "pending",
+      "excelDerivedState": "Pendiente",
+      "excelCoords": {
+        "nameCell": "G13",
+        "amountCell": "H13",
+        "statusCell": "I13",
+        "derivedStateCell": "J13",
+        "dateCell": "K13"
+      }
+    },
+    {
+      "id": "2026-10_exp_etb_o_alexandra",
+      "monthKey": "2026-10",
+      "conceptId": "exp_etb_o_alexandra",
+      "conceptName": "ETB O Alexandra",
+      "type": "expense",
+      "group": "fixed",
+      "plannedAmount": 100000,
+      "actualAmount": 100000,
+      "status": "pending",
+      "excelDerivedState": "Pendiente",
+      "excelCoords": {
+        "nameCell": "G14",
+        "amountCell": "H14",
+        "statusCell": "I14",
+        "derivedStateCell": "J14",
+        "dateCell": "K14"
+      }
+    },
+    {
+      "id": "2026-10_exp_parqueadero_cem",
+      "monthKey": "2026-10",
+      "conceptId": "exp_parqueadero_cem",
+      "conceptName": "Parqueadero CEM",
+      "type": "expense",
+      "group": "fixed",
+      "plannedAmount": 120000,
+      "actualAmount": 120000,
+      "status": "completed",
+      "excelDerivedState": "Pagado",
+      "completedAt": "2026-10-21",
+      "excelCoords": {
+        "nameCell": "G15",
+        "amountCell": "H15",
+        "statusCell": "I15",
+        "derivedStateCell": "J15",
+        "dateCell": "K15"
+      }
+    },
+    {
+      "id": "2026-10_exp_gasolina_moto_carro",
+      "monthKey": "2026-10",
+      "conceptId": "exp_gasolina_moto_carro",
+      "conceptName": "Gasolina Moto/Carro",
+      "type": "expense",
+      "group": "fixed",
+      "plannedAmount": 200000,
+      "actualAmount": 200000,
+      "status": "completed",
+      "excelDerivedState": "Pagado",
+      "completedAt": "2026-10-21",
+      "excelCoords": {
+        "nameCell": "G16",
+        "amountCell": "H16",
+        "statusCell": "I16",
+        "derivedStateCell": "J16",
+        "dateCell": "K16"
+      }
+    },
+    {
+      "id": "2026-10_exp_gemini_pro",
+      "monthKey": "2026-10",
+      "conceptId": "exp_gemini_pro",
+      "conceptName": "Gemini Pro",
+      "type": "expense",
+      "group": "fixed",
+      "plannedAmount": 20000,
+      "actualAmount": 20000,
+      "status": "pending",
+      "excelDerivedState": "Pendiente",
+      "excelCoords": {
+        "nameCell": "G17",
+        "amountCell": "H17",
+        "statusCell": "I17",
+        "derivedStateCell": "J17",
+        "dateCell": "K17"
+      }
+    },
+    {
+      "id": "2026-10_exp_tarjeta_nu",
+      "monthKey": "2026-10",
+      "conceptId": "exp_tarjeta_nu",
+      "conceptName": "Tarjeta Nu",
+      "type": "expense",
+      "group": "variable",
+      "plannedAmount": 300000,
+      "actualAmount": 300000,
+      "status": "completed",
+      "excelDerivedState": "Pagado",
+      "completedAt": "2026-10-21",
+      "excelCoords": {
+        "nameCell": "G21",
+        "amountCell": "H21",
+        "statusCell": "I21",
+        "derivedStateCell": "J21",
+        "dateCell": "K21"
+      }
+    },
+    {
+      "id": "2026-10_exp_smart_fit",
+      "monthKey": "2026-10",
+      "conceptId": "exp_smart_fit",
+      "conceptName": "Smart Fit",
+      "type": "expense",
+      "group": "variable",
+      "plannedAmount": 100000,
+      "actualAmount": 100000,
+      "status": "pending",
+      "excelDerivedState": "Pendiente",
+      "excelCoords": {
+        "nameCell": "G22",
+        "amountCell": "H22",
+        "statusCell": "I22",
+        "derivedStateCell": "J22",
+        "dateCell": "K22"
+      }
+    },
+    {
+      "id": "2026-10_exp_otro",
+      "monthKey": "2026-10",
+      "conceptId": "exp_otro",
+      "conceptName": "Otro",
+      "type": "expense",
+      "group": "variable",
+      "plannedAmount": 0,
+      "actualAmount": 0,
+      "status": "pending",
+      "excelDerivedState": "Pendiente",
+      "excelCoords": {
+        "nameCell": "G23",
+        "amountCell": "H23",
+        "statusCell": "I23",
+        "derivedStateCell": "J23",
+        "dateCell": "K23"
+      }
+    }
+  ],
+  "debts": [
+    {
+      "id": "debt_cb300f_moto",
+      "groupKey": "FUNFAMI",
+      "name": "CB300F - MOTO",
+      "lender": "FUNFAMI",
+      "openingBalance": 4400000,
+      "currentBalanceAfterOctInstallment": 2600000,
+      "monthKey": "2026-10",
+      "excelCells": {
+        "name": "G2",
+        "openingBalance": "H2"
+      }
+    },
+    {
+      "id": "debt_esp_ia",
+      "groupKey": "FUNFAMI",
+      "name": "ESP. IA",
+      "lender": "FUNFAMI",
+      "openingBalance": 3600000,
+      "currentBalanceAfterOctInstallment": 3600000,
+      "monthKey": "2026-10",
+      "excelCells": {
+        "name": "G3",
+        "openingBalance": "H3"
+      }
+    }
+  ],
+  "debtPayments": [
+    {
+      "id": "2026-10_exp_cuota_funfami_debt_cb300f_moto",
+      "entryId": "2026-10_exp_cuota_funfami",
+      "monthKey": "2026-10",
+      "debtId": "debt_cb300f_moto",
+      "principalAmount": 1800000,
+      "interestAmount": 0,
+      "totalApplied": 1800000,
+      "completedAt": "2026-10-27",
+      "active": true
+    }
+  ],
+  "savingsBuckets": [
+    {
+      "id": "moto",
+      "name": "Moto",
+      "excelOpeningLabel": "Moto - Mes pasado",
+      "openingBalance": 1600000,
+      "excelCurrentLabel": "Moto - Ahora",
+      "excelCurrentValue": 2300000,
+      "excelCurrentFormula": "K2+H10+H16"
+    },
+    {
+      "id": "savings",
+      "name": "Ahorros",
+      "excelOpeningLabel": "Ahorros - Mes pasado",
+      "openingBalance": 1000000,
+      "excelCurrentLabel": "Ahorros . Ahora",
+      "excelCurrentValue": 2080000,
+      "excelCurrentFormula": "K3+B6"
+    }
+  ],
+  "idealMotoPlan": {
+    "items": [
+      {
+        "id": "ideal_soat",
+        "excelRow": 34,
+        "excelRawName": "SOAT",
+        "displayName": "SOAT",
+        "excelRawTextValue": "$ 66.667",
+        "monthlyAmountCop": 66667,
+        "cycleCostCop": 800000,
+        "periodMonths": 12,
+        "ceilMonthlyCop": 66667,
+        "includedInExcelTotalB43": true,
+        "kind": "recurring_provision"
+      },
+      {
+        "id": "ideal_gasolina",
+        "excelRow": 35,
+        "excelRawName": "GASOLINA",
+        "displayName": "GASOLINA",
+        "excelRawTextValue": "$ 200.000",
+        "monthlyAmountCop": 200000,
+        "cycleCostCop": 200000,
+        "periodMonths": 1,
+        "ceilMonthlyCop": 200000,
+        "linkedConceptId": "exp_gasolina_moto_carro",
+        "includedInExcelTotalB43": true,
+        "kind": "recurring_provision"
+      },
+      {
+        "id": "ideal_impuesto",
+        "excelRow": 36,
+        "excelRawName": "IMPUESTO",
+        "displayName": "IMPUESTO",
+        "excelRawTextValue": "$ 21.000",
+        "monthlyAmountCop": 21000,
+        "cycleCostCop": 252000,
+        "periodMonths": 12,
+        "ceilMonthlyCop": 21000,
+        "includedInExcelTotalB43": true,
+        "kind": "recurring_provision"
+      },
+      {
+        "id": "ideal_mantemiento",
+        "excelRow": 37,
+        "excelRawName": "MANTEMIENTO",
+        "displayName": "Mantenimiento",
+        "excelRawTextValue": "$ 200.000",
+        "monthlyAmountCop": 200000,
+        "cycleCostCop": 200000,
+        "periodMonths": 1,
+        "ceilMonthlyCop": 200000,
+        "includedInExcelTotalB43": true,
+        "kind": "recurring_provision"
+      },
+      {
+        "id": "ideal_parqueadero",
+        "excelRow": 38,
+        "excelRawName": "PARQUEADERO",
+        "displayName": "PARQUEADERO",
+        "excelRawTextValue": "$ 210.000",
+        "monthlyAmountCop": 210000,
+        "cycleCostCop": 210000,
+        "periodMonths": 1,
+        "ceilMonthlyCop": 210000,
+        "includedInExcelTotalB43": true,
+        "kind": "recurring_provision"
+      },
+      {
+        "id": "ideal_casco",
+        "excelRow": 39,
+        "excelRawName": "CASCO",
+        "displayName": "CASCO",
+        "excelRawTextValue": "$ 41.667",
+        "monthlyAmountCop": 41667,
+        "cycleCostCop": 500000,
+        "periodMonths": 12,
+        "ceilMonthlyCop": 41667,
+        "includedInExcelTotalB43": true,
+        "kind": "recurring_provision"
+      },
+      {
+        "id": "ideal_cambio_de_aceite",
+        "excelRow": 40,
+        "excelRawName": "CAMBIO DE ACEITE",
+        "displayName": "CAMBIO DE ACEITE",
+        "excelRawTextValue": "$ 50.000",
+        "monthlyAmountCop": 50000,
+        "cycleCostCop": 50000,
+        "periodMonths": 1,
+        "ceilMonthlyCop": 50000,
+        "includedInExcelTotalB43": true,
+        "kind": "recurring_provision"
+      },
+      {
+        "id": "ideal_llantas",
+        "excelRow": 41,
+        "excelRawName": "LLANTAS",
+        "displayName": "LLANTAS",
+        "excelRawTextValue": "$ 83.333",
+        "monthlyAmountCop": 83333,
+        "cycleCostCop": 1000000,
+        "periodMonths": 12,
+        "ceilMonthlyCop": 83334,
+        "includedInExcelTotalB43": true,
+        "kind": "recurring_provision"
+      },
+      {
+        "id": "ideal_kit_de_arrastre_honda_original",
+        "excelRow": 42,
+        "excelRawName": "KIT DE ARRASTRE HONDA ORIGINAL",
+        "displayName": "KIT DE ARRASTRE HONDA ORIGINAL",
+        "excelRawTextValue": "$ 500.000",
+        "monthlyAmountCop": 500000,
+        "targetAmountCop": 500000,
+        "targetMonthKey": "2027-08",
+        "targetDateIso": "2027-08-31",
+        "includedInExcelTotalB43": false,
+        "kind": "target_goal"
+      }
+    ],
+    "excelReportedTotalText": "$ 872.666,67",
+    "recurringMonthlyTotalCop": 872667,
+    "totalWithTargetGoalCop": 1372667
+  },
+  "rawCells": {
+    "A1": {
+      "ref": "A1",
+      "type": "s",
+      "value": "Control de Ingresos y Gastos Mensuales - Octubre 2026"
+    },
+    "G1": {
+      "ref": "G1",
+      "type": "s",
+      "value": "Control Deuda FUNFAMI"
+    },
+    "J1": {
+      "ref": "J1",
+      "type": "s",
+      "value": "Control Ahorros y Moto"
+    },
+    "A2": {
+      "ref": "A2",
+      "type": "s",
+      "value": "Total Ingresos Previstos"
+    },
+    "B2": {
+      "ref": "B2",
+      "type": "n",
+      "value": 4000000,
+      "formula": "B17"
+    },
+    "G2": {
+      "ref": "G2",
+      "type": "s",
+      "value": "CB300F - MOTO"
+    },
+    "H2": {
+      "ref": "H2",
+      "type": "n",
+      "value": 4400000
+    },
+    "J2": {
+      "ref": "J2",
+      "type": "s",
+      "value": "Moto - Mes pasado"
+    },
+    "K2": {
+      "ref": "K2",
+      "type": "n",
+      "value": 1600000
+    },
+    "A3": {
+      "ref": "A3",
+      "type": "s",
+      "value": "Total Gastos Previstos"
+    },
+    "B3": {
+      "ref": "B3",
+      "type": "n",
+      "value": 3370000,
+      "formula": "SUM(H10:H17)+SUM(H21:H23)"
+    },
+    "G3": {
+      "ref": "G3",
+      "type": "s",
+      "value": "ESP. IA"
+    },
+    "H3": {
+      "ref": "H3",
+      "type": "n",
+      "value": 3600000
+    },
+    "J3": {
+      "ref": "J3",
+      "type": "s",
+      "value": "Ahorros - Mes pasado"
+    },
+    "K3": {
+      "ref": "K3",
+      "type": "n",
+      "value": 1000000
+    },
+    "A4": {
+      "ref": "A4",
+      "type": "s",
+      "value": "Total Gastos Pagados"
+    },
+    "B4": {
+      "ref": "B4",
+      "type": "n",
+      "value": 2920000,
+      "formula": "H25"
+    },
+    "J4": {
+      "ref": "J4",
+      "type": "s",
+      "value": "Moto - Ahora"
+    },
+    "K4": {
+      "ref": "K4",
+      "type": "n",
+      "value": 2300000,
+      "formula": "K2+H10+H16"
+    },
+    "A5": {
+      "ref": "A5",
+      "type": "s",
+      "value": "Total Gastos Pendientes"
+    },
+    "B5": {
+      "ref": "B5",
+      "type": "n",
+      "value": 450000,
+      "formula": "SUMIF(I10:I17, FALSE, H10:H17) + SUMIF(I21:I23, FALSE, H21:H23)"
+    },
+    "J5": {
+      "ref": "J5",
+      "type": "s",
+      "value": "Ahorros . Ahora"
+    },
+    "K5": {
+      "ref": "K5",
+      "type": "n",
+      "value": 2080000,
+      "formula": "K3+B6"
+    },
+    "A6": {
+      "ref": "A6",
+      "type": "s",
+      "value": "Flujo Neto (Saldo)"
+    },
+    "B6": {
+      "ref": "B6",
+      "type": "n",
+      "value": 1080000,
+      "formula": "B2-B4"
+    },
+    "G6": {
+      "ref": "G6",
+      "type": "s",
+      "value": "Total Deuda"
+    },
+    "H6": {
+      "ref": "H6",
+      "type": "n",
+      "value": 6200000,
+      "formula": "SUM(H2:H3)-H11"
+    },
+    "J6": {
+      "ref": "J6",
+      "type": "s",
+      "value": "Total Ahorros"
+    },
+    "K6": {
+      "ref": "K6",
+      "type": "n",
+      "value": 4380000,
+      "formula": "SUM(K4:K5)"
+    },
+    "A8": {
+      "ref": "A8",
+      "type": "s",
+      "value": "INGRESOS"
+    },
+    "G8": {
+      "ref": "G8",
+      "type": "s",
+      "value": "GASTOS"
+    },
+    "A9": {
+      "ref": "A9",
+      "type": "s",
+      "value": "Ingresos Fijos"
+    },
+    "B9": {
+      "ref": "B9",
+      "type": "s",
+      "value": "Monto"
+    },
+    "C9": {
+      "ref": "C9",
+      "type": "s",
+      "value": "¿Recibido?"
+    },
+    "D9": {
+      "ref": "D9",
+      "type": "s",
+      "value": "Fecha Recibido"
+    },
+    "E9": {
+      "ref": "E9",
+      "type": "s",
+      "value": "Observaciones"
+    },
+    "G9": {
+      "ref": "G9",
+      "type": "s",
+      "value": "Gastos Fijos"
+    },
+    "H9": {
+      "ref": "H9",
+      "type": "s",
+      "value": "Monto"
+    },
+    "I9": {
+      "ref": "I9",
+      "type": "s",
+      "value": "¿Pagado?"
+    },
+    "J9": {
+      "ref": "J9",
+      "type": "s",
+      "value": "Estado"
+    },
+    "K9": {
+      "ref": "K9",
+      "type": "s",
+      "value": "Fecha de Pago"
+    },
+    "L9": {
+      "ref": "L9",
+      "type": "s",
+      "value": "Observaciones"
+    },
+    "A10": {
+      "ref": "A10",
+      "type": "s",
+      "value": "Salario Principal"
+    },
+    "B10": {
+      "ref": "B10",
+      "type": "n",
+      "value": 4000000
+    },
+    "C10": {
+      "ref": "C10",
+      "type": "b",
+      "value": true
+    },
+    "D10": {
+      "ref": "D10",
+      "type": "n",
+      "value": 46316
+    },
+    "G10": {
+      "ref": "G10",
+      "type": "s",
+      "value": "CB300F"
+    },
+    "H10": {
+      "ref": "H10",
+      "type": "n",
+      "value": 500000
+    },
+    "I10": {
+      "ref": "I10",
+      "type": "b",
+      "value": true
+    },
+    "J10": {
+      "ref": "J10",
+      "type": "str",
+      "value": "Pagado",
+      "formula": "IF(G10=\"\", \"\", IF(I10, \"Pagado\", \"Pendiente\"))"
+    },
+    "K10": {
+      "ref": "K10",
+      "type": "n",
+      "value": 46316
+    },
+    "A11": {
+      "ref": "A11",
+      "type": "s",
+      "value": "Prima"
+    },
+    "B11": {
+      "ref": "B11",
+      "type": "n",
+      "value": 2000000
+    },
+    "C11": {
+      "ref": "C11",
+      "type": "b",
+      "value": false
+    },
+    "G11": {
+      "ref": "G11",
+      "type": "s",
+      "value": "Cuota FUNFAMI"
+    },
+    "H11": {
+      "ref": "H11",
+      "type": "n",
+      "value": 1800000
+    },
+    "I11": {
+      "ref": "I11",
+      "type": "b",
+      "value": true
+    },
+    "J11": {
+      "ref": "J11",
+      "type": "str",
+      "value": "Pagado"
+    },
+    "K11": {
+      "ref": "K11",
+      "type": "n",
+      "value": 46322
+    },
+    "A12": {
+      "ref": "A12",
+      "type": "s",
+      "value": "Total Ingresos Fijos"
+    },
+    "B12": {
+      "ref": "B12",
+      "type": "n",
+      "value": 4000000,
+      "formula": "SUMIF(C10:C11,TRUE,B10:B11)"
+    },
+    "G12": {
+      "ref": "G12",
+      "type": "s",
+      "value": "Plan de datos y baño kabir"
+    },
+    "H12": {
+      "ref": "H12",
+      "type": "n",
+      "value": 100000
+    },
+    "I12": {
+      "ref": "I12",
+      "type": "b",
+      "value": false
+    },
+    "J12": {
+      "ref": "J12",
+      "type": "str",
+      "value": "Pendiente"
+    },
+    "G13": {
+      "ref": "G13",
+      "type": "s",
+      "value": "Seguro TR SURA"
+    },
+    "H13": {
+      "ref": "H13",
+      "type": "n",
+      "value": 130000
+    },
+    "I13": {
+      "ref": "I13",
+      "type": "b",
+      "value": false
+    },
+    "J13": {
+      "ref": "J13",
+      "type": "str",
+      "value": "Pendiente"
+    },
+    "A14": {
+      "ref": "A14",
+      "type": "s",
+      "value": "Ingresos Variables"
+    },
+    "B14": {
+      "ref": "B14",
+      "type": "s",
+      "value": "Monto"
+    },
+    "C14": {
+      "ref": "C14",
+      "type": "s",
+      "value": "¿Recibido?"
+    },
+    "D14": {
+      "ref": "D14",
+      "type": "s",
+      "value": "Fecha Recibido"
+    },
+    "G14": {
+      "ref": "G14",
+      "type": "s",
+      "value": "ETB O Alexandra"
+    },
+    "H14": {
+      "ref": "H14",
+      "type": "n",
+      "value": 100000
+    },
+    "I14": {
+      "ref": "I14",
+      "type": "b",
+      "value": false
+    },
+    "J14": {
+      "ref": "J14",
+      "type": "str",
+      "value": "Pendiente"
+    },
+    "A15": {
+      "ref": "A15",
+      "type": "s",
+      "value": "Otros Ingresos Variables"
+    },
+    "B15": {
+      "ref": "B15",
+      "type": "n",
+      "value": 0
+    },
+    "C15": {
+      "ref": "C15",
+      "type": "b",
+      "value": false
+    },
+    "G15": {
+      "ref": "G15",
+      "type": "s",
+      "value": "Parqueadero CEM"
+    },
+    "H15": {
+      "ref": "H15",
+      "type": "n",
+      "value": 120000
+    },
+    "I15": {
+      "ref": "I15",
+      "type": "b",
+      "value": true
+    },
+    "J15": {
+      "ref": "J15",
+      "type": "str",
+      "value": "Pagado"
+    },
+    "K15": {
+      "ref": "K15",
+      "type": "n",
+      "value": 46316
+    },
+    "A16": {
+      "ref": "A16",
+      "type": "s",
+      "value": "Total Ingresos Variables"
+    },
+    "B16": {
+      "ref": "B16",
+      "type": "n",
+      "value": 0,
+      "formula": "SUMIF(C15,TRUE,B15)"
+    },
+    "G16": {
+      "ref": "G16",
+      "type": "s",
+      "value": "Gasolina Moto/Carro"
+    },
+    "H16": {
+      "ref": "H16",
+      "type": "n",
+      "value": 200000
+    },
+    "I16": {
+      "ref": "I16",
+      "type": "b",
+      "value": true
+    },
+    "J16": {
+      "ref": "J16",
+      "type": "str",
+      "value": "Pagado"
+    },
+    "K16": {
+      "ref": "K16",
+      "type": "n",
+      "value": 46316
+    },
+    "A17": {
+      "ref": "A17",
+      "type": "s",
+      "value": "TOTAL INGRESOS"
+    },
+    "B17": {
+      "ref": "B17",
+      "type": "n",
+      "value": 4000000,
+      "formula": "B12+B16"
+    },
+    "G17": {
+      "ref": "G17",
+      "type": "s",
+      "value": "Gemini Pro"
+    },
+    "H17": {
+      "ref": "H17",
+      "type": "n",
+      "value": 20000
+    },
+    "I17": {
+      "ref": "I17",
+      "type": "b",
+      "value": false
+    },
+    "J17": {
+      "ref": "J17",
+      "type": "str",
+      "value": "Pendiente"
+    },
+    "G18": {
+      "ref": "G18",
+      "type": "s",
+      "value": "Total Gastos Fijos"
+    },
+    "H18": {
+      "ref": "H18",
+      "type": "n",
+      "value": 2620000,
+      "formula": "SUMIF(I10:I17, TRUE, H10:H17)"
+    },
+    "G20": {
+      "ref": "G20",
+      "type": "s",
+      "value": "Gastos Variables"
+    },
+    "H20": {
+      "ref": "H20",
+      "type": "s",
+      "value": "Monto"
+    },
+    "I20": {
+      "ref": "I20",
+      "type": "s",
+      "value": "¿Pagado?"
+    },
+    "J20": {
+      "ref": "J20",
+      "type": "s",
+      "value": "Estado"
+    },
+    "K20": {
+      "ref": "K20",
+      "type": "s",
+      "value": "Fecha de Pago"
+    },
+    "L20": {
+      "ref": "L20",
+      "type": "s",
+      "value": "Observaciones"
+    },
+    "G21": {
+      "ref": "G21",
+      "type": "s",
+      "value": "Tarjeta Nu"
+    },
+    "H21": {
+      "ref": "H21",
+      "type": "n",
+      "value": 300000
+    },
+    "I21": {
+      "ref": "I21",
+      "type": "b",
+      "value": true
+    },
+    "J21": {
+      "ref": "J21",
+      "type": "str",
+      "value": "Pagado",
+      "formula": "IF(G21=\"\", \"\", IF(I21, \"Pagado\", \"Pendiente\"))"
+    },
+    "K21": {
+      "ref": "K21",
+      "type": "n",
+      "value": 46316
+    },
+    "G22": {
+      "ref": "G22",
+      "type": "s",
+      "value": "Smart Fit"
+    },
+    "H22": {
+      "ref": "H22",
+      "type": "n",
+      "value": 100000
+    },
+    "I22": {
+      "ref": "I22",
+      "type": "b",
+      "value": false
+    },
+    "J22": {
+      "ref": "J22",
+      "type": "str",
+      "value": "Pendiente"
+    },
+    "G23": {
+      "ref": "G23",
+      "type": "s",
+      "value": "Otro"
+    },
+    "H23": {
+      "ref": "H23",
+      "type": "n",
+      "value": 0
+    },
+    "I23": {
+      "ref": "I23",
+      "type": "b",
+      "value": false
+    },
+    "J23": {
+      "ref": "J23",
+      "type": "str",
+      "value": "Pendiente"
+    },
+    "G24": {
+      "ref": "G24",
+      "type": "s",
+      "value": "Total Gastos Variables"
+    },
+    "H24": {
+      "ref": "H24",
+      "type": "n",
+      "value": 300000,
+      "formula": "SUMIF(I21:I23, TRUE, H21:H23)"
+    },
+    "G25": {
+      "ref": "G25",
+      "type": "s",
+      "value": "TOTAL GASTOS"
+    },
+    "H25": {
+      "ref": "H25",
+      "type": "n",
+      "value": 2920000,
+      "formula": "H18+H24"
+    },
+    "A32": {
+      "ref": "A32",
+      "type": "s",
+      "value": "IDEAL"
+    },
+    "A33": {
+      "ref": "A33",
+      "type": "s",
+      "value": "MOTO"
+    },
+    "B33": {
+      "ref": "B33",
+      "type": "s",
+      "value": "MES"
+    },
+    "A34": {
+      "ref": "A34",
+      "type": "s",
+      "value": "SOAT"
+    },
+    "B34": {
+      "ref": "B34",
+      "type": "s",
+      "value": "$ 66.667"
+    },
+    "A35": {
+      "ref": "A35",
+      "type": "s",
+      "value": "GASOLINA"
+    },
+    "B35": {
+      "ref": "B35",
+      "type": "s",
+      "value": "$ 200.000"
+    },
+    "A36": {
+      "ref": "A36",
+      "type": "s",
+      "value": "IMPUESTO"
+    },
+    "B36": {
+      "ref": "B36",
+      "type": "s",
+      "value": "$ 21.000"
+    },
+    "A37": {
+      "ref": "A37",
+      "type": "s",
+      "value": "MANTEMIENTO"
+    },
+    "B37": {
+      "ref": "B37",
+      "type": "s",
+      "value": "$ 200.000"
+    },
+    "A38": {
+      "ref": "A38",
+      "type": "s",
+      "value": "PARQUEADERO"
+    },
+    "B38": {
+      "ref": "B38",
+      "type": "s",
+      "value": "$ 210.000"
+    },
+    "A39": {
+      "ref": "A39",
+      "type": "s",
+      "value": "CASCO"
+    },
+    "B39": {
+      "ref": "B39",
+      "type": "s",
+      "value": "$ 41.667"
+    },
+    "A40": {
+      "ref": "A40",
+      "type": "s",
+      "value": "CAMBIO DE ACEITE"
+    },
+    "B40": {
+      "ref": "B40",
+      "type": "s",
+      "value": "$ 50.000"
+    },
+    "A41": {
+      "ref": "A41",
+      "type": "s",
+      "value": "LLANTAS"
+    },
+    "B41": {
+      "ref": "B41",
+      "type": "s",
+      "value": "$ 83.333"
+    },
+    "A42": {
+      "ref": "A42",
+      "type": "s",
+      "value": "KIT DE ARRASTRE HONDA ORIGINAL"
+    },
+    "B42": {
+      "ref": "B42",
+      "type": "s",
+      "value": "$ 500.000"
+    },
+    "A43": {
+      "ref": "A43",
+      "type": "s",
+      "value": "TOTAL"
+    },
+    "B43": {
+      "ref": "B43",
+      "type": "s",
+      "value": "$ 872.666,67"
+    }
+  }
+}

@@ -1,7 +1,32 @@
+# Dependencies
 node_modules/
+.pnp
+.pnp.js
+
+# Expo
+.expo/
 dist/
-build/
+web-build/
+expo-env.d.ts
+
+# Native generated folders (Prebuild / GitHub Actions)
+/ios
+/android
+/build
+*.ipa
+*.xcarchive
+
+# Testing & coverage
+coverage/
+
+# Environment variables & secrets (NEVER commit)
 .env
-.env.local
+.env.*
+!.env.example
+GoogleService-Info.plist
+google-services.json
+
+# OS / Editor
+.DS_Store
+Thumbs.db
 *.log
-.antigravity/cache/

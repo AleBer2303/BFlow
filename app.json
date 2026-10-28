@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "BFlow",
+    "slug": "bflow",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "bflow",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.bflow.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

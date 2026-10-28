@@ -1,0 +1,109 @@
+name: Build Unsigned iOS .ipa (iloader)
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: build-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  quality-gate:
+    name: Pre-build Quality Gate (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test -- --coverage --ci
+
+  build-unsigned-ipa:
+    name: Compile Unsigned iOS .ipa on macOS
+    needs: quality-gate
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Generate native iOS project (Expo Prebuild)
+        env:
+          EXPO_NO_GIT_STATUS: 1
+        run: npx expo prebuild --platform ios --clean --no-install
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            ios/Pods
+            ~/Library/Caches/CocoaPods
+          key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
+      - name: Install CocoaPods
+        run: npx pod-install --non-interactive
+
+      - name: Build unsigned Release .xcarchive
+        run: |
+          xcodebuild archive \
+            -workspace ios/BFlow.xcworkspace \
+            -scheme BFlow \
+            -configuration Release \
+            -archivePath build/BFlow.xcarchive \
+            -sdk iphoneos \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO | xcpretty || xcodebuild archive \
+            -workspace ios/BFlow.xcworkspace \
+            -scheme BFlow \
+            -configuration Release \
+            -archivePath build/BFlow.xcarchive \
+            -sdk iphoneos \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO
+
+      - name: Package Payload/ into BFlow-unsigned.ipa
+        run: |
+          mkdir -p build/Payload
+          cp -R build/BFlow.xcarchive/Products/Applications/BFlow.app build/Payload/
+          cd build
+          zip -qry BFlow-unsigned.ipa Payload
+          ls -lh BFlow-unsigned.ipa
+
+      - name: Upload BFlow-unsigned.ipa Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BFlow-unsigned-ipa
+          path: build/BFlow-unsigned.ipa
+          retention-days: 30
+
+      - name: Publish GitHub Release (on main or version tag)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('build-{0}', github.run_number) }}
+          name: BFlow iOS Unsigned .ipa (${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('Build #{0}', github.run_number) }})
+          generate_release_notes: true
+          files: build/BFlow-unsigned.ipa

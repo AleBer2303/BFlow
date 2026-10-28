@@ -1,0 +1,49 @@
+name: CI Quality Gate
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint, Typecheck, Golden Fixture & Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Excel fixture parity (Octubre 2026)
+        run: |
+          node scripts/extract-excel-fixture.mjs
+          node --test scripts/verify-phase0-fixture.test.mjs
+          git diff --exit-code fixtures/
+
+      - name: Heuristic Guard — src/ changes must include test updates
+        if: github.event_name == 'pull_request'
+        run: node scripts/check-src-tests-guard.mjs origin/${{ github.base_ref }}
+
+      - name: TypeScript strict typecheck
+        run: npm run typecheck
+
+      - name: Lint check
+        run: npm run lint
+
+      - name: Run Jest test suite with domain coverage threshold (>=80%)
+        run: npm test -- --coverage --ci

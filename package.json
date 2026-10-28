@@ -1,0 +1,45 @@
+{
+  "name": "bflow",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "lint": "node scripts/lint-check.mjs",
+    "test": "jest --watchAll=false",
+    "test:phase0": "node --test scripts/verify-phase0-fixture.test.mjs",
+    "extract:excel": "node scripts/extract-excel-fixture.mjs"
+  },
+  "dependencies": {
+    "expo": "~58.0.21",
+    "expo-blur": "~58.0.5",
+    "expo-constants": "~58.0.14",
+    "expo-glass-effect": "~58.0.5",
+    "expo-haptics": "~58.0.7",
+    "expo-linking": "~58.0.6",
+    "expo-router": "~58.0.28",
+    "expo-status-bar": "~58.0.4",
+    "react": "19.3.1",
+    "react-native": "0.88.1",
+    "react-native-gesture-handler": "~2.30.0",
+    "react-native-reanimated": "~4.2.1",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.20.0",
+    "react-native-svg": "~15.15.0",
+    "zod": "^3.24.2",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@react-native/jest-preset": "^0.88.1",
+    "@testing-library/react-native": "^13.2.0",
+    "@types/jest": "^29.5.14",
+    "@types/react": "^19.0.0",
+    "jest": "^29.7.0",
+    "jest-expo": "~58.0.13",
+    "react-test-renderer": "^19.3.1",
+    "typescript": "~5.9.2"
+  }
+}

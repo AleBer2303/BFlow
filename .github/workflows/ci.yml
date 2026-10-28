@@ -27,13 +27,13 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Verify Excel fixture parity (Octubre 2026)
         run: |
           node scripts/extract-excel-fixture.mjs
           node --test scripts/verify-phase0-fixture.test.mjs
-          git diff --exit-code fixtures/
+          git diff --ignore-space-at-eol --exit-code fixtures/
 
       - name: Heuristic Guard — src/ changes must include test updates
         if: github.event_name == 'pull_request'

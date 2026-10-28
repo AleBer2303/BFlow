@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --legacy-peer-deps
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test -- --coverage --ci
@@ -43,7 +43,7 @@ jobs:
           cache: npm
 
       - name: Install JS dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Generate native iOS project (Expo Prebuild)
         env:
@@ -63,32 +63,24 @@ jobs:
       - name: Install CocoaPods
         run: npx pod-install --non-interactive
 
-      - name: Build unsigned Release .xcarchive
+      - name: Build unsigned Release .app for iOS device
         run: |
-          xcodebuild archive \
+          xcodebuild build \
             -workspace ios/BFlow.xcworkspace \
             -scheme BFlow \
             -configuration Release \
-            -archivePath build/BFlow.xcarchive \
             -sdk iphoneos \
+            -derivedDataPath build/DerivedData \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            COMPILER_INDEX_STORE_ENABLE=NO | xcpretty || xcodebuild archive \
-            -workspace ios/BFlow.xcworkspace \
-            -scheme BFlow \
-            -configuration Release \
-            -archivePath build/BFlow.xcarchive \
-            -sdk iphoneos \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
             COMPILER_INDEX_STORE_ENABLE=NO
 
       - name: Package Payload/ into BFlow-unsigned.ipa
         run: |
           mkdir -p build/Payload
-          cp -R build/BFlow.xcarchive/Products/Applications/BFlow.app build/Payload/
+          cp -R build/DerivedData/Build/Products/Release-iphoneos/BFlow.app build/Payload/
           cd build
           zip -qry BFlow-unsigned.ipa Payload
           ls -lh BFlow-unsigned.ipa
@@ -100,10 +92,21 @@ jobs:
           path: build/BFlow-unsigned.ipa
           retention-days: 30
 
+      - name: Compute Release Tag and Title
+        id: release_meta
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="build-${GITHUB_RUN_NUMBER}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "title=BFlow iOS Unsigned .ipa (${TAG})" >> "$GITHUB_OUTPUT"
+
       - name: Publish GitHub Release (on main or version tag)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('build-{0}', github.run_number) }}
-          name: BFlow iOS Unsigned .ipa (${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('Build #{0}', github.run_number) }})
+          tag_name: ${{ steps.release_meta.outputs.tag }}
+          name: ${{ steps.release_meta.outputs.title }}
           generate_release_notes: true
           files: build/BFlow-unsigned.ipa

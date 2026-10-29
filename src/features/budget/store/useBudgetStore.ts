@@ -2,12 +2,16 @@
  * src/features/budget/store/useBudgetStore.ts
  *
  * Reactive Zustand store orchestrating BFlow's domain calculators,
+ * Authentication Gate (`authUser: BFlowAuthUser | null`), persistent cloud session,
  * October 2026 golden seed data, month rollover ("2026-10" -> "2026-11"),
- * and optional Cloud Firestore synchronization (`bflow-deaeb`).
+ * and real-time Cloud Firestore synchronization (`bflow-deaeb`).
  */
 
 import { create } from 'zustand';
-import { FirestoreBudgetRepository } from '../../../data/repositories/budgetRepository';
+import {
+  FirestoreBudgetRepository,
+  type FullCloudAccountData,
+} from '../../../data/repositories/budgetRepository';
 import { buildOctober2026SeedPayload } from '../../../data/seed/october2026SeedData';
 import {
   closeMonthAndRollover,
@@ -24,7 +28,11 @@ import {
   type RegisterOrCompleteMovementInput,
   type SavingsBucket,
 } from '../../../domain';
-import { DEMO_OWNER_USER, type BFlowAuthUser } from '../../../platform/auth/authAdapter';
+import {
+  DEMO_OWNER_USER,
+  loadPersistedSession,
+  type BFlowAuthUser,
+} from '../../../platform/auth/authAdapter';
 
 export type BFlowWorkspaceTab = 'summary' | 'checklist' | 'debts' | 'savings' | 'analytics';
 
@@ -39,13 +47,14 @@ export interface BudgetStoreState {
   savingsBucketsByMonth: Record<string, SavingsBucket[]>;
   idealMotoPlan: IdealMotoPlan;
   closedSnapshots: Record<string, MonthSnapshot>;
-  authUser: BFlowAuthUser;
+  authUser: BFlowAuthUser | null;
   syncMessage: string;
   isSyncing: boolean;
 
   setActiveTab: (tab: BFlowWorkspaceTab) => void;
   setActiveMonthKey: (monthKey: string) => void;
-  setAuthUser: (user: BFlowAuthUser) => void;
+  setAuthUser: (user: BFlowAuthUser | null) => void;
+  requireAuthenticationGate: () => void;
   setSyncStatus: (message: string, isSyncing?: boolean) => void;
   applyCloudWorkspace: (payload: {
     monthKey: string;
@@ -57,15 +66,26 @@ export interface BudgetStoreState {
     provisionPlan: IdealMotoPlan;
     closedSnapshot?: MonthSnapshot;
   }) => void;
+  applyFullCloudAccount: (payload: FullCloudAccountData) => void;
   toggleEntryStatus: (entryId: string, completedAtDateIso?: string) => Promise<void>;
   addOrCompleteMovement: (input: RegisterOrCompleteMovementInput) => Promise<void>;
-  removeOrResetEntry: (entryId: string) => void;
+  removeOrResetEntry: (entryId: string) => Promise<void>;
   closeCurrentMonth: (closedAtIso?: string) => Promise<CloseMonthResult>;
   resetToOctober2026GoldenState: () => void;
 }
 
-function buildInitialState() {
+function resolveDefaultInitialAuthUser(): BFlowAuthUser | null {
+  if (process.env.NODE_ENV === 'test') {
+    return DEMO_OWNER_USER;
+  }
+  return loadPersistedSession();
+}
+
+function buildInitialState(authUserOverride?: BFlowAuthUser | null) {
   const seed = buildOctober2026SeedPayload();
+  const resolvedUser =
+    authUserOverride !== undefined ? authUserOverride : resolveDefaultInitialAuthUser();
+
   return {
     activeTab: 'summary' as BFlowWorkspaceTab,
     activeMonthKey: '2026-10',
@@ -81,8 +101,10 @@ function buildInitialState() {
     },
     idealMotoPlan: seed.provisionPlan,
     closedSnapshots: {} as Record<string, MonthSnapshot>,
-    authUser: DEMO_OWNER_USER,
-    syncMessage: 'Proyecto Firebase vinculado: bflow-deaeb (Toca para sincronizar en la nube)',
+    authUser: resolvedUser,
+    syncMessage: resolvedUser
+      ? `Sincronizado con Cloud Firestore (${resolvedUser.email ?? resolvedUser.uid})`
+      : 'Inicia sesión para cargar tu presupuesto desde Firebase',
     isSyncing: false,
   };
 }
@@ -95,6 +117,8 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
   setActiveMonthKey: (monthKey) => set({ activeMonthKey: monthKey }),
 
   setAuthUser: (user) => set({ authUser: user }),
+
+  requireAuthenticationGate: () => set({ authUser: null }),
 
   setSyncStatus: (message, isSyncing = false) => set({ syncMessage: message, isSyncing }),
 
@@ -126,6 +150,19 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
         ? { ...state.closedSnapshots, [payload.monthKey]: payload.closedSnapshot }
         : state.closedSnapshots,
     })),
+
+  applyFullCloudAccount: (payload) =>
+    set({
+      activeMonthKey: payload.activeMonthKey,
+      availableMonths: payload.availableMonths,
+      concepts: payload.concepts,
+      entries: payload.entries,
+      debtsByMonth: payload.debtsByMonth,
+      debtPayments: payload.debtPayments,
+      savingsBucketsByMonth: payload.savingsBucketsByMonth,
+      idealMotoPlan: payload.provisionPlan,
+      closedSnapshots: payload.closedSnapshots,
+    }),
 
   toggleEntryStatus: async (entryId, completedAtDateIso = '2026-10-28') => {
     const state = get();
@@ -172,7 +209,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       debtPayments: nextDebtPayments,
     });
 
-    if (state.authUser.provider === 'firebase') {
+    if (state.authUser?.provider === 'firebase') {
       try {
         const repo = new FirestoreBudgetRepository();
         await repo.toggleEntryCompletion(state.authUser.uid, entryId, target.monthKey, {
@@ -222,7 +259,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       debtPayments: nextDebtPayments,
     });
 
-    if (state.authUser.provider === 'firebase') {
+    if (state.authUser?.provider === 'firebase') {
       try {
         const repo = new FirestoreBudgetRepository();
         await repo.addMonthEntry(state.authUser.uid, input);
@@ -233,10 +270,20 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     }
   },
 
-  removeOrResetEntry: (entryId) => {
+  removeOrResetEntry: async (entryId) => {
     const state = get();
     const nextEntries = deleteMovement(state.entries, state.concepts, entryId);
     set({ entries: nextEntries });
+
+    if (state.authUser?.provider === 'firebase') {
+      try {
+        const repo = new FirestoreBudgetRepository();
+        await repo.deleteOrResetEntry(state.authUser.uid, entryId);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Error al eliminar en Firestore';
+        set({ syncMessage: `Aviso Firestore: ${msg}` });
+      }
+    }
   },
 
   closeCurrentMonth: async (closedAtIso = '2026-10-31T23:59:59-05:00') => {
@@ -284,7 +331,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       },
     });
 
-    if (state.authUser.provider === 'firebase') {
+    if (state.authUser?.provider === 'firebase') {
       try {
         const repo = new FirestoreBudgetRepository();
         await repo.closeMonth(state.authUser.uid, currentMonthKey, closedAtIso);
@@ -298,6 +345,6 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
   },
 
   resetToOctober2026GoldenState: () => {
-    set(buildInitialState());
+    set(buildInitialState(DEMO_OWNER_USER));
   },
 }));

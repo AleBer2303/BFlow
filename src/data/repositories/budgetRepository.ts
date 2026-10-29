@@ -6,10 +6,13 @@
  * - Queries `entries` and `debtPayments` scoped by `where('monthKey', '==', monthKey)`
  * - Uses atomic `writeBatch` when completing/uncompleting `Cuota FUNFAMI` and its linked `debtPayment`
  * - Performs idempotent October 2026 seeding (`seedOctober2026IfEmpty`) with deterministic IDs
+ * - Supports `loadFullCloudAccount` to restore all months, entries, debts, savings, and closed
+ *   `monthSnapshots` when the user signs in from another phone or browser.
  */
 
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -20,6 +23,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import {
+  deleteMovement,
   registerMovement,
   uncompleteMovement,
   type RegisterOrCompleteMovementInput,
@@ -64,6 +68,18 @@ export interface MonthWorkspaceData {
   closedSnapshot?: MonthSnapshot;
 }
 
+export interface FullCloudAccountData {
+  activeMonthKey: string;
+  availableMonths: string[];
+  concepts: Concept[];
+  entries: MonthEntry[];
+  debtsByMonth: Record<string, Debt[]>;
+  debtPayments: DebtPayment[];
+  savingsBucketsByMonth: Record<string, SavingsBucket[]>;
+  provisionPlan: IdealMotoPlan;
+  closedSnapshots: Record<string, MonthSnapshot>;
+}
+
 export interface ToggleEntryCompletionResult {
   updatedEntry: MonthEntry;
   updatedDebtPayment?: DebtPayment;
@@ -72,6 +88,7 @@ export interface ToggleEntryCompletionResult {
 export interface BudgetRepository {
   seedOctober2026IfEmpty(uid: string): Promise<{ seeded: boolean; monthKey: string }>;
   loadMonthWorkspace(uid: string, monthKey: string): Promise<MonthWorkspaceData>;
+  loadFullCloudAccount(uid: string): Promise<FullCloudAccountData>;
   toggleEntryCompletion(
     uid: string,
     entryId: string,
@@ -79,12 +96,13 @@ export interface BudgetRepository {
     options?: { actualAmount?: number; completedAtDateIso?: string; targetDebtId?: string }
   ): Promise<ToggleEntryCompletionResult>;
   addMonthEntry(uid: string, input: RegisterOrCompleteMovementInput): Promise<MonthEntry>;
+  deleteOrResetEntry(uid: string, entryId: string): Promise<void>;
   closeMonth(uid: string, monthKey: string, closedAtIso?: string): Promise<CloseMonthResult>;
 }
 
 /**
  * In-memory implementation pre-populated with the October 2026 golden dataset.
- * Used in Mode A instant demo/offline fallback and deterministic unit tests.
+ * Used in deterministic unit tests and offline fallback.
  */
 export class InMemoryBudgetRepository implements BudgetRepository {
   private concepts = new Map<string, Concept>();
@@ -95,6 +113,7 @@ export class InMemoryBudgetRepository implements BudgetRepository {
   private provisionPlan: IdealMotoPlan;
   private snapshots = new Map<string, MonthSnapshot>();
   private seededUsers = new Set<string>();
+  private activeMonthByUser = new Map<string, string>();
 
   constructor(autoSeedDefaultUser = true) {
     const seed = buildOctober2026SeedPayload();
@@ -102,6 +121,7 @@ export class InMemoryBudgetRepository implements BudgetRepository {
     if (autoSeedDefaultUser) {
       this.applySeedPayload(seed);
       this.seededUsers.add('local-owner');
+      this.activeMonthByUser.set('local-owner', '2026-10');
     }
   }
 
@@ -126,10 +146,11 @@ export class InMemoryBudgetRepository implements BudgetRepository {
 
   async seedOctober2026IfEmpty(uid: string): Promise<{ seeded: boolean; monthKey: string }> {
     if (this.seededUsers.has(uid) && this.entries.size > 0) {
-      return { seeded: false, monthKey: '2026-10' };
+      return { seeded: false, monthKey: this.activeMonthByUser.get(uid) ?? '2026-10' };
     }
     this.applySeedPayload();
     this.seededUsers.add(uid);
+    this.activeMonthByUser.set(uid, '2026-10');
     return { seeded: true, monthKey: '2026-10' };
   }
 
@@ -153,6 +174,45 @@ export class InMemoryBudgetRepository implements BudgetRepository {
       savingsBuckets,
       provisionPlan: this.provisionPlan,
       closedSnapshot,
+    };
+  }
+
+  async loadFullCloudAccount(uid: string): Promise<FullCloudAccountData> {
+    await this.seedOctober2026IfEmpty(uid);
+    const activeMonthKey = this.activeMonthByUser.get(uid) ?? '2026-10';
+    const concepts = Array.from(this.concepts.values()).sort((a, b) => a.order - b.order);
+    const entries = Array.from(this.entries.values());
+    const debts = Array.from(this.debts.values());
+    const debtPayments = Array.from(this.debtPayments.values());
+    const savingsBuckets = Array.from(this.savingsBuckets.values());
+
+    const monthsSet = new Set<string>(['2026-10', activeMonthKey]);
+    for (const e of entries) monthsSet.add(e.monthKey);
+    for (const s of this.snapshots.keys()) monthsSet.add(s);
+    const availableMonths = Array.from(monthsSet).sort();
+
+    const debtsByMonth: Record<string, Debt[]> = {};
+    const savingsBucketsByMonth: Record<string, SavingsBucket[]> = {};
+    for (const mk of availableMonths) {
+      debtsByMonth[mk] = debts;
+      savingsBucketsByMonth[mk] = savingsBuckets;
+    }
+
+    const closedSnapshots: Record<string, MonthSnapshot> = {};
+    for (const [mk, snap] of this.snapshots.entries()) {
+      closedSnapshots[mk] = snap;
+    }
+
+    return {
+      activeMonthKey,
+      availableMonths,
+      concepts,
+      entries,
+      debtsByMonth,
+      debtPayments,
+      savingsBucketsByMonth,
+      provisionPlan: this.provisionPlan,
+      closedSnapshots,
     };
   }
 
@@ -224,7 +284,13 @@ export class InMemoryBudgetRepository implements BudgetRepository {
     );
     const allConcepts = Array.from(this.concepts.values());
     const nextEntries = registerMovement(existingEntriesForMonth, allConcepts, input);
-    const created = nextEntries[nextEntries.length - 1];
+    const created =
+      nextEntries.find(
+        (e) =>
+          e.monthKey === input.monthKey &&
+          e.conceptId === input.conceptId &&
+          !existingEntriesForMonth.some((prev) => prev.id === e.id && prev.status === 'completed')
+      ) ?? nextEntries[nextEntries.length - 1];
     if (!created) {
       throw new Error('Failed to create month entry');
     }
@@ -232,8 +298,18 @@ export class InMemoryBudgetRepository implements BudgetRepository {
     return created;
   }
 
+  async deleteOrResetEntry(_uid: string, entryId: string): Promise<void> {
+    const allEntries = Array.from(this.entries.values());
+    const allConcepts = Array.from(this.concepts.values());
+    const nextEntries = deleteMovement(allEntries, allConcepts, entryId);
+    this.entries.clear();
+    for (const e of nextEntries) {
+      this.entries.set(e.id, e);
+    }
+  }
+
   async closeMonth(
-    _uid: string,
+    uid: string,
     monthKey: string,
     closedAtIso = '2026-10-31T23:59:59-05:00'
   ): Promise<CloseMonthResult> {
@@ -265,6 +341,7 @@ export class InMemoryBudgetRepository implements BudgetRepository {
     for (const nextEntry of result.nextMonthEntries) {
       this.entries.set(nextEntry.id, nextEntry);
     }
+    this.activeMonthByUser.set(uid, result.nextMonthKey);
 
     return result;
   }
@@ -285,7 +362,11 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     const userDocRef = doc(this.db, 'users', uid);
     const userSnap = await getDoc(userDocRef);
     if (userSnap.exists() && userSnap.data()?.seededOctober2026 === true) {
-      return { seeded: false, monthKey: '2026-10' };
+      const existingActive =
+        typeof userSnap.data()?.activeMonthKey === 'string'
+          ? (userSnap.data()?.activeMonthKey as string)
+          : '2026-10';
+      return { seeded: false, monthKey: existingActive };
     }
 
     const payload = buildOctober2026SeedPayload();
@@ -408,6 +489,99 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     };
   }
 
+  /**
+   * Loads the user's entire budget, all months' entries, debts, savings, and closed monthSnapshots
+   * when signing in on any device.
+   */
+  async loadFullCloudAccount(uid: string): Promise<FullCloudAccountData> {
+    const seedInfo = await this.seedOctober2026IfEmpty(uid);
+
+    const [
+      userSnap,
+      conceptsSnap,
+      entriesSnap,
+      debtsSnap,
+      paymentsSnap,
+      bucketsSnap,
+      planSnap,
+      snapshotsSnap,
+    ] = await Promise.all([
+      getDoc(doc(this.db, 'users', uid)),
+      getDocs(collection(this.db, 'users', uid, 'concepts')),
+      getDocs(collection(this.db, 'users', uid, 'entries')),
+      getDocs(collection(this.db, 'users', uid, 'debts')),
+      getDocs(collection(this.db, 'users', uid, 'debtPayments')),
+      getDocs(collection(this.db, 'users', uid, 'savingsBuckets')),
+      getDoc(doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal')),
+      getDocs(collection(this.db, 'users', uid, 'monthSnapshots')),
+    ]);
+
+    const activeMonthKey =
+      userSnap.exists() && typeof userSnap.data()?.activeMonthKey === 'string'
+        ? (userSnap.data()?.activeMonthKey as string)
+        : seedInfo.monthKey;
+
+    const concepts = conceptsSnap.docs
+      .map((d) => parseConceptFromFirestore(d.data()))
+      .sort((a, b) => a.order - b.order);
+    const entries = entriesSnap.docs.map((d) => parseMonthEntryFromFirestore(d.data()));
+    const currentDebts = debtsSnap.docs.map((d) => parseDebtFromFirestore(d.data()));
+    const debtPayments = paymentsSnap.docs.map((d) => parseDebtPaymentFromFirestore(d.data()));
+    const currentBuckets = bucketsSnap.docs.map((d) => parseSavingsBucketFromFirestore(d.data()));
+    const provisionPlan = planSnap.exists()
+      ? parseIdealMotoPlanFromFirestore(planSnap.data())
+      : buildOctober2026SeedPayload().provisionPlan;
+
+    const closedSnapshots: Record<string, MonthSnapshot> = {};
+    for (const snapDoc of snapshotsSnap.docs) {
+      const parsed = parseMonthSnapshotFromFirestore(snapDoc.data());
+      closedSnapshots[parsed.monthKey] = parsed;
+    }
+
+    const monthsSet = new Set<string>(['2026-10', activeMonthKey]);
+    for (const e of entries) monthsSet.add(e.monthKey);
+    for (const mk of Object.keys(closedSnapshots)) monthsSet.add(mk);
+    const availableMonths = Array.from(monthsSet).sort();
+
+    const seed = buildOctober2026SeedPayload();
+    const debtsByMonth: Record<string, Debt[]> = {
+      '2026-10': seed.debts,
+    };
+    const savingsBucketsByMonth: Record<string, SavingsBucket[]> = {
+      '2026-10': seed.savingsBuckets,
+    };
+
+    for (const mk of availableMonths) {
+      const snap = closedSnapshots[mk];
+      if (snap) {
+        debtsByMonth[mk] = snap.closingDebts.map((cd) => ({
+          id: cd.debtId,
+          groupKey: 'FUNFAMI',
+          name: cd.name,
+          lender: 'FUNFAMI',
+          openingBalance: cd.openingBalance,
+          monthKey: mk,
+        }));
+      } else {
+        debtsByMonth[mk] = currentDebts.length > 0 ? currentDebts : seed.debts;
+      }
+      savingsBucketsByMonth[mk] =
+        mk === activeMonthKey && currentBuckets.length > 0 ? currentBuckets : seed.savingsBuckets;
+    }
+
+    return {
+      activeMonthKey,
+      availableMonths,
+      concepts: concepts.length > 0 ? concepts : seed.concepts,
+      entries: entries.length > 0 ? entries : seed.entries,
+      debtsByMonth,
+      debtPayments,
+      savingsBucketsByMonth,
+      provisionPlan,
+      closedSnapshots,
+    };
+  }
+
   async toggleEntryCompletion(
     uid: string,
     entryId: string,
@@ -511,17 +685,72 @@ export class FirestoreBudgetRepository implements BudgetRepository {
         : buildOctober2026SeedPayload().concepts;
 
     const nextEntries = registerMovement(existingEntriesForMonth, concepts, input);
-    const created = nextEntries[nextEntries.length - 1];
+    const created =
+      nextEntries.find(
+        (e) =>
+          e.monthKey === input.monthKey &&
+          e.conceptId === input.conceptId &&
+          !existingEntriesForMonth.some((prev) => prev.id === e.id && prev.status === 'completed')
+      ) ?? nextEntries[nextEntries.length - 1];
     if (!created) {
       throw new Error('Failed to create month entry');
     }
 
+    const batch = writeBatch(this.db);
+    const updatedAt = new Date().toISOString();
     const entryRef = doc(this.db, 'users', uid, 'entries', created.id);
-    await setDoc(entryRef, {
+    batch.set(entryRef, {
       ...serializeMonthEntryForFirestore(created),
-      updatedAt: new Date().toISOString(),
+      updatedAt,
     });
+
+    const concept = concepts.find((c) => c.id === created.conceptId);
+    if (concept?.linkedDebtGroup) {
+      const targetDebtId = concept.defaultTargetDebtId ?? 'debt_cb300f_moto';
+      const paymentId = `${created.id}_${targetDebtId}`;
+      const paymentRef = doc(this.db, 'users', uid, 'debtPayments', paymentId);
+      batch.set(paymentRef, {
+        ...serializeDebtPaymentForFirestore({
+          id: paymentId,
+          entryId: created.id,
+          monthKey: created.monthKey,
+          debtId: targetDebtId,
+          principalAmount: created.actualAmount,
+          interestAmount: 0,
+          totalApplied: created.actualAmount,
+          completedAt: created.completedAt,
+          active: true,
+        }),
+        updatedAt,
+      });
+    }
+
+    await batch.commit();
     return created;
+  }
+
+  async deleteOrResetEntry(uid: string, entryId: string): Promise<void> {
+    const entryRef = doc(this.db, 'users', uid, 'entries', entryId);
+    const snap = await getDoc(entryRef);
+    if (!snap.exists()) return;
+
+    const entry = parseMonthEntryFromFirestore(snap.data());
+    const conceptSnap = await getDoc(doc(this.db, 'users', uid, 'concepts', entry.conceptId));
+    const concept = conceptSnap.exists()
+      ? parseConceptFromFirestore(conceptSnap.data())
+      : buildOctober2026SeedPayload().concepts.find((c) => c.id === entry.conceptId);
+
+    if (concept?.allowMultiplePerMonth) {
+      await deleteDoc(entryRef);
+    } else {
+      const resetEntry = uncompleteMovement([entry], entryId)[0];
+      if (resetEntry) {
+        await setDoc(entryRef, {
+          ...serializeMonthEntryForFirestore(resetEntry),
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    }
   }
 
   async closeMonth(

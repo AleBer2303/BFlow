@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
-import React, { useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Platform, Pressable, ScrollView, View } from 'react-native';
 import { FirestoreBudgetRepository } from '../data/repositories/budgetRepository';
 import {
   AppText,
@@ -23,6 +23,7 @@ import {
   type RegisterOrCompleteMovementInput,
 } from '../domain';
 import { AnalyticsAndHistoryView } from '../features/analytics/components/AnalyticsAndHistoryView';
+import { AuthScreen } from '../features/auth/components/AuthScreen';
 import {
   useBudgetStore,
   type BFlowWorkspaceTab,
@@ -31,12 +32,14 @@ import { ChecklistWorkspaceView } from '../features/checklist/components/Checkli
 import { DebtsFunfamiView } from '../features/debts/components/DebtsFunfamiView';
 import { SavingsAndMotoIdealView } from '../features/savings/components/SavingsAndMotoIdealView';
 import {
-  DEMO_OWNER_USER,
-  registerWithEmail,
+  registerWithPersonalProfile,
+  sendPasswordRecoveryEmail,
   signInWithEmail,
   signInWithGoogle,
   signOutCurrentUser,
+  subscribeToAuthUser,
   type BFlowAuthUser,
+  type RegisterPersonalAccountInput,
 } from '../platform/auth/authAdapter';
 import { resolveRuntimeCapabilities } from '../platform/mode/runtimeMode';
 
@@ -68,7 +71,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     setActiveMonthKey,
     setAuthUser,
     setSyncStatus,
-    applyCloudWorkspace,
+    applyFullCloudAccount,
     toggleEntryStatus,
     addOrCompleteMovement,
     removeOrResetEntry,
@@ -77,12 +80,131 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
   } = useBudgetStore();
 
   const [pulseCount, setPulseCount] = useState(0);
-  const [showAuthForm, setShowAuthForm] = useState(false);
-  const [emailInput, setEmailInput] = useState('abernalg2303@gmail.com');
-  const [passwordInput, setPasswordInput] = useState('');
+  const [authErrorMessage, setAuthErrorMessage] = useState<string | null>(null);
+  const [authStatusMessage, setAuthStatusMessage] = useState<string | null>(null);
 
   const runtime = resolveRuntimeCapabilities();
   const activeMonthLabel = formatMonthKeyLabelEs(activeMonthKey);
+
+  const triggerHaptic = async (type: 'success' | 'light') => {
+    if (Platform.OS === 'web') return;
+    try {
+      if (type === 'success') {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+    } catch {
+      // Ignore haptics errors on unsupported devices
+    }
+  };
+
+  const syncUserCloudAccount = async (user: BFlowAuthUser) => {
+    setSyncStatus('Cargando tu presupuesto e historial desde Cloud Firestore...', true);
+    try {
+      const repo = new FirestoreBudgetRepository();
+      const fullAccount = await repo.loadFullCloudAccount(user.uid);
+      applyFullCloudAccount(fullAccount);
+      setSyncStatus(
+        `Sincronizado en Cloud Firestore (${fullAccount.entries.length} movimientos · ${fullAccount.availableMonths.length} ${fullAccount.availableMonths.length === 1 ? 'mes' : 'meses'})`,
+        false
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error al sincronizar con Firestore';
+      setSyncStatus(`Aviso Firestore: ${message}`, false);
+    }
+  };
+
+  // Automatic session restoration listener in live runtime
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'test') {
+      return;
+    }
+    const unsubscribe = subscribeToAuthUser((restoredUser) => {
+      if (restoredUser) {
+        setAuthUser(restoredUser);
+        void syncUserCloudAccount(restoredUser);
+      } else {
+        setAuthUser(null);
+      }
+    });
+    return () => unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSignInWithEmail = async (email: string, password: string) => {
+    setAuthErrorMessage(null);
+    setAuthStatusMessage(null);
+    setSyncStatus('Verificando credenciales en Firebase Auth...', true);
+    try {
+      const user = await signInWithEmail(email, password);
+      setAuthUser(user);
+      await syncUserCloudAccount(user);
+      await triggerHaptic('success');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No fue posible iniciar sesión.';
+      setAuthErrorMessage(msg);
+      setSyncStatus(msg, false);
+    }
+  };
+
+  const handleRegisterPersonalAccount = async (input: RegisterPersonalAccountInput) => {
+    setAuthErrorMessage(null);
+    setAuthStatusMessage(null);
+    setSyncStatus('Creando tu cuenta personal y preparando tu presupuesto...', true);
+    try {
+      const user = await registerWithPersonalProfile(input);
+      setAuthUser(user);
+      await syncUserCloudAccount(user);
+      await triggerHaptic('success');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No fue posible crear tu cuenta.';
+      setAuthErrorMessage(msg);
+      setSyncStatus(msg, false);
+    }
+  };
+
+  const handleSignInWithGoogle = async () => {
+    setAuthErrorMessage(null);
+    setAuthStatusMessage(null);
+    setSyncStatus('Conectando con tu cuenta de Google...', true);
+    try {
+      const user = await signInWithGoogle();
+      setAuthUser(user);
+      await syncUserCloudAccount(user);
+      await triggerHaptic('success');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'No fue posible conectar con Google.';
+      setAuthErrorMessage(msg);
+      setSyncStatus(msg, false);
+    }
+  };
+
+  const handleSendPasswordRecovery = async (email: string) => {
+    setAuthErrorMessage(null);
+    setAuthStatusMessage(null);
+    setSyncStatus('Enviando enlace de recuperación...', true);
+    try {
+      await sendPasswordRecoveryEmail(email);
+      setAuthStatusMessage(
+        `Enviamos un enlace de recuperación a ${email.trim()}. Revisa tu bandeja de entrada.`
+      );
+      setSyncStatus('Enlace de recuperación enviado.', false);
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : 'No fue posible enviar el correo de recuperación.';
+      setAuthErrorMessage(msg);
+      setSyncStatus(msg, false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOutCurrentUser();
+    setAuthUser(null);
+    setAuthErrorMessage(null);
+    setAuthStatusMessage(null);
+    setSyncStatus('Sesión cerrada correctamente.', false);
+  };
 
   const activeDebts = useMemo(
     () => debtsByMonth[activeMonthKey] ?? debtsByMonth['2026-10'] ?? [],
@@ -144,58 +266,20 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     [concepts, entries, activeMonthKey]
   );
 
-  const triggerHaptic = async (type: 'success' | 'light') => {
-    if (Platform.OS === 'web') return;
-    try {
-      if (type === 'success') {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-    } catch {
-      // Ignore haptics errors on unsupported devices
-    }
-  };
-
-  const syncCloudWorkspace = async (user: BFlowAuthUser) => {
-    const repo = new FirestoreBudgetRepository();
-    const workspace = await repo.loadMonthWorkspace(user.uid, activeMonthKey);
-    applyCloudWorkspace(workspace);
-    setSyncStatus(
-      `Sincronizado en Cloud Firestore (bflow-deaeb · ${workspace.entries.length} movimientos)`,
-      false
+  // AUTHENTICATION GATE: If no authenticated user session is active, render AuthScreen first
+  if (!authUser) {
+    return (
+      <AuthScreen
+        isSubmitting={isSyncing}
+        errorMessage={authErrorMessage}
+        statusMessage={authStatusMessage}
+        onSignInWithEmail={handleSignInWithEmail}
+        onRegisterPersonalAccount={handleRegisterPersonalAccount}
+        onSignInWithGoogle={handleSignInWithGoogle}
+        onSendPasswordRecovery={handleSendPasswordRecovery}
+      />
     );
-  };
-
-  const handleAuthSubmit = async (modeAction: 'signin' | 'register' | 'google') => {
-    setSyncStatus('Conectando con Firebase Auth (bflow-deaeb)...', true);
-    try {
-      const user =
-        modeAction === 'google'
-          ? await signInWithGoogle()
-          : modeAction === 'register'
-            ? await registerWithEmail(emailInput, passwordInput)
-            : await signInWithEmail(emailInput, passwordInput);
-
-      setAuthUser(user);
-      setShowAuthForm(false);
-      await syncCloudWorkspace(user);
-      await triggerHaptic('success');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error de autenticación';
-      setSyncStatus(`Aviso Firebase: ${message}`, false);
-    }
-  };
-
-  const handleSignOutToLocal = async () => {
-    try {
-      await signOutCurrentUser();
-    } catch {
-      // Ignore if already signed out
-    }
-    setAuthUser(DEMO_OWNER_USER);
-    setSyncStatus('Modo Local Activo (Semilla Octubre 2026)', false);
-  };
+  }
 
   const handleToggleEntry = async (entry: MonthEntry) => {
     const wasCompleted = entry.status === 'completed';
@@ -268,6 +352,54 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         </Pressable>
       </View>
 
+      {/* Authenticated User Personal Profile & Cloud Session Card */}
+      <GlassSurface testID="authenticated-user-profile-card">
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: spacing.sm,
+          }}
+        >
+          <View style={{ flex: 1, gap: spacing.xxs }}>
+            <AppText variant="headline" testID="authenticated-user-name">
+              {`Hola, ${authUser.displayName ?? 'Usuario BFlow'}`}
+            </AppText>
+            <AppText variant="micro" color={colors.text.secondary}>
+              {`${authUser.email ?? authUser.uid}${authUser.phone ? ` · ${authUser.phone}` : ''}`}
+            </AppText>
+            {authUser.financialGoal ? (
+              <AppText variant="micro" color={colors.semantic.moto}>
+                {`Meta: ${authUser.financialGoal}`}
+              </AppText>
+            ) : null}
+            <AppText variant="micro" color={colors.text.muted}>
+              {syncMessage}
+            </AppText>
+          </View>
+
+          <Pressable
+            testID="sign-out-button"
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar sesión"
+            onPress={handleSignOut}
+            style={{
+              minHeight: MIN_TOUCH_TARGET_PT,
+              paddingHorizontal: spacing.md,
+              borderRadius: radius.pill,
+              backgroundColor: colors.glass.surfaceElevatedTint,
+              borderWidth: 1,
+              borderColor: colors.glass.specularBorder,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <AppText variant="caption">Cerrar sesión</AppText>
+          </Pressable>
+        </View>
+      </GlassSurface>
+
       {/* Floating iOS 26 Liquid Glass Navigation Tab Bar */}
       <GlassSurface elevated testID="liquid-glass-tab-bar">
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
@@ -305,158 +437,6 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
               </Pressable>
             );
           })}
-        </View>
-      </GlassSurface>
-
-      {/* Firebase Auth & Cloud Firestore Sync Card */}
-      <GlassSurface testID="firebase-sync-card">
-        <View style={{ gap: spacing.sm }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            <View style={{ flex: 1, gap: spacing.xxs }}>
-              <AppText variant="headline">
-                {authUser.provider === 'firebase'
-                  ? `☁️ Cloud Firestore (${authUser.email ?? authUser.uid})`
-                  : '📱 Modo Local + Nube Firebase (bflow-deaeb)'}
-              </AppText>
-              <AppText variant="micro" color={colors.text.secondary}>
-                {syncMessage}
-              </AppText>
-            </View>
-            <Pressable
-              testID="toggle-auth-panel-button"
-              accessibilityRole="button"
-              accessibilityLabel="Configurar cuenta de Firebase"
-              onPress={() =>
-                authUser.provider === 'firebase'
-                  ? handleSignOutToLocal()
-                  : setShowAuthForm((prev) => !prev)
-              }
-              style={{
-                minHeight: MIN_TOUCH_TARGET_PT,
-                paddingHorizontal: spacing.md,
-                borderRadius: radius.pill,
-                backgroundColor: colors.glass.surfaceElevatedTint,
-                borderWidth: 1,
-                borderColor: colors.glass.specularBorder,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <AppText variant="caption">
-                {authUser.provider === 'firebase'
-                  ? 'Cerrar Sesión'
-                  : showAuthForm
-                    ? 'Ocultar'
-                    : 'Conectar Nube'}
-              </AppText>
-            </Pressable>
-          </View>
-
-          {showAuthForm && authUser.provider !== 'firebase' ? (
-            <View style={{ gap: spacing.xs, paddingTop: spacing.xs }}>
-              <TextInput
-                testID="firebase-email-input"
-                value={emailInput}
-                onChangeText={setEmailInput}
-                placeholder="Correo electrónico"
-                placeholderTextColor={colors.text.muted}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                style={{
-                  minHeight: MIN_TOUCH_TARGET_PT,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: colors.glass.subtleBorder,
-                  color: colors.text.primary,
-                }}
-              />
-              <TextInput
-                testID="firebase-password-input"
-                value={passwordInput}
-                onChangeText={setPasswordInput}
-                placeholder="Contraseña (mín. 6 caracteres)"
-                placeholderTextColor={colors.text.muted}
-                secureTextEntry
-                style={{
-                  minHeight: MIN_TOUCH_TARGET_PT,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: colors.glass.subtleBorder,
-                  color: colors.text.primary,
-                }}
-              />
-              <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-                <Pressable
-                  testID="firebase-register-button"
-                  accessibilityRole="button"
-                  disabled={isSyncing}
-                  onPress={() => handleAuthSubmit('register')}
-                  style={{
-                    flex: 1,
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    borderRadius: radius.md,
-                    backgroundColor: colors.semantic.incomeSoft,
-                    borderWidth: 1,
-                    borderColor: colors.semantic.income,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                >
-                  <AppText variant="caption" color={colors.semantic.income}>
-                    {isSyncing ? 'Sincronizando...' : 'Crear Cuenta + Seed'}
-                  </AppText>
-                </Pressable>
-                <Pressable
-                  testID="firebase-signin-button"
-                  accessibilityRole="button"
-                  disabled={isSyncing}
-                  onPress={() => handleAuthSubmit('signin')}
-                  style={{
-                    flex: 1,
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    borderRadius: radius.md,
-                    backgroundColor: colors.glass.surfaceElevatedTint,
-                    borderWidth: 1,
-                    borderColor: colors.glass.specularBorder,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                >
-                  <AppText variant="caption">Iniciar Sesión</AppText>
-                </Pressable>
-                {Platform.OS === 'web' ? (
-                  <Pressable
-                    testID="firebase-google-button"
-                    accessibilityRole="button"
-                    disabled={isSyncing}
-                    onPress={() => handleAuthSubmit('google')}
-                    style={{
-                      flex: 1,
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceElevatedTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.specularBorder,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <AppText variant="caption">Google</AppText>
-                  </Pressable>
-                ) : null}
-              </View>
-            </View>
-          ) : null}
         </View>
       </GlassSurface>
 

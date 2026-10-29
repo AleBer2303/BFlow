@@ -12,83 +12,22 @@ rules_version = '2';
 //      - uid: string (optional, immutable, == uid)
 //      - email: string | null (optional, <= 254 chars)
 //      - displayName: string | null (optional, <= 120 chars)
+//      - phone: string | null (optional, <= 40 chars)
+//      - financialGoal: string | null (optional, <= 240 chars)
+//      - authProvider: 'password' | 'google.com' | 'local' | null (optional, <= 40 chars)
+//      - createdAt: timestamp | string | null (optional, <= 64 chars)
+//      - lastLoginAt: timestamp | string | null (optional, <= 64 chars)
 //      - seededOctober2026: bool (optional)
 //      - activeMonthKey: string (optional, YYYY-MM)
-//      - updatedAt: timestamp | string (optional)
+//      - updatedAt: timestamp | string | null (optional, <= 64 chars)
 //
 // 2. Collection: /users/{uid}/concepts/{conceptId}
-//    Fields:
-//      - id: string (required, immutable, == conceptId)
-//      - name: string (required, 1..120 chars)
-//      - type: 'income' | 'expense' (required)
-//      - group: 'fixed' | 'variable' (required)
-//      - defaultAmount: int (required, >= 0, COP integer)
-//      - allowMultiplePerMonth: bool (required)
-//      - recurrence: map (required, { kind: 'monthly' | 'specific_months', months?: list })
-//      - archived: bool (required)
-//      - order: int (required, >= 0)
-//      - icon, color, linkedDebtGroup, defaultTargetDebtId,
-//        savingsContribution, idealMotoCategoryKey, updatedAt: optional
-//
 // 3. Collection: /users/{uid}/entries/{entryId}
-//    Fields:
-//      - id: string (required, immutable, == entryId)
-//      - monthKey: string (required, matches ^\d{4}-(0[1-9]|1[0-2])$)
-//      - conceptId: string (required, 1..120 chars)
-//      - conceptName: string (required, 1..120 chars)
-//      - type: 'income' | 'expense' (required)
-//      - group: 'fixed' | 'variable' (required)
-//      - plannedAmount: int (required, >= 0, COP integer)
-//      - actualAmount: int (required, >= 0, COP integer)
-//      - status: 'pending' | 'completed' (required)
-//      - completedAt, note, updatedAt: optional
-//
 // 4. Collection: /users/{uid}/debts/{debtId}
-//    Fields:
-//      - id: string (required, immutable, == debtId)
-//      - groupKey: string (required, 1..64 chars)
-//      - name: string (required, 1..120 chars)
-//      - lender: string (required, 1..120 chars)
-//      - openingBalance: int (required, >= 0, COP integer)
-//      - monthKey: string (required, matches ^\d{4}-(0[1-9]|1[0-2])$)
-//      - updatedAt: optional
-//
 // 5. Collection: /users/{uid}/debtPayments/{paymentId}
-//    Fields:
-//      - id: string (required, immutable, == paymentId)
-//      - entryId: string (required, 1..160 chars)
-//      - monthKey: string (required, matches ^\d{4}-(0[1-9]|1[0-2])$)
-//      - debtId: string (required, 1..120 chars)
-//      - principalAmount: int (required, >= 0, COP integer)
-//      - interestAmount: int (required, >= 0, COP integer)
-//      - totalApplied: int (required, >= 0, == principalAmount + interestAmount)
-//      - active: bool (required)
-//      - completedAt, updatedAt: optional
-//
 // 6. Collection: /users/{uid}/savingsBuckets/{bucketId}
-//    Fields:
-//      - id: 'moto' | 'savings' (required, immutable, == bucketId)
-//      - name: string (required, 1..120 chars)
-//      - openingBalance: int (required, >= 0, COP integer)
-//      - updatedAt: optional
-//
 // 7. Collection: /users/{uid}/provisionPlans/{planId}
-//    Fields:
-//      - items: list (required, <= 50 items)
-//      - recurringMonthlyTotalCop: int (required, >= 0, COP integer)
-//      - totalWithTargetGoalCop: int (required, >= 0, COP integer)
-//      - id, updatedAt: optional
-//
 // 8. Collection: /users/{uid}/monthSnapshots/{snapshotId}
-//    Fields:
-//      - monthKey: string (required, immutable, == snapshotId, YYYY-MM)
-//      - closedAtIso: string (required, 1..64 chars)
-//      - budget: map (required)
-//      - checklist: map (required)
-//      - closingDebts: list (required, <= 50 items)
-//      - totalClosingDebt: int (required, >= 0, COP integer)
-//      - closingSavings: map (required)
-//      - updatedAt: optional
 // ===============================================================
 
 service cloud.firestore {
@@ -122,6 +61,13 @@ service cloud.firestore {
       return !(field in data) ||
         data[field] == null ||
         (data[field] is string && data[field].size() <= maxLen);
+    }
+
+    function isOptionalTimestampOrString(data, field, maxLen) {
+      return !(field in data) ||
+        data[field] == null ||
+        data[field] is timestamp ||
+        (data[field] is string && data[field].size() >= 1 && data[field].size() <= maxLen);
     }
 
     function isNonNegativeInt(val) {
@@ -178,13 +124,27 @@ service cloud.firestore {
           'uid',
           'email',
           'displayName',
+          'phone',
+          'financialGoal',
+          'authProvider',
+          'createdAt',
+          'lastLoginAt',
           'seededOctober2026',
           'activeMonthKey',
           'updatedAt'
         ]) &&
-        (!('uid' in data) || data.uid == uid) &&
+        (!('uid' in data) || (data.uid is string && data.uid == uid)) &&
         isOptionalString(data, 'email', 254) &&
         isOptionalString(data, 'displayName', 120) &&
+        isOptionalString(data, 'phone', 40) &&
+        isOptionalString(data, 'financialGoal', 240) &&
+        (!('authProvider' in data) ||
+          data.authProvider == null ||
+          (data.authProvider is string &&
+            data.authProvider.size() <= 40 &&
+            data.authProvider in ['password', 'google.com', 'local'])) &&
+        isOptionalTimestampOrString(data, 'createdAt', 64) &&
+        isOptionalTimestampOrString(data, 'lastLoginAt', 64) &&
         (!('seededOctober2026' in data) || data.seededOctober2026 is bool) &&
         (!('activeMonthKey' in data) || isValidMonthKey(data.activeMonthKey)) &&
         isValidUpdatedAt(data);

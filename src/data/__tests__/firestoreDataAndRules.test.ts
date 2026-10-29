@@ -176,6 +176,22 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
     expect(completeResult.updatedEntry.status).toBe('completed');
     expect(completeResult.updatedDebtPayment?.active).toBe(true);
 
+    // Resetting non-repeatable Cuota FUNFAMI via deleteOrResetEntry deactivates linked DebtPayment
+    await repo.deleteOrResetEntry('user_123', '2026-10_exp_cuota_funfami');
+    const afterReset = await repo.loadMonthWorkspace('user_123', '2026-10');
+    expect(
+      afterReset.entries.find((e) => e.id === '2026-10_exp_cuota_funfami')?.status
+    ).toBe('pending');
+    expect(afterReset.debtPayments[0]?.active).toBe(false);
+
+    // Re-complete Cuota FUNFAMI via addMonthEntry so October closes with $6.200.000 remaining debt
+    await repo.addMonthEntry('user_123', {
+      monthKey: '2026-10',
+      conceptId: 'exp_cuota_funfami',
+      actualAmount: 1_800_000,
+      completedAt: '2026-10-27',
+    });
+
     // Add repeatable variable expense ("exp_otro")
     const addedVariable = await repo.addMonthEntry('user_123', {
       monthKey: '2026-10',
@@ -191,6 +207,17 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
     const closeResult = await repo.closeMonth('user_123', '2026-10');
     expect(closeResult.nextMonthKey).toBe('2026-11');
     expect(closeResult.snapshot.totalClosingDebt).toBe(6_200_000);
+
+    // Historical October 2026 workspace must preserve its original opening balances (no double-subtraction)
+    const octClosedWorkspace = await repo.loadMonthWorkspace('user_123', '2026-10');
+    const octClosedDebtSummary = calculateFunfamiDebtSummary(
+      octClosedWorkspace.debts,
+      octClosedWorkspace.entries,
+      '2026-10',
+      octClosedWorkspace.debtPayments
+    );
+    expect(octClosedDebtSummary.openingTotalDebt).toBe(8_000_000);
+    expect(octClosedDebtSummary.totalRemainingDebt).toBe(6_200_000);
 
     const novWorkspace = await repo.loadMonthWorkspace('user_123', '2026-11');
     // Prima is excluded in November (specific_months [6, 12]), so 11 non-repeatable entries
@@ -223,6 +250,8 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
     expect(rulesContent).toContain('match /savingsBuckets/{bucketId}');
     expect(rulesContent).toContain('match /provisionPlans/{planId}');
     expect(rulesContent).toContain('match /monthSnapshots/{snapshotId}');
+    expect(rulesContent).toContain('request.resource.data.monthKey == resource.data.monthKey');
+    expect(rulesContent).toContain('request.resource.data.entryId == resource.data.entryId');
     expect(rulesContent).toContain('allow read, write: if false;');
   });
 });

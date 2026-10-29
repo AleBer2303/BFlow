@@ -21,6 +21,7 @@ import {
 import {
   formatCop,
   getAvailableConcepts,
+  toBogotaIsoDate,
   type Concept,
   type ConceptType,
   type MonthEntry,
@@ -128,7 +129,7 @@ export function ChecklistWorkspaceView({
       monthKey,
       conceptId: activeSelectedConcept.id,
       actualAmount: parsedAmount,
-      completedAt: '2026-10-28',
+      completedAt: toBogotaIsoDate(),
       ...(noteInput.trim() ? { note: noteInput.trim() } : {}),
     });
 
@@ -162,8 +163,9 @@ export function ChecklistWorkspaceView({
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            paddingVertical: spacing.xs,
-            paddingHorizontal: spacing.sm,
+            gap: spacing.sm,
+            paddingVertical: spacing.sm,
+            paddingHorizontal: spacing.md,
             borderRadius: radius.md,
             backgroundColor: isCompleted
               ? colors.semantic.completedSoft
@@ -173,7 +175,14 @@ export function ChecklistWorkspaceView({
           }}
         >
           <View style={{ flex: 1, gap: spacing.xxs }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.xs,
+                flexWrap: 'wrap',
+              }}
+            >
               <AppText variant="body">{`${isCompleted ? '✓ ' : '○ '}${entry.conceptName}`}</AppText>
               {concept?.savingsContribution?.bucketId === 'moto' ? (
                 <StatusBadge label="→ Fondo Moto" status="moto" />
@@ -189,11 +198,13 @@ export function ChecklistWorkspaceView({
                 : `Pendiente · Previsto ${formatCop(entry.plannedAmount)}`}
             </AppText>
           </View>
-          <CurrencyText
-            amount={entry.actualAmount}
-            variant="body"
-            tone={entry.type === 'income' ? 'income' : 'expense'}
-          />
+          <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+            <CurrencyText
+              amount={entry.actualAmount}
+              variant="body"
+              tone={entry.type === 'income' ? 'income' : 'expense'}
+            />
+          </View>
         </Pressable>
 
         {isRepeatable ? (
@@ -233,7 +244,7 @@ export function ChecklistWorkspaceView({
 
   return (
     <View style={{ gap: spacing.md }} testID="checklist-workspace-view">
-      {/* Top Action Bar: Segmented Filter + Open Add Movement Modal */}
+      {/* Top Action Bar: Header + Full-Width Add Movement CTA + Segmented Filter */}
       <GlassSurface elevated>
         <View style={{ gap: spacing.sm }}>
           <View
@@ -241,30 +252,45 @@ export function ChecklistWorkspaceView({
               flexDirection: 'row',
               justifyContent: 'space-between',
               alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: spacing.xs,
             }}
           >
-            <AppText variant="headline">Checklist del Mes (Ingresos y Gastos)</AppText>
-            <Pressable
-              testID="open-add-movement-modal-button"
-              accessibilityRole="button"
-              accessibilityLabel="Agregar o completar movimiento"
-              onPress={() => handleOpenAddModal('expense')}
-              style={{
-                minHeight: MIN_TOUCH_TARGET_PT,
-                paddingHorizontal: spacing.md,
-                borderRadius: radius.pill,
-                backgroundColor: colors.semantic.incomeSoft,
-                borderWidth: 1,
-                borderColor: colors.semantic.income,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <AppText variant="caption" color={colors.semantic.income}>
-                + Nuevo Movimiento
+            <View style={{ flex: 1 }}>
+              <AppText variant="headline">Checklist del Mes</AppText>
+              <AppText variant="micro" color={colors.text.secondary}>
+                Ingresos y gastos operativos
               </AppText>
-            </Pressable>
+            </View>
+            <StatusBadge
+              label={`${completedTotalCount}/${monthEntries.length} completados`}
+              status={pendingTotalCount === 0 ? 'completed' : 'pending'}
+            />
           </View>
+
+          <Pressable
+            testID="open-add-movement-modal-button"
+            accessibilityRole="button"
+            accessibilityLabel="Agregar o completar movimiento"
+            onPress={() => handleOpenAddModal('expense')}
+            style={{
+              width: '100%',
+              minHeight: MIN_TOUCH_TARGET_PT,
+              paddingVertical: spacing.sm,
+              paddingHorizontal: spacing.md,
+              borderRadius: radius.md,
+              backgroundColor: colors.semantic.incomeSoft,
+              borderWidth: 1,
+              borderColor: colors.semantic.income,
+              flexDirection: 'row',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <AppText variant="headline" color={colors.semantic.income}>
+              + Nuevo Movimiento
+            </AppText>
+          </Pressable>
 
           <View style={{ flexDirection: 'row', gap: spacing.xs }}>
             {(
@@ -285,6 +311,7 @@ export function ChecklistWorkspaceView({
                   style={{
                     flex: 1,
                     minHeight: MIN_TOUCH_TARGET_PT,
+                    paddingHorizontal: spacing.xxs,
                     borderRadius: radius.md,
                     backgroundColor: active
                       ? colors.glass.surfaceElevatedTint
@@ -296,7 +323,8 @@ export function ChecklistWorkspaceView({
                   }}
                 >
                   <AppText
-                    variant="caption"
+                    variant="micro"
+                    numberOfLines={1}
                     color={active ? colors.text.primary : colors.text.secondary}
                   >
                     {seg.label}
@@ -317,9 +345,12 @@ export function ChecklistWorkspaceView({
                 flexDirection: 'row',
                 justifyContent: 'space-between',
                 alignItems: 'center',
+                gap: spacing.xs,
               }}
             >
-              <AppText variant="title2">Registrar Movimiento</AppText>
+              <View style={{ flex: 1 }}>
+                <AppText variant="title2">Registrar Movimiento</AppText>
+              </View>
               <Pressable
                 testID="close-add-movement-modal-button"
                 accessibilityRole="button"
@@ -327,7 +358,12 @@ export function ChecklistWorkspaceView({
                 style={{
                   minHeight: MIN_TOUCH_TARGET_PT,
                   paddingHorizontal: spacing.md,
+                  borderRadius: radius.pill,
+                  backgroundColor: colors.glass.surfaceTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.subtleBorder,
                   justifyContent: 'center',
+                  alignItems: 'center',
                 }}
               >
                 <AppText variant="caption" color={colors.text.secondary}>
@@ -386,6 +422,7 @@ export function ChecklistWorkspaceView({
                     onPress={() => handleSelectConceptChip(concept)}
                     style={{
                       minHeight: MIN_TOUCH_TARGET_PT,
+                      paddingVertical: spacing.xs,
                       paddingHorizontal: spacing.md,
                       borderRadius: radius.pill,
                       backgroundColor: isSelected
@@ -452,6 +489,7 @@ export function ChecklistWorkspaceView({
               accessibilityRole="button"
               onPress={handleSubmitMovement}
               style={{
+                width: '100%',
                 minHeight: MIN_TOUCH_TARGET_PT,
                 borderRadius: radius.md,
                 backgroundColor: colors.semantic.incomeSoft,
@@ -477,6 +515,8 @@ export function ChecklistWorkspaceView({
               flexDirection: 'row',
               justifyContent: 'space-between',
               alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: spacing.xs,
             }}
           >
             <AppText variant="title2">Ingresos</AppText>
@@ -490,25 +530,25 @@ export function ChecklistWorkspaceView({
           </AppText>
           {fixedIncomes.map(renderEntryRow)}
 
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              paddingTop: spacing.xs,
-            }}
-          >
+          <View style={{ paddingTop: spacing.xs, gap: spacing.xs }}>
             <AppText variant="caption" color={colors.text.secondary}>
               {`Ingresos Variables · Recibido: ${formatCop(budget.incomeByGroup.variable.paid)}`}
             </AppText>
+            {variableIncomes.map(renderEntryRow)}
             <Pressable
               testID="quick-add-variable-income-button"
               accessibilityRole="button"
               onPress={() => handleOpenAddModal('income')}
               style={{
+                width: '100%',
                 minHeight: MIN_TOUCH_TARGET_PT,
-                paddingHorizontal: spacing.sm,
+                paddingHorizontal: spacing.md,
+                borderRadius: radius.md,
+                backgroundColor: colors.semantic.incomeSoft,
+                borderWidth: 1,
+                borderColor: colors.semantic.income,
                 justifyContent: 'center',
+                alignItems: 'center',
               }}
             >
               <AppText variant="caption" color={colors.semantic.income}>
@@ -516,7 +556,6 @@ export function ChecklistWorkspaceView({
               </AppText>
             </Pressable>
           </View>
-          {variableIncomes.map(renderEntryRow)}
         </View>
       </GlassSurface>
 
@@ -528,6 +567,8 @@ export function ChecklistWorkspaceView({
               flexDirection: 'row',
               justifyContent: 'space-between',
               alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: spacing.xs,
             }}
           >
             <AppText variant="title2">Gastos</AppText>
@@ -541,25 +582,25 @@ export function ChecklistWorkspaceView({
           </AppText>
           {fixedExpenses.map(renderEntryRow)}
 
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              paddingTop: spacing.xs,
-            }}
-          >
+          <View style={{ paddingTop: spacing.xs, gap: spacing.xs }}>
             <AppText variant="caption" color={colors.text.secondary}>
               {`Gastos Variables (${formatCop(budget.expensesByGroup.variable.paid)} pagados · ${formatCop(budget.expensesByGroup.variable.pending)} pendientes)`}
             </AppText>
+            {variableExpenses.map(renderEntryRow)}
             <Pressable
               testID="quick-add-variable-expense-button"
               accessibilityRole="button"
               onPress={() => handleOpenAddModal('expense')}
               style={{
+                width: '100%',
                 minHeight: MIN_TOUCH_TARGET_PT,
-                paddingHorizontal: spacing.sm,
+                paddingHorizontal: spacing.md,
+                borderRadius: radius.md,
+                backgroundColor: colors.semantic.expenseSoft,
+                borderWidth: 1,
+                borderColor: colors.semantic.expense,
                 justifyContent: 'center',
+                alignItems: 'center',
               }}
             >
               <AppText variant="caption" color={colors.semantic.expense}>
@@ -567,7 +608,6 @@ export function ChecklistWorkspaceView({
               </AppText>
             </Pressable>
           </View>
-          {variableExpenses.map(renderEntryRow)}
         </View>
       </GlassSurface>
     </View>

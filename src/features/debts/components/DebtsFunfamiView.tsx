@@ -18,7 +18,12 @@ import {
   StatusBadge,
   useBFlowTheme,
 } from '../../../design-system';
-import { formatCop, type FunfamiDebtSummary, type MonthEntry } from '../../../domain';
+import {
+  formatCop,
+  formatMonthKeyLabelEs,
+  type FunfamiDebtSummary,
+  type MonthEntry,
+} from '../../../domain';
 
 export interface DebtsFunfamiViewProps {
   debtSummary: FunfamiDebtSummary;
@@ -39,6 +44,12 @@ export function DebtsFunfamiView({
       : 0;
   const paydownPercent = Math.round(paydownRatio * 1000) / 10;
   const estimatedRemainingMonths = debtSummary.projection.remainingMonths;
+  const monthShortLabel = formatMonthKeyLabelEs(debtSummary.monthKey).split(' ')[0]?.slice(0, 3) ?? 'Mes';
+  const payoffLabel = debtSummary.projection.estimatedPayoffMonthKey
+    ? formatMonthKeyLabelEs(debtSummary.projection.estimatedPayoffMonthKey)
+    : 'Sin cuota activa';
+  const installmentAmount =
+    funfamiEntry?.actualAmount || debtSummary.appliedInstallmentThisMonth || 1_800_000;
 
   return (
     <View style={{ gap: spacing.md }} testID="debts-funfami-view">
@@ -50,6 +61,8 @@ export function DebtsFunfamiView({
               flexDirection: 'row',
               justifyContent: 'space-between',
               alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: spacing.xs,
             }}
           >
             <AppText variant="caption" color={colors.text.secondary}>
@@ -58,8 +71,8 @@ export function DebtsFunfamiView({
             <StatusBadge
               label={
                 debtSummary.isInstallmentPaid
-                  ? 'Cuota Oct Pagada ($ 1.800.000)'
-                  : 'Cuota Oct Pendiente'
+                  ? `Cuota ${monthShortLabel} Pagada (${formatCop(installmentAmount)})`
+                  : `Cuota ${monthShortLabel} Pendiente`
               }
               status={debtSummary.isInstallmentPaid ? 'completed' : 'pending'}
             />
@@ -101,13 +114,15 @@ export function DebtsFunfamiView({
               flexDirection: 'row',
               justifyContent: 'space-between',
               alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: spacing.xs,
             }}
           >
             <AppText variant="micro" color={colors.semantic.debt}>
               {`${paydownPercent}% reducido este mes`}
             </AppText>
             <AppText variant="micro" color={colors.text.secondary}>
-              {`Proyección libertad financiera: ~${estimatedRemainingMonths} cuotas (Feb 2027)`}
+              {`Proyección libertad financiera: ~${estimatedRemainingMonths} cuotas (${payoffLabel})`}
             </AppText>
           </View>
 
@@ -117,7 +132,10 @@ export function DebtsFunfamiView({
               accessibilityRole="button"
               onPress={() => onToggleFunfamiInstallment(funfamiEntry)}
               style={{
+                width: '100%',
                 minHeight: MIN_TOUCH_TARGET_PT,
+                paddingVertical: spacing.xs,
+                paddingHorizontal: spacing.md,
                 borderRadius: radius.md,
                 backgroundColor: debtSummary.isInstallmentPaid
                   ? colors.semantic.completedSoft
@@ -140,7 +158,7 @@ export function DebtsFunfamiView({
               >
                 {debtSummary.isInstallmentPaid
                   ? `✓ Cuota FUNFAMI Pagada (${funfamiEntry.completedAt ?? '2026-10-27'}) · Toca para simular pendiente`
-                  : '○ Marcar Cuota FUNFAMI ($ 1.800.000) como Pagada'}
+                  : `○ Marcar Cuota FUNFAMI (${formatCop(funfamiEntry.plannedAmount)}) como Pagada`}
               </AppText>
             </Pressable>
           ) : null}
@@ -156,6 +174,8 @@ export function DebtsFunfamiView({
                 flexDirection: 'row',
                 justifyContent: 'space-between',
                 alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: spacing.xs,
               }}
             >
               <AppText variant="title2">{debt.name}</AppText>
@@ -180,6 +200,8 @@ export function DebtsFunfamiView({
               style={{
                 flexDirection: 'row',
                 justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: spacing.xs,
                 paddingTop: spacing.xxs,
               }}
             >

@@ -8,7 +8,13 @@
  */
 
 import { getApp, getApps, initializeApp, type FirebaseApp, type FirebaseOptions } from 'firebase/app';
-import { getAuth, type Auth } from 'firebase/auth';
+import {
+  browserLocalPersistence,
+  getAuth,
+  inMemoryPersistence,
+  initializeAuth,
+  type Auth,
+} from 'firebase/auth';
 import {
   getFirestore,
   initializeFirestore,
@@ -104,6 +110,13 @@ export function getFirebaseAuth(): Auth {
   if (cachedAuth) {
     return cachedAuth;
   }
-  cachedAuth = getAuth(getFirebaseApp());
+  const app = getFirebaseApp();
+  try {
+    cachedAuth = initializeAuth(app, {
+      persistence: Platform.OS === 'web' ? browserLocalPersistence : inMemoryPersistence,
+    });
+  } catch {
+    cachedAuth = getAuth(app);
+  }
   return cachedAuth;
 }

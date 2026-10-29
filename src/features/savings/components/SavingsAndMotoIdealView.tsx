@@ -113,6 +113,8 @@ export function SavingsAndMotoIdealView({
               flexDirection: 'row',
               justifyContent: 'space-between',
               alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: spacing.xs,
             }}
           >
             <AppText variant="title2">Provisión IDEAL Moto (CB300F)</AppText>

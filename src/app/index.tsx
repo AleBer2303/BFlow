@@ -19,6 +19,7 @@ import {
   formatCop,
   formatMonthKeyLabelEs,
   getAvailableConcepts,
+  toBogotaIsoDate,
   type MonthEntry,
   type RegisterOrCompleteMovementInput,
 } from '../domain';
@@ -283,7 +284,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
 
   const handleToggleEntry = async (entry: MonthEntry) => {
     const wasCompleted = entry.status === 'completed';
-    await toggleEntryStatus(entry.id, '2026-10-28');
+    await toggleEntryStatus(entry.id, toBogotaIsoDate());
     await triggerHaptic(wasCompleted ? 'light' : 'success');
   };
 
@@ -324,9 +325,10 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
           flexDirection: 'row',
           justifyContent: 'space-between',
           alignItems: 'center',
+          gap: spacing.sm,
         }}
       >
-        <View style={{ gap: spacing.xs }}>
+        <View style={{ flex: 1, gap: spacing.xs }}>
           <StatusBadge testID="runtime-mode-badge" label={runtime.label} status="info" />
           <AppText variant="title1">{`BFlow · ${activeMonthLabel}`}</AppText>
         </View>
@@ -450,6 +452,8 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                   flexDirection: 'row',
                   justifyContent: 'space-between',
                   alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: spacing.xs,
                 }}
               >
                 <AppText variant="caption" color={colors.text.secondary}>
@@ -510,14 +514,16 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                   flexDirection: 'row',
                   justifyContent: 'space-between',
                   alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: spacing.xs,
                 }}
               >
                 <AppText variant="headline">Control Deuda FUNFAMI (H6)</AppText>
                 <StatusBadge
                   label={
                     debtSummary.isInstallmentPaid
-                      ? 'Cuota $ 1.800.000 Pagada'
-                      : 'Cuota $ 1.800.000 Pendiente'
+                      ? `Cuota ${formatCop(debtSummary.appliedInstallmentThisMonth)} Pagada`
+                      : `Cuota ${formatCop(funfamiEntry?.plannedAmount ?? 1_800_000)} Pendiente`
                   }
                   status={debtSummary.isInstallmentPaid ? 'debt' : 'pending'}
                 />
@@ -541,6 +547,8 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                   flexDirection: 'row',
                   justifyContent: 'space-between',
                   alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: spacing.xs,
                 }}
               >
                 <AppText variant="headline">Control Ahorros y Moto (K6)</AppText>
@@ -568,13 +576,40 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                   flexDirection: 'row',
                   justifyContent: 'space-between',
                   alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: spacing.xs,
                 }}
               >
-                <AppText variant="headline">Checklist Mensual (Toca para marcar)</AppText>
-                <AppText variant="micro" color={colors.text.muted}>
-                  {`Disponibles en Gasto: ${availableExpenseConcepts.length}`}
-                </AppText>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="headline">Checklist Mensual (Toca para marcar)</AppText>
+                  <AppText variant="micro" color={colors.text.muted}>
+                    {`Disponibles en Gasto: ${availableExpenseConcepts.length}`}
+                  </AppText>
+                </View>
               </View>
+
+              <Pressable
+                testID="summary-quick-open-checklist-add"
+                accessibilityRole="button"
+                accessibilityLabel="Ir a Checklist para agregar nuevo movimiento"
+                onPress={() => setActiveTab('checklist')}
+                style={{
+                  width: '100%',
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingVertical: spacing.xs,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.md,
+                  backgroundColor: colors.semantic.incomeSoft,
+                  borderWidth: 1,
+                  borderColor: colors.semantic.income,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <AppText variant="caption" color={colors.semantic.income}>
+                  + Agregar o Registrar Nuevo Movimiento
+                </AppText>
+              </Pressable>
 
               {trackableEntries.map((entry) => {
                 const isDone = entry.status === 'completed';
@@ -591,8 +626,9 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                       flexDirection: 'row',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      paddingVertical: spacing.xs,
-                      paddingHorizontal: spacing.sm,
+                      gap: spacing.sm,
+                      paddingVertical: spacing.sm,
+                      paddingHorizontal: spacing.md,
                       borderRadius: radius.md,
                       backgroundColor: isDone
                         ? colors.semantic.completedSoft
@@ -611,11 +647,13 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                           : 'Pendiente · Toca para completar'}
                       </AppText>
                     </View>
-                    <CurrencyText
-                      amount={entry.actualAmount}
-                      variant="body"
-                      tone={entry.type === 'income' ? 'income' : 'expense'}
-                    />
+                    <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+                      <CurrencyText
+                        amount={entry.actualAmount}
+                        variant="body"
+                        tone={entry.type === 'income' ? 'income' : 'expense'}
+                      />
+                    </View>
                   </Pressable>
                 );
               })}

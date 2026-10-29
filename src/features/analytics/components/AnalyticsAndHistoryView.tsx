@@ -89,6 +89,8 @@ export function AnalyticsAndHistoryView({
               flexDirection: 'row',
               justifyContent: 'space-between',
               alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: spacing.xs,
             }}
           >
             <AppText variant="title2">Analítica Visual del Mes</AppText>
@@ -190,6 +192,8 @@ export function AnalyticsAndHistoryView({
               flexDirection: 'row',
               justifyContent: 'space-between',
               alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: spacing.xs,
             }}
           >
             <AppText variant="title2">Cierre de Mes e Historial</AppText>
@@ -241,7 +245,10 @@ export function AnalyticsAndHistoryView({
             accessibilityRole="button"
             onPress={onCloseCurrentMonth}
             style={{
+              width: '100%',
               minHeight: MIN_TOUCH_TARGET_PT,
+              paddingVertical: spacing.sm,
+              paddingHorizontal: spacing.md,
               borderRadius: radius.md,
               backgroundColor: colors.semantic.incomeSoft,
               borderWidth: 1,

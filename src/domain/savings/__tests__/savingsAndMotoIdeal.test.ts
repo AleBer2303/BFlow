@@ -12,7 +12,6 @@ import {
 const concepts = octoberFixture.concepts as unknown as Concept[];
 const octoberEntries = octoberFixture.monthEntries as unknown as MonthEntry[];
 const savingsBuckets = octoberFixture.savingsBuckets as unknown as SavingsBucket[];
-const idealMotoPlan = octoberFixture.idealMotoPlan as unknown as IdealMotoPlan[];
 
 describe('domain/savings & domain/moto-ideal — Savings Buckets and Moto Ideal Calculators', () => {
   it('throws if either moto or savings bucket is missing', () => {

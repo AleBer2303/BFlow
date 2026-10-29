@@ -17,6 +17,7 @@ import {
   closeMonthAndRollover,
   deleteMovement,
   registerMovement,
+  toBogotaIsoDate,
   uncompleteMovement,
   type CloseMonthResult,
   type Concept,
@@ -164,7 +165,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       closedSnapshots: payload.closedSnapshots,
     }),
 
-  toggleEntryStatus: async (entryId, completedAtDateIso = '2026-10-28') => {
+  toggleEntryStatus: async (entryId, completedAtDateIso = toBogotaIsoDate()) => {
     const state = get();
     const target = state.entries.find((e) => e.id === entryId);
     if (!target) return;
@@ -272,8 +273,28 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
 
   removeOrResetEntry: async (entryId) => {
     const state = get();
+    const target = state.entries.find((e) => e.id === entryId);
     const nextEntries = deleteMovement(state.entries, state.concepts, entryId);
-    set({ entries: nextEntries });
+    const concept = target ? state.concepts.find((c) => c.id === target.conceptId) : undefined;
+
+    let nextDebtPayments = state.debtPayments;
+    if (target && concept?.linkedDebtGroup) {
+      nextDebtPayments = state.debtPayments.map((dp) => {
+        if (dp.entryId !== entryId) return dp;
+        const { completedAt: _removed, ...restPayment } = dp;
+        return {
+          ...restPayment,
+          principalAmount: target.plannedAmount,
+          totalApplied: target.plannedAmount + dp.interestAmount,
+          active: false,
+        };
+      });
+    }
+
+    set({
+      entries: nextEntries,
+      debtPayments: nextDebtPayments,
+    });
 
     if (state.authUser?.provider === 'firebase') {
       try {
@@ -286,7 +307,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     }
   },
 
-  closeCurrentMonth: async (closedAtIso = '2026-10-31T23:59:59-05:00') => {
+  closeCurrentMonth: async (closedAtIso = new Date().toISOString()) => {
     const state = get();
     const currentMonthKey = state.activeMonthKey;
     const currentDebts =

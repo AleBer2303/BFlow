@@ -73,6 +73,7 @@ export function buildOctober2026SeedPayload(): October2026SeedPayload {
       actualAmount: raw.actualAmount,
       status: raw.status,
       completedAt: (raw as { completedAt?: string }).completedAt,
+      note: (raw as { note?: string }).note,
     })
   );
 

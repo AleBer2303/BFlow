@@ -19,20 +19,18 @@ export interface Concept {
   group: 'fixed' | 'variable';
   defaultAmount: number; // entero en COP (>= 0)
   icon: string; // SF Symbol / Lucide icon name
-  color: string; // token semántico del design system
+  colorToken: string; // token semántico del design system
   allowMultiplePerMonth: boolean;
   recurrence:
     | { kind: 'monthly' }
     | { kind: 'specific_months'; months: Array<1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12> };
-  linkedDebtId?: string; // ej. "funfami" o una deuda específica
-   defaultDebtAllocationStrategy?: 'ask_on_complete' | 'fixed_split' | 'proportional';
+  linkedDebtGroup?: string; // ej. "FUNFAMI"
   savingsContribution?: {
     bucketId: 'moto' | 'savings';
     onlyWhenCompleted: boolean; // true por defecto (resuelve Inconsistencia #4)
   };
   idealMotoCategoryId?: string; // permite cruzar Gasto Real vs Cuadro IDEAL (resuelve Inconsistencia #9)
-  archived: boolean;
-  order: number;
+  order?: number;
 }
 ```
 - **Mejora clave:** Añadir `idealMotoCategoryId?` opcional permite vincular conceptos del presupuesto (`Gasolina Moto/Carro`, `Parqueadero CEM`, `Seguro TR SURA`) con los renglones del cuadro **IDEAL de la moto** para comparar el costo real mensual frente al provisto sin duplicar registros.
@@ -43,22 +41,19 @@ export interface MonthEntry {
   id: string; // Determinístico si !allowMultiplePerMonth: `${monthKey}_${conceptId}`
   monthKey: string; // "YYYY-MM" en zona America/Bogota
   conceptId: string;
-  conceptSnapshot: {
-    name: string;
-    type: 'income' | 'expense';
-    group: 'fixed' | 'variable';
-  };
+  conceptName: string;
+  type: 'income' | 'expense';
+  group: 'fixed' | 'variable';
   plannedAmount: number; // Monto previsto del mes (COP entero)
   actualAmount: number; // Monto real ejecutado (por defecto igual a plannedAmount al crear/completar)
   status: 'pending' | 'completed';
-  completedAt?: string; // ISO date "YYYY-MM-DD" (ej. "2026-10-21")
+  completedAt: string | null; // ISO date "YYYY-MM-DD" (ej. "2026-10-21")
   note?: string;
-  updatedAt: string;
 }
 ```
 - **Mejoras clave:**
   1. **ID determinístico `${monthKey}_${conceptId}`** para conceptos únicos por mes: si el usuario abre la app sin conexión en el iPhone y en web al mismo tiempo al iniciar un mes, `ensureMonthPlan("2026-11")` genera exactamente los mismos IDs de documento en Firestore, haciendo imposible crear entradas duplicadas al reconectar.
-  2. **`conceptSnapshot` ligero:** Guarda `name`, `type` y `group` al momento del mes para que si meses después se renombra o archiva un concepto, el historial de meses cerrados conserve su fidelidad histórica.
+  2. **Snapshot desnormalizado (`conceptName`, `type`, `group`):** Guarda el nombre, tipo y grupo al momento del mes para que si meses después se renombra o archiva un concepto, el historial de meses cerrados conserve su fidelidad histórica.
   3. **`plannedAmount` vs `actualAmount` explícitos:** Permite medir tanto el presupuesto original como desviaciones reales en el gráfico "Previsto vs Real por mes".
 
 ### 1.3. `Debt` y `DebtPayment` (Módulo Deuda FUNFAMI)
@@ -68,11 +63,8 @@ export interface Debt {
   groupKey: string; // "FUNFAMI"
   name: string; // "CB300F - MOTO" | "ESP. IA"
   lender: string; // "FUNFAMI"
-  initialOpeningBalance: number; // Apertura base (4.400.000 y 3.600.000 en 2026-10)
-  initialMonthKey: string; // "2026-10"
-  suggestedInstallment?: number;
-  interestRateMonthlyBps?: number; // opcional si la cuota incluye intereses
-  order: number;
+  openingBalance: number; // Apertura base (4.400.000 y 3.600.000 en 2026-10)
+  monthKey: string; // "2026-10"
 }
 
 export interface DebtPayment {
@@ -95,33 +87,26 @@ export interface DebtPayment {
 export interface SavingsBucket {
   id: 'moto' | 'savings';
   name: string; // "Moto" | "Ahorros"
-  baseOpeningBalance: number; // En 2026-10: Moto = 1.600.000, Ahorros = 1.000.000
-  baseMonthKey: string; // "2026-10"
+  openingBalance: number; // En 2026-10: Moto = 1.600.000, Ahorros = 1.000.000
+  monthKey: string; // "2026-10"
 }
 ```
 - **Mejora clave:** Separamos en el cálculo puro dos métricas complementarias para cada bucket:
   - **`currentBalance` (En vivo / Regla Excel):** `openingBalance + aportesPagados` (para `moto`) y `openingBalance + netCashFlow` (para `savings`, dando `$2.080.000` en octubre 2026).
   - **`projectedBalanceAfterPending` (Proyectado tras pendientes):** Para `savings`, resta los gastos pendientes (`$2.080.000 - $450.000 = $1.630.000`), evitando que el usuario crea que puede gastar dinero comprometido en pagos aún no realizados.
 
-### 1.5. `ProvisionPlan` ("Moto Ideal")
+### 1.5. `IdealMotoPlan` ("Moto Ideal")
 ```ts
-export interface ProvisionRecurringItem {
+export interface IdealMotoItem {
   id: string;
   name: string; // ej. "SOAT", "Gasolina", "Impuesto", "Mantenimiento", etc.
   excelRawName: string; // preserva el texto exacto del Excel (ej. "MANTEMIENTO")
-  totalCost: number; // Costo del ciclo en COP entero (ej. SOAT anual 800.004 o mensual directo)
+  kind: 'recurring' | 'target_goal';
   periodMonths: number; // 1 = mensual, 12 = anual
-  monthlyProvision: number; // Math.ceil(totalCost / periodMonths) en COP entero
+  excelMonthlyAmount: number; // Monto en columna G del Excel (ej. 66.667 para SOAT)
+  annualReferenceAmount?: number; // Costo anual de referencia en COP entero
+  includedInExcelTotal: boolean; // false para "Kit de arrastre Honda original" ($500.000)
   linkedConceptId?: string; // vínculo opcional con concepto del presupuesto
-}
-
-export interface ProvisionTargetGoal {
-  id: string; // "goal_kit_arrastre_honda"
-  name: string; // "Kit de arrastre Honda original"
-  targetAmount: number; // 500.000
-  savedAmount: number;
-  targetDate?: string; // "YYYY-MM-DD"
-  includedInExcelTotal: boolean; // false en el Excel original (explica los $872.667 vs $1.372.667)
 }
 ```
 

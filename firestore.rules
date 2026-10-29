@@ -389,41 +389,63 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if isOwner(uid);
       allow create: if isOwner(uid) && isValidUserProfile(request.resource.data, uid);
-      allow update: if isOwner(uid) && isValidUserProfile(request.resource.data, uid);
+      allow update: if isOwner(uid) &&
+        isValidUserProfile(request.resource.data, uid) &&
+        (!('createdAt' in resource.data) ||
+          resource.data.createdAt == null ||
+          ('createdAt' in request.resource.data &&
+            request.resource.data.createdAt == resource.data.createdAt));
       allow delete: if isOwner(uid);
 
       match /concepts/{conceptId} {
         allow read: if isOwner(uid);
         allow create: if isOwner(uid) && isValidConcept(request.resource.data, conceptId);
-        allow update: if isOwner(uid) && isValidConcept(request.resource.data, conceptId);
+        allow update: if isOwner(uid) &&
+          isValidConcept(request.resource.data, conceptId) &&
+          request.resource.data.id == resource.data.id &&
+          request.resource.data.type == resource.data.type;
         allow delete: if isOwner(uid);
       }
 
       match /entries/{entryId} {
         allow read: if isOwner(uid);
         allow create: if isOwner(uid) && isValidEntry(request.resource.data, entryId);
-        allow update: if isOwner(uid) && isValidEntry(request.resource.data, entryId);
+        allow update: if isOwner(uid) &&
+          isValidEntry(request.resource.data, entryId) &&
+          request.resource.data.id == resource.data.id &&
+          request.resource.data.monthKey == resource.data.monthKey &&
+          request.resource.data.conceptId == resource.data.conceptId;
         allow delete: if isOwner(uid);
       }
 
       match /debts/{debtId} {
         allow read: if isOwner(uid);
         allow create: if isOwner(uid) && isValidDebt(request.resource.data, debtId);
-        allow update: if isOwner(uid) && isValidDebt(request.resource.data, debtId);
+        allow update: if isOwner(uid) &&
+          isValidDebt(request.resource.data, debtId) &&
+          request.resource.data.id == resource.data.id &&
+          request.resource.data.groupKey == resource.data.groupKey;
         allow delete: if isOwner(uid);
       }
 
       match /debtPayments/{paymentId} {
         allow read: if isOwner(uid);
         allow create: if isOwner(uid) && isValidDebtPayment(request.resource.data, paymentId);
-        allow update: if isOwner(uid) && isValidDebtPayment(request.resource.data, paymentId);
+        allow update: if isOwner(uid) &&
+          isValidDebtPayment(request.resource.data, paymentId) &&
+          request.resource.data.id == resource.data.id &&
+          request.resource.data.entryId == resource.data.entryId &&
+          request.resource.data.debtId == resource.data.debtId &&
+          request.resource.data.monthKey == resource.data.monthKey;
         allow delete: if isOwner(uid);
       }
 
       match /savingsBuckets/{bucketId} {
         allow read: if isOwner(uid);
         allow create: if isOwner(uid) && isValidSavingsBucket(request.resource.data, bucketId);
-        allow update: if isOwner(uid) && isValidSavingsBucket(request.resource.data, bucketId);
+        allow update: if isOwner(uid) &&
+          isValidSavingsBucket(request.resource.data, bucketId) &&
+          request.resource.data.id == resource.data.id;
         allow delete: if isOwner(uid);
       }
 
@@ -437,7 +459,9 @@ service cloud.firestore {
       match /monthSnapshots/{snapshotId} {
         allow read: if isOwner(uid);
         allow create: if isOwner(uid) && isValidMonthSnapshot(request.resource.data, snapshotId);
-        allow update: if isOwner(uid) && isValidMonthSnapshot(request.resource.data, snapshotId);
+        allow update: if isOwner(uid) &&
+          isValidMonthSnapshot(request.resource.data, snapshotId) &&
+          request.resource.data.monthKey == resource.data.monthKey;
         allow delete: if isOwner(uid);
       }
     }

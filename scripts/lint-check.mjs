@@ -38,9 +38,10 @@ for (const filePath of files) {
 
   // Rule 1: Pure domain check
   if (relPath.startsWith('src/domain/')) {
-    const forbiddenDomainImport = /from\s+['"](react|react-native|expo[^'"]*|firebase[^'"]*)['"]/;
+    const forbiddenDomainImport =
+      /from\s+['"](react|react-native|expo[^'"]*|firebase[^'"]*|zustand[^'"]*|\.\.\/(?:data|platform|design-system|features|app)\b[^'"]*)['"]/;
     if (forbiddenDomainImport.test(content)) {
-      errors.push(`${relPath}: Forbidden UI/Expo/Firebase import inside pure src/domain/ layer.`);
+      errors.push(`${relPath}: Forbidden UI/Expo/Firebase/Store/Cross-layer import inside pure src/domain/ layer.`);
     }
   }
 
@@ -55,6 +56,19 @@ for (const filePath of files) {
   // Rule 3: No console.log in src/
   if (!isTest && /\bconsole\.log\s*\(/.test(content)) {
     errors.push(`${relPath}: Unexpected console.log() statement.`);
+  }
+
+  // Rule 4: Mode B native-only modules restricted to src/platform/**/*.native.{ts,tsx}
+  const isNativePlatformAdapter =
+    relPath.startsWith('src/platform/') && /\.native\.tsx?$/.test(relPath);
+  if (!isNativePlatformAdapter && !isTest) {
+    const modeBNativeImport =
+      /from\s+['"](@react-native-google-signin\/google-signin|expo-glass-effect)['"]/;
+    if (modeBNativeImport.test(content)) {
+      errors.push(
+        `${relPath}: Mode B native module imported outside src/platform/**/*.native.{ts,tsx} (breaks Mode A Expo Go/Web).`
+      );
+    }
   }
 }
 

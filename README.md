@@ -137,16 +137,10 @@ Observaciones mías: los valores parecen ser costo anual ÷ 12 (SOAT ≈ 800.000
 - Convención de color para estados (completado/pendiente, ingreso/gasto) definida en tokens y documentada.
 - Design system en src/design-system y DESIGN.md como fuente de verdad visual. Nunca valores hardcodeados.
 
-# INTEGRACIÓN CON STITCH
-- Los mockups los diseño en Google Stitch. Configura el servidor MCP de Stitch en Antigravity (paso a paso; la API key como secreto, sin commitearla).
-- Flujo: el agente lee las pantallas de Stitch vía MCP, extrae tokens y estructura a DESIGN.md, genera componentes React Native y compara visualmente con el mockup.
-- Alterno si el MCP falla: exportar imágenes/HTML de Stitch a docs/design/ y generar desde ahí.
-- Entrega la lista de pantallas que debo diseñar en Stitch (las 12 de arriba) con el contenido y estados que debe mostrar cada una, usando mis datos reales de octubre como contenido de ejemplo.
-
 # AGENTES, SKILLS Y REGLAS (Antigravity)
 Verifica rutas y formatos vigentes de Antigravity y crea:
 - AGENTS.md / reglas del workspace: convenciones, arquitectura, definición de "terminado" (DoD), y la regla de que el Excel manda en la lógica de negocio.
-- Skills (SKILL.md): expo-feature-scaffold, firebase-firestore-modeling, domain-budget-rules (reglas del Excel y valores dorados), ios-widget-liveactivity, liquid-glass-ui, stitch-to-code, write-tests-for-change, ci-cd-ipa-build.
+- Skills (SKILL.md): expo-feature-scaffold, firebase-firestore-modeling, domain-budget-rules (reglas del Excel y valores dorados), ios-widget-liveactivity, liquid-glass-ui, write-tests-for-change, ci-cd-ipa-build.
 - Agentes/roles: Architect, UI Builder, QA Engineer (obligatorio tras cada cambio), DevOps, Reviewer.
 - Workflows reutilizables: /new-feature, /add-tests, /fix-bug, /release.
 - Regla dura: ningún cambio se considera terminado sin tests nuevos o actualizados que lo cubran y sin que toda la suite pase.
@@ -180,11 +174,11 @@ Verifica rutas y formatos vigentes de Antigravity y crea:
 7. Documenta cómo descargar el .ipa del Release y firmarlo/instalarlo con iloader, con el recordatorio del ciclo de 7 días.
 
 # PLAN DE ENTREGA (no avances sin que la fase anterior pase tests)
-- Fase 0: viabilidad y riesgos, ADRs, estructura del repo, AGENTS.md, skills, MCP de Stitch, lectura del Excel y lista de preguntas abiertas.
+- Fase 0: viabilidad y riesgos, ADRs, estructura del repo, AGENTS.md, skills, lectura del Excel y lista de preguntas abiertas.
 - Fase 1: proyecto Expo + TypeScript + design system + CI con tests + .ipa vacío instalado en mi iPhone (valida la tubería completa temprano).
 - Fase 2: dominio puro con TDD: checklist, métricas mensuales con golden tests del Excel, deudas, ahorros, moto ideal, cierre de mes.
 - Fase 3: Firebase (Auth email + Google, Firestore, reglas, emulador, seed) con tests.
-- Fase 4: UI principal desde Stitch: resumen, checklist, agregar, historial, conceptos.
+- Fase 4: UI principal: resumen, checklist, agregar, historial, conceptos.
 - Fase 5: módulos Deuda FUNFAMI, Ahorros y Moto, Moto ideal (UI + datos).
 - Fase 6: gráficos animados.
 - Fase 7: widgets y Live Activity / Isla Dinámica (Modo B).

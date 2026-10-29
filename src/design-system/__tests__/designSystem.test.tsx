@@ -1,9 +1,14 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
 import PhaseOneHomeScreen from '../../app/index';
+import { useBudgetStore } from '../../features/budget/store/useBudgetStore';
 import { BFlowThemeProvider } from '../theme/ThemeContext';
 
 describe('design-system & PhaseOneHomeScreen (RNTL)', () => {
+  beforeEach(() => {
+    useBudgetStore.getState().resetToOctober2026GoldenState();
+  });
+
   it('renders Golden October 2026 metrics and Liquid Glass cards accurately', () => {
     render(
       <BFlowThemeProvider initialMode="dark">

@@ -1,7 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import React, { useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
-import octoberFixture from '../../fixtures/october-2026.json';
 import { FirestoreBudgetRepository } from '../data/repositories/budgetRepository';
 import {
   AppText,
@@ -17,80 +16,109 @@ import {
   calculateMonthlyBudgetSummary,
   calculateMonthlySavingsSummary,
   calculateMotoIdealSummary,
-  Concept,
-  Debt,
-  DebtPayment,
   formatCop,
   formatMonthKeyLabelEs,
   getAvailableConcepts,
-  IdealMotoPlan,
-  MonthEntry,
-  registerMovement,
-  SavingsBucket,
-  uncompleteMovement,
+  type MonthEntry,
+  type RegisterOrCompleteMovementInput,
 } from '../domain';
+import { AnalyticsAndHistoryView } from '../features/analytics/components/AnalyticsAndHistoryView';
 import {
-  BFlowAuthUser,
+  useBudgetStore,
+  type BFlowWorkspaceTab,
+} from '../features/budget/store/useBudgetStore';
+import { ChecklistWorkspaceView } from '../features/checklist/components/ChecklistWorkspaceView';
+import { DebtsFunfamiView } from '../features/debts/components/DebtsFunfamiView';
+import { SavingsAndMotoIdealView } from '../features/savings/components/SavingsAndMotoIdealView';
+import {
   DEMO_OWNER_USER,
   registerWithEmail,
   signInWithEmail,
   signInWithGoogle,
   signOutCurrentUser,
+  type BFlowAuthUser,
 } from '../platform/auth/authAdapter';
 import { resolveRuntimeCapabilities } from '../platform/mode/runtimeMode';
 
-const INITIAL_CONCEPTS = octoberFixture.concepts as unknown as Concept[];
-const INITIAL_ENTRIES = octoberFixture.monthEntries as unknown as MonthEntry[];
-const INITIAL_DEBTS = octoberFixture.debts as unknown as Debt[];
-const INITIAL_SAVINGS_BUCKETS = octoberFixture.savingsBuckets as unknown as SavingsBucket[];
-const INITIAL_IDEAL_MOTO_PLAN = octoberFixture.idealMotoPlan as unknown as IdealMotoPlan;
-const ACTIVE_MONTH_KEY = '2026-10';
+const WORKSPACE_TABS: ReadonlyArray<{ id: BFlowWorkspaceTab; label: string }> = [
+  { id: 'summary', label: 'Resumen' },
+  { id: 'checklist', label: 'Checklist' },
+  { id: 'debts', label: 'Deudas' },
+  { id: 'savings', label: 'Ahorros & Moto' },
+  { id: 'analytics', label: 'Análisis & Cierre' },
+];
 
 export default function PhaseOneHomeScreen(): React.JSX.Element {
   const { colors, spacing, radius, mode, toggleTheme } = useBFlowTheme();
-  const [concepts, setConcepts] = useState<Concept[]>(INITIAL_CONCEPTS);
-  const [entries, setEntries] = useState<MonthEntry[]>(INITIAL_ENTRIES);
-  const [debts, setDebts] = useState<Debt[]>(INITIAL_DEBTS);
-  const [debtPayments, setDebtPayments] = useState<DebtPayment[] | undefined>(undefined);
-  const [savingsBuckets, setSavingsBuckets] = useState<SavingsBucket[]>(INITIAL_SAVINGS_BUCKETS);
-  const [idealMotoPlan, setIdealMotoPlan] = useState<IdealMotoPlan>(INITIAL_IDEAL_MOTO_PLAN);
-  const [pulseCount, setPulseCount] = useState(0);
+  const {
+    activeTab,
+    activeMonthKey,
+    availableMonths,
+    concepts,
+    entries,
+    debtsByMonth,
+    debtPayments,
+    savingsBucketsByMonth,
+    idealMotoPlan,
+    closedSnapshots,
+    authUser,
+    syncMessage,
+    isSyncing,
+    setActiveTab,
+    setActiveMonthKey,
+    setAuthUser,
+    setSyncStatus,
+    applyCloudWorkspace,
+    toggleEntryStatus,
+    addOrCompleteMovement,
+    removeOrResetEntry,
+    closeCurrentMonth,
+    resetToOctober2026GoldenState,
+  } = useBudgetStore();
 
-  // Phase 3: Firebase Auth & Cloud Firestore Sync state
-  const [authUser, setAuthUser] = useState<BFlowAuthUser>(DEMO_OWNER_USER);
+  const [pulseCount, setPulseCount] = useState(0);
   const [showAuthForm, setShowAuthForm] = useState(false);
   const [emailInput, setEmailInput] = useState('abernalg2303@gmail.com');
   const [passwordInput, setPasswordInput] = useState('');
-  const [syncMessage, setSyncMessage] = useState<string>(
-    'Proyecto Firebase vinculado: bflow-deaeb (Toca para sincronizar en la nube)'
-  );
-  const [isSyncing, setIsSyncing] = useState(false);
 
   const runtime = resolveRuntimeCapabilities();
-  const activeMonthLabel = formatMonthKeyLabelEs(ACTIVE_MONTH_KEY);
+  const activeMonthLabel = formatMonthKeyLabelEs(activeMonthKey);
+
+  const activeDebts = useMemo(
+    () => debtsByMonth[activeMonthKey] ?? debtsByMonth['2026-10'] ?? [],
+    [activeMonthKey, debtsByMonth]
+  );
+  const activeSavingsBuckets = useMemo(
+    () => savingsBucketsByMonth[activeMonthKey] ?? savingsBucketsByMonth['2026-10'] ?? [],
+    [activeMonthKey, savingsBucketsByMonth]
+  );
+  const activeDebtPayments = useMemo(
+    () => debtPayments.filter((dp) => dp.monthKey === activeMonthKey),
+    [activeMonthKey, debtPayments]
+  );
 
   const budget = useMemo(
-    () => calculateMonthlyBudgetSummary(entries, ACTIVE_MONTH_KEY),
-    [entries]
+    () => calculateMonthlyBudgetSummary(entries, activeMonthKey),
+    [entries, activeMonthKey]
   );
   const checklist = useMemo(
-    () => calculateChecklistProgress(concepts, entries, ACTIVE_MONTH_KEY),
-    [concepts, entries]
+    () => calculateChecklistProgress(concepts, entries, activeMonthKey),
+    [concepts, entries, activeMonthKey]
   );
   const debtSummary = useMemo(
-    () => calculateFunfamiDebtSummary(debts, entries, ACTIVE_MONTH_KEY, debtPayments),
-    [debts, entries, debtPayments]
+    () => calculateFunfamiDebtSummary(activeDebts, entries, activeMonthKey, activeDebtPayments),
+    [activeDebts, entries, activeMonthKey, activeDebtPayments]
   );
   const savingsSummary = useMemo(
     () =>
       calculateMonthlySavingsSummary(
-        savingsBuckets,
+        activeSavingsBuckets,
         concepts,
         entries,
         budget,
-        ACTIVE_MONTH_KEY
+        activeMonthKey
       ),
-    [savingsBuckets, concepts, entries, budget]
+    [activeSavingsBuckets, concepts, entries, budget, activeMonthKey]
   );
   const motoIdealSummary = useMemo(
     () =>
@@ -98,22 +126,22 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         idealMotoPlan,
         entries,
         savingsSummary.moto.paidContributionsThisMonth,
-        ACTIVE_MONTH_KEY
+        activeMonthKey
       ),
-    [idealMotoPlan, entries, savingsSummary.moto.paidContributionsThisMonth]
+    [idealMotoPlan, entries, savingsSummary.moto.paidContributionsThisMonth, activeMonthKey]
   );
   const availableExpenseConcepts = useMemo(
-    () => getAvailableConcepts(concepts, entries, ACTIVE_MONTH_KEY, 'expense'),
-    [concepts, entries]
+    () => getAvailableConcepts(concepts, entries, activeMonthKey, 'expense'),
+    [concepts, entries, activeMonthKey]
   );
 
   const trackableEntries = useMemo(
     () =>
       entries.filter((e) => {
         const c = concepts.find((concept) => concept.id === e.conceptId);
-        return e.monthKey === ACTIVE_MONTH_KEY && !c?.allowMultiplePerMonth;
+        return e.monthKey === activeMonthKey && !c?.allowMultiplePerMonth;
       }),
-    [concepts, entries]
+    [concepts, entries, activeMonthKey]
   );
 
   const triggerHaptic = async (type: 'success' | 'light') => {
@@ -131,20 +159,16 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
 
   const syncCloudWorkspace = async (user: BFlowAuthUser) => {
     const repo = new FirestoreBudgetRepository();
-    const workspace = await repo.loadMonthWorkspace(user.uid, ACTIVE_MONTH_KEY);
-    setConcepts(workspace.concepts);
-    setEntries(workspace.entries);
-    setDebts(workspace.debts);
-    setDebtPayments(workspace.debtPayments);
-    setSavingsBuckets(workspace.savingsBuckets);
-    setIdealMotoPlan(workspace.provisionPlan);
-    setSyncMessage(
-      `Sincronizado en Cloud Firestore (bflow-deaeb · ${workspace.entries.length} movimientos)`
+    const workspace = await repo.loadMonthWorkspace(user.uid, activeMonthKey);
+    applyCloudWorkspace(workspace);
+    setSyncStatus(
+      `Sincronizado en Cloud Firestore (bflow-deaeb · ${workspace.entries.length} movimientos)`,
+      false
     );
   };
 
   const handleAuthSubmit = async (modeAction: 'signin' | 'register' | 'google') => {
-    setIsSyncing(true);
+    setSyncStatus('Conectando con Firebase Auth (bflow-deaeb)...', true);
     try {
       const user =
         modeAction === 'google'
@@ -159,9 +183,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
       await triggerHaptic('success');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error de autenticación';
-      setSyncMessage(`Aviso Firebase: ${message}`);
-    } finally {
-      setIsSyncing(false);
+      setSyncStatus(`Aviso Firebase: ${message}`, false);
     }
   };
 
@@ -172,41 +194,23 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
       // Ignore if already signed out
     }
     setAuthUser(DEMO_OWNER_USER);
-    setDebtPayments(undefined);
-    setSyncMessage('Modo Local Activo (Semilla Octubre 2026)');
+    setSyncStatus('Modo Local Activo (Semilla Octubre 2026)', false);
   };
 
   const handleToggleEntry = async (entry: MonthEntry) => {
-    if (entry.status === 'completed') {
-      setEntries((prev) => uncompleteMovement(prev, entry.id));
-      await triggerHaptic('light');
-    } else {
-      setEntries((prev) =>
-        registerMovement(prev, concepts, {
-          monthKey: ACTIVE_MONTH_KEY,
-          conceptId: entry.conceptId,
-          actualAmount: entry.plannedAmount,
-          completedAt: '2026-10-28',
-        })
-      );
-      await triggerHaptic('success');
-    }
+    const wasCompleted = entry.status === 'completed';
+    await toggleEntryStatus(entry.id, '2026-10-28');
+    await triggerHaptic(wasCompleted ? 'light' : 'success');
+  };
 
-    if (authUser.provider === 'firebase') {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.toggleEntryCompletion(authUser.uid, entry.id, ACTIVE_MONTH_KEY, {
-          actualAmount: entry.plannedAmount,
-          completedAtDateIso: '2026-10-28',
-        });
-        const refreshed = await repo.loadMonthWorkspace(authUser.uid, ACTIVE_MONTH_KEY);
-        setEntries(refreshed.entries);
-        setDebtPayments(refreshed.debtPayments);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Error al guardar en Firestore';
-        setSyncMessage(`Aviso Firestore: ${message}`);
-      }
-    }
+  const handleAddMovement = async (input: RegisterOrCompleteMovementInput) => {
+    await addOrCompleteMovement(input);
+    await triggerHaptic('success');
+  };
+
+  const handleCloseMonth = async () => {
+    await closeCurrentMonth();
+    await triggerHaptic('success');
   };
 
   const handleTestHaptic = async () => {
@@ -216,6 +220,9 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
 
   const cb300fDebt = debtSummary.debts.find((d) => d.debtId === 'debt_cb300f_moto');
   const espIaDebt = debtSummary.debts.find((d) => d.debtId === 'debt_esp_ia');
+  const funfamiEntry = entries.find(
+    (e) => e.monthKey === activeMonthKey && e.conceptId === 'exp_cuota_funfami'
+  );
 
   return (
     <ScrollView
@@ -227,6 +234,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         gap: spacing.md,
       }}
     >
+      {/* Header */}
       <View
         style={{
           flexDirection: 'row',
@@ -260,6 +268,47 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         </Pressable>
       </View>
 
+      {/* Floating iOS 26 Liquid Glass Navigation Tab Bar */}
+      <GlassSurface elevated testID="liquid-glass-tab-bar">
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+          {WORKSPACE_TABS.map((tab) => {
+            const isSelected = activeTab === tab.id;
+            return (
+              <Pressable
+                key={tab.id}
+                testID={`workspace-tab-${tab.id}`}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isSelected }}
+                onPress={() => setActiveTab(tab.id)}
+                style={{
+                  flexGrow: 1,
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingHorizontal: spacing.sm,
+                  borderRadius: radius.pill,
+                  backgroundColor: isSelected
+                    ? colors.glass.surfaceElevatedTint
+                    : colors.glass.surfaceTint,
+                  borderWidth: 1,
+                  borderColor: isSelected
+                    ? colors.glass.specularBorder
+                    : colors.glass.subtleBorder,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <AppText
+                  variant="caption"
+                  color={isSelected ? colors.text.primary : colors.text.secondary}
+                >
+                  {tab.label}
+                </AppText>
+              </Pressable>
+            );
+          })}
+        </View>
+      </GlassSurface>
+
+      {/* Firebase Auth & Cloud Firestore Sync Card */}
       <GlassSurface testID="firebase-sync-card">
         <View style={{ gap: spacing.sm }}>
           <View
@@ -411,208 +460,257 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         </View>
       </GlassSurface>
 
-      <GlassSurface elevated testID="net-flow-hero-card">
-        <View style={{ gap: spacing.xs }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            <AppText variant="caption" color={colors.text.secondary}>
-              Flujo Neto (En caja hoy · B6)
-            </AppText>
-            <StatusBadge
-              testID="checklist-progress-badge"
-              label={
-                checklist.isMonthComplete
-                  ? '✨ Mes completo (12 de 12)'
-                  : `Checklist ${checklist.completedCount} de ${checklist.totalTrackableCount}`
-              }
-              status={checklist.isMonthComplete ? 'completed' : 'pending'}
-            />
-          </View>
-          <CurrencyText
-            testID="golden-net-flow"
-            amount={budget.netCashFlow}
-            variant="heroCurrency"
-            tone="income"
-          />
-          <AppText variant="caption" color={colors.text.secondary}>
-            {`Flujo proyectado del mes: ${formatCop(budget.projectedNetFlow)}`}
-          </AppText>
-        </View>
-      </GlassSurface>
-
-      <View style={{ flexDirection: 'row', gap: spacing.md }}>
-        <GlassSurface style={{ flex: 1 }} testID="income-summary-card">
-          <View style={{ gap: spacing.xs }}>
-            <AppText variant="caption" color={colors.text.secondary}>
-              Ingresos Recibidos (B2)
-            </AppText>
-            <CurrencyText amount={budget.receivedIncome} variant="title2" tone="income" />
-            <AppText variant="micro" color={colors.text.muted}>
-              {`Previstos: ${formatCop(budget.plannedIncome)}`}
-            </AppText>
-          </View>
-        </GlassSurface>
-
-        <GlassSurface style={{ flex: 1 }} testID="expense-summary-card">
-          <View style={{ gap: spacing.xs }}>
-            <AppText variant="caption" color={colors.text.secondary}>
-              Gastos Pagados (B4)
-            </AppText>
-            <CurrencyText amount={budget.paidExpenses} variant="title2" tone="expense" />
-            <AppText variant="micro" color={colors.semantic.pending}>
-              {`Pendientes (B5): ${formatCop(budget.pendingExpenses)}`}
-            </AppText>
-          </View>
-        </GlassSurface>
-      </View>
-
-      <GlassSurface testID="debt-summary-card">
-        <View style={{ gap: spacing.xs }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            <AppText variant="headline">Control Deuda FUNFAMI (H6)</AppText>
-            <StatusBadge
-              label={
-                debtSummary.isInstallmentPaid
-                  ? 'Cuota $ 1.800.000 Pagada'
-                  : 'Cuota $ 1.800.000 Pendiente'
-              }
-              status={debtSummary.isInstallmentPaid ? 'debt' : 'pending'}
-            />
-          </View>
-          <CurrencyText
-            testID="total-debt-amount"
-            amount={debtSummary.totalRemainingDebt}
-            variant="title2"
-            tone="debt"
-          />
-          <AppText variant="caption" color={colors.text.secondary}>
-            {`CB300F - MOTO: ${formatCop(cb300fDebt?.remainingBalance ?? 0)} · ESP. IA: ${formatCop(espIaDebt?.remainingBalance ?? 0)}`}
-          </AppText>
-        </View>
-      </GlassSurface>
-
-      <GlassSurface testID="savings-summary-card">
-        <View style={{ gap: spacing.xs }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            <AppText variant="headline">Control Ahorros y Moto (K6)</AppText>
-            <StatusBadge
-              label={`IDEAL Moto: ${formatCop(motoIdealSummary.excelRecurringMonthlyTotalCop)}/mes`}
-              status="moto"
-            />
-          </View>
-          <CurrencyText
-            testID="total-savings-amount"
-            amount={savingsSummary.totalCurrentSavings}
-            variant="title2"
-            tone="moto"
-          />
-          <AppText variant="caption" color={colors.text.secondary}>
-            {`Moto Ahora: ${formatCop(savingsSummary.moto.currentBalance)} · Ahorros Ahora: ${formatCop(savingsSummary.savings.currentBalance)} (Tras pendientes: ${formatCop(savingsSummary.savings.projectedAfterPendingExpenses)})`}
-          </AppText>
-        </View>
-      </GlassSurface>
-
-      <GlassSurface testID="interactive-checklist-card">
-        <View style={{ gap: spacing.sm }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            <AppText variant="headline">Checklist Mensual (Toca para marcar)</AppText>
-            <AppText variant="micro" color={colors.text.muted}>
-              {`Disponibles en Gasto: ${availableExpenseConcepts.length}`}
-            </AppText>
-          </View>
-
-          {trackableEntries.map((entry) => {
-            const isDone = entry.status === 'completed';
-            return (
-              <Pressable
-                key={entry.id}
-                testID={`checklist-item-${entry.conceptId}`}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: isDone }}
-                accessibilityLabel={`${entry.conceptName}, ${formatCop(entry.actualAmount)}`}
-                onPress={() => handleToggleEntry(entry)}
+      {/* Active Workspace Content */}
+      {activeTab === 'summary' ? (
+        <>
+          <GlassSurface elevated testID="net-flow-hero-card">
+            <View style={{ gap: spacing.xs }}>
+              <View
                 style={{
-                  minHeight: MIN_TOUCH_TARGET_PT,
                   flexDirection: 'row',
-                  alignItems: 'center',
                   justifyContent: 'space-between',
-                  paddingVertical: spacing.xs,
-                  paddingHorizontal: spacing.sm,
-                  borderRadius: radius.md,
-                  backgroundColor: isDone
-                    ? colors.semantic.completedSoft
-                    : colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: isDone
-                    ? colors.semantic.completed
-                    : colors.glass.subtleBorder,
+                  alignItems: 'center',
                 }}
               >
-                <View style={{ flex: 1, gap: spacing.xxs }}>
-                  <AppText variant="body">{`${isDone ? '✓ ' : '○ '}${entry.conceptName}`}</AppText>
-                  <AppText variant="micro" color={colors.text.secondary}>
-                    {isDone
-                      ? `${entry.type === 'income' ? 'Recibido' : 'Pagado'}${entry.completedAt ? ` · ${entry.completedAt}` : ''}`
-                      : 'Pendiente · Toca para completar'}
-                  </AppText>
-                </View>
-                <CurrencyText
-                  amount={entry.actualAmount}
-                  variant="body"
-                  tone={entry.type === 'income' ? 'income' : 'expense'}
+                <AppText variant="caption" color={colors.text.secondary}>
+                  Flujo Neto (En caja hoy · B6)
+                </AppText>
+                <StatusBadge
+                  testID="checklist-progress-badge"
+                  label={
+                    checklist.isMonthComplete
+                      ? `✨ Mes completo (${checklist.completedCount} de ${checklist.totalTrackableCount})`
+                      : `Checklist ${checklist.completedCount} de ${checklist.totalTrackableCount}`
+                  }
+                  status={checklist.isMonthComplete ? 'completed' : 'pending'}
                 />
-              </Pressable>
-            );
-          })}
-        </View>
-      </GlassSurface>
+              </View>
+              <CurrencyText
+                testID="golden-net-flow"
+                amount={budget.netCashFlow}
+                variant="heroCurrency"
+                tone="income"
+              />
+              <AppText variant="caption" color={colors.text.secondary}>
+                {`Flujo proyectado del mes: ${formatCop(budget.projectedNetFlow)}`}
+              </AppText>
+            </View>
+          </GlassSurface>
 
-      <Pressable
-        testID="haptic-verification-button"
-        accessibilityRole="button"
-        accessibilityLabel="Verificar respuesta táctil y tubería Fase 1"
-        onPress={handleTestHaptic}
-        style={{
-          minHeight: MIN_TOUCH_TARGET_PT,
-          borderRadius: radius.lg,
-          paddingVertical: spacing.md,
-          paddingHorizontal: spacing.lg,
-          backgroundColor: colors.semantic.incomeSoft,
-          borderWidth: 1,
-          borderColor: colors.semantic.income,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <AppText variant="headline" color={colors.semantic.income}>
-          {pulseCount === 0
-            ? 'Probar Haptics & Liquid Glass (Fase 1)'
-            : `Tubería Verificada (${pulseCount} ${pulseCount === 1 ? 'toque' : 'toques'})`}
-        </AppText>
-      </Pressable>
+          <View style={{ flexDirection: 'row', gap: spacing.md }}>
+            <GlassSurface style={{ flex: 1 }} testID="income-summary-card">
+              <View style={{ gap: spacing.xs }}>
+                <AppText variant="caption" color={colors.text.secondary}>
+                  Ingresos Recibidos (B2)
+                </AppText>
+                <CurrencyText amount={budget.receivedIncome} variant="title2" tone="income" />
+                <AppText variant="micro" color={colors.text.muted}>
+                  {`Previstos: ${formatCop(budget.plannedIncome)}`}
+                </AppText>
+              </View>
+            </GlassSurface>
+
+            <GlassSurface style={{ flex: 1 }} testID="expense-summary-card">
+              <View style={{ gap: spacing.xs }}>
+                <AppText variant="caption" color={colors.text.secondary}>
+                  Gastos Pagados (B4)
+                </AppText>
+                <CurrencyText amount={budget.paidExpenses} variant="title2" tone="expense" />
+                <AppText variant="micro" color={colors.semantic.pending}>
+                  {`Pendientes (B5): ${formatCop(budget.pendingExpenses)}`}
+                </AppText>
+              </View>
+            </GlassSurface>
+          </View>
+
+          <GlassSurface testID="debt-summary-card">
+            <View style={{ gap: spacing.xs }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <AppText variant="headline">Control Deuda FUNFAMI (H6)</AppText>
+                <StatusBadge
+                  label={
+                    debtSummary.isInstallmentPaid
+                      ? 'Cuota $ 1.800.000 Pagada'
+                      : 'Cuota $ 1.800.000 Pendiente'
+                  }
+                  status={debtSummary.isInstallmentPaid ? 'debt' : 'pending'}
+                />
+              </View>
+              <CurrencyText
+                testID="total-debt-amount"
+                amount={debtSummary.totalRemainingDebt}
+                variant="title2"
+                tone="debt"
+              />
+              <AppText variant="caption" color={colors.text.secondary}>
+                {`CB300F - MOTO: ${formatCop(cb300fDebt?.remainingBalance ?? 0)} · ESP. IA: ${formatCop(espIaDebt?.remainingBalance ?? 0)}`}
+              </AppText>
+            </View>
+          </GlassSurface>
+
+          <GlassSurface testID="savings-summary-card">
+            <View style={{ gap: spacing.xs }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <AppText variant="headline">Control Ahorros y Moto (K6)</AppText>
+                <StatusBadge
+                  label={`IDEAL Moto: ${formatCop(motoIdealSummary.excelRecurringMonthlyTotalCop)}/mes`}
+                  status="moto"
+                />
+              </View>
+              <CurrencyText
+                testID="total-savings-amount"
+                amount={savingsSummary.totalCurrentSavings}
+                variant="title2"
+                tone="moto"
+              />
+              <AppText variant="caption" color={colors.text.secondary}>
+                {`Moto Ahora: ${formatCop(savingsSummary.moto.currentBalance)} · Ahorros Ahora: ${formatCop(savingsSummary.savings.currentBalance)} (Tras pendientes: ${formatCop(savingsSummary.savings.projectedAfterPendingExpenses)})`}
+              </AppText>
+            </View>
+          </GlassSurface>
+
+          <GlassSurface testID="interactive-checklist-card">
+            <View style={{ gap: spacing.sm }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <AppText variant="headline">Checklist Mensual (Toca para marcar)</AppText>
+                <AppText variant="micro" color={colors.text.muted}>
+                  {`Disponibles en Gasto: ${availableExpenseConcepts.length}`}
+                </AppText>
+              </View>
+
+              {trackableEntries.map((entry) => {
+                const isDone = entry.status === 'completed';
+                return (
+                  <Pressable
+                    key={entry.id}
+                    testID={`checklist-item-${entry.conceptId}`}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: isDone }}
+                    accessibilityLabel={`${entry.conceptName}, ${formatCop(entry.actualAmount)}`}
+                    onPress={() => handleToggleEntry(entry)}
+                    style={{
+                      minHeight: MIN_TOUCH_TARGET_PT,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingVertical: spacing.xs,
+                      paddingHorizontal: spacing.sm,
+                      borderRadius: radius.md,
+                      backgroundColor: isDone
+                        ? colors.semantic.completedSoft
+                        : colors.glass.surfaceTint,
+                      borderWidth: 1,
+                      borderColor: isDone
+                        ? colors.semantic.completed
+                        : colors.glass.subtleBorder,
+                    }}
+                  >
+                    <View style={{ flex: 1, gap: spacing.xxs }}>
+                      <AppText variant="body">{`${isDone ? '✓ ' : '○ '}${entry.conceptName}`}</AppText>
+                      <AppText variant="micro" color={colors.text.secondary}>
+                        {isDone
+                          ? `${entry.type === 'income' ? 'Recibido' : 'Pagado'}${entry.completedAt ? ` · ${entry.completedAt}` : ''}`
+                          : 'Pendiente · Toca para completar'}
+                      </AppText>
+                    </View>
+                    <CurrencyText
+                      amount={entry.actualAmount}
+                      variant="body"
+                      tone={entry.type === 'income' ? 'income' : 'expense'}
+                    />
+                  </Pressable>
+                );
+              })}
+            </View>
+          </GlassSurface>
+
+          <Pressable
+            testID="haptic-verification-button"
+            accessibilityRole="button"
+            accessibilityLabel="Verificar respuesta táctil y tubería Fase 1"
+            onPress={handleTestHaptic}
+            style={{
+              minHeight: MIN_TOUCH_TARGET_PT,
+              borderRadius: radius.lg,
+              paddingVertical: spacing.md,
+              paddingHorizontal: spacing.lg,
+              backgroundColor: colors.semantic.incomeSoft,
+              borderWidth: 1,
+              borderColor: colors.semantic.income,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <AppText variant="headline" color={colors.semantic.income}>
+              {pulseCount === 0
+                ? 'Probar Haptics & Liquid Glass (Fase 1)'
+                : `Tubería Verificada (${pulseCount} ${pulseCount === 1 ? 'toque' : 'toques'})`}
+            </AppText>
+          </Pressable>
+        </>
+      ) : null}
+
+      {activeTab === 'checklist' ? (
+        <ChecklistWorkspaceView
+          monthKey={activeMonthKey}
+          concepts={concepts}
+          entries={entries}
+          budget={budget}
+          onToggleEntry={handleToggleEntry}
+          onAddOrCompleteMovement={handleAddMovement}
+          onRemoveRepeatableEntry={removeOrResetEntry}
+        />
+      ) : null}
+
+      {activeTab === 'debts' ? (
+        <DebtsFunfamiView
+          debtSummary={debtSummary}
+          funfamiEntry={funfamiEntry}
+          onToggleFunfamiInstallment={handleToggleEntry}
+        />
+      ) : null}
+
+      {activeTab === 'savings' ? (
+        <SavingsAndMotoIdealView
+          savingsSummary={savingsSummary}
+          motoIdealSummary={motoIdealSummary}
+        />
+      ) : null}
+
+      {activeTab === 'analytics' ? (
+        <AnalyticsAndHistoryView
+          activeMonthKey={activeMonthKey}
+          availableMonths={availableMonths}
+          concepts={concepts}
+          entries={entries}
+          budget={budget}
+          checklist={checklist}
+          debtSummary={debtSummary}
+          savingsSummary={savingsSummary}
+          closedSnapshots={closedSnapshots}
+          onSelectMonth={setActiveMonthKey}
+          onCloseCurrentMonth={handleCloseMonth}
+          onResetOctoberSeed={resetToOctober2026GoldenState}
+        />
+      ) : null}
     </ScrollView>
   );
 }

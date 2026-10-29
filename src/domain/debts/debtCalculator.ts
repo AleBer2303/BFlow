@@ -177,8 +177,11 @@ export function calculateFunfamiDebtSummary(
 
   const funfamiEntry = monthEntries.find((e) => e.conceptId === 'exp_cuota_funfami');
   const resolvedPayments =
-    explicitPayments ??
-    (funfamiEntry ? buildDebtPaymentsForInstallment(funfamiEntry, debts) : []);
+    explicitPayments && explicitPayments.length > 0
+      ? explicitPayments
+      : funfamiEntry
+        ? buildDebtPaymentsForInstallment(funfamiEntry, debts)
+        : [];
 
   const activePayments = resolvedPayments.filter(
     (p) => p.monthKey === monthKey && p.active && completedEntryIds.has(p.entryId)

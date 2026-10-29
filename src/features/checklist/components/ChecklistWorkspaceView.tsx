@@ -3,9 +3,9 @@
  *
  * Implements Screens `03-monthly-checklist` & `04-add-movement-modal`:
  * - iOS segmented filter (`Todos` | `Pendientes` | `Completados`)
+ * - Single primary `+ Nuevo Movimiento` button (supports existing catalog concepts & custom items)
  * - Full breakdown of Ingresos (Fijos / Variables) and Gastos (Fijos / Variables)
- * - Semantic badges (`→ Fondo Moto`, `→ Deuda FUNFAMI`, `Múltiple/mes`)
- * - Liquid Glass "Agregar / Completar Movimiento" sheet enforcing `getAvailableConcepts`
+ * - Edit (`✎`) and Delete (`✕`) actions on every existing or newly created item
  */
 
 import React, { useMemo, useState } from 'react';
@@ -23,11 +23,16 @@ import {
   getAvailableConcepts,
   toBogotaIsoDate,
   type Concept,
+  type ConceptGroup,
   type ConceptType,
   type MonthEntry,
   type MonthlyBudgetSummary,
   type RegisterOrCompleteMovementInput,
 } from '../../../domain';
+import type {
+  CreateCustomConceptInput,
+  EditEntryUpdates,
+} from '../../budget/store/useBudgetStore';
 
 export type ChecklistFilterMode = 'all' | 'pending' | 'completed';
 
@@ -38,6 +43,9 @@ export interface ChecklistWorkspaceViewProps {
   budget: MonthlyBudgetSummary;
   onToggleEntry: (entry: MonthEntry) => void;
   onAddOrCompleteMovement: (input: RegisterOrCompleteMovementInput) => void;
+  onCreateCustomMovement?: (input: CreateCustomConceptInput) => void;
+  onEditEntry?: (entryId: string, updates: EditEntryUpdates) => void;
+  onDeleteEntry?: (entryId: string) => void;
   onRemoveRepeatableEntry: (entryId: string) => void;
 }
 
@@ -48,16 +56,31 @@ export function ChecklistWorkspaceView({
   budget,
   onToggleEntry,
   onAddOrCompleteMovement,
+  onCreateCustomMovement,
+  onEditEntry,
+  onDeleteEntry,
   onRemoveRepeatableEntry,
 }: ChecklistWorkspaceViewProps): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
   const [filterMode, setFilterMode] = useState<ChecklistFilterMode>('all');
+
+  // Add Movement Modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<ConceptType>('expense');
+  const [isCustomConceptMode, setIsCustomConceptMode] = useState(false);
+  const [customConceptName, setCustomConceptName] = useState('');
+  const [customConceptGroup, setCustomConceptGroup] = useState<ConceptGroup>('variable');
   const [selectedConceptId, setSelectedConceptId] = useState<string>('');
   const [amountInput, setAmountInput] = useState<string>('');
   const [noteInput, setNoteInput] = useState<string>('');
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Edit Existing Item Modal state
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [editNameInput, setEditNameInput] = useState<string>('');
+  const [editAmountInput, setEditAmountInput] = useState<string>('');
+  const [editNoteInput, setEditNoteInput] = useState<string>('');
+  const [editError, setEditError] = useState<string | null>(null);
 
   const monthEntries = useMemo(
     () => entries.filter((e) => e.monthKey === monthKey),
@@ -96,6 +119,8 @@ export function ChecklistWorkspaceView({
 
   const handleOpenAddModal = (type: ConceptType) => {
     setSelectedType(type);
+    setIsCustomConceptMode(false);
+    setCustomConceptName('');
     const avail = getAvailableConcepts(concepts, entries, monthKey, type);
     const first = avail[0];
     setSelectedConceptId(first?.id ?? '');
@@ -106,18 +131,45 @@ export function ChecklistWorkspaceView({
   };
 
   const handleSelectConceptChip = (concept: Concept) => {
+    setIsCustomConceptMode(false);
     setSelectedConceptId(concept.id);
     setAmountInput(concept.defaultAmount > 0 ? String(concept.defaultAmount) : '');
     setFormError(null);
   };
 
   const handleSubmitMovement = () => {
+    const digitsOnly = amountInput.replace(/[^0-9]/g, '');
+
+    if (isCustomConceptMode) {
+      if (!customConceptName.trim()) {
+        setFormError('Ingresa el nombre del nuevo ítem.');
+        return;
+      }
+      const parsedCustomAmount = digitsOnly ? Number(digitsOnly) : 0;
+      if (!Number.isSafeInteger(parsedCustomAmount) || parsedCustomAmount <= 0) {
+        setFormError('Ingresa un monto entero mayor a $ 0 en pesos colombianos.');
+        return;
+      }
+      if (onCreateCustomMovement) {
+        onCreateCustomMovement({
+          monthKey,
+          name: customConceptName.trim(),
+          type: selectedType,
+          group: customConceptGroup,
+          amountCop: parsedCustomAmount,
+          ...(noteInput.trim() ? { note: noteInput.trim() } : {}),
+        });
+      }
+      setIsAddModalOpen(false);
+      setFormError(null);
+      return;
+    }
+
     if (!activeSelectedConcept) {
       setFormError('No hay conceptos disponibles en esta categoría para este mes.');
       return;
     }
 
-    const digitsOnly = amountInput.replace(/[^0-9]/g, '');
     const parsedAmount = digitsOnly ? Number(digitsOnly) : activeSelectedConcept.defaultAmount;
 
     if (!Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
@@ -135,6 +187,47 @@ export function ChecklistWorkspaceView({
 
     setIsAddModalOpen(false);
     setFormError(null);
+  };
+
+  const handleOpenEditModal = (entry: MonthEntry) => {
+    setEditingEntryId(entry.id);
+    setEditNameInput(entry.conceptName);
+    setEditAmountInput(String(entry.actualAmount > 0 ? entry.actualAmount : entry.plannedAmount));
+    setEditNoteInput(entry.note ?? '');
+    setEditError(null);
+  };
+
+  const handleSaveEditEntry = () => {
+    if (!editingEntryId) return;
+    if (!editNameInput.trim()) {
+      setEditError('El nombre del movimiento no puede estar vacío.');
+      return;
+    }
+    const digitsOnly = editAmountInput.replace(/[^0-9]/g, '');
+    const parsedAmount = digitsOnly ? Number(digitsOnly) : 0;
+    if (!Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
+      setEditError('Ingresa un monto entero válido mayor a $ 0.');
+      return;
+    }
+
+    if (onEditEntry) {
+      onEditEntry(editingEntryId, {
+        conceptName: editNameInput.trim(),
+        actualAmount: parsedAmount,
+        plannedAmount: parsedAmount,
+        ...(editNoteInput.trim() ? { note: editNoteInput.trim() } : {}),
+      });
+    }
+    setEditingEntryId(null);
+    setEditError(null);
+  };
+
+  const handleDeleteEntry = (entry: MonthEntry) => {
+    if (onDeleteEntry) {
+      onDeleteEntry(entry.id);
+    } else {
+      onRemoveRepeatableEntry(entry.id);
+    }
   };
 
   const renderEntryRow = (entry: MonthEntry) => {
@@ -207,28 +300,49 @@ export function ChecklistWorkspaceView({
           </View>
         </Pressable>
 
-        {isRepeatable ? (
-          <Pressable
-            testID={`delete-repeatable-${entry.id}`}
-            accessibilityRole="button"
-            accessibilityLabel={`Eliminar ${entry.conceptName}`}
-            onPress={() => onRemoveRepeatableEntry(entry.id)}
-            style={{
-              minHeight: MIN_TOUCH_TARGET_PT,
-              minWidth: MIN_TOUCH_TARGET_PT,
-              borderRadius: radius.md,
-              backgroundColor: colors.semantic.expenseSoft,
-              borderWidth: 1,
-              borderColor: colors.semantic.expense,
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
-            <AppText variant="caption" color={colors.semantic.expense}>
-              ✕
-            </AppText>
-          </Pressable>
-        ) : null}
+        {/* Edit Entry Button */}
+        <Pressable
+          testID={`edit-entry-${entry.id}`}
+          accessibilityRole="button"
+          accessibilityLabel={`Editar ${entry.conceptName}`}
+          onPress={() => handleOpenEditModal(entry)}
+          style={{
+            minHeight: MIN_TOUCH_TARGET_PT,
+            minWidth: MIN_TOUCH_TARGET_PT,
+            borderRadius: radius.md,
+            backgroundColor: colors.glass.surfaceElevatedTint,
+            borderWidth: 1,
+            borderColor: colors.glass.specularBorder,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <AppText variant="caption" color={colors.text.primary}>
+            ✎
+          </AppText>
+        </Pressable>
+
+        {/* Delete Entry Button */}
+        <Pressable
+          testID={`delete-entry-${entry.id}`}
+          accessibilityRole="button"
+          accessibilityLabel={`Eliminar ${entry.conceptName}`}
+          onPress={() => handleDeleteEntry(entry)}
+          style={{
+            minHeight: MIN_TOUCH_TARGET_PT,
+            minWidth: MIN_TOUCH_TARGET_PT,
+            borderRadius: radius.md,
+            backgroundColor: colors.semantic.expenseSoft,
+            borderWidth: 1,
+            borderColor: colors.semantic.expense,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <AppText variant="caption" color={colors.semantic.expense}>
+            ✕
+          </AppText>
+        </Pressable>
       </View>
     );
   };
@@ -336,6 +450,123 @@ export function ChecklistWorkspaceView({
         </View>
       </GlassSurface>
 
+      {/* Edit Existing Item Sheet */}
+      {editingEntryId ? (
+        <GlassSurface elevated testID="edit-entry-modal-card">
+          <View style={{ gap: spacing.sm }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: spacing.xs,
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <AppText variant="title2">Editar Movimiento</AppText>
+              </View>
+              <Pressable
+                testID="close-edit-entry-modal-button"
+                accessibilityRole="button"
+                onPress={() => setEditingEntryId(null)}
+                style={{
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.pill,
+                  backgroundColor: colors.glass.surfaceTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.subtleBorder,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <AppText variant="caption" color={colors.text.secondary}>
+                  Cancelar
+                </AppText>
+              </Pressable>
+            </View>
+
+            <TextInput
+              testID="edit-entry-name-input"
+              value={editNameInput}
+              onChangeText={setEditNameInput}
+              placeholder="Nombre del ingreso o gasto"
+              placeholderTextColor={colors.text.muted}
+              style={{
+                minHeight: MIN_TOUCH_TARGET_PT,
+                paddingHorizontal: spacing.md,
+                borderRadius: radius.md,
+                backgroundColor: colors.glass.surfaceTint,
+                borderWidth: 1,
+                borderColor: colors.glass.subtleBorder,
+                color: colors.text.primary,
+              }}
+            />
+
+            <TextInput
+              testID="edit-entry-amount-input"
+              value={editAmountInput}
+              onChangeText={setEditAmountInput}
+              keyboardType="numeric"
+              placeholder="Monto en COP enteros"
+              placeholderTextColor={colors.text.muted}
+              style={{
+                minHeight: MIN_TOUCH_TARGET_PT,
+                paddingHorizontal: spacing.md,
+                borderRadius: radius.md,
+                backgroundColor: colors.glass.surfaceTint,
+                borderWidth: 1,
+                borderColor: colors.glass.subtleBorder,
+                color: colors.text.primary,
+              }}
+            />
+
+            <TextInput
+              testID="edit-entry-note-input"
+              value={editNoteInput}
+              onChangeText={setEditNoteInput}
+              placeholder="Nota opcional"
+              placeholderTextColor={colors.text.muted}
+              style={{
+                minHeight: MIN_TOUCH_TARGET_PT,
+                paddingHorizontal: spacing.md,
+                borderRadius: radius.md,
+                backgroundColor: colors.glass.surfaceTint,
+                borderWidth: 1,
+                borderColor: colors.glass.subtleBorder,
+                color: colors.text.primary,
+              }}
+            />
+
+            {editError ? (
+              <AppText variant="caption" color={colors.semantic.expense}>
+                {editError}
+              </AppText>
+            ) : null}
+
+            <Pressable
+              testID="save-edit-entry-button"
+              accessibilityRole="button"
+              onPress={handleSaveEditEntry}
+              style={{
+                width: '100%',
+                minHeight: MIN_TOUCH_TARGET_PT,
+                borderRadius: radius.md,
+                backgroundColor: colors.semantic.incomeSoft,
+                borderWidth: 1,
+                borderColor: colors.semantic.income,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <AppText variant="headline" color={colors.semantic.income}>
+                Guardar Cambios
+              </AppText>
+            </Pressable>
+          </View>
+        </GlassSurface>
+      ) : null}
+
       {/* Screen 04: Liquid Glass Add / Complete Movement Sheet */}
       {isAddModalOpen ? (
         <GlassSurface elevated testID="add-movement-modal-card">
@@ -408,12 +639,13 @@ export function ChecklistWorkspaceView({
             </View>
 
             <AppText variant="caption" color={colors.text.secondary}>
-              {`Conceptos disponibles en ${monthKey} (${availableConcepts.length} opciones · oculta completados únicos):`}
+              {`Conceptos disponibles en ${monthKey} (${availableConcepts.length} opciones):`}
             </AppText>
 
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
               {availableConcepts.map((concept) => {
-                const isSelected = activeSelectedConcept?.id === concept.id;
+                const isSelected =
+                  !isCustomConceptMode && activeSelectedConcept?.id === concept.id;
                 return (
                   <Pressable
                     key={concept.id}
@@ -441,7 +673,88 @@ export function ChecklistWorkspaceView({
                   </Pressable>
                 );
               })}
+
+              <Pressable
+                testID="available-concept-chip-custom"
+                accessibilityRole="button"
+                onPress={() => {
+                  setIsCustomConceptMode(true);
+                  setAmountInput('');
+                  setFormError(null);
+                }}
+                style={{
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingVertical: spacing.xs,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.pill,
+                  backgroundColor: isCustomConceptMode
+                    ? colors.semantic.motoSoft
+                    : colors.glass.surfaceTint,
+                  borderWidth: 1,
+                  borderColor: isCustomConceptMode
+                    ? colors.semantic.moto
+                    : colors.glass.subtleBorder,
+                  justifyContent: 'center',
+                }}
+              >
+                <AppText variant="caption">+ Crear nuevo ítem</AppText>
+              </Pressable>
             </View>
+
+            {isCustomConceptMode ? (
+              <View style={{ gap: spacing.xs }}>
+                <TextInput
+                  testID="custom-concept-name-input"
+                  value={customConceptName}
+                  onChangeText={setCustomConceptName}
+                  placeholder="Nombre del nuevo ítem (ej. Bono extra o Parqueadero)"
+                  placeholderTextColor={colors.text.muted}
+                  style={{
+                    minHeight: MIN_TOUCH_TARGET_PT,
+                    paddingHorizontal: spacing.md,
+                    borderRadius: radius.md,
+                    backgroundColor: colors.glass.surfaceTint,
+                    borderWidth: 1,
+                    borderColor: colors.glass.subtleBorder,
+                    color: colors.text.primary,
+                  }}
+                />
+                <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                  {(
+                    [
+                      { id: 'fixed', label: 'Fijo' },
+                      { id: 'variable', label: 'Variable' },
+                    ] as const
+                  ).map((g) => {
+                    const active = customConceptGroup === g.id;
+                    return (
+                      <Pressable
+                        key={g.id}
+                        testID={`custom-group-${g.id}`}
+                        accessibilityRole="button"
+                        onPress={() => setCustomConceptGroup(g.id)}
+                        style={{
+                          flex: 1,
+                          minHeight: MIN_TOUCH_TARGET_PT,
+                          borderRadius: radius.md,
+                          backgroundColor: active
+                            ? colors.glass.surfaceElevatedTint
+                            : colors.glass.surfaceTint,
+                          borderWidth: 1,
+                          borderColor: active
+                            ? colors.glass.specularBorder
+                            : colors.glass.subtleBorder,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <AppText variant="caption">{g.label}</AppText>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
 
             <TextInput
               testID="movement-amount-input"
@@ -535,26 +848,6 @@ export function ChecklistWorkspaceView({
               {`Ingresos Variables · Recibido: ${formatCop(budget.incomeByGroup.variable.paid)}`}
             </AppText>
             {variableIncomes.map(renderEntryRow)}
-            <Pressable
-              testID="quick-add-variable-income-button"
-              accessibilityRole="button"
-              onPress={() => handleOpenAddModal('income')}
-              style={{
-                width: '100%',
-                minHeight: MIN_TOUCH_TARGET_PT,
-                paddingHorizontal: spacing.md,
-                borderRadius: radius.md,
-                backgroundColor: colors.semantic.incomeSoft,
-                borderWidth: 1,
-                borderColor: colors.semantic.income,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <AppText variant="caption" color={colors.semantic.income}>
-                + Agregar Ingreso Variable
-              </AppText>
-            </Pressable>
           </View>
         </View>
       </GlassSurface>
@@ -587,26 +880,6 @@ export function ChecklistWorkspaceView({
               {`Gastos Variables (${formatCop(budget.expensesByGroup.variable.paid)} pagados · ${formatCop(budget.expensesByGroup.variable.pending)} pendientes)`}
             </AppText>
             {variableExpenses.map(renderEntryRow)}
-            <Pressable
-              testID="quick-add-variable-expense-button"
-              accessibilityRole="button"
-              onPress={() => handleOpenAddModal('expense')}
-              style={{
-                width: '100%',
-                minHeight: MIN_TOUCH_TARGET_PT,
-                paddingHorizontal: spacing.md,
-                borderRadius: radius.md,
-                backgroundColor: colors.semantic.expenseSoft,
-                borderWidth: 1,
-                borderColor: colors.semantic.expense,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <AppText variant="caption" color={colors.semantic.expense}>
-                + Agregar Gasto (Otro)
-              </AppText>
-            </Pressable>
           </View>
         </View>
       </GlassSurface>

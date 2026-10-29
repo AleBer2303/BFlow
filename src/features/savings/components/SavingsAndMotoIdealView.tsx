@@ -2,10 +2,10 @@
  * src/features/savings/components/SavingsAndMotoIdealView.tsx
  *
  * Implements Screens `08-savings-and-moto` & `09-moto-ideal`:
- * - Hero Card Total Ahorros (`K6`: `$ 4.380.000`)
- * - Fondo Moto (`K4`: `$ 2.300.000` = Apertura `$ 1.600.000` + Aportes pagados `$ 700.000`)
- * - Fondo Ahorros (`K5`: `$ 2.080.000` en caja hoy, y `$ 1.630.000` proyectado tras pendientes)
- * - Provisión "IDEAL" de la Moto (CB300F): `$ 872.667/mes` recurrente (`B43`), `$ 1.372.667` con meta
+ * - Hero Card Total Ahorros (`$ 4.380.000`)
+ * - Fondo Moto (`$ 2.300.000` = Apertura `$ 1.600.000` + Aportes pagados `$ 700.000`)
+ * - Fondo Ahorros (`$ 2.080.000` en caja hoy, y `$ 1.630.000` proyectado tras pendientes)
+ * - Provisión "IDEAL" de la Moto (CB300F): `$ 872.667/mes` recurrente, `$ 1.372.667` con meta
  *   `Kit de arrastre Honda original` (`$ 500.000` meta `2027-08`), y brecha operativa `- $ 172.667`.
  */
 
@@ -37,7 +37,7 @@ export function SavingsAndMotoIdealView({
 
   return (
     <View style={{ gap: spacing.md }} testID="savings-and-moto-ideal-view">
-      {/* Screen 08: Hero Card Total Ahorros (K6) */}
+      {/* Screen 08: Hero Card Total Ahorros */}
       <GlassSurface elevated testID="savings-hero-card">
         <View style={{ gap: spacing.xs }}>
           <View
@@ -45,10 +45,12 @@ export function SavingsAndMotoIdealView({
               flexDirection: 'row',
               justifyContent: 'space-between',
               alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: spacing.xs,
             }}
           >
             <AppText variant="caption" color={colors.text.secondary}>
-              Total Ahorros Acumulados (Celda K6)
+              Total Ahorros Acumulados
             </AppText>
             <StatusBadge label="Moto + Ahorros" status="moto" />
           </View>
@@ -66,11 +68,11 @@ export function SavingsAndMotoIdealView({
         </View>
       </GlassSurface>
 
-      {/* Two Bucket Cards: Moto (K4) & Ahorros (K5) */}
+      {/* Two Bucket Cards: Moto & Ahorros */}
       <View style={{ flexDirection: 'row', gap: spacing.md }}>
         <GlassSurface style={{ flex: 1 }} testID="bucket-moto-card">
           <View style={{ gap: spacing.xs }}>
-            <AppText variant="headline">Fondo Moto (K4)</AppText>
+            <AppText variant="headline">Fondo Moto</AppText>
             <CurrencyText
               testID="bucket-moto-current"
               amount={savingsSummary.moto.currentBalance}
@@ -78,7 +80,7 @@ export function SavingsAndMotoIdealView({
               tone="moto"
             />
             <AppText variant="micro" color={colors.text.secondary}>
-              {`Mes pasado (J4): ${formatCop(savingsSummary.moto.openingBalance)}`}
+              {`Saldo mes anterior: ${formatCop(savingsSummary.moto.openingBalance)}`}
             </AppText>
             <AppText variant="micro" color={colors.semantic.income}>
               {`+ Aportes pagados: ${formatCop(savingsSummary.moto.paidContributionsThisMonth)}`}
@@ -88,7 +90,7 @@ export function SavingsAndMotoIdealView({
 
         <GlassSurface style={{ flex: 1 }} testID="bucket-savings-card">
           <View style={{ gap: spacing.xs }}>
-            <AppText variant="headline">Fondo Ahorros (K5)</AppText>
+            <AppText variant="headline">Fondo Ahorros</AppText>
             <CurrencyText
               testID="bucket-savings-current"
               amount={savingsSummary.savings.currentBalance}
@@ -96,7 +98,7 @@ export function SavingsAndMotoIdealView({
               tone="income"
             />
             <AppText variant="micro" color={colors.text.secondary}>
-              {`Mes pasado (J5): ${formatCop(savingsSummary.savings.openingBalance)} + Flujo Neto ${formatCop(savingsSummary.savings.netCashFlowContribution)}`}
+              {`Saldo mes anterior: ${formatCop(savingsSummary.savings.openingBalance)} + Flujo Neto ${formatCop(savingsSummary.savings.netCashFlowContribution)}`}
             </AppText>
             <AppText variant="micro" color={colors.semantic.pending}>
               {`Tras pendientes: ${formatCop(savingsSummary.savings.projectedAfterPendingExpenses)}`}
@@ -117,9 +119,11 @@ export function SavingsAndMotoIdealView({
               gap: spacing.xs,
             }}
           >
-            <AppText variant="title2">Provisión IDEAL Moto (CB300F)</AppText>
+            <View style={{ flex: 1 }}>
+              <AppText variant="title2">Provisión IDEAL Moto (CB300F)</AppText>
+            </View>
             <StatusBadge
-              label={`Celda B43: ${formatCop(motoIdealSummary.excelRecurringMonthlyTotalCop)}/mes`}
+              label={`Cuota ideal: ${formatCop(motoIdealSummary.excelRecurringMonthlyTotalCop)}/mes`}
               status="moto"
             />
           </View>
@@ -137,6 +141,7 @@ export function SavingsAndMotoIdealView({
                   flexDirection: 'row',
                   justifyContent: 'space-between',
                   alignItems: 'center',
+                  gap: spacing.sm,
                   paddingVertical: spacing.xs,
                   paddingHorizontal: spacing.sm,
                   borderRadius: radius.md,
@@ -155,18 +160,20 @@ export function SavingsAndMotoIdealView({
                         : 'Provisión mensual directa'}
                   </AppText>
                 </View>
-                <CurrencyText amount={item.excelMonthlyAmountCop} variant="body" tone="moto" />
+                <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+                  <CurrencyText amount={item.excelMonthlyAmountCop} variant="body" tone="moto" />
+                </View>
               </View>
             ))}
           </View>
 
-          {/* Target Goals (Kit de Arrastre Honda Original) */}
+          {/* Target Goals (Kit de Arrastre Honda Original) — Polished layout for iPhone 16 Pro Max */}
           {motoIdealSummary.targetGoals.map((goal) => (
             <View
               key={goal.id}
               testID={`moto-target-goal-${goal.id}`}
               style={{
-                padding: spacing.sm,
+                padding: spacing.md,
                 borderRadius: radius.md,
                 backgroundColor: colors.semantic.motoSoft,
                 borderWidth: 1,
@@ -178,10 +185,14 @@ export function SavingsAndMotoIdealView({
                 style={{
                   flexDirection: 'row',
                   justifyContent: 'space-between',
-                  alignItems: 'center',
+                  alignItems: 'flex-start',
+                  flexWrap: 'wrap',
+                  gap: spacing.xs,
                 }}
               >
-                <AppText variant="headline">{`🎯 ${goal.displayName}`}</AppText>
+                <View style={{ flex: 1, minWidth: 180 }}>
+                  <AppText variant="headline">{`🎯 ${goal.displayName}`}</AppText>
+                </View>
                 <StatusBadge label={`Meta: ${goal.targetMonthKey}`} status="moto" />
               </View>
               <AppText variant="caption" color={colors.text.secondary}>

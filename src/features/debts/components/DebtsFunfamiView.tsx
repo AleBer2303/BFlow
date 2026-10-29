@@ -3,13 +3,13 @@
  *
  * Implements Screen `07-debt-funfami` (Control de Deuda FUNFAMI):
  * - Hero Card Total Deuda FUNFAMI (`$ 6.200.000` after `$ 1.800.000` Oct installment)
- * - De-leveraging progress bar (`22.5%` reduced in Oct 2026 from `$ 8.000.000`)
- * - Freedom projection (`~4 meses · Febrero 2027` at `$ 1.800.000/mes` 100% principal)
- * - Individual cards for `CB300F - MOTO` (`$ 4.400.000 -> $ 2.600.000`) and `ESP. IA` (`$ 3.600.000 -> $ 3.600.000`)
+ * - Editable monthly installment amount (`funfami-installment-amount-input` + `funfami-apply-installment-button`)
+ * - Automatic waterfall payoff: once `CB300F - MOTO` reaches `$ 0`, it is removed from active obligations
+ *   and any remaining or future installment automatically subtracts from `ESP. IA`.
  */
 
-import React from 'react';
-import { Pressable, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Pressable, TextInput, View } from 'react-native';
 import {
   AppText,
   CurrencyText,
@@ -29,14 +29,29 @@ export interface DebtsFunfamiViewProps {
   debtSummary: FunfamiDebtSummary;
   funfamiEntry?: MonthEntry;
   onToggleFunfamiInstallment?: (entry: MonthEntry) => void;
+  onUpdateFunfamiInstallmentAmount?: (newAmountCop: number) => void;
 }
 
 export function DebtsFunfamiView({
   debtSummary,
   funfamiEntry,
   onToggleFunfamiInstallment,
+  onUpdateFunfamiInstallmentAmount,
 }: DebtsFunfamiViewProps): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
+
+  const installmentAmount =
+    funfamiEntry?.actualAmount ||
+    funfamiEntry?.plannedAmount ||
+    debtSummary.appliedInstallmentThisMonth ||
+    1_800_000;
+
+  const [installmentInput, setInstallmentInput] = useState<string>(String(installmentAmount));
+  const [amountError, setAmountError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setInstallmentInput(String(installmentAmount));
+  }, [installmentAmount]);
 
   const paydownRatio =
     debtSummary.openingTotalDebt > 0
@@ -44,16 +59,34 @@ export function DebtsFunfamiView({
       : 0;
   const paydownPercent = Math.round(paydownRatio * 1000) / 10;
   const estimatedRemainingMonths = debtSummary.projection.remainingMonths;
-  const monthShortLabel = formatMonthKeyLabelEs(debtSummary.monthKey).split(' ')[0]?.slice(0, 3) ?? 'Mes';
+  const monthShortLabel =
+    formatMonthKeyLabelEs(debtSummary.monthKey).split(' ')[0]?.slice(0, 3) ?? 'Mes';
   const payoffLabel = debtSummary.projection.estimatedPayoffMonthKey
     ? formatMonthKeyLabelEs(debtSummary.projection.estimatedPayoffMonthKey)
     : 'Sin cuota activa';
-  const installmentAmount =
-    funfamiEntry?.actualAmount || debtSummary.appliedInstallmentThisMonth || 1_800_000;
+
+  const handleApplyInstallmentAmount = () => {
+    const digitsOnly = installmentInput.replace(/[^0-9]/g, '');
+    const parsed = digitsOnly ? Number(digitsOnly) : 0;
+    if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+      setAmountError('Ingresa una cuota entera mayor a $ 0 en pesos colombianos.');
+      return;
+    }
+    setAmountError(null);
+    if (onUpdateFunfamiInstallmentAmount) {
+      onUpdateFunfamiInstallmentAmount(parsed);
+    }
+  };
+
+  const motoDebtItem = debtSummary.debts.find((d) => d.debtId === 'debt_cb300f_moto');
+  const isMotoDebtPaidOff = Boolean(motoDebtItem && motoDebtItem.remainingBalance === 0);
+
+  // When CB300F - MOTO is 100% paid off (remainingBalance === 0), remove it from active obligations
+  const activeObligations = debtSummary.debts.filter((d) => d.remainingBalance > 0);
 
   return (
     <View style={{ gap: spacing.md }} testID="debts-funfami-view">
-      {/* Hero Card: Total Deuda FUNFAMI (H6) */}
+      {/* Hero Card: Total Deuda FUNFAMI */}
       <GlassSurface elevated testID="funfami-hero-card">
         <View style={{ gap: spacing.sm }}>
           <View
@@ -66,7 +99,7 @@ export function DebtsFunfamiView({
             }}
           >
             <AppText variant="caption" color={colors.text.secondary}>
-              Total Deuda FUNFAMI (Celda H6)
+              Total Deuda FUNFAMI
             </AppText>
             <StatusBadge
               label={
@@ -126,6 +159,55 @@ export function DebtsFunfamiView({
             </AppText>
           </View>
 
+          {/* Modify Monthly Installment Amount */}
+          <View style={{ gap: spacing.xs, paddingTop: spacing.xxs }}>
+            <AppText variant="micro" color={colors.text.secondary}>
+              Modificar monto a pagar este mes (COP):
+            </AppText>
+            <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
+              <TextInput
+                testID="funfami-installment-amount-input"
+                value={installmentInput}
+                onChangeText={setInstallmentInput}
+                keyboardType="numeric"
+                placeholder="Ej. 1800000"
+                placeholderTextColor={colors.text.muted}
+                style={{
+                  flex: 1,
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.md,
+                  backgroundColor: colors.glass.surfaceTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.subtleBorder,
+                  color: colors.text.primary,
+                }}
+              />
+              <Pressable
+                testID="funfami-apply-installment-button"
+                accessibilityRole="button"
+                onPress={handleApplyInstallmentAmount}
+                style={{
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.md,
+                  backgroundColor: colors.glass.surfaceElevatedTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.specularBorder,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <AppText variant="caption">Actualizar cuota</AppText>
+              </Pressable>
+            </View>
+            {amountError ? (
+              <AppText variant="micro" color={colors.semantic.expense}>
+                {amountError}
+              </AppText>
+            ) : null}
+          </View>
+
           {funfamiEntry && onToggleFunfamiInstallment ? (
             <Pressable
               testID="debts-view-toggle-installment"
@@ -157,16 +239,30 @@ export function DebtsFunfamiView({
                 }
               >
                 {debtSummary.isInstallmentPaid
-                  ? `✓ Cuota FUNFAMI Pagada (${funfamiEntry.completedAt ?? '2026-10-27'}) · Toca para simular pendiente`
-                  : `○ Marcar Cuota FUNFAMI (${formatCop(funfamiEntry.plannedAmount)}) como Pagada`}
+                  ? `✓ Cuota FUNFAMI Pagada (${formatCop(installmentAmount)}) · Toca para marcar pendiente`
+                  : `○ Marcar Cuota FUNFAMI (${formatCop(installmentAmount)}) como Pagada`}
               </AppText>
             </Pressable>
           ) : null}
         </View>
       </GlassSurface>
 
-      {/* Individual Obligations Breakdown */}
-      {debtSummary.debts.map((debt) => (
+      {/* Banner when CB300F - MOTO is 100% paid off */}
+      {isMotoDebtPaidOff ? (
+        <GlassSurface testID="moto-debt-completed-banner">
+          <View style={{ gap: spacing.xxs }}>
+            <AppText variant="headline" color={colors.semantic.completed}>
+              ✨ Deuda CB300F - MOTO completada y eliminada
+            </AppText>
+            <AppText variant="caption" color={colors.text.secondary}>
+              El saldo de la moto llegó a $ 0. A partir de este momento los pagos se descuentan automáticamente de la deuda ESP. IA.
+            </AppText>
+          </View>
+        </GlassSurface>
+      ) : null}
+
+      {/* Individual Active Obligations Breakdown */}
+      {activeObligations.map((debt) => (
         <GlassSurface key={debt.debtId} testID={`debt-card-${debt.debtId}`}>
           <View style={{ gap: spacing.xs }}>
             <View

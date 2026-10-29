@@ -5,8 +5,9 @@
  * `11-settings`, and `12-month-close`:
  * - Interactive SVG Paid vs Pending ring & proportional Expense Distribution bars
  * - Month Close & Automatic Rollover ritual (`2026-10` -> `2026-11`)
- * - Month History selector (`Octubre 2026`, `Noviembre 2026`, etc.)
- * - Concepts Catalog viewer (14 concepts with recurrence and links)
+ * - Month History manager: select, reopen/edit previously closed months, or delete an
+ *   accidentally created/closed month to return to the previous month
+ * - Concepts Catalog viewer
  * - Native Mode A / Mode B & iloader 7-day signature diagnostics
  */
 
@@ -46,6 +47,8 @@ export interface AnalyticsAndHistoryViewProps {
   closedSnapshots: Readonly<Record<string, MonthSnapshot>>;
   onSelectMonth: (monthKey: string) => void;
   onCloseCurrentMonth: () => void;
+  onReopenClosedMonth?: (monthKey: string) => void;
+  onDeleteOrRevertMonth?: (monthKey: string) => void;
   onResetOctoberSeed: () => void;
 }
 
@@ -61,6 +64,8 @@ export function AnalyticsAndHistoryView({
   closedSnapshots,
   onSelectMonth,
   onCloseCurrentMonth,
+  onReopenClosedMonth,
+  onDeleteOrRevertMonth,
   onResetOctoberSeed,
 }: AnalyticsAndHistoryViewProps): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
@@ -184,7 +189,7 @@ export function AnalyticsAndHistoryView({
         </View>
       </GlassSurface>
 
-      {/* Screen 12 & Screen 06: Month Close & Month History */}
+      {/* Screen 12 & Screen 06: Month Close & Month History Management */}
       <GlassSurface elevated testID="month-close-and-history-card">
         <View style={{ gap: spacing.sm }}>
           <View
@@ -262,20 +267,25 @@ export function AnalyticsAndHistoryView({
             </AppText>
           </Pressable>
 
-          {/* Month History Pills */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+          {/* Month History Selector, Reopen/Edit & Delete/Revert Controls */}
+          <View style={{ gap: spacing.xs, paddingTop: spacing.xs }}>
+            <AppText variant="headline">Historial de Meses (Editar o Eliminar)</AppText>
             {availableMonths.map((mk) => {
               const isSelected = mk === activeMonthKey;
+              const isClosed = Boolean(closedSnapshots[mk]);
+              const canDelete = availableMonths.length > 1 || isClosed;
+
               return (
-                <Pressable
+                <View
                   key={mk}
-                  testID={`history-month-pill-${mk}`}
-                  accessibilityRole="button"
-                  onPress={() => onSelectMonth(mk)}
                   style={{
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    paddingHorizontal: spacing.md,
-                    borderRadius: radius.pill,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: spacing.xs,
+                    padding: spacing.xs,
+                    borderRadius: radius.md,
                     backgroundColor: isSelected
                       ? colors.glass.surfaceElevatedTint
                       : colors.glass.surfaceTint,
@@ -283,11 +293,71 @@ export function AnalyticsAndHistoryView({
                     borderColor: isSelected
                       ? colors.glass.specularBorder
                       : colors.glass.subtleBorder,
-                    justifyContent: 'center',
                   }}
                 >
-                  <AppText variant="caption">{formatMonthKeyLabelEs(mk)}</AppText>
-                </Pressable>
+                  <Pressable
+                    testID={`history-month-pill-${mk}`}
+                    accessibilityRole="button"
+                    onPress={() => onSelectMonth(mk)}
+                    style={{
+                      flex: 1,
+                      minHeight: MIN_TOUCH_TARGET_PT,
+                      paddingHorizontal: spacing.sm,
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <AppText variant="body">{formatMonthKeyLabelEs(mk)}</AppText>
+                    <AppText variant="micro" color={colors.text.secondary}>
+                      {isClosed ? 'Mes Cerrado · Toca para ver' : 'Mes Abierto · Activo'}
+                    </AppText>
+                  </Pressable>
+
+                  <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                    {isClosed && onReopenClosedMonth ? (
+                      <Pressable
+                        testID={`reopen-month-${mk}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Editar mes cerrado ${formatMonthKeyLabelEs(mk)}`}
+                        onPress={() => onReopenClosedMonth(mk)}
+                        style={{
+                          minHeight: MIN_TOUCH_TARGET_PT,
+                          paddingHorizontal: spacing.md,
+                          borderRadius: radius.md,
+                          backgroundColor: colors.glass.surfaceElevatedTint,
+                          borderWidth: 1,
+                          borderColor: colors.glass.specularBorder,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <AppText variant="caption">Editar mes</AppText>
+                      </Pressable>
+                    ) : null}
+
+                    {canDelete && onDeleteOrRevertMonth ? (
+                      <Pressable
+                        testID={`delete-month-${mk}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Eliminar mes ${formatMonthKeyLabelEs(mk)}`}
+                        onPress={() => onDeleteOrRevertMonth(mk)}
+                        style={{
+                          minHeight: MIN_TOUCH_TARGET_PT,
+                          paddingHorizontal: spacing.md,
+                          borderRadius: radius.md,
+                          backgroundColor: colors.semantic.expenseSoft,
+                          borderWidth: 1,
+                          borderColor: colors.semantic.expense,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <AppText variant="caption" color={colors.semantic.expense}>
+                          Eliminar
+                        </AppText>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                </View>
               );
             })}
           </View>
@@ -305,6 +375,7 @@ export function AnalyticsAndHistoryView({
                 flexDirection: 'row',
                 justifyContent: 'space-between',
                 alignItems: 'center',
+                gap: spacing.sm,
                 paddingVertical: spacing.xs,
                 borderBottomWidth: 1,
                 borderBottomColor: colors.glass.subtleBorder,

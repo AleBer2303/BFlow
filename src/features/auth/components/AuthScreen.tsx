@@ -14,8 +14,10 @@ import { Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import {
   AppText,
   GlassSurface,
+  GoogleLogoIcon,
   MIN_TOUCH_TARGET_PT,
   StatusBadge,
+  ThemeToggleIconButton,
   useBFlowTheme,
 } from '../../../design-system';
 import type { RegisterPersonalAccountInput } from '../../../platform/auth/authAdapter';
@@ -43,7 +45,7 @@ export function AuthScreen({
   onSignInWithGoogle,
   onSendPasswordRecovery,
 }: AuthScreenProps): React.JSX.Element {
-  const { colors, spacing, radius, mode, toggleTheme } = useBFlowTheme();
+  const { colors, spacing, radius } = useBFlowTheme();
 
   const [formMode, setFormMode] = useState<AuthFormMode>(initialMode);
   const [displayName, setDisplayName] = useState('');
@@ -148,24 +150,7 @@ export function AuthScreen({
             </AppText>
           </View>
 
-          <Pressable
-            testID="auth-theme-toggle-button"
-            accessibilityRole="button"
-            accessibilityLabel="Cambiar tema visual"
-            onPress={toggleTheme}
-            style={{
-              minHeight: MIN_TOUCH_TARGET_PT,
-              paddingHorizontal: spacing.md,
-              borderRadius: radius.pill,
-              backgroundColor: colors.glass.surfaceElevatedTint,
-              borderWidth: 1,
-              borderColor: colors.glass.specularBorder,
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
-            <AppText variant="caption">{mode === 'dark' ? 'Modo claro' : 'Modo oscuro'}</AppText>
-          </Pressable>
+          <ThemeToggleIconButton testID="auth-theme-toggle-button" />
         </View>
 
         {/* Grounded Ledger Preview Strip */}
@@ -483,11 +468,15 @@ export function AuthScreen({
                     backgroundColor: colors.glass.surfaceElevatedTint,
                     borderWidth: 1,
                     borderColor: colors.glass.specularBorder,
+                    flexDirection: 'row',
                     justifyContent: 'center',
                     alignItems: 'center',
+                    gap: spacing.sm,
                     paddingVertical: spacing.sm,
+                    paddingHorizontal: spacing.md,
                   }}
                 >
+                  <GoogleLogoIcon size={20} />
                   <AppText variant="headline">Continuar con Google</AppText>
                 </Pressable>
 

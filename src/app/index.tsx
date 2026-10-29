@@ -8,6 +8,7 @@ import {
   GlassSurface,
   MIN_TOUCH_TARGET_PT,
   StatusBadge,
+  ThemeToggleIconButton,
   useBFlowTheme,
 } from '../design-system';
 import {
@@ -53,7 +54,7 @@ const WORKSPACE_TABS: ReadonlyArray<{ id: BFlowWorkspaceTab; label: string }> = 
 ];
 
 export default function PhaseOneHomeScreen(): React.JSX.Element {
-  const { colors, spacing, radius, mode, toggleTheme } = useBFlowTheme();
+  const { colors, spacing, radius } = useBFlowTheme();
   const {
     activeTab,
     activeMonthKey,
@@ -75,8 +76,14 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     applyFullCloudAccount,
     toggleEntryStatus,
     addOrCompleteMovement,
+    createCustomConceptAndMovement,
+    editEntry,
+    deleteEntryById,
     removeOrResetEntry,
+    updateFunfamiInstallmentAmount,
     closeCurrentMonth,
+    reopenClosedMonth,
+    deleteOrRevertMonth,
     resetToOctober2026GoldenState,
   } = useBudgetStore();
 
@@ -333,25 +340,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
           <AppText variant="title1">{`BFlow · ${activeMonthLabel}`}</AppText>
         </View>
 
-        <Pressable
-          testID="theme-toggle-button"
-          accessibilityRole="button"
-          accessibilityLabel="Cambiar tema claro u oscuro"
-          onPress={toggleTheme}
-          style={{
-            minHeight: MIN_TOUCH_TARGET_PT,
-            minWidth: MIN_TOUCH_TARGET_PT,
-            paddingHorizontal: spacing.md,
-            borderRadius: radius.pill,
-            backgroundColor: colors.glass.surfaceElevatedTint,
-            borderWidth: 1,
-            borderColor: colors.glass.specularBorder,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <AppText variant="caption">{mode === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}</AppText>
-        </Pressable>
+        <ThemeToggleIconButton testID="theme-toggle-button" />
       </View>
 
       {/* Authenticated User Personal Profile & Cloud Session Card */}
@@ -457,7 +446,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                 }}
               >
                 <AppText variant="caption" color={colors.text.secondary}>
-                  Flujo Neto (En caja hoy · B6)
+                  Flujo Neto (En caja hoy)
                 </AppText>
                 <StatusBadge
                   testID="checklist-progress-badge"
@@ -485,7 +474,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
             <GlassSurface style={{ flex: 1 }} testID="income-summary-card">
               <View style={{ gap: spacing.xs }}>
                 <AppText variant="caption" color={colors.text.secondary}>
-                  Ingresos Recibidos (B2)
+                  Ingresos Recibidos
                 </AppText>
                 <CurrencyText amount={budget.receivedIncome} variant="title2" tone="income" />
                 <AppText variant="micro" color={colors.text.muted}>
@@ -497,11 +486,11 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
             <GlassSurface style={{ flex: 1 }} testID="expense-summary-card">
               <View style={{ gap: spacing.xs }}>
                 <AppText variant="caption" color={colors.text.secondary}>
-                  Gastos Pagados (B4)
+                  Gastos Pagados
                 </AppText>
                 <CurrencyText amount={budget.paidExpenses} variant="title2" tone="expense" />
                 <AppText variant="micro" color={colors.semantic.pending}>
-                  {`Pendientes (B5): ${formatCop(budget.pendingExpenses)}`}
+                  {`Pendientes: ${formatCop(budget.pendingExpenses)}`}
                 </AppText>
               </View>
             </GlassSurface>
@@ -518,7 +507,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                   gap: spacing.xs,
                 }}
               >
-                <AppText variant="headline">Control Deuda FUNFAMI (H6)</AppText>
+                <AppText variant="headline">Control Deuda FUNFAMI</AppText>
                 <StatusBadge
                   label={
                     debtSummary.isInstallmentPaid
@@ -551,7 +540,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                   gap: spacing.xs,
                 }}
               >
-                <AppText variant="headline">Control Ahorros y Moto (K6)</AppText>
+                <AppText variant="headline">Control Ahorros y Moto</AppText>
                 <StatusBadge
                   label={`IDEAL Moto: ${formatCop(motoIdealSummary.excelRecurringMonthlyTotalCop)}/mes`}
                   status="moto"
@@ -591,7 +580,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
               <Pressable
                 testID="summary-quick-open-checklist-add"
                 accessibilityRole="button"
-                accessibilityLabel="Ir a Checklist para agregar nuevo movimiento"
+                accessibilityLabel="Registrar Nuevo Movimiento"
                 onPress={() => setActiveTab('checklist')}
                 style={{
                   width: '100%',
@@ -607,7 +596,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                 }}
               >
                 <AppText variant="caption" color={colors.semantic.income}>
-                  + Agregar o Registrar Nuevo Movimiento
+                  Registrar Nuevo Movimiento
                 </AppText>
               </Pressable>
 
@@ -694,6 +683,18 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
           budget={budget}
           onToggleEntry={handleToggleEntry}
           onAddOrCompleteMovement={handleAddMovement}
+          onCreateCustomMovement={(input) => {
+            void createCustomConceptAndMovement(input);
+            void triggerHaptic('success');
+          }}
+          onEditEntry={(entryId, updates) => {
+            void editEntry(entryId, updates);
+            void triggerHaptic('success');
+          }}
+          onDeleteEntry={(entryId) => {
+            void deleteEntryById(entryId);
+            void triggerHaptic('light');
+          }}
           onRemoveRepeatableEntry={removeOrResetEntry}
         />
       ) : null}
@@ -703,6 +704,10 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
           debtSummary={debtSummary}
           funfamiEntry={funfamiEntry}
           onToggleFunfamiInstallment={handleToggleEntry}
+          onUpdateFunfamiInstallmentAmount={(newAmountCop) => {
+            void updateFunfamiInstallmentAmount(activeMonthKey, newAmountCop);
+            void triggerHaptic('success');
+          }}
         />
       ) : null}
 
@@ -726,6 +731,14 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
           closedSnapshots={closedSnapshots}
           onSelectMonth={setActiveMonthKey}
           onCloseCurrentMonth={handleCloseMonth}
+          onReopenClosedMonth={(mk) => {
+            void reopenClosedMonth(mk);
+            void triggerHaptic('light');
+          }}
+          onDeleteOrRevertMonth={(mk) => {
+            void deleteOrRevertMonth(mk);
+            void triggerHaptic('light');
+          }}
           onResetOctoberSeed={resetToOctober2026GoldenState}
         />
       ) : null}

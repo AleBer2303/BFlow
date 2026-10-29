@@ -30,9 +30,9 @@ describe('design-system & PhaseOneHomeScreen (RNTL)', () => {
     );
 
     const themeBtn = screen.getByTestId('theme-toggle-button');
-    expect(screen.getByText('Modo Claro')).toBeTruthy();
+    expect(screen.getByTestId('theme-icon-sun')).toBeTruthy();
     fireEvent.press(themeBtn);
-    expect(screen.getByText('Modo Oscuro')).toBeTruthy();
+    expect(screen.getByTestId('theme-icon-moon')).toBeTruthy();
 
     // Unchecking Cuota FUNFAMI restores total debt to $ 8.000.000 and checklist to 5 de 12
     const funfamiRow = screen.getByTestId('checklist-item-exp_cuota_funfami');

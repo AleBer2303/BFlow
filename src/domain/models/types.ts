@@ -60,6 +60,7 @@ export interface Debt {
   lender: string;
   openingBalance: number;
   monthKey: string;
+  monthlyInterestRate?: number;
 }
 
 export interface DebtPayment {

@@ -44,6 +44,11 @@ export interface ChecklistWorkspaceViewProps {
   onToggleEntry: (entry: MonthEntry) => void;
   onAddOrCompleteMovement: (input: RegisterOrCompleteMovementInput) => void;
   onCreateCustomMovement?: (input: CreateCustomConceptInput) => void;
+  onUpdateConcept?: (
+    conceptId: string,
+    updates: { name?: string; defaultAmount?: number; group?: ConceptGroup }
+  ) => void;
+  onDeleteConcept?: (conceptId: string) => void;
   onEditEntry?: (entryId: string, updates: EditEntryUpdates) => void;
   onDeleteEntry?: (entryId: string) => void;
   onRemoveRepeatableEntry: (entryId: string) => void;
@@ -57,6 +62,8 @@ export function ChecklistWorkspaceView({
   onToggleEntry,
   onAddOrCompleteMovement,
   onCreateCustomMovement,
+  onUpdateConcept,
+  onDeleteConcept,
   onEditEntry,
   onDeleteEntry,
   onRemoveRepeatableEntry,
@@ -74,6 +81,13 @@ export function ChecklistWorkspaceView({
   const [amountInput, setAmountInput] = useState<string>('');
   const [noteInput, setNoteInput] = useState<string>('');
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Concept Edit / Delete state
+  const [isEditingConcept, setIsEditingConcept] = useState(false);
+  const [conceptEditName, setConceptEditName] = useState('');
+  const [conceptEditAmount, setConceptEditAmount] = useState('');
+  const [conceptEditGroup, setConceptEditGroup] = useState<ConceptGroup>('variable');
+  const [confirmDeleteConceptId, setConfirmDeleteConceptId] = useState<string | null>(null);
 
   // Edit Existing Item Modal state
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
@@ -121,6 +135,8 @@ export function ChecklistWorkspaceView({
     setSelectedType(type);
     setIsCustomConceptMode(false);
     setCustomConceptName('');
+    setIsEditingConcept(false);
+    setConfirmDeleteConceptId(null);
     const avail = getAvailableConcepts(concepts, entries, monthKey, type);
     const first = avail[0];
     setSelectedConceptId(first?.id ?? '');
@@ -134,6 +150,32 @@ export function ChecklistWorkspaceView({
     setIsCustomConceptMode(false);
     setSelectedConceptId(concept.id);
     setAmountInput(concept.defaultAmount > 0 ? String(concept.defaultAmount) : '');
+    setIsEditingConcept(false);
+    setConfirmDeleteConceptId(null);
+    setFormError(null);
+  };
+
+  const handleSaveConceptChanges = () => {
+    if (!activeSelectedConcept) return;
+    if (!conceptEditName.trim()) {
+      setFormError('El nombre del concepto no puede estar vacío.');
+      return;
+    }
+    const digitsOnly = conceptEditAmount.replace(/[^0-9]/g, '');
+    const parsedAmount = digitsOnly ? Number(digitsOnly) : 0;
+    if (!Number.isSafeInteger(parsedAmount) || parsedAmount < 0) {
+      setFormError('Ingresa un monto entero válido mayor o igual a $ 0.');
+      return;
+    }
+
+    if (onUpdateConcept) {
+      onUpdateConcept(activeSelectedConcept.id, {
+        name: conceptEditName.trim(),
+        defaultAmount: parsedAmount,
+        group: conceptEditGroup,
+      });
+    }
+    setIsEditingConcept(false);
     setFormError(null);
   };
 
@@ -700,6 +742,286 @@ export function ChecklistWorkspaceView({
                 <AppText variant="caption">+ Crear nuevo ítem</AppText>
               </Pressable>
             </View>
+
+            {/* Concept Management Actions (Edit / Delete available concepts) */}
+            {!isCustomConceptMode && activeSelectedConcept ? (
+              <View
+                style={{
+                  padding: spacing.md,
+                  borderRadius: radius.lg,
+                  backgroundColor: colors.glass.surfaceElevatedTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.specularBorder,
+                  gap: spacing.sm,
+                }}
+              >
+                {/* Generous Full-width Concept Information Block */}
+                <View style={{ gap: spacing.xxs }}>
+                  <AppText variant="micro" color={colors.text.muted}>
+                    Concepto del catálogo seleccionado
+                  </AppText>
+
+                  <AppText
+                    variant="title2"
+                    color={colors.text.primary}
+                    style={{ flexWrap: 'wrap' }}
+                  >
+                    {activeSelectedConcept.name}
+                  </AppText>
+
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      gap: spacing.xs,
+                      marginTop: spacing.xxs,
+                    }}
+                  >
+                    <View
+                      style={{
+                        paddingHorizontal: spacing.sm,
+                        paddingVertical: spacing.xxs,
+                        borderRadius: radius.pill,
+                        backgroundColor:
+                          activeSelectedConcept.group === 'fixed'
+                            ? colors.semantic.incomeSoft
+                            : colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor:
+                          activeSelectedConcept.group === 'fixed'
+                            ? colors.semantic.income
+                            : colors.glass.subtleBorder,
+                      }}
+                    >
+                      <AppText
+                        variant="micro"
+                        color={
+                          activeSelectedConcept.group === 'fixed'
+                            ? colors.semantic.income
+                            : colors.text.secondary
+                        }
+                      >
+                        {activeSelectedConcept.group === 'fixed' ? 'Gasto Fijo' : 'Gasto Variable'}
+                      </AppText>
+                    </View>
+
+                    {activeSelectedConcept.defaultAmount > 0 ? (
+                      <View
+                        style={{
+                          paddingHorizontal: spacing.sm,
+                          paddingVertical: spacing.xxs,
+                          borderRadius: radius.pill,
+                          backgroundColor: colors.glass.surfaceTint,
+                          borderWidth: 1,
+                          borderColor: colors.glass.subtleBorder,
+                        }}
+                      >
+                        <AppText variant="micro" color={colors.text.secondary}>
+                          {`Monto base: ${formatCop(activeSelectedConcept.defaultAmount)}`}
+                        </AppText>
+                      </View>
+                    ) : (
+                      <View
+                        style={{
+                          paddingHorizontal: spacing.sm,
+                          paddingVertical: spacing.xxs,
+                          borderRadius: radius.pill,
+                          backgroundColor: colors.glass.surfaceTint,
+                          borderWidth: 1,
+                          borderColor: colors.glass.subtleBorder,
+                        }}
+                      >
+                        <AppText variant="micro" color={colors.text.secondary}>
+                          Monto variable por registro
+                        </AppText>
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                {/* Dedicated Action Buttons Row (Touch target >= 44pt, 50/50 distribution) */}
+                <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xxs }}>
+                  <Pressable
+                    testID={`edit-concept-trigger-${activeSelectedConcept.id}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Editar concepto ${activeSelectedConcept.name}`}
+                    onPress={() => {
+                      setIsEditingConcept(!isEditingConcept);
+                      setConceptEditName(activeSelectedConcept.name);
+                      setConceptEditAmount(
+                        activeSelectedConcept.defaultAmount > 0
+                          ? String(activeSelectedConcept.defaultAmount)
+                          : ''
+                      );
+                      setConceptEditGroup(activeSelectedConcept.group);
+                      setConfirmDeleteConceptId(null);
+                    }}
+                    style={{
+                      flex: 1,
+                      minHeight: MIN_TOUCH_TARGET_PT,
+                      paddingVertical: spacing.xs,
+                      paddingHorizontal: spacing.sm,
+                      borderRadius: radius.md,
+                      backgroundColor: isEditingConcept
+                        ? colors.semantic.incomeSoft
+                        : colors.glass.surfaceTint,
+                      borderWidth: 1,
+                      borderColor: isEditingConcept
+                        ? colors.semantic.income
+                        : colors.glass.subtleBorder,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <AppText
+                      variant="caption"
+                      color={isEditingConcept ? colors.semantic.income : colors.text.primary}
+                    >
+                      {isEditingConcept ? '✕ Cancelar edición' : '✏️ Editar concepto'}
+                    </AppText>
+                  </Pressable>
+
+                  <Pressable
+                    testID={`delete-concept-trigger-${activeSelectedConcept.id}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Eliminar concepto ${activeSelectedConcept.name}`}
+                    onPress={() => {
+                      if (confirmDeleteConceptId === activeSelectedConcept.id) {
+                        if (onDeleteConcept) {
+                          onDeleteConcept(activeSelectedConcept.id);
+                        }
+                        setConfirmDeleteConceptId(null);
+                        setIsEditingConcept(false);
+                      } else {
+                        setConfirmDeleteConceptId(activeSelectedConcept.id);
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      minHeight: MIN_TOUCH_TARGET_PT,
+                      paddingVertical: spacing.xs,
+                      paddingHorizontal: spacing.sm,
+                      borderRadius: radius.md,
+                      backgroundColor:
+                        confirmDeleteConceptId === activeSelectedConcept.id
+                          ? colors.semantic.expenseSoft
+                          : colors.glass.surfaceTint,
+                      borderWidth: 1,
+                      borderColor:
+                        confirmDeleteConceptId === activeSelectedConcept.id
+                          ? colors.semantic.expense
+                          : colors.glass.subtleBorder,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <AppText
+                      variant="caption"
+                      color={
+                        confirmDeleteConceptId === activeSelectedConcept.id
+                          ? colors.semantic.expense
+                          : colors.text.secondary
+                      }
+                    >
+                      {confirmDeleteConceptId === activeSelectedConcept.id
+                        ? '⚠️ ¿Confirmar eliminar?'
+                        : '🗑️ Eliminar concepto'}
+                    </AppText>
+                  </Pressable>
+                </View>
+
+                {isEditingConcept ? (
+                  <View style={{ gap: spacing.xs, paddingTop: spacing.xxs }}>
+                    <TextInput
+                      testID="edit-concept-name-input"
+                      value={conceptEditName}
+                      onChangeText={setConceptEditName}
+                      placeholder="Nombre del concepto"
+                      placeholderTextColor={colors.text.muted}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceElevatedTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        color: colors.text.primary,
+                      }}
+                    />
+                    <TextInput
+                      testID="edit-concept-amount-input"
+                      value={conceptEditAmount}
+                      onChangeText={setConceptEditAmount}
+                      keyboardType="numeric"
+                      placeholder="Monto por defecto en COP (ej. 150000)"
+                      placeholderTextColor={colors.text.muted}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceElevatedTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        color: colors.text.primary,
+                      }}
+                    />
+                    <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                      {(
+                        [
+                          { id: 'fixed', label: 'Fijo' },
+                          { id: 'variable', label: 'Variable' },
+                        ] as const
+                      ).map((g) => {
+                        const active = conceptEditGroup === g.id;
+                        return (
+                          <Pressable
+                            key={g.id}
+                            testID={`edit-concept-group-${g.id}`}
+                            accessibilityRole="button"
+                            onPress={() => setConceptEditGroup(g.id)}
+                            style={{
+                              flex: 1,
+                              minHeight: 36,
+                              borderRadius: radius.md,
+                              backgroundColor: active
+                                ? colors.glass.surfaceElevatedTint
+                                : colors.glass.surfaceTint,
+                              borderWidth: 1,
+                              borderColor: active
+                                ? colors.glass.specularBorder
+                                : colors.glass.subtleBorder,
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <AppText variant="caption">{g.label}</AppText>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    <Pressable
+                      testID="save-concept-changes-button"
+                      accessibilityRole="button"
+                      onPress={handleSaveConceptChanges}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.semantic.incomeSoft,
+                        borderWidth: 1,
+                        borderColor: colors.semantic.income,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <AppText variant="caption" color={colors.semantic.income}>
+                        Guardar cambios del concepto
+                      </AppText>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
 
             {isCustomConceptMode ? (
               <View style={{ gap: spacing.xs }}>

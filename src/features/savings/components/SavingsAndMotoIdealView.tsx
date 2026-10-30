@@ -9,8 +9,8 @@
  *   `Kit de arrastre Honda original` (`$ 500.000` meta `2027-08`), y brecha operativa `- $ 172.667`.
  */
 
-import React from 'react';
-import { View } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, TextInput, View } from 'react-native';
 import {
   AppText,
   CurrencyText,
@@ -24,16 +24,51 @@ import {
   type MotoIdealComparisonSummary,
 } from '../../../domain';
 
+const MIN_TOUCH_TARGET_PT = 44;
+
 export interface SavingsAndMotoIdealViewProps {
   savingsSummary: MonthlySavingsSummary;
   motoIdealSummary: MotoIdealComparisonSummary;
+  onUpdateOpeningBalance?: (bucketId: 'moto' | 'savings', newBalanceCop: number) => void;
 }
 
 export function SavingsAndMotoIdealView({
   savingsSummary,
   motoIdealSummary,
+  onUpdateOpeningBalance,
 }: SavingsAndMotoIdealViewProps): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
+  const [isEditingBalances, setIsEditingBalances] = useState(false);
+  const [motoBalanceInput, setMotoBalanceInput] = useState(
+    String(savingsSummary.moto.openingBalance)
+  );
+  const [savingsBalanceInput, setSavingsBalanceInput] = useState(
+    String(savingsSummary.savings.openingBalance)
+  );
+  const [balanceError, setBalanceError] = useState<string | null>(null);
+
+  const handleSaveBalances = () => {
+    const motoDigits = motoBalanceInput.replace(/[^0-9]/g, '');
+    const savingsDigits = savingsBalanceInput.replace(/[^0-9]/g, '');
+    const motoNum = motoDigits ? Number(motoDigits) : 0;
+    const savingsNum = savingsDigits ? Number(savingsDigits) : 0;
+
+    if (!Number.isSafeInteger(motoNum) || motoNum < 0) {
+      setBalanceError('Ingresa un valor entero válido para el Fondo Moto.');
+      return;
+    }
+    if (!Number.isSafeInteger(savingsNum) || savingsNum < 0) {
+      setBalanceError('Ingresa un valor entero válido para el Fondo Ahorros.');
+      return;
+    }
+
+    if (onUpdateOpeningBalance) {
+      onUpdateOpeningBalance('moto', motoNum);
+      onUpdateOpeningBalance('savings', savingsNum);
+    }
+    setIsEditingBalances(false);
+    setBalanceError(null);
+  };
 
   return (
     <View style={{ gap: spacing.md }} testID="savings-and-moto-ideal-view">
@@ -106,6 +141,122 @@ export function SavingsAndMotoIdealView({
           </View>
         </GlassSurface>
       </View>
+
+      {/* Adjust Opening Balances Button (Full Width, below the two buckets) */}
+      <Pressable
+        testID="open-edit-opening-balance-button"
+        accessibilityRole="button"
+        accessibilityLabel="Ajustar saldos mes anterior"
+        onPress={() => {
+          setIsEditingBalances(!isEditingBalances);
+          setMotoBalanceInput(String(savingsSummary.moto.openingBalance));
+          setSavingsBalanceInput(String(savingsSummary.savings.openingBalance));
+          setBalanceError(null);
+        }}
+        style={{
+          width: '100%',
+          minHeight: MIN_TOUCH_TARGET_PT,
+          paddingVertical: spacing.sm,
+          paddingHorizontal: spacing.md,
+          borderRadius: radius.md,
+          backgroundColor: isEditingBalances
+            ? colors.glass.surfaceElevatedTint
+            : colors.glass.surfaceTint,
+          borderWidth: 1,
+          borderColor: isEditingBalances
+            ? colors.glass.specularBorder
+            : colors.glass.subtleBorder,
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        <AppText
+          variant="caption"
+          color={isEditingBalances ? colors.text.primary : colors.text.secondary}
+        >
+          {isEditingBalances ? '✕ Cancelar ajuste' : '✏️ Ajustar saldos mes anterior'}
+        </AppText>
+      </Pressable>
+
+      {/* Edit Opening Balances Sheet */}
+      {isEditingBalances ? (
+        <GlassSurface elevated testID="edit-opening-balances-card">
+          <View style={{ gap: spacing.sm }}>
+            <AppText variant="headline">Ajustar Saldos del Mes Anterior</AppText>
+            <AppText variant="micro" color={colors.text.secondary}>
+              Valores base con los que arrancó el mes (Fondo Moto: $ 1.600.000, Ahorros: $ 1.000.000).
+            </AppText>
+
+            <View style={{ gap: spacing.xs }}>
+              <AppText variant="caption">Saldo mes anterior Fondo Moto</AppText>
+              <TextInput
+                testID="moto-opening-balance-input"
+                value={motoBalanceInput}
+                onChangeText={setMotoBalanceInput}
+                keyboardType="numeric"
+                placeholder="1600000"
+                placeholderTextColor={colors.text.muted}
+                style={{
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.md,
+                  backgroundColor: colors.glass.surfaceTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.subtleBorder,
+                  color: colors.text.primary,
+                }}
+              />
+            </View>
+
+            <View style={{ gap: spacing.xs }}>
+              <AppText variant="caption">Saldo mes anterior Fondo Ahorros</AppText>
+              <TextInput
+                testID="savings-opening-balance-input"
+                value={savingsBalanceInput}
+                onChangeText={setSavingsBalanceInput}
+                keyboardType="numeric"
+                placeholder="1000000"
+                placeholderTextColor={colors.text.muted}
+                style={{
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.md,
+                  backgroundColor: colors.glass.surfaceTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.subtleBorder,
+                  color: colors.text.primary,
+                }}
+              />
+            </View>
+
+            {balanceError ? (
+              <AppText variant="caption" color={colors.semantic.expense}>
+                {balanceError}
+              </AppText>
+            ) : null}
+
+            <Pressable
+              testID="save-opening-balances-button"
+              accessibilityRole="button"
+              accessibilityLabel="Guardar Saldos"
+              onPress={handleSaveBalances}
+              style={{
+                minHeight: MIN_TOUCH_TARGET_PT,
+                borderRadius: radius.md,
+                backgroundColor: colors.semantic.incomeSoft,
+                borderWidth: 1,
+                borderColor: colors.semantic.income,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <AppText variant="body" color={colors.semantic.income}>
+                Guardar Saldos
+              </AppText>
+            </Pressable>
+          </View>
+        </GlassSurface>
+      ) : null}
 
       {/* Screen 09: Provisión IDEAL de la Moto (CB300F) */}
       <GlassSurface elevated testID="moto-ideal-card">

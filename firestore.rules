@@ -258,6 +258,7 @@ service cloud.firestore {
           'lender',
           'openingBalance',
           'monthKey',
+          'monthlyInterestRate',
           'updatedAt'
         ]) &&
         data.id is string &&
@@ -267,6 +268,11 @@ service cloud.firestore {
         isNonEmptyString(data.lender, 120) &&
         isNonNegativeInt(data.openingBalance) &&
         isValidMonthKey(data.monthKey) &&
+        (!('monthlyInterestRate' in data) ||
+          data.monthlyInterestRate == null ||
+          (data.monthlyInterestRate is number &&
+            data.monthlyInterestRate >= 0 &&
+            data.monthlyInterestRate <= 100)) &&
         isValidUpdatedAt(data);
     }
 

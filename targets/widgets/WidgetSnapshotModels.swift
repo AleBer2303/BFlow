@@ -104,26 +104,59 @@ public enum WidgetStorageBridge {
         return "group.\(base)"
     }
 
+    /// Candidate App Group suite names to handle dynamic bundle IDs, iloader, and canonical names
+    public static func candidateSuiteNames() -> [String] {
+        var suites: [String] = []
+        let dynamic = resolveAppGroupId()
+        suites.append(dynamic)
+        if !suites.contains("group.com.bflow.app") {
+            suites.append("group.com.bflow.app")
+        }
+        if let bundleId = Bundle.main.bundleIdentifier {
+            let parts = bundleId.components(separatedBy: ".")
+            if parts.count >= 3 {
+                let firstThree = parts.prefix(3).joined(separator: ".")
+                let prefixGroup = "group.\(firstThree)"
+                if !suites.contains(prefixGroup) {
+                    suites.append(prefixGroup)
+                }
+            }
+        }
+        return suites
+    }
+
     /// Loads the latest snapshot written by React Native from shared UserDefaults
     public static func loadSnapshot() -> WidgetSnapshotV1 {
-        let suiteName = resolveAppGroupId()
-        guard let defaults = UserDefaults(suiteName: suiteName) else {
-            return .goldenFallback
-        }
+        for suiteName in candidateSuiteNames() {
+            guard let defaults = UserDefaults(suiteName: suiteName) else {
+                continue
+            }
+            defaults.synchronize()
 
-        // Try raw JSON data first (from ExtensionStorage setObject/setArray)
-        if let data = defaults.data(forKey: storageKey) {
-            if let decoded = try? JSONDecoder().decode(WidgetSnapshotV1.self, from: data) {
+            // 1. Try JSON string (from ExtensionStorage setString)
+            if let stringValue = defaults.string(forKey: storageKey),
+               let data = stringValue.data(using: .utf8),
+               let decoded = try? JSONDecoder().decode(WidgetSnapshotV1.self, from: data) {
+                return decoded
+            }
+
+            // 2. Try raw JSON data (from ExtensionStorage setObject/setArray)
+            if let data = defaults.data(forKey: storageKey),
+               let decoded = try? JSONDecoder().decode(WidgetSnapshotV1.self, from: data) {
                 return decoded
             }
         }
 
-        // Try JSON string (from ExtensionStorage setString)
-        if let stringValue = defaults.string(forKey: storageKey),
-           let data = stringValue.data(using: .utf8) {
-            if let decoded = try? JSONDecoder().decode(WidgetSnapshotV1.self, from: data) {
-                return decoded
-            }
+        // 3. Fallback to standard UserDefaults if shared container isn't isolated
+        UserDefaults.standard.synchronize()
+        if let stringValue = UserDefaults.standard.string(forKey: storageKey),
+           let data = stringValue.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode(WidgetSnapshotV1.self, from: data) {
+            return decoded
+        }
+        if let data = UserDefaults.standard.data(forKey: storageKey),
+           let decoded = try? JSONDecoder().decode(WidgetSnapshotV1.self, from: data) {
+            return decoded
         }
 
         return .goldenFallback

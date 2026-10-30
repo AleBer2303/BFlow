@@ -140,16 +140,10 @@ export function AuthScreen({
           style={{
             flexDirection: 'row',
             justifyContent: 'space-between',
-            alignItems: 'flex-start',
+            alignItems: 'center',
           }}
         >
-          <View style={{ flex: 1, gap: spacing.xs }}>
-            <AppText variant="heroCurrency">BFlow</AppText>
-            <AppText variant="body" color={colors.text.secondary}>
-              Tu flujo mensual en pesos, tus abonos a FUNFAMI y el fondo de tu CB300F sincronizados en todos tus dispositivos.
-            </AppText>
-          </View>
-
+          <AppText variant="heroCurrency">BFlow</AppText>
           <ThemeToggleIconButton testID="auth-theme-toggle-button" />
         </View>
 
@@ -163,7 +157,7 @@ export function AuthScreen({
         {/* Main Liquid Glass Authentication Card */}
         <GlassSurface elevated testID="auth-glass-card">
           <View style={{ gap: spacing.md }}>
-            {/* Mode Switcher */}
+            {/* Mode Switcher: Iniciar sesión / Crear cuenta */}
             <View
               style={{
                 flexDirection: 'row',
@@ -179,7 +173,6 @@ export function AuthScreen({
                 [
                   { id: 'login', label: 'Iniciar sesión' },
                   { id: 'register', label: 'Crear cuenta' },
-                  { id: 'recover', label: 'Recuperar clave' },
                 ] as const
               ).map((tab) => {
                 const isSelected = formMode === tab.id;
@@ -223,13 +216,11 @@ export function AuthScreen({
                     ? 'Registra tus datos personales'
                     : 'Recupera el acceso a tu cuenta'}
               </AppText>
-              <AppText variant="caption" color={colors.text.secondary}>
-                {formMode === 'login'
-                  ? 'Al iniciar sesión desde cualquier celular o navegador se descargan automáticamente tu presupuesto y tu historial mensual desde Firebase.'
-                  : formMode === 'register'
-                    ? 'Tu cuenta crea y respalda automáticamente tu presupuesto base de Octubre 2026 en Cloud Firestore.'
-                    : 'Te enviaremos un enlace seguro a tu correo para definir una nueva contraseña.'}
-              </AppText>
+              {formMode === 'recover' ? (
+                <AppText variant="caption" color={colors.text.secondary}>
+                  Te enviaremos un enlace seguro a tu correo para definir una nueva contraseña.
+                </AppText>
+              ) : null}
             </View>
 
             {/* Personal Profile Fields (Registration Only) */}
@@ -448,9 +439,9 @@ export function AuthScreen({
               </AppText>
             </Pressable>
 
-            {/* Google Sign-In Option */}
+            {/* Google Sign-In Option & Password Recovery Link */}
             {formMode !== 'recover' ? (
-              <View style={{ gap: spacing.xs }}>
+              <View style={{ gap: spacing.xs, marginTop: spacing.xs }}>
                 <View style={{ alignItems: 'center', paddingVertical: spacing.xxs }}>
                   <AppText variant="micro" color={colors.text.muted}>
                     O accede con tu cuenta de Google
@@ -480,13 +471,42 @@ export function AuthScreen({
                   <AppText variant="headline">Continuar con Google</AppText>
                 </Pressable>
 
-                {Platform.OS !== 'web' ? (
-                  <AppText variant="micro" color={colors.text.muted}>
-                    En Expo Go para iOS puedes crear tu cuenta con correo y contraseña y usarla en todos tus dispositivos.
+                {/* Password recovery option placed beneath Continuar con Google */}
+                <Pressable
+                  testID="auth-mode-recover"
+                  accessibilityRole="button"
+                  accessibilityLabel="Recuperar clave"
+                  onPress={() => switchMode('recover')}
+                  style={{
+                    minHeight: MIN_TOUCH_TARGET_PT,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    paddingVertical: spacing.xs,
+                  }}
+                >
+                  <AppText variant="caption" color={colors.text.secondary}>
+                    ¿Olvidaste tu contraseña? Recuperar clave
                   </AppText>
-                ) : null}
+                </Pressable>
               </View>
-            ) : null}
+            ) : (
+              <Pressable
+                testID="auth-back-to-login-button"
+                accessibilityRole="button"
+                accessibilityLabel="Volver a iniciar sesión"
+                onPress={() => switchMode('login')}
+                style={{
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  paddingVertical: spacing.xs,
+                }}
+              >
+                <AppText variant="caption" color={colors.text.secondary}>
+                  ← Volver a iniciar sesión
+                </AppText>
+              </Pressable>
+            )}
           </View>
         </GlassSurface>
       </View>

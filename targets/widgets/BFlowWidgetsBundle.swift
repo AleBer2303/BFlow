@@ -5,6 +5,5 @@ import WidgetKit
 struct BFlowWidgetsBundle: WidgetBundle {
     var body: some Widget {
         BFlowWidget()
-        BFlowLiveActivity()
     }
 }

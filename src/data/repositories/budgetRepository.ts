@@ -25,6 +25,7 @@ import {
 import {
   deleteMovement,
   registerMovement,
+  toggleMovementStatus,
   uncompleteMovement,
   type RegisterOrCompleteMovementInput,
 } from '../../domain/checklist/checklist';
@@ -107,9 +108,72 @@ export interface BudgetRepository {
     debtPayments?: DebtPayment[]
   ): Promise<void>;
   saveCustomConceptAndEntry(uid: string, concept: Concept, entry: MonthEntry): Promise<void>;
+  saveConcept(uid: string, concept: Concept): Promise<void>;
+  deleteConcept(uid: string, conceptId: string): Promise<void>;
+  saveDebt(uid: string, debt: Debt): Promise<void>;
+  deleteDebt(uid: string, debtId: string): Promise<void>;
+  saveSavingsBucket(
+    uid: string,
+    bucketId: string,
+    openingBalanceCop: number,
+    monthKey?: string
+  ): Promise<void>;
   reopenMonthInCloud(uid: string, monthKey: string): Promise<void>;
   deleteMonthInCloud(uid: string, monthKey: string, fallbackMonthKey: string): Promise<void>;
   closeMonth(uid: string, monthKey: string, closedAtIso?: string): Promise<CloseMonthResult>;
+}
+
+function ensureCanonicalOctoberDebts(currentDebts: Debt[]): { debts: Debt[]; healed: boolean } {
+  let healed = false;
+  const result = [...currentDebts];
+
+  const motoIdx = result.findIndex((d) => d.id === 'debt_cb300f_moto');
+  if (motoIdx < 0) {
+    result.unshift({
+      id: 'debt_cb300f_moto',
+      groupKey: 'FUNFAMI',
+      name: 'CB300F - MOTO',
+      lender: 'FUNFAMI',
+      openingBalance: 4_400_000,
+      monthKey: '2026-10',
+    });
+    healed = true;
+  } else {
+    const existingMoto = result[motoIdx];
+    if (existingMoto && existingMoto.openingBalance < 4_400_000) {
+      result[motoIdx] = {
+        ...existingMoto,
+        openingBalance: 4_400_000,
+        monthKey: '2026-10',
+      };
+      healed = true;
+    }
+  }
+
+  const espIdx = result.findIndex((d) => d.id === 'debt_esp_ia');
+  if (espIdx < 0) {
+    result.push({
+      id: 'debt_esp_ia',
+      groupKey: 'FUNFAMI',
+      name: 'ESP. IA',
+      lender: 'FUNFAMI',
+      openingBalance: 3_600_000,
+      monthKey: '2026-10',
+    });
+    healed = true;
+  } else {
+    const existingEsp = result[espIdx];
+    if (existingEsp && existingEsp.openingBalance < 3_600_000) {
+      result[espIdx] = {
+        ...existingEsp,
+        openingBalance: 3_600_000,
+        monthKey: '2026-10',
+      };
+      healed = true;
+    }
+  }
+
+  return { debts: result, healed };
 }
 
 function reconstructClosedMonthBalances(
@@ -304,17 +368,11 @@ export class InMemoryBudgetRepository implements BudgetRepository {
     }
 
     const allEntries = Array.from(this.entries.values());
-    const allConcepts = Array.from(this.concepts.values());
 
-    const nextEntries =
-      existing.status === 'completed'
-        ? uncompleteMovement(allEntries, entryId)
-        : registerMovement(allEntries, allConcepts, {
-            monthKey,
-            conceptId: existing.conceptId,
-            actualAmount: options?.actualAmount ?? existing.plannedAmount,
-            completedAt: options?.completedAtDateIso ?? toBogotaIsoDate(),
-          });
+    const nextEntries = toggleMovementStatus(allEntries, entryId, {
+      actualAmount: options?.actualAmount ?? existing.plannedAmount,
+      completedAt: options?.completedAtDateIso ?? toBogotaIsoDate(),
+    });
 
     const updatedEntry = nextEntries.find((e) => e.id === entryId);
     if (!updatedEntry) {
@@ -490,6 +548,52 @@ export class InMemoryBudgetRepository implements BudgetRepository {
     this.entries.set(entry.id, entry);
   }
 
+  async saveConcept(_uid: string, concept: Concept): Promise<void> {
+    this.concepts.set(concept.id, { ...concept });
+  }
+
+  async deleteConcept(_uid: string, conceptId: string): Promise<void> {
+    this.concepts.delete(conceptId);
+  }
+
+  async saveDebt(_uid: string, debt: Debt): Promise<void> {
+    const list = this.debtsByMonth.get(debt.monthKey) ?? [];
+    const idx = list.findIndex((d) => d.id === debt.id);
+    if (idx >= 0) {
+      list[idx] = { ...debt };
+    } else {
+      list.push({ ...debt });
+    }
+    this.debtsByMonth.set(debt.monthKey, list);
+  }
+
+  async deleteDebt(_uid: string, debtId: string): Promise<void> {
+    for (const [mk, list] of this.debtsByMonth.entries()) {
+      this.debtsByMonth.set(
+        mk,
+        list.filter((d) => d.id !== debtId)
+      );
+    }
+  }
+
+  async saveSavingsBucket(
+    _uid: string,
+    bucketId: string,
+    openingBalanceCop: number,
+    monthKey: string = '2026-10'
+  ): Promise<void> {
+    const list = this.savingsBucketsByMonth.get(monthKey) ?? [
+      { id: 'moto', name: 'Moto', openingBalance: 1_600_000 },
+      { id: 'savings', name: 'Ahorros', openingBalance: 1_000_000 },
+    ];
+    const updated = list.map((b) =>
+      b.id === bucketId
+        ? { ...b, openingBalance: Math.max(0, Math.round(openingBalanceCop)) }
+        : b
+    );
+    this.savingsBucketsByMonth.set(monthKey, updated);
+  }
+
   async deleteEntryCompletely(_uid: string, entryId: string): Promise<void> {
     this.entries.delete(entryId);
     for (const [id, dp] of this.debtPayments.entries()) {
@@ -655,9 +759,14 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       ? parseMonthSnapshotFromFirestore(snapshotSnap.data())
       : undefined;
 
+    const effectiveDebts =
+      monthKey === '2026-10' && !closedSnapshot
+        ? ensureCanonicalOctoberDebts(currentDebts).debts
+        : currentDebts;
+
     const resolvedBalances = closedSnapshot
       ? reconstructClosedMonthBalances(closedSnapshot, concepts, entries)
-      : { debts: currentDebts, savingsBuckets: currentBuckets };
+      : { debts: effectiveDebts, savingsBuckets: currentBuckets };
 
     return {
       monthKey,
@@ -729,11 +838,42 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     const resolvedConcepts = concepts.length > 0 ? concepts : seed.concepts;
     const resolvedEntries = entries.length > 0 ? entries : seed.entries;
 
+    // Heal/guarantee October 2026 canonical opening debts
+    const canonicalCheck = ensureCanonicalOctoberDebts(currentDebts);
+    const effectiveCurrentDebts = canonicalCheck.debts;
+
+    if (canonicalCheck.healed && uid) {
+      try {
+        const batch = writeBatch(this.db);
+        const updatedAt = new Date().toISOString();
+        for (const debt of effectiveCurrentDebts) {
+          batch.set(
+            doc(this.db, 'users', uid, 'debts', debt.id),
+            {
+              ...serializeDebtForFirestore(debt),
+              updatedAt,
+            },
+            { merge: true }
+          );
+        }
+        void batch.commit().catch((err) => {
+          console.warn('[FirestoreBudgetRepository] Failed to heal debts in cloud:', err);
+        });
+      } catch (err) {
+        console.warn('[FirestoreBudgetRepository] Batch heal exception:', err);
+      }
+    }
+
+    const defaultOctoberSavings: SavingsBucket[] = [
+      { id: 'moto', name: 'Moto', openingBalance: 1_600_000 },
+      { id: 'savings', name: 'Ahorros', openingBalance: 1_000_000 },
+    ];
+
     const debtsByMonth: Record<string, Debt[]> = {
-      '2026-10': seed.debts,
+      '2026-10': effectiveCurrentDebts,
     };
     const savingsBucketsByMonth: Record<string, SavingsBucket[]> = {
-      '2026-10': seed.savingsBuckets,
+      '2026-10': defaultOctoberSavings,
     };
 
     for (const mk of availableMonths) {
@@ -747,8 +887,14 @@ export class FirestoreBudgetRepository implements BudgetRepository {
         debtsByMonth[mk] = reconstructed.debts;
         savingsBucketsByMonth[mk] = reconstructed.savingsBuckets;
       } else {
-        debtsByMonth[mk] = currentDebts.length > 0 ? currentDebts : seed.debts;
-        savingsBucketsByMonth[mk] = currentBuckets.length > 0 ? currentBuckets : seed.savingsBuckets;
+        if (mk === '2026-10') {
+          debtsByMonth['2026-10'] = effectiveCurrentDebts;
+          savingsBucketsByMonth['2026-10'] = defaultOctoberSavings;
+        } else {
+          debtsByMonth[mk] = effectiveCurrentDebts.length > 0 ? effectiveCurrentDebts : seed.debts;
+          savingsBucketsByMonth[mk] =
+            currentBuckets.length > 0 ? currentBuckets : defaultOctoberSavings;
+        }
       }
     }
 
@@ -790,15 +936,10 @@ export class FirestoreBudgetRepository implements BudgetRepository {
 
     const conceptsList = concept ? [concept] : buildOctober2026SeedPayload().concepts;
 
-    const nextEntries =
-      currentEntry.status === 'completed'
-        ? uncompleteMovement([currentEntry], entryId)
-        : registerMovement([currentEntry], conceptsList, {
-            monthKey,
-            conceptId: currentEntry.conceptId,
-            actualAmount: options?.actualAmount ?? currentEntry.plannedAmount,
-            completedAt: options?.completedAtDateIso ?? toBogotaIsoDate(),
-          });
+    const nextEntries = toggleMovementStatus([currentEntry], entryId, {
+      actualAmount: options?.actualAmount ?? currentEntry.plannedAmount,
+      completedAt: options?.completedAtDateIso ?? toBogotaIsoDate(),
+    });
 
     const updatedEntry = nextEntries[0];
     if (!updatedEntry) {
@@ -1171,5 +1312,59 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     );
 
     await batch.commit();
+  }
+
+  async saveConcept(uid: string, concept: Concept): Promise<void> {
+    const conceptRef = doc(this.db, 'users', uid, 'concepts', concept.id);
+    await setDoc(
+      conceptRef,
+      {
+        ...serializeConceptForFirestore(concept),
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+  }
+
+  async deleteConcept(uid: string, conceptId: string): Promise<void> {
+    const conceptRef = doc(this.db, 'users', uid, 'concepts', conceptId);
+    await deleteDoc(conceptRef);
+  }
+
+  async saveDebt(uid: string, debt: Debt): Promise<void> {
+    const debtRef = doc(this.db, 'users', uid, 'debts', debt.id);
+    await setDoc(
+      debtRef,
+      {
+        ...serializeDebtForFirestore(debt),
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+  }
+
+  async deleteDebt(uid: string, debtId: string): Promise<void> {
+    const debtRef = doc(this.db, 'users', uid, 'debts', debtId);
+    await deleteDoc(debtRef);
+  }
+
+  async saveSavingsBucket(
+    uid: string,
+    bucketId: string,
+    openingBalanceCop: number,
+    monthKey: string = '2026-10'
+  ): Promise<void> {
+    const bucketRef = doc(this.db, 'users', uid, 'savingsBuckets', `${monthKey}_${bucketId}`);
+    await setDoc(
+      bucketRef,
+      {
+        id: bucketId,
+        name: bucketId === 'moto' ? 'Moto' : 'Ahorros',
+        openingBalance: Math.max(0, Math.round(openingBalanceCop)),
+        monthKey,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
   }
 }

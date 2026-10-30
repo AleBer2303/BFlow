@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import PhaseOneHomeScreen from '../../app/index';
 import { BFlowThemeProvider } from '../../design-system/theme/ThemeContext';
@@ -68,6 +68,17 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     // Delete an item from the checklist
     fireEvent.press(screen.getByTestId('delete-entry-2026-10_exp_smart_fit'));
     expect(screen.queryByText('○ Smart Fit Black')).toBeNull();
+
+    // Open Add Movement modal and edit an available concept in catalog
+    fireEvent.press(screen.getByTestId('open-add-movement-modal-button'));
+    const otroChip = screen.getByTestId('available-concept-chip-exp_otro');
+    fireEvent.press(otroChip);
+    fireEvent.press(screen.getByTestId('edit-concept-trigger-exp_otro'));
+    fireEvent.changeText(screen.getByTestId('edit-concept-name-input'), 'Gastos Varios');
+    fireEvent.press(screen.getByTestId('save-concept-changes-button'));
+    expect(screen.getByText('Gastos Varios')).toBeTruthy();
+    expect(screen.getByText('Gasto Variable')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('close-add-movement-modal-button'));
   });
 
   it('renders Deudas FUNFAMI screen, modifies monthly installment amount, and cascades payoff from CB300F - MOTO into ESP. IA', () => {
@@ -95,9 +106,25 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     expect(screen.getByTestId('debt-remaining-debt_esp_ia')).toHaveTextContent('$ 3.000.000');
     expect(screen.getByTestId('funfami-hero-remaining')).toHaveTextContent('$ 3.000.000');
 
+    // Dismiss the banner
+    fireEvent.press(screen.getByTestId('moto-debt-banner-dismiss-button'));
+    expect(screen.queryByTestId('moto-debt-completed-banner')).toBeNull();
+
     // Toggle installment to pending -> restores total debt to $ 8.000.000
     fireEvent.press(screen.getByTestId('debts-view-toggle-installment'));
     expect(screen.getByTestId('funfami-hero-remaining')).toHaveTextContent('$ 8.000.000');
+
+    // Create a new debt with monthly interest rate
+    fireEvent.press(screen.getByTestId('debts-add-new-debt-button'));
+    expect(screen.getByTestId('debt-form-modal')).toBeTruthy();
+    fireEvent.changeText(screen.getByTestId('debt-form-name-input'), 'Tarjeta Nu');
+    fireEvent.changeText(screen.getByTestId('debt-form-lender-input'), 'Nu Colombia');
+    fireEvent.changeText(screen.getByTestId('debt-form-amount-input'), '1000000');
+    fireEvent.changeText(screen.getByTestId('debt-form-interest-rate-input'), '0.9');
+    fireEvent.press(screen.getByTestId('debt-form-submit-button'));
+
+    expect(screen.queryByTestId('debt-form-modal')).toBeNull();
+    expect(screen.getByText('Tarjeta Nu')).toBeTruthy();
   });
 
   it('renders Ahorros & Moto IDEAL screens without Excel cell references', () => {
@@ -120,6 +147,39 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
       screen.getByTestId('moto-target-goal-ideal_kit_de_arrastre_honda_original')
     ).toBeTruthy();
     expect(screen.getByText('Meta: 2027-08')).toBeTruthy();
+
+    // Adjust opening balance in savings tab
+    fireEvent.press(screen.getByTestId('open-edit-opening-balance-button'));
+    expect(screen.getByTestId('edit-opening-balances-card')).toBeTruthy();
+    expect(screen.getByTestId('moto-opening-balance-input').props.value).toBe('1600000');
+    expect(screen.getByTestId('savings-opening-balance-input').props.value).toBe('1000000');
+    fireEvent.press(screen.getByTestId('save-opening-balances-button'));
+    expect(screen.queryByTestId('edit-opening-balances-card')).toBeNull();
+  });
+
+  it('registers a movement directly from Summary tab and immediately updates summary totals and list', async () => {
+    render(
+      <BFlowThemeProvider initialMode="dark">
+        <PhaseOneHomeScreen />
+      </BFlowThemeProvider>
+    );
+
+    // Initial Net Flow: $ 1.080.000
+    expect(screen.getByTestId('golden-net-flow')).toHaveTextContent('$ 1.080.000');
+
+    // Open Summary Add Movement modal
+    fireEvent.press(screen.getByTestId('summary-quick-open-checklist-add'));
+    expect(screen.getByTestId('summary-add-movement-modal-card')).toBeTruthy();
+
+    // Select Seguro TR SURA ($ 130.000) and save
+    fireEvent.press(screen.getByTestId('summary-concept-chip-exp_seguro_tr_sura'));
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('summary-submit-movement-button'));
+    });
+
+    // Modal closes and Net Flow drops by $ 130.000 -> $ 950.000
+    expect(screen.queryByTestId('summary-add-movement-modal-card')).toBeNull();
+    expect(screen.getByTestId('golden-net-flow')).toHaveTextContent('$ 950.000');
   });
 
   it('renders Analytics, executes Month Close to Nov 2026, and supports editing closed months or deleting an accidentally created month', async () => {
@@ -132,7 +192,7 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     fireEvent.press(screen.getByTestId('workspace-tab-analytics'));
     expect(screen.getByTestId('analytics-and-history-view')).toBeTruthy();
     expect(screen.getByText('Pagado 86.6% · Pendiente 13.4%')).toBeTruthy();
-    expect(screen.getByText('Catálogo de Conceptos (14)')).toBeTruthy();
+    expect(screen.queryByTestId('concepts-catalog-card')).toBeNull();
 
     // Trigger Month Close & Rollover (2026-10 -> 2026-11)
     fireEvent.press(screen.getByTestId('confirm-month-close-button'));

@@ -9,7 +9,7 @@
  * - `calculateChecklistProgress`: counts only non-repeatable concepts (`6 / 12` in Oct 2026).
  */
 
-import { assertValidMonthKey } from '../date/monthKey';
+import { assertValidMonthKey, toBogotaIsoDate } from '../date/monthKey';
 import {
   ChecklistProgress,
   Concept,
@@ -243,6 +243,7 @@ export function registerMovement(
 
 /**
  * Unchecks a completed movement back to `pending` (restoring its availability in the checklist).
+ * Preserves the original planned or actual amount so toggling back does not wipe out or alter the amount.
  */
 export function uncompleteMovement(
   entries: readonly MonthEntry[],
@@ -251,12 +252,63 @@ export function uncompleteMovement(
   return entries.map((entry) => {
     if (entry.id !== entryId) return entry;
     const { completedAt: _removed, ...rest } = entry;
+    const preservedAmount =
+      entry.plannedAmount > 0 ? entry.plannedAmount : entry.actualAmount;
     return {
       ...rest,
-      actualAmount: entry.plannedAmount,
+      plannedAmount: preservedAmount,
+      actualAmount: preservedAmount,
       status: 'pending',
     };
   });
+}
+
+/**
+ * Completes an existing movement in-place without duplicating it or creating new entries.
+ */
+export function completeExistingMovement(
+  entries: readonly MonthEntry[],
+  entryId: string,
+  options?: {
+    actualAmount?: number;
+    completedAt?: string;
+  }
+): MonthEntry[] {
+  return entries.map((entry) => {
+    if (entry.id !== entryId) return entry;
+    const resolvedActual =
+      options?.actualAmount !== undefined
+        ? assertSafeMoneyInteger(options.actualAmount, 'actualAmount')
+        : entry.actualAmount > 0
+        ? entry.actualAmount
+        : entry.plannedAmount;
+    return {
+      ...entry,
+      actualAmount: resolvedActual,
+      status: 'completed' as const,
+      completedAt: options?.completedAt ?? toBogotaIsoDate(),
+    };
+  });
+}
+
+/**
+ * Toggles an existing movement between completed and pending in-place.
+ * Preserves the exact entry ID and NEVER duplicates an entry under any condition.
+ */
+export function toggleMovementStatus(
+  entries: readonly MonthEntry[],
+  entryId: string,
+  options?: {
+    actualAmount?: number;
+    completedAt?: string;
+  }
+): MonthEntry[] {
+  const target = entries.find((e) => e.id === entryId);
+  if (!target) return [...entries];
+  if (target.status === 'completed') {
+    return uncompleteMovement(entries, entryId);
+  }
+  return completeExistingMovement(entries, entryId, options);
 }
 
 /**

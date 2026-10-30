@@ -99,6 +99,7 @@ export const debtSchema: z.ZodType<Debt> = z.object({
   lender: z.string().min(1),
   openingBalance: nonNegativeCopIntSchema,
   monthKey: monthKeyStringSchema,
+  monthlyInterestRate: z.number().min(0).max(100).optional(),
 });
 
 export const debtPaymentSchema: z.ZodType<DebtPayment> = z

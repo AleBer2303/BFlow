@@ -1,11 +1,10 @@
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Platform, Pressable, ScrollView, View } from 'react-native';
+import { AppState, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { FirestoreBudgetRepository } from '../data/repositories/budgetRepository';
 import {
   AppText,
   CurrencyText,
-  DynamicIslandPreview,
   GlassSurface,
   MIN_TOUCH_TARGET_PT,
   StatusBadge,
@@ -22,6 +21,8 @@ import {
   formatMonthKeyLabelEs,
   getAvailableConcepts,
   toBogotaIsoDate,
+  type ConceptGroup,
+  type ConceptType,
   type MonthEntry,
   type RegisterOrCompleteMovementInput,
 } from '../domain';
@@ -44,7 +45,6 @@ import {
   type BFlowAuthUser,
   type RegisterPersonalAccountInput,
 } from '../platform/auth/authAdapter';
-import { resolveRuntimeCapabilities } from '../platform/mode/runtimeMode';
 
 const WORKSPACE_TABS: ReadonlyArray<{ id: BFlowWorkspaceTab; label: string }> = [
   { id: 'summary', label: 'Resumen' },
@@ -68,7 +68,6 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     idealMotoPlan,
     closedSnapshots,
     authUser,
-    syncMessage,
     isSyncing,
     setActiveTab,
     setActiveMonthKey,
@@ -78,6 +77,12 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     toggleEntryStatus,
     addOrCompleteMovement,
     createCustomConceptAndMovement,
+    updateConcept,
+    deleteConcept,
+    createDebt,
+    updateDebt,
+    deleteDebt,
+    updateSavingsOpeningBalance,
     editEntry,
     deleteEntryById,
     removeOrResetEntry,
@@ -86,13 +91,23 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     reopenClosedMonth,
     deleteOrRevertMonth,
     resetToOctober2026GoldenState,
+    syncActiveWidget,
   } = useBudgetStore();
 
-  const [pulseCount, setPulseCount] = useState(0);
   const [authErrorMessage, setAuthErrorMessage] = useState<string | null>(null);
   const [authStatusMessage, setAuthStatusMessage] = useState<string | null>(null);
 
-  const runtime = resolveRuntimeCapabilities();
+  // Summary Add Movement Modal state
+  const [isSummaryAddModalOpen, setIsSummaryAddModalOpen] = useState(false);
+  const [summaryMovementType, setSummaryMovementType] = useState<ConceptType>('expense');
+  const [summarySelectedConceptId, setSummarySelectedConceptId] = useState<string>('');
+  const [summaryAmountInput, setSummaryAmountInput] = useState<string>('');
+  const [summaryNoteInput, setSummaryNoteInput] = useState<string>('');
+  const [summaryCustomName, setSummaryCustomName] = useState<string>('');
+  const [summaryCustomGroup, setSummaryCustomGroup] = useState<ConceptGroup>('variable');
+  const [isSummaryCustomMode, setIsSummaryCustomMode] = useState<boolean>(false);
+  const [summaryFormError, setSummaryFormError] = useState<string | null>(null);
+
   const activeMonthLabel = formatMonthKeyLabelEs(activeMonthKey);
 
   const triggerHaptic = async (type: 'success' | 'light') => {
@@ -109,18 +124,14 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
   };
 
   const syncUserCloudAccount = async (user: BFlowAuthUser) => {
-    setSyncStatus('Cargando tu presupuesto e historial desde Cloud Firestore...', true);
+    setSyncStatus('Cargando tu presupuesto e historial...', true);
     try {
       const repo = new FirestoreBudgetRepository();
       const fullAccount = await repo.loadFullCloudAccount(user.uid);
       applyFullCloudAccount(fullAccount);
-      setSyncStatus(
-        `Sincronizado en Cloud Firestore (${fullAccount.entries.length} movimientos · ${fullAccount.availableMonths.length} ${fullAccount.availableMonths.length === 1 ? 'mes' : 'meses'})`,
-        false
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error al sincronizar con Firestore';
-      setSyncStatus(`Aviso Firestore: ${message}`, false);
+      setSyncStatus('Sincronizado', false);
+    } catch {
+      setSyncStatus('', false);
     }
   };
 
@@ -141,10 +152,28 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Real-time WidgetKit synchronization: triggers on mount and whenever user leaves app / switches to background
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'test') {
+      return;
+    }
+    void syncActiveWidget();
+
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        void syncActiveWidget();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [syncActiveWidget]);
+
   const handleSignInWithEmail = async (email: string, password: string) => {
     setAuthErrorMessage(null);
     setAuthStatusMessage(null);
-    setSyncStatus('Verificando credenciales en Firebase Auth...', true);
+    setSyncStatus('Verificando credenciales...', true);
     try {
       const user = await signInWithEmail(email, password);
       setAuthUser(user);
@@ -275,6 +304,11 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     [concepts, entries, activeMonthKey]
   );
 
+  const allMonthEntries = useMemo(
+    () => entries.filter((e) => e.monthKey === activeMonthKey),
+    [entries, activeMonthKey]
+  );
+
   // AUTHENTICATION GATE: If no authenticated user session is active, render AuthScreen first
   if (!authUser) {
     return (
@@ -301,13 +335,74 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     await triggerHaptic('success');
   };
 
-  const handleCloseMonth = async () => {
-    await closeCurrentMonth();
-    await triggerHaptic('success');
+  const handleSummaryOpenAddModal = (type: ConceptType = 'expense') => {
+    setSummaryMovementType(type);
+    setIsSummaryCustomMode(false);
+    setSummaryCustomName('');
+    const avail = getAvailableConcepts(concepts, entries, activeMonthKey, type);
+    const first = avail[0];
+    setSummarySelectedConceptId(first?.id ?? '');
+    setSummaryAmountInput(first && first.defaultAmount > 0 ? String(first.defaultAmount) : '');
+    setSummaryNoteInput('');
+    setSummaryFormError(null);
+    setIsSummaryAddModalOpen(true);
   };
 
-  const handleTestHaptic = async () => {
-    setPulseCount((prev) => prev + 1);
+  const handleSummarySubmitMovement = async () => {
+    const digitsOnly = summaryAmountInput.replace(/[^0-9]/g, '');
+
+    if (isSummaryCustomMode) {
+      if (!summaryCustomName.trim()) {
+        setSummaryFormError('Ingresa el nombre del nuevo ítem.');
+        return;
+      }
+      const parsedAmount = digitsOnly ? Number(digitsOnly) : 0;
+      if (!Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
+        setSummaryFormError('Ingresa un monto entero mayor a $ 0 en pesos colombianos.');
+        return;
+      }
+      await createCustomConceptAndMovement({
+        monthKey: activeMonthKey,
+        name: summaryCustomName.trim(),
+        type: summaryMovementType,
+        group: summaryCustomGroup,
+        amountCop: parsedAmount,
+        ...(summaryNoteInput.trim() ? { note: summaryNoteInput.trim() } : {}),
+      });
+      setIsSummaryAddModalOpen(false);
+      setSummaryFormError(null);
+      await triggerHaptic('success');
+      return;
+    }
+
+    const available = getAvailableConcepts(concepts, entries, activeMonthKey, summaryMovementType);
+    const activeConcept =
+      available.find((c) => c.id === summarySelectedConceptId) ?? available[0];
+    if (!activeConcept) {
+      setSummaryFormError('No hay conceptos disponibles en esta categoría.');
+      return;
+    }
+
+    const parsedAmount = digitsOnly ? Number(digitsOnly) : activeConcept.defaultAmount;
+    if (!Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
+      setSummaryFormError('Ingresa un monto entero mayor a $ 0 en pesos colombianos.');
+      return;
+    }
+
+    await handleAddMovement({
+      monthKey: activeMonthKey,
+      conceptId: activeConcept.id,
+      actualAmount: parsedAmount,
+      completedAt: toBogotaIsoDate(),
+      ...(summaryNoteInput.trim() ? { note: summaryNoteInput.trim() } : {}),
+    });
+
+    setIsSummaryAddModalOpen(false);
+    setSummaryFormError(null);
+  };
+
+  const handleCloseMonth = async () => {
+    await closeCurrentMonth();
     await triggerHaptic('success');
   };
 
@@ -336,10 +431,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
           gap: spacing.sm,
         }}
       >
-        <View style={{ flex: 1, gap: spacing.xs }}>
-          <StatusBadge testID="runtime-mode-badge" label={runtime.label} status="info" />
-          <AppText variant="title1">{`BFlow · ${activeMonthLabel}`}</AppText>
-        </View>
+        <AppText variant="title1">{`BFlow · ${activeMonthLabel}`}</AppText>
 
         <ThemeToggleIconButton testID="theme-toggle-button" />
       </View>
@@ -366,9 +458,6 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                 {`Meta: ${authUser.financialGoal}`}
               </AppText>
             ) : null}
-            <AppText variant="micro" color={colors.text.muted}>
-              {syncMessage}
-            </AppText>
           </View>
 
           <Pressable
@@ -470,17 +559,6 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
               </AppText>
             </View>
           </GlassSurface>
-
-          {/* Dynamic Island Live Activity Interactive Preview */}
-          <DynamicIslandPreview
-            netCashFlowCop={budget.netCashFlow}
-            receivedIncomeCop={budget.receivedIncome}
-            paidExpensesCop={budget.paidExpenses}
-            totalDebtCop={debtSummary.totalRemainingDebt}
-            checklistCompleted={checklist.completedCount}
-            checklistTotal={checklist.totalTrackableCount}
-            monthLabel={activeMonthLabel}
-          />
 
           <View style={{ flexDirection: 'row', gap: spacing.md }}>
             <GlassSurface style={{ flex: 1 }} testID="income-summary-card">
@@ -593,7 +671,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                 testID="summary-quick-open-checklist-add"
                 accessibilityRole="button"
                 accessibilityLabel="Registrar Nuevo Movimiento"
-                onPress={() => setActiveTab('checklist')}
+                onPress={() => handleSummaryOpenAddModal('expense')}
                 style={{
                   width: '100%',
                   minHeight: MIN_TOUCH_TARGET_PT,
@@ -612,7 +690,254 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                 </AppText>
               </Pressable>
 
-              {trackableEntries.map((entry) => {
+              {isSummaryAddModalOpen ? (
+                <GlassSurface elevated testID="summary-add-movement-modal-card">
+                  <View style={{ gap: spacing.sm }}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <AppText variant="title2">Registrar Movimiento</AppText>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => setIsSummaryAddModalOpen(false)}
+                        style={{
+                          paddingVertical: 4,
+                          paddingHorizontal: spacing.sm,
+                          borderRadius: radius.pill,
+                          backgroundColor: colors.glass.surfaceTint,
+                          borderWidth: 1,
+                          borderColor: colors.glass.subtleBorder,
+                        }}
+                      >
+                        <AppText variant="caption" color={colors.text.secondary}>
+                          Cerrar
+                        </AppText>
+                      </Pressable>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                      {(
+                        [
+                          { type: 'expense', label: 'Gasto' },
+                          { type: 'income', label: 'Ingreso' },
+                        ] as const
+                      ).map((tab) => {
+                        const isSelected = summaryMovementType === tab.type;
+                        return (
+                          <Pressable
+                            key={tab.type}
+                            accessibilityRole="button"
+                            onPress={() => handleSummaryOpenAddModal(tab.type)}
+                            style={{
+                              flex: 1,
+                              minHeight: 36,
+                              borderRadius: radius.md,
+                              backgroundColor: isSelected
+                                ? colors.glass.surfaceElevatedTint
+                                : colors.glass.surfaceTint,
+                              borderWidth: 1,
+                              borderColor: isSelected
+                                ? colors.glass.specularBorder
+                                : colors.glass.subtleBorder,
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <AppText variant="caption">{tab.label}</AppText>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+                      {getAvailableConcepts(
+                        concepts,
+                        entries,
+                        activeMonthKey,
+                        summaryMovementType
+                      ).map((concept) => {
+                        const isSelected =
+                          !isSummaryCustomMode && summarySelectedConceptId === concept.id;
+                        return (
+                          <Pressable
+                            key={concept.id}
+                            testID={`summary-concept-chip-${concept.id}`}
+                            accessibilityRole="button"
+                            onPress={() => {
+                              setIsSummaryCustomMode(false);
+                              setSummarySelectedConceptId(concept.id);
+                              setSummaryAmountInput(
+                                concept.defaultAmount > 0 ? String(concept.defaultAmount) : ''
+                              );
+                              setSummaryFormError(null);
+                            }}
+                            style={{
+                              minHeight: 36,
+                              paddingVertical: spacing.xs,
+                              paddingHorizontal: spacing.md,
+                              borderRadius: radius.pill,
+                              backgroundColor: isSelected
+                                ? colors.semantic.incomeSoft
+                                : colors.glass.surfaceTint,
+                              borderWidth: 1,
+                              borderColor: isSelected
+                                ? colors.semantic.income
+                                : colors.glass.subtleBorder,
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <AppText variant="caption">
+                              {`${concept.name}${concept.defaultAmount > 0 ? ` (${formatCop(concept.defaultAmount)})` : ' (Múltiple)'}`}
+                            </AppText>
+                          </Pressable>
+                        );
+                      })}
+
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => {
+                          setIsSummaryCustomMode(true);
+                          setSummaryAmountInput('');
+                          setSummaryFormError(null);
+                        }}
+                        style={{
+                          minHeight: 36,
+                          paddingVertical: spacing.xs,
+                          paddingHorizontal: spacing.md,
+                          borderRadius: radius.pill,
+                          backgroundColor: isSummaryCustomMode
+                            ? colors.semantic.motoSoft
+                            : colors.glass.surfaceTint,
+                          borderWidth: 1,
+                          borderColor: isSummaryCustomMode
+                            ? colors.semantic.moto
+                            : colors.glass.subtleBorder,
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <AppText variant="caption">+ Crear nuevo ítem</AppText>
+                      </Pressable>
+                    </View>
+
+                    {isSummaryCustomMode ? (
+                      <View style={{ gap: spacing.xs }}>
+                        <TextInput
+                          value={summaryCustomName}
+                          onChangeText={setSummaryCustomName}
+                          placeholder="Nombre del nuevo ítem"
+                          placeholderTextColor={colors.text.muted}
+                          style={{
+                            minHeight: MIN_TOUCH_TARGET_PT,
+                            paddingHorizontal: spacing.md,
+                            borderRadius: radius.md,
+                            backgroundColor: colors.glass.surfaceTint,
+                            borderWidth: 1,
+                            borderColor: colors.glass.subtleBorder,
+                            color: colors.text.primary,
+                          }}
+                        />
+                        <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                          {(
+                            [
+                              { id: 'fixed', label: 'Fijo' },
+                              { id: 'variable', label: 'Variable' },
+                            ] as const
+                          ).map((g) => {
+                            const active = summaryCustomGroup === g.id;
+                            return (
+                              <Pressable
+                                key={g.id}
+                                accessibilityRole="button"
+                                onPress={() => setSummaryCustomGroup(g.id)}
+                                style={{
+                                  flex: 1,
+                                  minHeight: 36,
+                                  borderRadius: radius.md,
+                                  backgroundColor: active
+                                    ? colors.glass.surfaceElevatedTint
+                                    : colors.glass.surfaceTint,
+                                  borderWidth: 1,
+                                  borderColor: active
+                                    ? colors.glass.specularBorder
+                                    : colors.glass.subtleBorder,
+                                  justifyContent: 'center',
+                                  alignItems: 'center',
+                                }}
+                              >
+                                <AppText variant="caption">{g.label}</AppText>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    ) : null}
+
+                    <TextInput
+                      value={summaryAmountInput}
+                      onChangeText={setSummaryAmountInput}
+                      keyboardType="numeric"
+                      placeholder="Monto en COP enteros"
+                      placeholderTextColor={colors.text.muted}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        color: colors.text.primary,
+                      }}
+                    />
+
+                    <TextInput
+                      value={summaryNoteInput}
+                      onChangeText={setSummaryNoteInput}
+                      placeholder="Nota opcional"
+                      placeholderTextColor={colors.text.muted}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        color: colors.text.primary,
+                      }}
+                    />
+
+                    {summaryFormError ? (
+                      <AppText variant="caption" color={colors.semantic.expense}>
+                        {summaryFormError}
+                      </AppText>
+                    ) : null}
+
+                    <Pressable
+                      testID="summary-submit-movement-button"
+                      accessibilityRole="button"
+                      onPress={handleSummarySubmitMovement}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.semantic.incomeSoft,
+                        borderWidth: 1,
+                        borderColor: colors.semantic.income,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <AppText variant="body" color={colors.semantic.income}>
+                        Guardar Movimiento
+                      </AppText>
+                    </Pressable>
+                  </View>
+                </GlassSurface>
+              ) : null}
+
+              {allMonthEntries.map((entry) => {
                 const isDone = entry.status === 'completed';
                 return (
                   <Pressable
@@ -660,30 +985,6 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
               })}
             </View>
           </GlassSurface>
-
-          <Pressable
-            testID="haptic-verification-button"
-            accessibilityRole="button"
-            accessibilityLabel="Verificar respuesta táctil y tubería Fase 1"
-            onPress={handleTestHaptic}
-            style={{
-              minHeight: MIN_TOUCH_TARGET_PT,
-              borderRadius: radius.lg,
-              paddingVertical: spacing.md,
-              paddingHorizontal: spacing.lg,
-              backgroundColor: colors.semantic.incomeSoft,
-              borderWidth: 1,
-              borderColor: colors.semantic.income,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <AppText variant="headline" color={colors.semantic.income}>
-              {pulseCount === 0
-                ? 'Probar Haptics & Liquid Glass (Fase 1)'
-                : `Tubería Verificada (${pulseCount} ${pulseCount === 1 ? 'toque' : 'toques'})`}
-            </AppText>
-          </Pressable>
         </>
       ) : null}
 
@@ -698,6 +999,14 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
           onCreateCustomMovement={(input) => {
             void createCustomConceptAndMovement(input);
             void triggerHaptic('success');
+          }}
+          onUpdateConcept={(conceptId, updates) => {
+            void updateConcept(conceptId, updates);
+            void triggerHaptic('success');
+          }}
+          onDeleteConcept={(conceptId) => {
+            void deleteConcept(conceptId);
+            void triggerHaptic('light');
           }}
           onEditEntry={(entryId, updates) => {
             void editEntry(entryId, updates);
@@ -720,6 +1029,18 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
             void updateFunfamiInstallmentAmount(activeMonthKey, newAmountCop);
             void triggerHaptic('success');
           }}
+          onCreateDebt={(input) => {
+            void createDebt(activeMonthKey, input);
+            void triggerHaptic('success');
+          }}
+          onUpdateDebt={(debtId, updates) => {
+            void updateDebt(activeMonthKey, debtId, updates);
+            void triggerHaptic('success');
+          }}
+          onDeleteDebt={(debtId) => {
+            void deleteDebt(activeMonthKey, debtId);
+            void triggerHaptic('light');
+          }}
         />
       ) : null}
 
@@ -727,6 +1048,10 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         <SavingsAndMotoIdealView
           savingsSummary={savingsSummary}
           motoIdealSummary={motoIdealSummary}
+          onUpdateOpeningBalance={(bucketId, newBalanceCop) => {
+            void updateSavingsOpeningBalance(activeMonthKey, bucketId, newBalanceCop);
+            void triggerHaptic('success');
+          }}
         />
       ) : null}
 

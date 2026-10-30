@@ -19,6 +19,7 @@ import {
   deleteMovement,
   registerMovement,
   toBogotaIsoDate,
+  toggleMovementStatus,
   uncompleteMovement,
   type CloseMonthResult,
   type Concept,
@@ -95,6 +96,37 @@ export interface BudgetStoreState {
   toggleEntryStatus: (entryId: string, completedAtDateIso?: string) => Promise<void>;
   addOrCompleteMovement: (input: RegisterOrCompleteMovementInput) => Promise<void>;
   createCustomConceptAndMovement: (input: CreateCustomConceptInput) => Promise<void>;
+  updateConcept: (
+    conceptId: string,
+    updates: { name?: string; defaultAmount?: number; group?: ConceptGroup }
+  ) => Promise<void>;
+  deleteConcept: (conceptId: string) => Promise<void>;
+  createDebt: (
+    monthKey: string,
+    debt: {
+      name: string;
+      lender: string;
+      openingBalance: number;
+      monthlyInterestRate?: number;
+      groupKey?: string;
+    }
+  ) => Promise<void>;
+  updateDebt: (
+    monthKey: string,
+    debtId: string,
+    updates: {
+      name?: string;
+      lender?: string;
+      openingBalance?: number;
+      monthlyInterestRate?: number;
+    }
+  ) => Promise<void>;
+  deleteDebt: (monthKey: string, debtId: string) => Promise<void>;
+  updateSavingsOpeningBalance: (
+    monthKey: string,
+    bucketId: 'moto' | 'savings',
+    newBalanceCop: number
+  ) => Promise<void>;
   editEntry: (entryId: string, updates: EditEntryUpdates) => Promise<void>;
   deleteEntryById: (entryId: string) => Promise<void>;
   removeOrResetEntry: (entryId: string) => Promise<void>;
@@ -171,9 +203,7 @@ function buildInitialState(authUserOverride?: BFlowAuthUser | null) {
     idealMotoPlan: seed.provisionPlan,
     closedSnapshots: {} as Record<string, MonthSnapshot>,
     authUser: resolvedUser,
-    syncMessage: resolvedUser
-      ? `Sincronizado con Cloud Firestore (${resolvedUser.email ?? resolvedUser.uid})`
-      : 'Inicia sesión para cargar tu presupuesto desde Firebase',
+    syncMessage: '',
     isSyncing: false,
   };
 }
@@ -191,7 +221,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
 
   setSyncStatus: (message, isSyncing = false) => set({ syncMessage: message, isSyncing }),
 
-  applyCloudWorkspace: (payload) =>
+  applyCloudWorkspace: (payload) => {
     set((state) => ({
       activeMonthKey: payload.monthKey,
       availableMonths: state.availableMonths.includes(payload.monthKey)
@@ -218,9 +248,11 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       closedSnapshots: payload.closedSnapshot
         ? { ...state.closedSnapshots, [payload.monthKey]: payload.closedSnapshot }
         : state.closedSnapshots,
-    })),
+    }));
+    triggerWidgetSync(get());
+  },
 
-  applyFullCloudAccount: (payload) =>
+  applyFullCloudAccount: (payload) => {
     set({
       activeMonthKey: payload.activeMonthKey,
       availableMonths: payload.availableMonths,
@@ -231,22 +263,18 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       savingsBucketsByMonth: payload.savingsBucketsByMonth,
       idealMotoPlan: payload.provisionPlan,
       closedSnapshots: payload.closedSnapshots,
-    }),
+    });
+    triggerWidgetSync(get());
+  },
 
   toggleEntryStatus: async (entryId, completedAtDateIso = toBogotaIsoDate()) => {
     const state = get();
     const target = state.entries.find((e) => e.id === entryId);
     if (!target) return;
 
-    const wasCompleted = target.status === 'completed';
-    const nextEntries = wasCompleted
-      ? uncompleteMovement(state.entries, entryId)
-      : registerMovement(state.entries, state.concepts, {
-          monthKey: target.monthKey,
-          conceptId: target.conceptId,
-          actualAmount: target.actualAmount > 0 ? target.actualAmount : target.plannedAmount,
-          completedAt: completedAtDateIso,
-        });
+    const nextEntries = toggleMovementStatus(state.entries, entryId, {
+      completedAt: completedAtDateIso,
+    });
 
     const updatedEntry = nextEntries.find((e) => e.id === entryId);
     const concept = state.concepts.find((c) => c.id === target.conceptId);
@@ -277,9 +305,8 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
           concept,
           nextDebtPayments.filter((dp) => dp.entryId === entryId)
         );
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Error al sincronizar en Firestore';
-        set({ syncMessage: `Aviso Firestore: ${msg}` });
+      } catch {
+        set({ syncMessage: '' });
       }
     }
   },
@@ -315,9 +342,8 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       try {
         const repo = new FirestoreBudgetRepository();
         await repo.addMonthEntry(state.authUser.uid, input);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Error al guardar movimiento en Firestore';
-        set({ syncMessage: `Aviso Firestore: ${msg}` });
+      } catch {
+        set({ syncMessage: '' });
       }
     }
   },
@@ -369,9 +395,195 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       try {
         const repo = new FirestoreBudgetRepository();
         await repo.saveCustomConceptAndEntry(state.authUser.uid, newConcept, newEntry);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Error al guardar concepto en Firestore';
-        set({ syncMessage: `Aviso Firestore: ${msg}` });
+      } catch {
+        set({ syncMessage: '' });
+      }
+    }
+  },
+
+  updateConcept: async (conceptId, updates) => {
+    const state = get();
+    const target = state.concepts.find((c) => c.id === conceptId);
+    if (!target) return;
+
+    const updatedConcept: Concept = {
+      ...target,
+      ...(updates.name?.trim() ? { name: updates.name.trim() } : {}),
+      ...(updates.defaultAmount !== undefined
+        ? { defaultAmount: Math.max(0, Math.round(updates.defaultAmount)) }
+        : {}),
+      ...(updates.group ? { group: updates.group } : {}),
+    };
+
+    const nextConcepts = state.concepts.map((c) => (c.id === conceptId ? updatedConcept : c));
+    const nextEntries = state.entries.map((entry) => {
+      if (entry.conceptId !== conceptId) return entry;
+      return {
+        ...entry,
+        conceptName: updatedConcept.name,
+        group: updatedConcept.group,
+      };
+    });
+
+    set({
+      concepts: nextConcepts,
+      entries: nextEntries,
+    });
+    triggerWidgetSync(get());
+
+    if (isRealAuthUser(state.authUser)) {
+      try {
+        const repo = new FirestoreBudgetRepository();
+        await repo.saveConcept(state.authUser.uid, updatedConcept);
+      } catch {
+        set({ syncMessage: '' });
+      }
+    }
+  },
+
+  deleteConcept: async (conceptId) => {
+    const state = get();
+    const nextConcepts = state.concepts.filter((c) => c.id !== conceptId);
+    const nextEntries = state.entries.filter(
+      (e) => !(e.conceptId === conceptId && e.status === 'pending')
+    );
+
+    set({
+      concepts: nextConcepts,
+      entries: nextEntries,
+    });
+    triggerWidgetSync(get());
+
+    if (isRealAuthUser(state.authUser)) {
+      try {
+        const repo = new FirestoreBudgetRepository();
+        await repo.deleteConcept(state.authUser.uid, conceptId);
+      } catch {
+        set({ syncMessage: '' });
+      }
+    }
+  },
+
+  createDebt: async (monthKey, input) => {
+    const state = get();
+    const id = `debt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const newDebt: Debt = {
+      id,
+      groupKey: input.groupKey ?? 'PERSONAL',
+      name: input.name.trim(),
+      lender: input.lender.trim(),
+      openingBalance: Math.max(0, Math.round(input.openingBalance)),
+      monthKey,
+      ...(input.monthlyInterestRate !== undefined && input.monthlyInterestRate >= 0
+        ? { monthlyInterestRate: input.monthlyInterestRate }
+        : {}),
+    };
+
+    const currentDebts = state.debtsByMonth[monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
+    const nextDebts = [...currentDebts, newDebt];
+
+    set({
+      debtsByMonth: {
+        ...state.debtsByMonth,
+        [monthKey]: nextDebts,
+      },
+    });
+    triggerWidgetSync(get());
+
+    if (isRealAuthUser(state.authUser)) {
+      try {
+        const repo = new FirestoreBudgetRepository();
+        await repo.saveDebt(state.authUser.uid, newDebt);
+      } catch {
+        set({ syncMessage: '' });
+      }
+    }
+  },
+
+  updateDebt: async (monthKey, debtId, updates) => {
+    const state = get();
+    const currentDebts = state.debtsByMonth[monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
+    let updatedDebt: Debt | null = null;
+    const nextDebts = currentDebts.map((d) => {
+      if (d.id !== debtId) return d;
+      updatedDebt = {
+        ...d,
+        ...(updates.name !== undefined ? { name: updates.name.trim() } : {}),
+        ...(updates.lender !== undefined ? { lender: updates.lender.trim() } : {}),
+        ...(updates.openingBalance !== undefined
+          ? { openingBalance: Math.max(0, Math.round(updates.openingBalance)) }
+          : {}),
+        ...(updates.monthlyInterestRate !== undefined
+          ? { monthlyInterestRate: updates.monthlyInterestRate }
+          : {}),
+      };
+      return updatedDebt;
+    });
+
+    set({
+      debtsByMonth: {
+        ...state.debtsByMonth,
+        [monthKey]: nextDebts,
+      },
+    });
+    triggerWidgetSync(get());
+
+    if (updatedDebt && isRealAuthUser(state.authUser)) {
+      try {
+        const repo = new FirestoreBudgetRepository();
+        await repo.saveDebt(state.authUser.uid, updatedDebt);
+      } catch {
+        set({ syncMessage: '' });
+      }
+    }
+  },
+
+  deleteDebt: async (monthKey, debtId) => {
+    const state = get();
+    const currentDebts = state.debtsByMonth[monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
+    const nextDebts = currentDebts.filter((d) => d.id !== debtId);
+
+    set({
+      debtsByMonth: {
+        ...state.debtsByMonth,
+        [monthKey]: nextDebts,
+      },
+    });
+    triggerWidgetSync(get());
+
+    if (isRealAuthUser(state.authUser)) {
+      try {
+        const repo = new FirestoreBudgetRepository();
+        await repo.deleteDebt(state.authUser.uid, debtId);
+      } catch {
+        set({ syncMessage: '' });
+      }
+    }
+  },
+
+  updateSavingsOpeningBalance: async (monthKey, bucketId, newBalanceCop) => {
+    const state = get();
+    const safeAmount = Math.max(0, Math.round(newBalanceCop));
+    const monthBuckets =
+      state.savingsBucketsByMonth[monthKey] ?? state.savingsBucketsByMonth['2026-10'] ?? [];
+    const nextBuckets = monthBuckets.map((b) =>
+      b.id === bucketId ? { ...b, openingBalance: safeAmount } : b
+    );
+
+    set({
+      savingsBucketsByMonth: {
+        ...state.savingsBucketsByMonth,
+        [monthKey]: nextBuckets,
+      },
+    });
+    triggerWidgetSync(get());
+
+    if (isRealAuthUser(state.authUser)) {
+      try {
+        const repo = new FirestoreBudgetRepository();
+        await repo.saveSavingsBucket(state.authUser.uid, bucketId, safeAmount, monthKey);
+      } catch {
+        set({ syncMessage: '' });
       }
     }
   },
@@ -434,9 +646,8 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
           updatedConcept,
           nextDebtPayments.filter((dp) => dp.entryId === entryId)
         );
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Error al actualizar en Firestore';
-        set({ syncMessage: `Aviso Firestore: ${msg}` });
+      } catch {
+        set({ syncMessage: '' });
       }
     }
   },
@@ -459,9 +670,8 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       try {
         const repo = new FirestoreBudgetRepository();
         await repo.deleteEntryCompletely(state.authUser.uid, entryId);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Error al eliminar en Firestore';
-        set({ syncMessage: `Aviso Firestore: ${msg}` });
+      } catch {
+        set({ syncMessage: '' });
       }
     }
   },
@@ -496,9 +706,8 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       try {
         const repo = new FirestoreBudgetRepository();
         await repo.deleteOrResetEntry(state.authUser.uid, entryId);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Error al eliminar en Firestore';
-        set({ syncMessage: `Aviso Firestore: ${msg}` });
+      } catch {
+        set({ syncMessage: '' });
       }
     }
   },
@@ -543,9 +752,8 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
           undefined,
           cascadedPayments
         );
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Error al actualizar cuota en Firestore';
-        set({ syncMessage: `Aviso Firestore: ${msg}` });
+      } catch {
+        set({ syncMessage: '' });
       }
     }
   },
@@ -600,9 +808,8 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       try {
         const repo = new FirestoreBudgetRepository();
         await repo.closeMonth(state.authUser.uid, currentMonthKey, closedAtIso);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Error al cerrar mes en Firestore';
-        set({ syncMessage: `Aviso Firestore: ${msg}` });
+      } catch {
+        set({ syncMessage: '' });
       }
     }
 
@@ -624,9 +831,8 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       try {
         const repo = new FirestoreBudgetRepository();
         await repo.reopenMonthInCloud(state.authUser.uid, monthKey);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Error al reabrir mes en Firestore';
-        set({ syncMessage: `Aviso Firestore: ${msg}` });
+      } catch {
+        set({ syncMessage: '' });
       }
     }
   },
@@ -686,9 +892,8 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       try {
         const repo = new FirestoreBudgetRepository();
         await repo.deleteMonthInCloud(state.authUser.uid, monthKey, fallbackMonth);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Error al eliminar mes en Firestore';
-        set({ syncMessage: `Aviso Firestore: ${msg}` });
+      } catch {
+        set({ syncMessage: '' });
       }
     }
   },

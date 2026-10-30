@@ -87,14 +87,25 @@ export function closeMonthAndRollover(input: CloseMonthInput): CloseMonthResult 
 
   const nextMonthKey = addMonthsToMonthKey(input.closingMonthKey, 1);
 
-  const nextMonthDebts: Debt[] = debtSummary.debts.map((d) => ({
-    id: d.debtId,
-    groupKey: 'FUNFAMI',
-    name: d.name,
-    lender: d.lender,
-    openingBalance: d.remainingBalance,
-    monthKey: nextMonthKey,
-  }));
+  const nextMonthDebts: Debt[] = debtSummary.debts.map((d) => {
+    const origDebt = input.debts.find((orig) => orig.id === d.debtId);
+    const interestRate = d.monthlyInterestRate ?? origDebt?.monthlyInterestRate ?? 0;
+    const accruedInterest =
+      interestRate > 0 && d.remainingBalance > 0
+        ? Math.round(d.remainingBalance * (interestRate / 100))
+        : 0;
+    const nextOpeningBalance = Math.max(0, d.remainingBalance + accruedInterest);
+
+    return {
+      id: d.debtId,
+      groupKey: origDebt?.groupKey ?? 'FUNFAMI',
+      name: d.name,
+      lender: d.lender,
+      openingBalance: nextOpeningBalance,
+      monthKey: nextMonthKey,
+      ...(interestRate > 0 ? { monthlyInterestRate: interestRate } : {}),
+    };
+  });
 
   const nextMonthSavingsBuckets: SavingsBucket[] = [
     {

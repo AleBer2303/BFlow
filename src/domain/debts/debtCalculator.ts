@@ -24,6 +24,8 @@ export interface DebtItemStatus {
   name: string;
   lender: string;
   openingBalance: number;
+  monthlyInterestRate?: number;
+  accruedInterestThisMonth: number;
   appliedPrincipalThisMonth: number;
   remainingBalance: number;
   reductionRatio: number;
@@ -93,8 +95,9 @@ export function buildDebtPaymentsForInstallment(
     });
   }
 
-  // Default confirmed rule: prioritize CB300F - MOTO first, then remaining debts in order
-  const orderedDebts = [...debts].sort((a, b) => {
+  // Default confirmed rule: prioritize CB300F - MOTO first, then remaining FUNFAMI debts in order
+  const funfamiDebts = debts.filter((d) => !d.groupKey || d.groupKey === 'FUNFAMI');
+  const orderedDebts = [...funfamiDebts].sort((a, b) => {
     if (a.id === 'debt_cb300f_moto') return -1;
     if (b.id === 'debt_cb300f_moto') return 1;
     return a.id.localeCompare(b.id);
@@ -191,7 +194,13 @@ export function calculateFunfamiDebtSummary(
     const appliedPrincipalThisMonth = sumMoneyIntegers(
       activePayments.filter((p) => p.debtId === debt.id).map((p) => p.principalAmount)
     );
-    const remainingBalance = Math.max(0, debt.openingBalance - appliedPrincipalThisMonth);
+    const principalAfterPayments = Math.max(0, debt.openingBalance - appliedPrincipalThisMonth);
+    const interestRate = debt.monthlyInterestRate ?? 0;
+    const accruedInterestThisMonth =
+      interestRate > 0 && principalAfterPayments > 0
+        ? Math.round(principalAfterPayments * (interestRate / 100))
+        : 0;
+    const remainingBalance = principalAfterPayments;
     const reductionRatio =
       debt.openingBalance === 0 ? 1 : appliedPrincipalThisMonth / debt.openingBalance;
 
@@ -200,6 +209,8 @@ export function calculateFunfamiDebtSummary(
       name: debt.name,
       lender: debt.lender,
       openingBalance: debt.openingBalance,
+      monthlyInterestRate: debt.monthlyInterestRate,
+      accruedInterestThisMonth,
       appliedPrincipalThisMonth,
       remainingBalance,
       reductionRatio,

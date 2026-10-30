@@ -106,4 +106,23 @@ describe('domain/debts — FUNFAMI Debt Calculator & Payoff Projections', () => 
       calculateFunfamiDebtSummary(debts, uncheckedEntries, '2026-10').isInstallmentPaid
     ).toBe(false);
   });
+
+  it('calculates monthly accrued interest when monthlyInterestRate is specified', () => {
+    const interestDebts: Debt[] = [
+      {
+        id: 'debt_credit_card',
+        groupKey: 'PERSONAL',
+        name: 'Tarjeta Nu',
+        lender: 'Nu Colombia',
+        openingBalance: 1_000_000,
+        monthKey: '2026-10',
+        monthlyInterestRate: 2.0,
+      },
+    ];
+
+    const summary = calculateFunfamiDebtSummary(interestDebts, octoberEntries, '2026-10');
+    const cardStatus = summary.debts.find((d) => d.debtId === 'debt_credit_card')!;
+    expect(cardStatus.accruedInterestThisMonth).toBe(20_000);
+    expect(cardStatus.monthlyInterestRate).toBe(2.0);
+  });
 });

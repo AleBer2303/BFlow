@@ -33,12 +33,11 @@ import {
   type MonthlyBudgetSummary,
   type MonthlySavingsSummary,
 } from '../../../domain';
-import { resolveRuntimeCapabilities } from '../../../platform/mode/runtimeMode';
 
 export interface AnalyticsAndHistoryViewProps {
   activeMonthKey: string;
   availableMonths: readonly string[];
-  concepts: readonly Concept[];
+  concepts?: readonly Concept[];
   entries: readonly MonthEntry[];
   budget: MonthlyBudgetSummary;
   checklist: ChecklistProgress;
@@ -49,13 +48,13 @@ export interface AnalyticsAndHistoryViewProps {
   onCloseCurrentMonth: () => void;
   onReopenClosedMonth?: (monthKey: string) => void;
   onDeleteOrRevertMonth?: (monthKey: string) => void;
-  onResetOctoberSeed: () => void;
+  onResetOctoberSeed?: () => void;
 }
 
 export function AnalyticsAndHistoryView({
   activeMonthKey,
   availableMonths,
-  concepts,
+  concepts: _concepts,
   entries,
   budget,
   checklist,
@@ -66,10 +65,9 @@ export function AnalyticsAndHistoryView({
   onCloseCurrentMonth,
   onReopenClosedMonth,
   onDeleteOrRevertMonth,
-  onResetOctoberSeed,
+  onResetOctoberSeed: _onResetOctoberSeed,
 }: AnalyticsAndHistoryViewProps): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
-  const runtime = resolveRuntimeCapabilities();
 
   const paidExpenseRatio =
     budget.plannedExpenses > 0 ? budget.paidExpenses / budget.plannedExpenses : 0;
@@ -361,69 +359,6 @@ export function AnalyticsAndHistoryView({
               );
             })}
           </View>
-        </View>
-      </GlassSurface>
-
-      {/* Screen 10: Catálogo de Conceptos */}
-      <GlassSurface testID="concepts-catalog-card">
-        <View style={{ gap: spacing.xs }}>
-          <AppText variant="title2">{`Catálogo de Conceptos (${concepts.length})`}</AppText>
-          {concepts.map((c) => (
-            <View
-              key={c.id}
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: spacing.sm,
-                paddingVertical: spacing.xs,
-                borderBottomWidth: 1,
-                borderBottomColor: colors.glass.subtleBorder,
-              }}
-            >
-              <View style={{ flex: 1, gap: spacing.xxs }}>
-                <AppText variant="body">{c.name}</AppText>
-                <AppText variant="micro" color={colors.text.secondary}>
-                  {`${c.type === 'income' ? 'Ingreso' : 'Gasto'} ${c.group === 'fixed' ? 'Fijo' : 'Variable'} · ${c.recurrence.kind === 'monthly' ? 'Mensual' : `Meses [${c.recurrence.months.join(', ')}]`} · ${c.allowMultiplePerMonth ? 'Múltiple/mes' : 'Único/mes'}`}
-                </AppText>
-              </View>
-              <CurrencyText
-                amount={c.defaultAmount}
-                variant="caption"
-                tone={c.type === 'income' ? 'income' : 'expense'}
-              />
-            </View>
-          ))}
-        </View>
-      </GlassSurface>
-
-      {/* Screen 11: Ajustes y Diagnóstico Nativo */}
-      <GlassSurface testID="settings-diagnostics-card">
-        <View style={{ gap: spacing.xs }}>
-          <AppText variant="title2">Ajustes y Diagnóstico Nativo (iOS 26 / iloader)</AppText>
-          <AppText variant="caption" color={colors.text.secondary}>
-            {`Modo de Ejecución: ${runtime.label} · Zona Horaria: America/Bogota (UTC-05:00)`}
-          </AppText>
-          <AppText variant="caption" color={colors.text.secondary}>
-            Estado Firma 7 días (iloader): Activa · Máximo 2 App IDs (com.bflow.app + widgets)
-          </AppText>
-          <Pressable
-            testID="reset-october-seed-button"
-            accessibilityRole="button"
-            onPress={onResetOctoberSeed}
-            style={{
-              minHeight: MIN_TOUCH_TARGET_PT,
-              borderRadius: radius.md,
-              backgroundColor: colors.glass.surfaceElevatedTint,
-              borderWidth: 1,
-              borderColor: colors.glass.specularBorder,
-              justifyContent: 'center',
-              alignItems: 'center',
-              marginTop: spacing.xs,
-            }}
-          >
-            <AppText variant="caption">Restaurar Semilla Dorada Octubre 2026 (Idempotente)</AppText>
-          </Pressable>
         </View>
       </GlassSurface>
     </View>

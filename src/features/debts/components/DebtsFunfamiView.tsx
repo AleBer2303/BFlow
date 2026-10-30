@@ -1,15 +1,16 @@
 /**
  * src/features/debts/components/DebtsFunfamiView.tsx
  *
- * Implements Screen `07-debt-funfami` (Control de Deuda FUNFAMI):
- * - Hero Card Total Deuda FUNFAMI (`$ 6.200.000` after `$ 1.800.000` Oct installment)
+ * Implements Screen `07-debt-funfami` (Control de Deudas):
+ * - Hero Card Total Deudas & Deuda FUNFAMI
  * - Editable monthly installment amount (`funfami-installment-amount-input` + `funfami-apply-installment-button`)
- * - Automatic waterfall payoff: once `CB300F - MOTO` reaches `$ 0`, it is removed from active obligations
- *   and any remaining or future installment automatically subtracts from `ESP. IA`.
+ * - Milestone payoff banner for CB300F - MOTO with dismiss capability and automatic disappearance in subsequent months
+ * - Complete CRUD for debts: Create, Edit, and Delete debts with monthly interest rate calculation (e.g. 0.9%, 2.0%)
+ * - 100% pure COP integers, >= 44pt touch targets, Apple Liquid Glass aesthetics
  */
 
 import React, { useEffect, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { Alert, Pressable, TextInput, View } from 'react-native';
 import {
   AppText,
   CurrencyText,
@@ -25,11 +26,28 @@ import {
   type MonthEntry,
 } from '../../../domain';
 
+export interface CreateDebtInput {
+  name: string;
+  lender: string;
+  openingBalance: number;
+  monthlyInterestRate?: number;
+}
+
+export interface UpdateDebtInput {
+  name?: string;
+  lender?: string;
+  openingBalance?: number;
+  monthlyInterestRate?: number;
+}
+
 export interface DebtsFunfamiViewProps {
   debtSummary: FunfamiDebtSummary;
   funfamiEntry?: MonthEntry;
   onToggleFunfamiInstallment?: (entry: MonthEntry) => void;
   onUpdateFunfamiInstallmentAmount?: (newAmountCop: number) => void;
+  onCreateDebt?: (input: CreateDebtInput) => void;
+  onUpdateDebt?: (debtId: string, updates: UpdateDebtInput) => void;
+  onDeleteDebt?: (debtId: string) => void;
 }
 
 export function DebtsFunfamiView({
@@ -37,6 +55,9 @@ export function DebtsFunfamiView({
   funfamiEntry,
   onToggleFunfamiInstallment,
   onUpdateFunfamiInstallmentAmount,
+  onCreateDebt,
+  onUpdateDebt,
+  onDeleteDebt,
 }: DebtsFunfamiViewProps): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
 
@@ -48,6 +69,16 @@ export function DebtsFunfamiView({
 
   const [installmentInput, setInstallmentInput] = useState<string>(String(installmentAmount));
   const [amountError, setAmountError] = useState<string | null>(null);
+  const [dismissedBannerMonth, setDismissedBannerMonth] = useState<string | null>(null);
+
+  // Form modal/drawer state for adding or editing a debt
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingDebtId, setEditingDebtId] = useState<string | null>(null);
+  const [formName, setFormName] = useState('');
+  const [formLender, setFormLender] = useState('');
+  const [formOpeningBalance, setFormOpeningBalance] = useState('');
+  const [formInterestRate, setFormInterestRate] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     setInstallmentInput(String(installmentAmount));
@@ -79,10 +110,105 @@ export function DebtsFunfamiView({
   };
 
   const motoDebtItem = debtSummary.debts.find((d) => d.debtId === 'debt_cb300f_moto');
-  const isMotoDebtPaidOff = Boolean(motoDebtItem && motoDebtItem.remainingBalance === 0);
+
+  // Requirement 1: Only show banner if CB300F - MOTO had a balance > 0 in this month AND reached 0,
+  // and user has not dismissed it. In subsequent months (where openingBalance is 0), it never appears!
+  const isMotoDebtPaidOff = Boolean(
+    motoDebtItem &&
+      motoDebtItem.openingBalance > 0 &&
+      motoDebtItem.remainingBalance === 0 &&
+      dismissedBannerMonth !== debtSummary.monthKey
+  );
 
   // When CB300F - MOTO is 100% paid off (remainingBalance === 0), remove it from active obligations
   const activeObligations = debtSummary.debts.filter((d) => d.remainingBalance > 0);
+
+  const openCreateForm = () => {
+    setEditingDebtId(null);
+    setFormName('');
+    setFormLender('');
+    setFormOpeningBalance('');
+    setFormInterestRate('0');
+    setFormError(null);
+    setIsFormOpen(true);
+  };
+
+  const openEditForm = (debt: (typeof debtSummary.debts)[number]) => {
+    setEditingDebtId(debt.debtId);
+    setFormName(debt.name);
+    setFormLender(debt.lender);
+    setFormOpeningBalance(String(debt.openingBalance));
+    setFormInterestRate(
+      debt.monthlyInterestRate !== undefined ? String(debt.monthlyInterestRate) : '0'
+    );
+    setFormError(null);
+    setIsFormOpen(true);
+  };
+
+  const handleSaveDebtForm = () => {
+    if (!formName.trim()) {
+      setFormError('Escribe el nombre de la deuda.');
+      return;
+    }
+    if (!formLender.trim()) {
+      setFormError('Escribe la entidad o persona acreedora.');
+      return;
+    }
+    const cleanBalance = formOpeningBalance.replace(/[^0-9]/g, '');
+    const parsedBalance = cleanBalance ? Number(cleanBalance) : 0;
+    if (!Number.isSafeInteger(parsedBalance) || parsedBalance <= 0) {
+      setFormError('Ingresa un saldo inicial válido en pesos colombianos.');
+      return;
+    }
+
+    const cleanRate = formInterestRate.replace(',', '.').trim();
+    const parsedRate = cleanRate ? parseFloat(cleanRate) : 0;
+    if (isNaN(parsedRate) || parsedRate < 0 || parsedRate > 100) {
+      setFormError('La tasa de interés mensual debe ser entre 0% y 100%.');
+      return;
+    }
+
+    setFormError(null);
+    if (editingDebtId) {
+      if (onUpdateDebt) {
+        onUpdateDebt(editingDebtId, {
+          name: formName.trim(),
+          lender: formLender.trim(),
+          openingBalance: parsedBalance,
+          monthlyInterestRate: parsedRate,
+        });
+      }
+    } else {
+      if (onCreateDebt) {
+        onCreateDebt({
+          name: formName.trim(),
+          lender: formLender.trim(),
+          openingBalance: parsedBalance,
+          monthlyInterestRate: parsedRate,
+        });
+      }
+    }
+    setIsFormOpen(false);
+  };
+
+  const handleDeleteDebtConfirm = (debtId: string, name: string) => {
+    Alert.alert(
+      'Eliminar deuda',
+      `¿Deseas eliminar permanentemente la obligación "${name}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: () => {
+            if (onDeleteDebt) {
+              onDeleteDebt(debtId);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <View style={{ gap: spacing.md }} testID="debts-funfami-view">
@@ -247,13 +373,216 @@ export function DebtsFunfamiView({
         </View>
       </GlassSurface>
 
-      {/* Banner when CB300F - MOTO is 100% paid off */}
+      {/* Action Bar: "+ Nueva Deuda" */}
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <AppText variant="title2">Obligaciones Activas</AppText>
+        <Pressable
+          testID="debts-add-new-debt-button"
+          accessibilityRole="button"
+          onPress={openCreateForm}
+          style={{
+            minHeight: MIN_TOUCH_TARGET_PT,
+            paddingHorizontal: spacing.md,
+            paddingVertical: spacing.xs,
+            borderRadius: radius.md,
+            backgroundColor: colors.semantic.incomeSoft,
+            borderWidth: 1,
+            borderColor: colors.semantic.income,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <AppText variant="caption" color={colors.semantic.income}>
+            + Nueva Deuda
+          </AppText>
+        </Pressable>
+      </View>
+
+      {/* Form Drawer / Card for Creating or Editing a Debt */}
+      {isFormOpen ? (
+        <GlassSurface elevated testID="debt-form-modal">
+          <View style={{ gap: spacing.sm }}>
+            <AppText variant="title2">
+              {editingDebtId ? 'Editar Deuda' : 'Registrar Nueva Deuda'}
+            </AppText>
+
+            <View style={{ gap: spacing.xxs }}>
+              <AppText variant="caption" color={colors.text.secondary}>
+                Nombre de la deuda
+              </AppText>
+              <TextInput
+                testID="debt-form-name-input"
+                value={formName}
+                onChangeText={setFormName}
+                placeholder="Ej. Tarjeta Bancolombia, Libre Inversión"
+                placeholderTextColor={colors.text.muted}
+                style={{
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.md,
+                  backgroundColor: colors.glass.surfaceTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.subtleBorder,
+                  color: colors.text.primary,
+                }}
+              />
+            </View>
+
+            <View style={{ gap: spacing.xxs }}>
+              <AppText variant="caption" color={colors.text.secondary}>
+                Acreedor / Entidad
+              </AppText>
+              <TextInput
+                testID="debt-form-lender-input"
+                value={formLender}
+                onChangeText={setFormLender}
+                placeholder="Ej. Bancolombia, Davivienda, Familiar"
+                placeholderTextColor={colors.text.muted}
+                style={{
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.md,
+                  backgroundColor: colors.glass.surfaceTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.subtleBorder,
+                  color: colors.text.primary,
+                }}
+              />
+            </View>
+
+            <View style={{ gap: spacing.xxs }}>
+              <AppText variant="caption" color={colors.text.secondary}>
+                Saldo inicial (COP enteros)
+              </AppText>
+              <TextInput
+                testID="debt-form-amount-input"
+                value={formOpeningBalance}
+                onChangeText={setFormOpeningBalance}
+                keyboardType="numeric"
+                placeholder="Ej. 2500000"
+                placeholderTextColor={colors.text.muted}
+                style={{
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.md,
+                  backgroundColor: colors.glass.surfaceTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.subtleBorder,
+                  color: colors.text.primary,
+                }}
+              />
+            </View>
+
+            <View style={{ gap: spacing.xxs }}>
+              <AppText variant="caption" color={colors.text.secondary}>
+                Tasa de interés mensual (%):
+              </AppText>
+              <TextInput
+                testID="debt-form-interest-rate-input"
+                value={formInterestRate}
+                onChangeText={setFormInterestRate}
+                keyboardType="decimal-pad"
+                placeholder="Ej. 0.9 o 2.0 (0 si no cobra interés)"
+                placeholderTextColor={colors.text.muted}
+                style={{
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.md,
+                  backgroundColor: colors.glass.surfaceTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.subtleBorder,
+                  color: colors.text.primary,
+                }}
+              />
+              <AppText variant="micro" color={colors.text.muted}>
+                Ej. 0,9% o 2% mensual. Al pasar de mes los intereses se calculan y suman al saldo automáticamente.
+              </AppText>
+            </View>
+
+            {formError ? (
+              <AppText variant="micro" color={colors.semantic.expense}>
+                {formError}
+              </AppText>
+            ) : null}
+
+            <View style={{ flexDirection: 'row', gap: spacing.xs, justifyContent: 'flex-end', paddingTop: spacing.xs }}>
+              <Pressable
+                testID="debt-form-cancel-button"
+                accessibilityRole="button"
+                onPress={() => setIsFormOpen(false)}
+                style={{
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.md,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <AppText variant="caption" color={colors.text.secondary}>
+                  Cancelar
+                </AppText>
+              </Pressable>
+
+              <Pressable
+                testID="debt-form-submit-button"
+                accessibilityRole="button"
+                onPress={handleSaveDebtForm}
+                style={{
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingHorizontal: spacing.lg,
+                  borderRadius: radius.md,
+                  backgroundColor: colors.semantic.incomeSoft,
+                  borderWidth: 1,
+                  borderColor: colors.semantic.income,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <AppText variant="caption" color={colors.semantic.income}>
+                  Guardar Deuda
+                </AppText>
+              </Pressable>
+            </View>
+          </View>
+        </GlassSurface>
+      ) : null}
+
+      {/* Banner when CB300F - MOTO is 100% paid off (Dismissible, only in month of completion) */}
       {isMotoDebtPaidOff ? (
         <GlassSurface testID="moto-debt-completed-banner">
-          <View style={{ gap: spacing.xxs }}>
-            <AppText variant="headline" color={colors.semantic.completed}>
-              ✨ Deuda CB300F - MOTO completada y eliminada
-            </AppText>
+          <View style={{ gap: spacing.xs }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <AppText variant="headline" color={colors.semantic.completed}>
+                ✨ Deuda CB300F - MOTO completada y eliminada
+              </AppText>
+              <Pressable
+                testID="moto-debt-banner-dismiss-button"
+                accessibilityRole="button"
+                accessibilityLabel="Descartar aviso de deuda completada"
+                onPress={() => setDismissedBannerMonth(debtSummary.monthKey)}
+                style={{
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingHorizontal: spacing.sm,
+                  paddingVertical: spacing.xxs,
+                  borderRadius: radius.sm,
+                  backgroundColor: colors.glass.surfaceElevatedTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.subtleBorder,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <AppText variant="micro" color={colors.text.secondary}>
+                  ✕ Descartar
+                </AppText>
+              </Pressable>
+            </View>
             <AppText variant="caption" color={colors.text.secondary}>
               El saldo de la moto llegó a $ 0. A partir de este momento los pagos se descuentan automáticamente de la deuda ESP. IA.
             </AppText>
@@ -274,7 +603,18 @@ export function DebtsFunfamiView({
                 gap: spacing.xs,
               }}
             >
-              <AppText variant="title2">{debt.name}</AppText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                <AppText variant="title2">{debt.name}</AppText>
+                {debt.monthlyInterestRate !== undefined && debt.monthlyInterestRate > 0 ? (
+                  <StatusBadge
+                    label={`${debt.monthlyInterestRate}% mes`}
+                    status="moto"
+                  />
+                ) : (
+                  <StatusBadge label="0% int." status="info" />
+                )}
+              </View>
+
               <StatusBadge
                 label={
                   debt.appliedPrincipalThisMonth > 0
@@ -292,21 +632,76 @@ export function DebtsFunfamiView({
               tone="debt"
             />
 
+            {/* Interest calculation feedback if rate > 0 */}
+            {debt.monthlyInterestRate !== undefined && debt.monthlyInterestRate > 0 ? (
+              <AppText variant="micro" color={colors.semantic.debt}>
+                {`Interés generado este mes (${debt.monthlyInterestRate}%): + ${formatCop(debt.accruedInterestThisMonth)}`}
+              </AppText>
+            ) : null}
+
             <View
               style={{
                 flexDirection: 'row',
                 justifyContent: 'space-between',
+                alignItems: 'center',
                 flexWrap: 'wrap',
                 gap: spacing.xs,
                 paddingTop: spacing.xxs,
               }}
             >
-              <AppText variant="caption" color={colors.text.secondary}>
-                {`Saldo apertura (${debtSummary.monthKey}): ${formatCop(debt.openingBalance)}`}
-              </AppText>
-              <AppText variant="caption" color={colors.text.secondary}>
-                {`Acreedor: ${debt.lender}`}
-              </AppText>
+              <View>
+                <AppText variant="caption" color={colors.text.secondary}>
+                  {`Saldo apertura (${debtSummary.monthKey}): ${formatCop(debt.openingBalance)}`}
+                </AppText>
+                <AppText variant="caption" color={colors.text.secondary}>
+                  {`Acreedor: ${debt.lender}`}
+                </AppText>
+              </View>
+
+              {/* Edit & Delete Action Buttons */}
+              <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                <Pressable
+                  testID={`debt-edit-${debt.debtId}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Editar deuda ${debt.name}`}
+                  onPress={() => openEditForm(debt)}
+                  style={{
+                    minHeight: MIN_TOUCH_TARGET_PT,
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: spacing.xxs,
+                    borderRadius: radius.sm,
+                    backgroundColor: colors.glass.surfaceElevatedTint,
+                    borderWidth: 1,
+                    borderColor: colors.glass.specularBorder,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <AppText variant="micro">✏️ Editar</AppText>
+                </Pressable>
+
+                <Pressable
+                  testID={`debt-delete-${debt.debtId}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Eliminar deuda ${debt.name}`}
+                  onPress={() => handleDeleteDebtConfirm(debt.debtId, debt.name)}
+                  style={{
+                    minHeight: MIN_TOUCH_TARGET_PT,
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: spacing.xxs,
+                    borderRadius: radius.sm,
+                    backgroundColor: colors.semantic.expenseSoft,
+                    borderWidth: 1,
+                    borderColor: colors.semantic.expense,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <AppText variant="micro" color={colors.semantic.expense}>
+                    🗑️
+                  </AppText>
+                </Pressable>
+              </View>
             </View>
           </View>
         </GlassSurface>

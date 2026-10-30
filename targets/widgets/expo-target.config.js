@@ -5,7 +5,7 @@ module.exports = {
   displayName: 'BFlow',
   bundleIdentifier: '.widgets',
   deploymentTarget: '18.0',
-  frameworks: ['SwiftUI', 'WidgetKit', 'ActivityKit'],
+  frameworks: ['SwiftUI', 'WidgetKit'],
   entitlements: {
     'com.apple.security.application-groups': ['group.com.bflow.app'],
   },

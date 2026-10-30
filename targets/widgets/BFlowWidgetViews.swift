@@ -33,9 +33,9 @@ public struct BFlowTimelineProvider: TimelineProvider {
         let snapshot = WidgetStorageBridge.loadSnapshot()
         let entry = BFlowWidgetEntry(date: Date(), snapshot: snapshot)
 
-        // Refresh every 30 minutes, or when main app triggers WidgetCenter.reloadAllTimelines()
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 30, to: Date()) ?? Date().addingTimeInterval(1800)
-        let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
+        // Instant timeline invalidation: policy .atEnd ensures that whenever WidgetCenter.reloadAllTimelines()
+        // is triggered, WidgetKit immediately requests the latest snapshot without waiting for a timer.
+        let timeline = Timeline(entries: [entry], policy: .atEnd)
         completion(timeline)
     }
 }

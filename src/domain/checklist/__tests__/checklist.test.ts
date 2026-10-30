@@ -1,6 +1,7 @@
 import octoberFixture from '../../../../fixtures/october-2026.json';
 import {
   calculateChecklistProgress,
+  completeExistingMovement,
   Concept,
   deleteMovement,
   ensureMonthPlan,
@@ -9,6 +10,7 @@ import {
   isConceptActiveInMonth,
   MonthEntry,
   registerMovement,
+  toggleMovementStatus,
   uncompleteMovement,
 } from '../../index';
 
@@ -215,5 +217,41 @@ describe('domain/checklist — Monthly Checklist Core Rules', () => {
     const emptyProgress = calculateChecklistProgress(concepts, [], '2026-11');
     expect(emptyProgress.completionRatio).toBe(1);
     expect(emptyProgress.isMonthComplete).toBe(false);
+  });
+
+  it('toggleMovementStatus toggles movements back and forth in-place without duplicating entries', () => {
+    // 1. Register a new repeatable movement (e.g. exp_otro)
+    const registered = registerMovement(octoberEntries, concepts, {
+      monthKey: '2026-10',
+      conceptId: 'exp_otro',
+      actualAmount: 75_000,
+      completedAt: '2026-10-29',
+      customEntryId: '2026-10_exp_otro_test',
+    });
+    const initialCount = registered.length;
+    const initialItem = registered.find((e) => e.id === '2026-10_exp_otro_test')!;
+    expect(initialItem.status).toBe('completed');
+    expect(initialItem.actualAmount).toBe(75_000);
+
+    // 2. Uncheck it -> becomes pending, preserves amount
+    const unchecked = toggleMovementStatus(registered, '2026-10_exp_otro_test');
+    expect(unchecked).toHaveLength(initialCount);
+    const pendingItem = unchecked.find((e) => e.id === '2026-10_exp_otro_test')!;
+    expect(pendingItem.status).toBe('pending');
+    expect(pendingItem.actualAmount).toBe(75_000);
+
+    // 3. Check it again -> becomes completed, NEVER duplicates
+    const rechecked = toggleMovementStatus(unchecked, '2026-10_exp_otro_test');
+    expect(rechecked).toHaveLength(initialCount);
+    const completedAgain = rechecked.find((e) => e.id === '2026-10_exp_otro_test')!;
+    expect(completedAgain.status).toBe('completed');
+    expect(completedAgain.actualAmount).toBe(75_000);
+
+    // 4. Repeated toggles NEVER increase length
+    let current = rechecked;
+    for (let i = 0; i < 6; i++) {
+      current = toggleMovementStatus(current, '2026-10_exp_otro_test');
+      expect(current).toHaveLength(initialCount);
+    }
   });
 });

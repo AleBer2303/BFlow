@@ -261,6 +261,29 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
     expect(withCustom.concepts.find((c) => c.id === 'custom_freelance')).toBeTruthy();
     expect(withCustom.entries.find((e) => e.id === '2026-10_custom_freelance')).toBeTruthy();
 
+    // Update concept
+    await repo.saveConcept('user_123', {
+      ...customConcept,
+      name: 'Freelance App Pro',
+      defaultAmount: 950_000,
+    });
+    const withUpdatedConcept = await repo.loadMonthWorkspace('user_123', '2026-10');
+    expect(withUpdatedConcept.concepts.find((c) => c.id === 'custom_freelance')?.name).toBe(
+      'Freelance App Pro'
+    );
+
+    // Delete concept
+    await repo.deleteConcept('user_123', 'custom_freelance');
+    const afterDeleteConcept = await repo.loadMonthWorkspace('user_123', '2026-10');
+    expect(afterDeleteConcept.concepts.find((c) => c.id === 'custom_freelance')).toBeUndefined();
+
+    // Save savings bucket opening balance
+    await repo.saveSavingsBucket('user_123', 'moto', 1_700_000, '2026-10');
+    const afterBucketSave = await repo.loadMonthWorkspace('user_123', '2026-10');
+    expect(afterBucketSave.savingsBuckets.find((b) => b.id === 'moto')?.openingBalance).toBe(
+      1_700_000
+    );
+
     // Delete custom entry
     await repo.deleteEntryCompletely('user_123', '2026-10_custom_freelance');
     const afterDelete = await repo.loadMonthWorkspace('user_123', '2026-10');
@@ -285,6 +308,9 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
     expect(rulesContent).toContain('match /concepts/{conceptId}');
     expect(rulesContent).toContain('match /entries/{entryId}');
     expect(rulesContent).toContain('match /debts/{debtId}');
+    expect(rulesContent).toContain("'monthlyInterestRate',");
+    expect(rulesContent).toContain('data.monthlyInterestRate >= 0 &&');
+    expect(rulesContent).toContain('data.monthlyInterestRate <= 100');
     expect(rulesContent).toContain('match /debtPayments/{paymentId}');
     expect(rulesContent).toContain('match /savingsBuckets/{bucketId}');
     expect(rulesContent).toContain('match /provisionPlans/{planId}');

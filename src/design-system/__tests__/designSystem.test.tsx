@@ -2,6 +2,9 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
 import PhaseOneHomeScreen from '../../app/index';
 import { useBudgetStore } from '../../features/budget/store/useBudgetStore';
+import { CurrencyText } from '../components/CurrencyText';
+import { StatusBadge } from '../components/StatusBadge';
+import { AppText } from '../components/Typography';
 import { BFlowThemeProvider } from '../theme/ThemeContext';
 
 describe('design-system & PhaseOneHomeScreen (RNTL)', () => {
@@ -44,37 +47,21 @@ describe('design-system & PhaseOneHomeScreen (RNTL)', () => {
     fireEvent.press(funfamiRow);
     expect(screen.getByTestId('total-debt-amount')).toHaveTextContent('$ 6.200.000');
     expect(screen.getByText('Checklist 6 de 12')).toBeTruthy();
-
-    const hapticBtn = screen.getByTestId('haptic-verification-button');
-    fireEvent.press(hapticBtn);
-    expect(screen.getByText('Tubería Verificada (1 toque)')).toBeTruthy();
   });
 
-  it('renders and interacts with the Dynamic Island preview (toggles compact/expanded)', () => {
+  it('renders core typography, currency, and status badge design system components', () => {
     render(
       <BFlowThemeProvider initialMode="dark">
-        <PhaseOneHomeScreen />
+        <AppText variant="heroCurrency" testID="sample-text">
+          Texto de Prueba
+        </AppText>
+        <CurrencyText amount={1080000} variant="title1" tone="income" testID="sample-currency" />
+        <StatusBadge label="Al Día" status="completed" testID="sample-badge" />
       </BFlowThemeProvider>
     );
 
-    const islandCard = screen.getByTestId('dynamic-island-preview');
-    expect(islandCard).toBeTruthy();
-    expect(screen.getByText('Dynamic Island (iOS 26)')).toBeTruthy();
-
-    const pill = screen.getByTestId('dynamic-island-pill');
-    expect(screen.getByText('Toca para expandir')).toBeTruthy();
-
-    // Tap pill to expand
-    fireEvent.press(pill);
-    expect(screen.getByText('Toca para contraer')).toBeTruthy();
-    expect(screen.getByText('Flujo Neto Disponible')).toBeTruthy();
-    expect(screen.getByText('Recibido')).toBeTruthy();
-    expect(screen.getByText('Gastos')).toBeTruthy();
-    expect(screen.getByText('Deuda')).toBeTruthy();
-    expect(screen.getByText('6/12 Listos')).toBeTruthy();
-
-    // Tap pill again to collapse
-    fireEvent.press(pill);
-    expect(screen.getByText('Toca para expandir')).toBeTruthy();
+    expect(screen.getByTestId('sample-text')).toHaveTextContent('Texto de Prueba');
+    expect(screen.getByTestId('sample-currency')).toHaveTextContent('$ 1.080.000');
+    expect(screen.getByTestId('sample-badge')).toHaveTextContent('Al Día');
   });
 });

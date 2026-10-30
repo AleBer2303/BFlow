@@ -49,4 +49,32 @@ describe('design-system & PhaseOneHomeScreen (RNTL)', () => {
     fireEvent.press(hapticBtn);
     expect(screen.getByText('Tubería Verificada (1 toque)')).toBeTruthy();
   });
+
+  it('renders and interacts with the Dynamic Island preview (toggles compact/expanded)', () => {
+    render(
+      <BFlowThemeProvider initialMode="dark">
+        <PhaseOneHomeScreen />
+      </BFlowThemeProvider>
+    );
+
+    const islandCard = screen.getByTestId('dynamic-island-preview');
+    expect(islandCard).toBeTruthy();
+    expect(screen.getByText('Dynamic Island (iOS 26)')).toBeTruthy();
+
+    const pill = screen.getByTestId('dynamic-island-pill');
+    expect(screen.getByText('Toca para expandir')).toBeTruthy();
+
+    // Tap pill to expand
+    fireEvent.press(pill);
+    expect(screen.getByText('Toca para contraer')).toBeTruthy();
+    expect(screen.getByText('Flujo Neto Disponible')).toBeTruthy();
+    expect(screen.getByText('Recibido')).toBeTruthy();
+    expect(screen.getByText('Gastos')).toBeTruthy();
+    expect(screen.getByText('Deuda')).toBeTruthy();
+    expect(screen.getByText('6/12 Listos')).toBeTruthy();
+
+    // Tap pill again to collapse
+    fireEvent.press(pill);
+    expect(screen.getByText('Toca para expandir')).toBeTruthy();
+  });
 });

@@ -5,6 +5,7 @@ import { FirestoreBudgetRepository } from '../data/repositories/budgetRepository
 import {
   AppText,
   CurrencyText,
+  DynamicIslandPreview,
   GlassSurface,
   MIN_TOUCH_TARGET_PT,
   StatusBadge,
@@ -469,6 +470,17 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
               </AppText>
             </View>
           </GlassSurface>
+
+          {/* Dynamic Island Live Activity Interactive Preview */}
+          <DynamicIslandPreview
+            netCashFlowCop={budget.netCashFlow}
+            receivedIncomeCop={budget.receivedIncome}
+            paidExpensesCop={budget.paidExpenses}
+            totalDebtCop={debtSummary.totalRemainingDebt}
+            checklistCompleted={checklist.completedCount}
+            checklistTotal={checklist.totalTrackableCount}
+            monthLabel={activeMonthLabel}
+          />
 
           <View style={{ flexDirection: 'row', gap: spacing.md }}>
             <GlassSurface style={{ flex: 1 }} testID="income-summary-card">

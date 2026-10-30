@@ -99,6 +99,16 @@ export interface BudgetRepository {
   ): Promise<ToggleEntryCompletionResult>;
   addMonthEntry(uid: string, input: RegisterOrCompleteMovementInput): Promise<MonthEntry>;
   deleteOrResetEntry(uid: string, entryId: string): Promise<void>;
+  deleteEntryCompletely(uid: string, entryId: string): Promise<void>;
+  saveOrUpdateEntry(
+    uid: string,
+    entry: MonthEntry,
+    linkedConcept?: Concept,
+    debtPayments?: DebtPayment[]
+  ): Promise<void>;
+  saveCustomConceptAndEntry(uid: string, concept: Concept, entry: MonthEntry): Promise<void>;
+  reopenMonthInCloud(uid: string, monthKey: string): Promise<void>;
+  deleteMonthInCloud(uid: string, monthKey: string, fallbackMonthKey: string): Promise<void>;
   closeMonth(uid: string, monthKey: string, closedAtIso?: string): Promise<CloseMonthResult>;
 }
 
@@ -452,6 +462,66 @@ export class InMemoryBudgetRepository implements BudgetRepository {
     this.activeMonthByUser.set(uid, result.nextMonthKey);
 
     return result;
+  }
+
+  async saveOrUpdateEntry(
+    _uid: string,
+    entry: MonthEntry,
+    linkedConcept?: Concept,
+    debtPayments?: DebtPayment[]
+  ): Promise<void> {
+    this.entries.set(entry.id, entry);
+    if (linkedConcept) {
+      this.concepts.set(linkedConcept.id, linkedConcept);
+    }
+    if (debtPayments) {
+      for (const dp of debtPayments) {
+        this.debtPayments.set(dp.id, dp);
+      }
+    }
+  }
+
+  async saveCustomConceptAndEntry(
+    _uid: string,
+    concept: Concept,
+    entry: MonthEntry
+  ): Promise<void> {
+    this.concepts.set(concept.id, concept);
+    this.entries.set(entry.id, entry);
+  }
+
+  async deleteEntryCompletely(_uid: string, entryId: string): Promise<void> {
+    this.entries.delete(entryId);
+    for (const [id, dp] of this.debtPayments.entries()) {
+      if (dp.entryId === entryId) {
+        this.debtPayments.delete(id);
+      }
+    }
+  }
+
+  async reopenMonthInCloud(uid: string, monthKey: string): Promise<void> {
+    this.snapshots.delete(monthKey);
+    this.activeMonthByUser.set(uid, monthKey);
+  }
+
+  async deleteMonthInCloud(
+    uid: string,
+    monthKey: string,
+    fallbackMonthKey: string
+  ): Promise<void> {
+    this.snapshots.delete(monthKey);
+    this.snapshots.delete(fallbackMonthKey);
+    for (const [id, e] of this.entries.entries()) {
+      if (e.monthKey === monthKey) {
+        this.entries.delete(id);
+      }
+    }
+    for (const [id, dp] of this.debtPayments.entries()) {
+      if (dp.monthKey === monthKey) {
+        this.debtPayments.delete(id);
+      }
+    }
+    this.activeMonthByUser.set(uid, fallbackMonthKey);
   }
 }
 
@@ -952,5 +1022,154 @@ export class FirestoreBudgetRepository implements BudgetRepository {
 
     await batch.commit();
     return result;
+  }
+
+  async saveOrUpdateEntry(
+    uid: string,
+    entry: MonthEntry,
+    linkedConcept?: Concept,
+    debtPayments?: DebtPayment[]
+  ): Promise<void> {
+    const batch = writeBatch(this.db);
+    const updatedAt = new Date().toISOString();
+
+    const entryRef = doc(this.db, 'users', uid, 'entries', entry.id);
+    batch.set(entryRef, {
+      ...serializeMonthEntryForFirestore(entry),
+      updatedAt,
+    });
+
+    if (linkedConcept) {
+      const conceptRef = doc(this.db, 'users', uid, 'concepts', linkedConcept.id);
+      batch.set(conceptRef, {
+        ...serializeConceptForFirestore(linkedConcept),
+        updatedAt,
+      });
+    }
+
+    if (debtPayments && debtPayments.length > 0) {
+      for (const dp of debtPayments) {
+        const dpRef = doc(this.db, 'users', uid, 'debtPayments', dp.id);
+        batch.set(dpRef, {
+          ...serializeDebtPaymentForFirestore(dp),
+          updatedAt,
+        });
+      }
+    }
+
+    await batch.commit();
+  }
+
+  async saveCustomConceptAndEntry(
+    uid: string,
+    concept: Concept,
+    entry: MonthEntry
+  ): Promise<void> {
+    const batch = writeBatch(this.db);
+    const updatedAt = new Date().toISOString();
+
+    const conceptRef = doc(this.db, 'users', uid, 'concepts', concept.id);
+    batch.set(conceptRef, {
+      ...serializeConceptForFirestore(concept),
+      updatedAt,
+    });
+
+    const entryRef = doc(this.db, 'users', uid, 'entries', entry.id);
+    batch.set(entryRef, {
+      ...serializeMonthEntryForFirestore(entry),
+      updatedAt,
+    });
+
+    await batch.commit();
+  }
+
+  async deleteEntryCompletely(uid: string, entryId: string): Promise<void> {
+    const batch = writeBatch(this.db);
+    const entryRef = doc(this.db, 'users', uid, 'entries', entryId);
+    batch.delete(entryRef);
+
+    try {
+      const paymentsSnap = await getDocs(
+        query(
+          collection(this.db, 'users', uid, 'debtPayments'),
+          where('entryId', '==', entryId)
+        )
+      );
+      for (const snap of paymentsSnap.docs) {
+        batch.delete(snap.ref);
+      }
+    } catch {
+      // Non-fatal if index not yet propagated
+    }
+
+    await batch.commit();
+  }
+
+  async reopenMonthInCloud(uid: string, monthKey: string): Promise<void> {
+    const snapshotRef = doc(this.db, 'users', uid, 'monthSnapshots', monthKey);
+    await deleteDoc(snapshotRef);
+
+    const userDocRef = doc(this.db, 'users', uid);
+    await setDoc(
+      userDocRef,
+      {
+        activeMonthKey: monthKey,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+  }
+
+  async deleteMonthInCloud(
+    uid: string,
+    monthKey: string,
+    fallbackMonthKey: string
+  ): Promise<void> {
+    const batch = writeBatch(this.db);
+    const updatedAt = new Date().toISOString();
+
+    const snapshotRef = doc(this.db, 'users', uid, 'monthSnapshots', monthKey);
+    batch.delete(snapshotRef);
+
+    const fallbackSnapshotRef = doc(this.db, 'users', uid, 'monthSnapshots', fallbackMonthKey);
+    batch.delete(fallbackSnapshotRef);
+
+    try {
+      const [entriesSnap, paymentsSnap] = await Promise.all([
+        getDocs(
+          query(
+            collection(this.db, 'users', uid, 'entries'),
+            where('monthKey', '==', monthKey)
+          )
+        ),
+        getDocs(
+          query(
+            collection(this.db, 'users', uid, 'debtPayments'),
+            where('monthKey', '==', monthKey)
+          )
+        ),
+      ]);
+
+      for (const d of entriesSnap.docs) {
+        batch.delete(d.ref);
+      }
+      for (const d of paymentsSnap.docs) {
+        batch.delete(d.ref);
+      }
+    } catch {
+      // Fallback
+    }
+
+    const userDocRef = doc(this.db, 'users', uid);
+    batch.set(
+      userDocRef,
+      {
+        activeMonthKey: fallbackMonthKey,
+        updatedAt,
+      },
+      { merge: true }
+    );
+
+    await batch.commit();
   }
 }

@@ -132,6 +132,17 @@ function triggerWidgetSync(state: BudgetStoreState): Promise<WidgetSyncResult> {
   }
 }
 
+function isRealAuthUser(user: BFlowAuthUser | null): user is BFlowAuthUser {
+  return Boolean(
+    user &&
+      user.provider === 'firebase' &&
+      user.uid &&
+      user.uid !== 'local-owner' &&
+      user.uid !== 'local-demo' &&
+      process.env.NODE_ENV !== 'test'
+  );
+}
+
 function resolveDefaultInitialAuthUser(): BFlowAuthUser | null {
   if (process.env.NODE_ENV === 'test') {
     return DEMO_OWNER_USER;
@@ -257,13 +268,15 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     });
     triggerWidgetSync(get());
 
-    if (state.authUser?.provider === 'firebase') {
+    if (updatedEntry && isRealAuthUser(state.authUser)) {
       try {
         const repo = new FirestoreBudgetRepository();
-        await repo.toggleEntryCompletion(state.authUser.uid, entryId, target.monthKey, {
-          actualAmount: target.actualAmount > 0 ? target.actualAmount : target.plannedAmount,
-          completedAtDateIso,
-        });
+        await repo.saveOrUpdateEntry(
+          state.authUser.uid,
+          updatedEntry,
+          concept,
+          nextDebtPayments.filter((dp) => dp.entryId === entryId)
+        );
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Error al sincronizar en Firestore';
         set({ syncMessage: `Aviso Firestore: ${msg}` });
@@ -298,7 +311,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     });
     triggerWidgetSync(get());
 
-    if (state.authUser?.provider === 'firebase') {
+    if (isRealAuthUser(state.authUser)) {
       try {
         const repo = new FirestoreBudgetRepository();
         await repo.addMonthEntry(state.authUser.uid, input);
@@ -351,6 +364,16 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       entries: [...state.entries, newEntry],
     });
     triggerWidgetSync(get());
+
+    if (isRealAuthUser(state.authUser)) {
+      try {
+        const repo = new FirestoreBudgetRepository();
+        await repo.saveCustomConceptAndEntry(state.authUser.uid, newConcept, newEntry);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Error al guardar concepto en Firestore';
+        set({ syncMessage: `Aviso Firestore: ${msg}` });
+      }
+    }
   },
 
   editEntry: async (entryId, updates) => {
@@ -400,6 +423,22 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       debtPayments: nextDebtPayments,
     });
     triggerWidgetSync(get());
+
+    if (isRealAuthUser(state.authUser)) {
+      try {
+        const repo = new FirestoreBudgetRepository();
+        const updatedConcept = nextConcepts.find((c) => c.id === target.conceptId);
+        await repo.saveOrUpdateEntry(
+          state.authUser.uid,
+          updatedEntry,
+          updatedConcept,
+          nextDebtPayments.filter((dp) => dp.entryId === entryId)
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Error al actualizar en Firestore';
+        set({ syncMessage: `Aviso Firestore: ${msg}` });
+      }
+    }
   },
 
   deleteEntryById: async (entryId) => {
@@ -416,10 +455,10 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     });
     triggerWidgetSync(get());
 
-    if (state.authUser?.provider === 'firebase') {
+    if (isRealAuthUser(state.authUser)) {
       try {
         const repo = new FirestoreBudgetRepository();
-        await repo.deleteOrResetEntry(state.authUser.uid, entryId);
+        await repo.deleteEntryCompletely(state.authUser.uid, entryId);
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Error al eliminar en Firestore';
         set({ syncMessage: `Aviso Firestore: ${msg}` });
@@ -453,7 +492,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     });
     triggerWidgetSync(get());
 
-    if (state.authUser?.provider === 'firebase') {
+    if (isRealAuthUser(state.authUser)) {
       try {
         const repo = new FirestoreBudgetRepository();
         await repo.deleteOrResetEntry(state.authUser.uid, entryId);
@@ -493,6 +532,22 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       entries: nextEntries,
       debtPayments: nextDebtPayments,
     });
+    triggerWidgetSync(get());
+
+    if (isRealAuthUser(state.authUser)) {
+      try {
+        const repo = new FirestoreBudgetRepository();
+        await repo.saveOrUpdateEntry(
+          state.authUser.uid,
+          updatedEntry,
+          undefined,
+          cascadedPayments
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Error al actualizar cuota en Firestore';
+        set({ syncMessage: `Aviso Firestore: ${msg}` });
+      }
+    }
   },
 
   closeCurrentMonth: async (closedAtIso = new Date().toISOString()) => {
@@ -541,7 +596,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     });
     triggerWidgetSync(get());
 
-    if (state.authUser?.provider === 'firebase') {
+    if (isRealAuthUser(state.authUser)) {
       try {
         const repo = new FirestoreBudgetRepository();
         await repo.closeMonth(state.authUser.uid, currentMonthKey, closedAtIso);
@@ -563,6 +618,17 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       activeMonthKey: monthKey,
       closedSnapshots: nextClosedSnapshots,
     });
+    triggerWidgetSync(get());
+
+    if (isRealAuthUser(state.authUser)) {
+      try {
+        const repo = new FirestoreBudgetRepository();
+        await repo.reopenMonthInCloud(state.authUser.uid, monthKey);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Error al reabrir mes en Firestore';
+        set({ syncMessage: `Aviso Firestore: ${msg}` });
+      }
+    }
   },
 
   deleteOrRevertMonth: async (monthKey) => {
@@ -577,6 +643,15 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
         activeMonthKey: monthKey,
         closedSnapshots: nextSnapshots,
       });
+      triggerWidgetSync(get());
+      if (isRealAuthUser(state.authUser)) {
+        try {
+          const repo = new FirestoreBudgetRepository();
+          await repo.reopenMonthInCloud(state.authUser.uid, monthKey);
+        } catch {
+          // Non-fatal
+        }
+      }
       return;
     }
 
@@ -605,10 +680,22 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       debtPayments: state.debtPayments.filter((dp) => dp.monthKey !== monthKey),
       closedSnapshots: nextSnapshots,
     });
+    triggerWidgetSync(get());
+
+    if (isRealAuthUser(state.authUser)) {
+      try {
+        const repo = new FirestoreBudgetRepository();
+        await repo.deleteMonthInCloud(state.authUser.uid, monthKey, fallbackMonth);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Error al eliminar mes en Firestore';
+        set({ syncMessage: `Aviso Firestore: ${msg}` });
+      }
+    }
   },
 
   resetToOctober2026GoldenState: () => {
-    set(buildInitialState(DEMO_OWNER_USER));
+    const currentUser = get().authUser;
+    set(buildInitialState(currentUser));
     triggerWidgetSync(get());
   },
 

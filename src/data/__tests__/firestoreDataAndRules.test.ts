@@ -231,6 +231,45 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
       '2026-11'
     );
     expect(novSavings.moto.openingBalance).toBe(2_300_000);
+
+    // Test new persistent cloud methods: saveOrUpdateEntry, saveCustomConceptAndEntry, deleteEntryCompletely, reopenMonthInCloud
+    const sampleEntry = octClosedWorkspace.entries[0]!;
+    await repo.saveOrUpdateEntry('user_123', {
+      ...sampleEntry,
+      conceptName: 'Salario Modificado',
+      actualAmount: 4_500_000,
+    });
+    const reloaded = await repo.loadMonthWorkspace('user_123', '2026-10');
+    expect(reloaded.entries.find((e) => e.id === sampleEntry.id)?.actualAmount).toBe(4_500_000);
+
+    // Save custom concept and entry
+    const customConcept = {
+      ...octClosedWorkspace.concepts[0]!,
+      id: 'custom_freelance',
+      name: 'Freelance App',
+      defaultAmount: 800_000,
+    };
+    const customEntry = {
+      ...sampleEntry,
+      id: '2026-10_custom_freelance',
+      conceptId: 'custom_freelance',
+      conceptName: 'Freelance App',
+      actualAmount: 800_000,
+    };
+    await repo.saveCustomConceptAndEntry('user_123', customConcept, customEntry);
+    const withCustom = await repo.loadMonthWorkspace('user_123', '2026-10');
+    expect(withCustom.concepts.find((c) => c.id === 'custom_freelance')).toBeTruthy();
+    expect(withCustom.entries.find((e) => e.id === '2026-10_custom_freelance')).toBeTruthy();
+
+    // Delete custom entry
+    await repo.deleteEntryCompletely('user_123', '2026-10_custom_freelance');
+    const afterDelete = await repo.loadMonthWorkspace('user_123', '2026-10');
+    expect(afterDelete.entries.find((e) => e.id === '2026-10_custom_freelance')).toBeUndefined();
+
+    // Reopen closed month
+    await repo.reopenMonthInCloud('user_123', '2026-10');
+    const afterReopen = await repo.loadMonthWorkspace('user_123', '2026-10');
+    expect(afterReopen.closedSnapshot).toBeUndefined();
   });
 
   it('validates that firestore.rules enforces strict owner isolation, COP integers, and all 7 subcollections', () => {

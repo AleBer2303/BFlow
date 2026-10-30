@@ -13,6 +13,8 @@ import {
   SavingsBucket,
 } from '../../domain';
 
+export const WIDGET_STORAGE_KEY = 'bflow_widget_snapshot_v1';
+
 export interface WidgetPendingItemV1 {
   id: string;
   name: string;
@@ -151,25 +153,3 @@ export function buildWidgetSnapshotV1(input: BuildWidgetSnapshotInput): WidgetSn
   return widgetSnapshotV1Schema.parse(snapshot);
 }
 
-let latestPreviewSnapshot: WidgetSnapshotV1 | null = null;
-
-/**
- * Mode A (Expo Go / Web) safe preview adapter for WidgetKit + ActivityKit.
- * Validates the snapshot with Zod and caches it in memory for preview inspection.
- */
-export async function syncWidgetSnapshot(
-  snapshot: WidgetSnapshotV1,
-  bundleIdentifier?: string
-): Promise<{ synced: boolean; mode: 'mode-a-preview' | 'mode-b-native'; appGroupId: string }> {
-  const validated = widgetSnapshotV1Schema.parse(snapshot);
-  latestPreviewSnapshot = validated;
-  return {
-    synced: true,
-    mode: 'mode-a-preview',
-    appGroupId: resolveDynamicAppGroupId(bundleIdentifier),
-  };
-}
-
-export function getLatestWidgetSnapshotPreview(): WidgetSnapshotV1 | null {
-  return latestPreviewSnapshot;
-}

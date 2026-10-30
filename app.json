@@ -10,8 +10,15 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.bflow.app",
+      "appleTeamId": "0000000000",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSSupportsLiveActivities": true
+      },
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.bflow.app"
+        ]
       }
     },
     "web": {
@@ -19,7 +26,8 @@
       "output": "single"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "@bacons/apple-targets"
     ],
     "experiments": {
       "typedRoutes": true

@@ -37,6 +37,11 @@ import {
   loadPersistedSession,
   type BFlowAuthUser,
 } from '../../../platform/auth/authAdapter';
+import {
+  buildWidgetSnapshotV1,
+  syncWidgetSnapshotNative,
+  type WidgetSyncResult,
+} from '../../../platform/widgets';
 
 export type BFlowWorkspaceTab = 'summary' | 'checklist' | 'debts' | 'savings' | 'analytics';
 
@@ -98,6 +103,33 @@ export interface BudgetStoreState {
   reopenClosedMonth: (monthKey: string) => Promise<void>;
   deleteOrRevertMonth: (monthKey: string) => Promise<void>;
   resetToOctober2026GoldenState: () => void;
+  syncActiveWidget: () => Promise<WidgetSyncResult>;
+}
+
+function triggerWidgetSync(state: BudgetStoreState): Promise<WidgetSyncResult> {
+  try {
+    const monthDebts =
+      state.debtsByMonth[state.activeMonthKey] ?? state.debtsByMonth['2026-10'] ?? [];
+    const monthSavings =
+      state.savingsBucketsByMonth[state.activeMonthKey] ??
+      state.savingsBucketsByMonth['2026-10'] ??
+      [];
+    const snapshot = buildWidgetSnapshotV1({
+      monthKey: state.activeMonthKey,
+      concepts: state.concepts,
+      entries: state.entries,
+      debts: monthDebts,
+      debtPayments: state.debtPayments,
+      savingsBuckets: monthSavings,
+    });
+    return syncWidgetSnapshotNative(snapshot);
+  } catch {
+    return Promise.resolve({
+      synced: false,
+      mode: 'mode-a-preview' as const,
+      appGroupId: 'group.com.bflow.app',
+    });
+  }
 }
 
 function resolveDefaultInitialAuthUser(): BFlowAuthUser | null {
@@ -223,6 +255,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       entries: nextEntries,
       debtPayments: nextDebtPayments,
     });
+    triggerWidgetSync(get());
 
     if (state.authUser?.provider === 'firebase') {
       try {
@@ -263,6 +296,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       entries: nextEntries,
       debtPayments: nextDebtPayments,
     });
+    triggerWidgetSync(get());
 
     if (state.authUser?.provider === 'firebase') {
       try {
@@ -316,6 +350,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       concepts: [...state.concepts, newConcept],
       entries: [...state.entries, newEntry],
     });
+    triggerWidgetSync(get());
   },
 
   editEntry: async (entryId, updates) => {
@@ -364,6 +399,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       concepts: nextConcepts,
       debtPayments: nextDebtPayments,
     });
+    triggerWidgetSync(get());
   },
 
   deleteEntryById: async (entryId) => {
@@ -378,6 +414,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       entries: nextEntries,
       debtPayments: nextDebtPayments,
     });
+    triggerWidgetSync(get());
 
     if (state.authUser?.provider === 'firebase') {
       try {
@@ -414,6 +451,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       entries: nextEntries,
       debtPayments: nextDebtPayments,
     });
+    triggerWidgetSync(get());
 
     if (state.authUser?.provider === 'firebase') {
       try {
@@ -501,6 +539,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
         [currentMonthKey]: result.snapshot,
       },
     });
+    triggerWidgetSync(get());
 
     if (state.authUser?.provider === 'firebase') {
       try {
@@ -570,5 +609,10 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
 
   resetToOctober2026GoldenState: () => {
     set(buildInitialState(DEMO_OWNER_USER));
+    triggerWidgetSync(get());
+  },
+
+  syncActiveWidget: async () => {
+    return triggerWidgetSync(get());
   },
 }));

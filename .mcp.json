@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "playwright-server": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest"
+      ]
+    }
+  }
+}

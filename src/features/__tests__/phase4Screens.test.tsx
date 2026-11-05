@@ -238,7 +238,8 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     // Must render InitialAccountSetupView
     expect(screen.getByTestId('initial-account-setup-view')).toBeTruthy();
 
-    // Configure an income and complete setup
+    // Configure an income and complete setup via accordion
+    fireEvent.press(screen.getByTestId('onboarding-toggle-add-income'));
     fireEvent.changeText(screen.getByTestId('onboarding-income-name-input'), 'Salario Mensual');
     fireEvent.changeText(screen.getByTestId('onboarding-income-amount-input'), '5000000');
     fireEvent.press(screen.getByTestId('onboarding-add-income-button'));

@@ -75,7 +75,7 @@ describe('InitialAccountSetupView (Onboarding / Account Reset Wizard)', () => {
     expect(screen.queryByTestId('onboarding-month-picker-sheet')).toBeNull();
   });
 
-  it('allows adding funds, debts, incomes, expenses, and provisions, then submits setup', () => {
+  it('keeps empty state banners and collapses add forms into smooth accordions by default', () => {
     const mockComplete = jest.fn();
 
     render(
@@ -84,41 +84,81 @@ describe('InitialAccountSetupView (Onboarding / Account Reset Wizard)', () => {
       </BFlowThemeProvider>
     );
 
-    // 1. Add savings bucket
+    // Verify empty state banners are visible
+    expect(screen.getByText(/Sin fondos registrados/)).toBeTruthy();
+    expect(screen.getByText(/Sin deudas registradas/)).toBeTruthy();
+    expect(screen.getByText(/Sin ingresos registrados/)).toBeTruthy();
+    expect(screen.getByText(/Sin gastos registrados aún/)).toBeTruthy();
+    expect(screen.getByText(/Sin provisiones registradas/)).toBeTruthy();
+
+    // Verify all form fields are hidden by default
+    expect(screen.queryByTestId('onboarding-new-bucket-name-input')).toBeNull();
+    expect(screen.queryByTestId('onboarding-debt-name-input')).toBeNull();
+    expect(screen.queryByTestId('onboarding-income-name-input')).toBeNull();
+    expect(screen.queryByTestId('onboarding-expense-name-input')).toBeNull();
+    expect(screen.queryByTestId('onboarding-provision-name-input')).toBeNull();
+
+    // Toggle savings accordion open and cancel
+    fireEvent.press(screen.getByTestId('onboarding-toggle-add-bucket'));
+    expect(screen.getByTestId('onboarding-new-bucket-name-input')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('onboarding-cancel-add-bucket'));
+    expect(screen.queryByTestId('onboarding-new-bucket-name-input')).toBeNull();
+  });
+
+  it('allows adding funds, debts, incomes, expenses, and provisions via accordions, then submits setup', () => {
+    const mockComplete = jest.fn();
+
+    render(
+      <BFlowThemeProvider initialMode="dark">
+        <InitialAccountSetupView defaultMonthKey="2026-10" onCompleteSetup={mockComplete} />
+      </BFlowThemeProvider>
+    );
+
+    // 1. Add savings bucket via accordion
+    fireEvent.press(screen.getByTestId('onboarding-toggle-add-bucket'));
     fireEvent.changeText(screen.getByTestId('onboarding-new-bucket-name-input'), 'Emergencias');
     fireEvent.changeText(screen.getByTestId('onboarding-new-bucket-balance-input'), '500000');
     fireEvent.press(screen.getByTestId('onboarding-add-bucket-button'));
     expect(screen.getByText('Emergencias')).toBeTruthy();
+    expect(screen.queryByTestId('onboarding-new-bucket-name-input')).toBeNull();
 
-    // 2. Add debt
+    // 2. Add debt via accordion
+    fireEvent.press(screen.getByTestId('onboarding-toggle-add-debt'));
     fireEvent.changeText(screen.getByTestId('onboarding-debt-name-input'), 'Crédito Moto');
     fireEvent.changeText(screen.getByTestId('onboarding-debt-lender-input'), 'Bancolombia');
     fireEvent.changeText(screen.getByTestId('onboarding-debt-balance-input'), '2000000');
     fireEvent.changeText(screen.getByTestId('onboarding-debt-installment-input'), '200000');
     fireEvent.press(screen.getByTestId('onboarding-add-debt-button'));
     expect(screen.getByText('Crédito Moto (Bancolombia)')).toBeTruthy();
+    expect(screen.queryByTestId('onboarding-debt-name-input')).toBeNull();
 
-    // 3. Add income
+    // 3. Add income via accordion
+    fireEvent.press(screen.getByTestId('onboarding-toggle-add-income'));
     fireEvent.changeText(screen.getByTestId('onboarding-income-name-input'), 'Salario Principal');
     fireEvent.changeText(screen.getByTestId('onboarding-income-amount-input'), '3500000');
     fireEvent.press(screen.getByTestId('onboarding-income-group-fixed'));
     fireEvent.press(screen.getByTestId('onboarding-add-income-button'));
     expect(screen.getByText('Salario Principal')).toBeTruthy();
+    expect(screen.queryByTestId('onboarding-income-name-input')).toBeNull();
 
-    // 4. Add expense linked to debt
+    // 4. Add expense linked to debt via accordion
+    fireEvent.press(screen.getByTestId('onboarding-toggle-add-expense'));
     fireEvent.changeText(screen.getByTestId('onboarding-expense-name-input'), 'Cuota Préstamo Moto');
     fireEvent.changeText(screen.getByTestId('onboarding-expense-amount-input'), '200000');
     const debtLinkBtn = screen.getByText('Abona a: Crédito Moto');
     fireEvent.press(debtLinkBtn);
     fireEvent.press(screen.getByTestId('onboarding-add-expense-button'));
     expect(screen.getByText('Cuota Préstamo Moto')).toBeTruthy();
+    expect(screen.queryByTestId('onboarding-expense-name-input')).toBeNull();
 
-    // 5. Add provision
+    // 5. Add provision via accordion
+    fireEvent.press(screen.getByTestId('onboarding-toggle-add-provision'));
     fireEvent.changeText(screen.getByTestId('onboarding-provision-name-input'), 'SOAT 2027');
     fireEvent.changeText(screen.getByTestId('onboarding-provision-amount-input'), '650000');
     fireEvent.changeText(screen.getByTestId('onboarding-provision-months-input'), '12');
     fireEvent.press(screen.getByTestId('onboarding-add-provision-button'));
     expect(screen.getByText('SOAT 2027')).toBeTruthy();
+    expect(screen.queryByTestId('onboarding-provision-name-input')).toBeNull();
 
     // 6. Complete setup
     fireEvent.press(screen.getByTestId('complete-initial-setup-button'));

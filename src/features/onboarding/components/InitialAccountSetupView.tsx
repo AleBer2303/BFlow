@@ -9,7 +9,7 @@
      */
 
     import React, { useMemo, useState } from 'react';
-    import { Pressable, TextInput, View } from 'react-native';
+    import { LayoutAnimation, Platform, Pressable, TextInput, UIManager, View } from 'react-native';
     import {
       AppText,
       CurrencyText,
@@ -27,6 +27,32 @@
       type DebtInterestRateType,
     } from '../../../domain';
     import type { InitialOnboardingConfigInput } from '../../budget/store/useBudgetStore';
+
+    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+
+    /**
+     * Subtle, imperceptible iOS-style accordion transition (250ms ease-in-out).
+     */
+    const triggerSubtleAccordionAnimation = () => {
+      if (Platform.OS !== 'web') {
+        LayoutAnimation.configureNext({
+          duration: 250,
+          create: {
+            type: LayoutAnimation.Types.easeInEaseOut,
+            property: LayoutAnimation.Properties.opacity,
+          },
+          update: {
+            type: LayoutAnimation.Types.easeInEaseOut,
+          },
+          delete: {
+            type: LayoutAnimation.Types.easeInEaseOut,
+            property: LayoutAnimation.Properties.opacity,
+          },
+        });
+      }
+    };
 
     export interface InitialAccountSetupViewProps {
       defaultMonthKey?: string;
@@ -92,6 +118,7 @@
       const [incAmount, setIncAmount] = useState('');
       const [incGroup, setIncGroup] = useState<ConceptGroup>('fixed');
       const [incPersist, setIncPersist] = useState(true);
+      const [isAddIncomeOpen, setIsAddIncomeOpen] = useState(false);
 
       // 2. Debts state
       const [debts, setDebts] = useState<InitialOnboardingConfigInput['debts']>([]);
@@ -101,6 +128,7 @@
       const [debtRate, setDebtRate] = useState('');
       const [debtRateType, setDebtRateType] = useState<DebtInterestRateType>('monthly');
       const [debtInstallment, setDebtInstallment] = useState('');
+      const [isAddDebtOpen, setIsAddDebtOpen] = useState(false);
 
       // 3. Savings buckets state
       const [savingsBuckets, setSavingsBuckets] = useState<
@@ -108,6 +136,7 @@
       >([]);
       const [newBucketName, setNewBucketName] = useState('');
       const [newBucketBalance, setNewBucketBalance] = useState('');
+      const [isAddBucketOpen, setIsAddBucketOpen] = useState(false);
 
       // 4. Expenses state
       const [expenses, setExpenses] = useState<InitialOnboardingConfigInput['expenses']>([]);
@@ -117,6 +146,7 @@
       const [expPersist, setExpPersist] = useState(true);
       const [expDebtKey, setExpDebtKey] = useState<string | null>(null);
       const [expBucketKey, setExpBucketKey] = useState<string | null>(null);
+      const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
 
       // 5. Provisions state
       const [provisions, setProvisions] = useState<
@@ -126,6 +156,7 @@
       const [provAmount, setProvAmount] = useState('');
       const [provMonths, setProvMonths] = useState('12');
       const [provKind, setProvKind] = useState<'recurring' | 'target_goal'>('recurring');
+      const [isAddProvisionOpen, setIsAddProvisionOpen] = useState(false);
 
       const handleAddIncome = () => {
         const parsedAmount = Number.parseInt(incAmount.replace(/\D/g, ''), 10);
@@ -143,6 +174,8 @@
         ]);
         setIncName('');
         setIncAmount('');
+        triggerSubtleAccordionAnimation();
+        setIsAddIncomeOpen(false);
       };
 
       const handleAddDebt = () => {
@@ -173,6 +206,8 @@
         setDebtBalance('');
         setDebtRate('');
         setDebtInstallment('');
+        triggerSubtleAccordionAnimation();
+        setIsAddDebtOpen(false);
       };
 
       const handleUpdateBucketBalance = (bucketId: string, rawText: string) => {
@@ -207,6 +242,8 @@
         ]);
         setNewBucketName('');
         setNewBucketBalance('');
+        triggerSubtleAccordionAnimation();
+        setIsAddBucketOpen(false);
       };
 
       const handleAddExpense = () => {
@@ -229,6 +266,8 @@
         setExpAmount('');
         setExpDebtKey(null);
         setExpBucketKey(null);
+        triggerSubtleAccordionAnimation();
+        setIsAddExpenseOpen(false);
       };
 
       const handleAddProvision = () => {
@@ -250,6 +289,8 @@
         setProvName('');
         setProvAmount('');
         setProvMonths('12');
+        triggerSubtleAccordionAnimation();
+        setIsAddProvisionOpen(false);
       };
 
       const handleFinishSetup = () => {
@@ -446,7 +487,7 @@
                       value={bucket.openingBalanceCop > 0 ? String(bucket.openingBalanceCop) : ''}
                       onChangeText={(txt) => handleUpdateBucketBalance(bucket.id ?? 'savings', txt)}
                       keyboardType="numeric"
-                      placeholder="Saldo COP (0)"
+                      placeholder="Saldo $ (0)"
                       placeholderTextColor={colors.text.muted}
                       style={{
                         flex: 1,
@@ -483,48 +524,15 @@
                 ))
               )}
 
-              <View style={{ gap: spacing.sm }}>
-                <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                  <TextInput
-                    testID="onboarding-new-bucket-name-input"
-                    value={newBucketName}
-                    onChangeText={setNewBucketName}
-                    placeholder="Nombre fondo (ej. Vacaciones)"
-                    placeholderTextColor={colors.text.muted}
-                    style={{
-                      flex: 1.4,
-                      minHeight: 46,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      color: colors.text.primary,
-                    }}
-                  />
-                  <TextInput
-                    testID="onboarding-new-bucket-balance-input"
-                    value={newBucketBalance}
-                    onChangeText={setNewBucketBalance}
-                    keyboardType="numeric"
-                    placeholder="Saldo inicial $"
-                    placeholderTextColor={colors.text.muted}
-                    style={{
-                      flex: 1,
-                      minHeight: 46,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      color: colors.text.primary,
-                    }}
-                  />
-                </View>
+              {!isAddBucketOpen ? (
                 <Pressable
-                  testID="onboarding-add-bucket-button"
+                  testID="onboarding-toggle-add-bucket"
                   accessibilityRole="button"
-                  onPress={handleAddCustomBucket}
+                  accessibilityLabel="Agregar nuevo fondo de ahorro"
+                  onPress={() => {
+                    triggerSubtleAccordionAnimation();
+                    setIsAddBucketOpen(true);
+                  }}
                   style={{
                     alignSelf: 'flex-start',
                     minHeight: MIN_TOUCH_TARGET_PT,
@@ -542,7 +550,101 @@
                     + Agregar Fondo
                   </AppText>
                 </Pressable>
-              </View>
+              ) : (
+                <View
+                  style={{
+                    gap: spacing.sm,
+                    padding: spacing.md,
+                    borderRadius: radius.md,
+                    backgroundColor: colors.glass.surfaceTint,
+                    borderWidth: 1,
+                    borderColor: colors.glass.subtleBorder,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                    <TextInput
+                      testID="onboarding-new-bucket-name-input"
+                      value={newBucketName}
+                      onChangeText={setNewBucketName}
+                      placeholder="Nombre fondo (ej. Vacaciones)"
+                      placeholderTextColor={colors.text.muted}
+                      style={{
+                        flex: 1.4,
+                        minHeight: 46,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        color: colors.text.primary,
+                      }}
+                    />
+                    <TextInput
+                      testID="onboarding-new-bucket-balance-input"
+                      value={newBucketBalance}
+                      onChangeText={setNewBucketBalance}
+                      keyboardType="numeric"
+                      placeholder="Saldo inicial $"
+                      placeholderTextColor={colors.text.muted}
+                      style={{
+                        flex: 1,
+                        minHeight: 46,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        color: colors.text.primary,
+                      }}
+                    />
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+                    <Pressable
+                      testID="onboarding-add-bucket-button"
+                      accessibilityRole="button"
+                      onPress={handleAddCustomBucket}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.lg,
+                        paddingVertical: spacing.xs,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.semantic.savingsSoft,
+                        borderWidth: 1,
+                        borderColor: colors.semantic.savings,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <AppText variant="caption" color={colors.semantic.savings} style={{ fontWeight: '600' }}>
+                        + Agregar Fondo
+                      </AppText>
+                    </Pressable>
+                    <Pressable
+                      testID="onboarding-cancel-add-bucket"
+                      accessibilityRole="button"
+                      onPress={() => {
+                        triggerSubtleAccordionAnimation();
+                        setIsAddBucketOpen(false);
+                      }}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.md,
+                        paddingVertical: spacing.xs,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <AppText variant="caption" color={colors.text.secondary}>
+                        Cancelar
+                      </AppText>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
             </View>
           </GlassSurface>
 
@@ -610,163 +712,15 @@
                 ))
               )}
 
-              <View style={{ gap: spacing.sm }}>
-                <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                  <TextInput
-                    testID="onboarding-debt-name-input"
-                    value={debtName}
-                    onChangeText={setDebtName}
-                    placeholder="Nombre de la deuda"
-                    placeholderTextColor={colors.text.muted}
-                    style={{
-                      flex: 1.2,
-                      minHeight: 46,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      color: colors.text.primary,
-                    }}
-                  />
-                  <TextInput
-                    testID="onboarding-debt-lender-input"
-                    value={debtLender}
-                    onChangeText={setDebtLender}
-                    placeholder="Entidad o Banco"
-                    placeholderTextColor={colors.text.muted}
-                    style={{
-                      flex: 1,
-                      minHeight: 46,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      color: colors.text.primary,
-                    }}
-                  />
-                </View>
-
-                <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                  <TextInput
-                    testID="onboarding-debt-balance-input"
-                    value={debtBalance}
-                    onChangeText={setDebtBalance}
-                    keyboardType="numeric"
-                    placeholder="Saldo actual $"
-                    placeholderTextColor={colors.text.muted}
-                    style={{
-                      flex: 1,
-                      minHeight: 46,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      color: colors.text.primary,
-                    }}
-                  />
-                  <TextInput
-                    testID="onboarding-debt-installment-input"
-                    value={debtInstallment}
-                    onChangeText={setDebtInstallment}
-                    keyboardType="numeric"
-                    placeholder="Cuota mensual $"
-                    placeholderTextColor={colors.text.muted}
-                    style={{
-                      flex: 1,
-                      minHeight: 46,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      color: colors.text.primary,
-                    }}
-                  />
-                </View>
-
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center' }}>
-                  <Pressable
-                    testID="onboarding-debt-rate-monthly"
-                    accessibilityRole="button"
-                    onPress={() => setDebtRateType('monthly')}
-                    style={{
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.pill,
-                      backgroundColor:
-                        debtRateType === 'monthly'
-                          ? colors.glass.surfaceElevatedTint
-                          : colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor:
-                        debtRateType === 'monthly'
-                          ? colors.glass.specularBorder
-                          : colors.glass.subtleBorder,
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <AppText
-                      variant="caption"
-                      style={{ fontWeight: debtRateType === 'monthly' ? '600' : '400' }}
-                    >
-                      Interés Mensual (%)
-                    </AppText>
-                  </Pressable>
-                  <Pressable
-                    testID="onboarding-debt-rate-annual"
-                    accessibilityRole="button"
-                    onPress={() => setDebtRateType('annual')}
-                    style={{
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.pill,
-                      backgroundColor:
-                        debtRateType === 'annual'
-                          ? colors.glass.surfaceElevatedTint
-                          : colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor:
-                        debtRateType === 'annual'
-                          ? colors.glass.specularBorder
-                          : colors.glass.subtleBorder,
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <AppText
-                      variant="caption"
-                      style={{ fontWeight: debtRateType === 'annual' ? '600' : '400' }}
-                    >
-                      Interés Anual (% E.A.)
-                    </AppText>
-                  </Pressable>
-                  <TextInput
-                    testID="onboarding-debt-rate-input"
-                    value={debtRate}
-                    onChangeText={setDebtRate}
-                    keyboardType="decimal-pad"
-                    placeholder="Tasa % (ej. 0.5)"
-                    placeholderTextColor={colors.text.muted}
-                    style={{
-                      flex: 1,
-                      minWidth: 120,
-                      minHeight: 46,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      color: colors.text.primary,
-                    }}
-                  />
-                </View>
-
+              {!isAddDebtOpen ? (
                 <Pressable
-                  testID="onboarding-add-debt-button"
+                  testID="onboarding-toggle-add-debt"
                   accessibilityRole="button"
-                  onPress={handleAddDebt}
+                  accessibilityLabel="Agregar nueva deuda"
+                  onPress={() => {
+                    triggerSubtleAccordionAnimation();
+                    setIsAddDebtOpen(true);
+                  }}
                   style={{
                     alignSelf: 'flex-start',
                     minHeight: MIN_TOUCH_TARGET_PT,
@@ -784,7 +738,216 @@
                     + Agregar Deuda
                   </AppText>
                 </Pressable>
-              </View>
+              ) : (
+                <View
+                  style={{
+                    gap: spacing.sm,
+                    padding: spacing.md,
+                    borderRadius: radius.md,
+                    backgroundColor: colors.glass.surfaceTint,
+                    borderWidth: 1,
+                    borderColor: colors.glass.subtleBorder,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                    <TextInput
+                      testID="onboarding-debt-name-input"
+                      value={debtName}
+                      onChangeText={setDebtName}
+                      placeholder="Nombre de la deuda"
+                      placeholderTextColor={colors.text.muted}
+                      style={{
+                        flex: 1.2,
+                        minHeight: 46,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        color: colors.text.primary,
+                      }}
+                    />
+                    <TextInput
+                      testID="onboarding-debt-lender-input"
+                      value={debtLender}
+                      onChangeText={setDebtLender}
+                      placeholder="Entidad o Banco"
+                      placeholderTextColor={colors.text.muted}
+                      style={{
+                        flex: 1,
+                        minHeight: 46,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        color: colors.text.primary,
+                      }}
+                    />
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                    <TextInput
+                      testID="onboarding-debt-balance-input"
+                      value={debtBalance}
+                      onChangeText={setDebtBalance}
+                      keyboardType="numeric"
+                      placeholder="Saldo actual $"
+                      placeholderTextColor={colors.text.muted}
+                      style={{
+                        flex: 1,
+                        minHeight: 46,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        color: colors.text.primary,
+                      }}
+                    />
+                    <TextInput
+                      testID="onboarding-debt-installment-input"
+                      value={debtInstallment}
+                      onChangeText={setDebtInstallment}
+                      keyboardType="numeric"
+                      placeholder="Cuota mensual $"
+                      placeholderTextColor={colors.text.muted}
+                      style={{
+                        flex: 1,
+                        minHeight: 46,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        color: colors.text.primary,
+                      }}
+                    />
+                  </View>
+
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center' }}>
+                    <Pressable
+                      testID="onboarding-debt-rate-monthly"
+                      accessibilityRole="button"
+                      onPress={() => setDebtRateType('monthly')}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.pill,
+                        backgroundColor:
+                          debtRateType === 'monthly'
+                            ? colors.glass.surfaceElevatedTint
+                            : colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor:
+                          debtRateType === 'monthly'
+                            ? colors.glass.specularBorder
+                            : colors.glass.subtleBorder,
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <AppText
+                        variant="caption"
+                        style={{ fontWeight: debtRateType === 'monthly' ? '600' : '400' }}
+                      >
+                        Interés Mensual (%)
+                      </AppText>
+                    </Pressable>
+                    <Pressable
+                      testID="onboarding-debt-rate-annual"
+                      accessibilityRole="button"
+                      onPress={() => setDebtRateType('annual')}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.pill,
+                        backgroundColor:
+                          debtRateType === 'annual'
+                            ? colors.glass.surfaceElevatedTint
+                            : colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor:
+                          debtRateType === 'annual'
+                            ? colors.glass.specularBorder
+                            : colors.glass.subtleBorder,
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <AppText
+                        variant="caption"
+                        style={{ fontWeight: debtRateType === 'annual' ? '600' : '400' }}
+                      >
+                        Interés Anual (% E.A.)
+                      </AppText>
+                    </Pressable>
+                    <TextInput
+                      testID="onboarding-debt-rate-input"
+                      value={debtRate}
+                      onChangeText={setDebtRate}
+                      keyboardType="decimal-pad"
+                      placeholder="Tasa % (ej. 0.5)"
+                      placeholderTextColor={colors.text.muted}
+                      style={{
+                        flex: 1,
+                        minWidth: 120,
+                        minHeight: 46,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        color: colors.text.primary,
+                      }}
+                    />
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+                    <Pressable
+                      testID="onboarding-add-debt-button"
+                      accessibilityRole="button"
+                      onPress={handleAddDebt}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.lg,
+                        paddingVertical: spacing.xs,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.semantic.debtSoft,
+                        borderWidth: 1,
+                        borderColor: colors.semantic.debt,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <AppText variant="caption" color={colors.semantic.debt} style={{ fontWeight: '600' }}>
+                        + Agregar Deuda
+                      </AppText>
+                    </Pressable>
+                    <Pressable
+                      testID="onboarding-cancel-add-debt"
+                      accessibilityRole="button"
+                      onPress={() => {
+                        triggerSubtleAccordionAnimation();
+                        setIsAddDebtOpen(false);
+                      }}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.md,
+                        paddingVertical: spacing.xs,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <AppText variant="caption" color={colors.text.secondary}>
+                        Cancelar
+                      </AppText>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
             </View>
           </GlassSurface>
 
@@ -854,122 +1017,15 @@
                 ))
               )}
 
-              <View style={{ gap: spacing.sm }}>
-                <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                  <TextInput
-                    testID="onboarding-income-name-input"
-                    value={incName}
-                    onChangeText={setIncName}
-                    placeholder="Concepto (ej. Salario)"
-                    placeholderTextColor={colors.text.muted}
-                    style={{
-                      flex: 1.4,
-                      minHeight: 46,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      color: colors.text.primary,
-                    }}
-                  />
-                  <TextInput
-                    testID="onboarding-income-amount-input"
-                    value={incAmount}
-                    onChangeText={setIncAmount}
-                    keyboardType="numeric"
-                    placeholder="Valor $"
-                    placeholderTextColor={colors.text.muted}
-                    style={{
-                      flex: 1,
-                      minHeight: 46,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      color: colors.text.primary,
-                    }}
-                  />
-                </View>
-
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center' }}>
-                  <Pressable
-                    testID="onboarding-income-group-fixed"
-                    accessibilityRole="button"
-                    onPress={() => setIncGroup('fixed')}
-                    style={{
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.pill,
-                      backgroundColor:
-                        incGroup === 'fixed'
-                          ? colors.glass.surfaceElevatedTint
-                          : colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor:
-                        incGroup === 'fixed' ? colors.glass.specularBorder : colors.glass.subtleBorder,
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <AppText
-                      variant="caption"
-                      style={{ fontWeight: incGroup === 'fixed' ? '600' : '400' }}
-                    >
-                      Fijo
-                    </AppText>
-                  </Pressable>
-                  <Pressable
-                    testID="onboarding-income-group-variable"
-                    accessibilityRole="button"
-                    onPress={() => setIncGroup('variable')}
-                    style={{
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.pill,
-                      backgroundColor:
-                        incGroup === 'variable'
-                          ? colors.glass.surfaceElevatedTint
-                          : colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor:
-                        incGroup === 'variable' ? colors.glass.specularBorder : colors.glass.subtleBorder,
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <AppText
-                      variant="caption"
-                      style={{ fontWeight: incGroup === 'variable' ? '600' : '400' }}
-                    >
-                      Variable
-                    </AppText>
-                  </Pressable>
-                  <Pressable
-                    testID="onboarding-income-persist-toggle"
-                    accessibilityRole="button"
-                    onPress={() => setIncPersist((v) => !v)}
-                    style={{
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.pill,
-                      backgroundColor: incPersist
-                        ? colors.glass.surfaceElevatedTint
-                        : colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: incPersist ? colors.glass.specularBorder : colors.glass.subtleBorder,
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <AppText variant="caption">
-                      {incPersist ? 'Persiste cada mes' : 'Solo este mes'}
-                    </AppText>
-                  </Pressable>
-                </View>
-
+              {!isAddIncomeOpen ? (
                 <Pressable
-                  testID="onboarding-add-income-button"
+                  testID="onboarding-toggle-add-income"
                   accessibilityRole="button"
-                  onPress={handleAddIncome}
+                  accessibilityLabel="Agregar nuevo ingreso"
+                  onPress={() => {
+                    triggerSubtleAccordionAnimation();
+                    setIsAddIncomeOpen(true);
+                  }}
                   style={{
                     alignSelf: 'flex-start',
                     minHeight: MIN_TOUCH_TARGET_PT,
@@ -987,7 +1043,175 @@
                     + Agregar Ingreso
                   </AppText>
                 </Pressable>
-              </View>
+              ) : (
+                <View
+                  style={{
+                    gap: spacing.sm,
+                    padding: spacing.md,
+                    borderRadius: radius.md,
+                    backgroundColor: colors.glass.surfaceTint,
+                    borderWidth: 1,
+                    borderColor: colors.glass.subtleBorder,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                    <TextInput
+                      testID="onboarding-income-name-input"
+                      value={incName}
+                      onChangeText={setIncName}
+                      placeholder="Concepto (ej. Salario)"
+                      placeholderTextColor={colors.text.muted}
+                      style={{
+                        flex: 1.4,
+                        minHeight: 46,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        color: colors.text.primary,
+                      }}
+                    />
+                    <TextInput
+                      testID="onboarding-income-amount-input"
+                      value={incAmount}
+                      onChangeText={setIncAmount}
+                      keyboardType="numeric"
+                      placeholder="Valor $"
+                      placeholderTextColor={colors.text.muted}
+                      style={{
+                        flex: 1,
+                        minHeight: 46,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        color: colors.text.primary,
+                      }}
+                    />
+                  </View>
+
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center' }}>
+                    <Pressable
+                      testID="onboarding-income-group-fixed"
+                      accessibilityRole="button"
+                      onPress={() => setIncGroup('fixed')}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.pill,
+                        backgroundColor:
+                          incGroup === 'fixed'
+                            ? colors.glass.surfaceElevatedTint
+                            : colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor:
+                          incGroup === 'fixed' ? colors.glass.specularBorder : colors.glass.subtleBorder,
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <AppText
+                        variant="caption"
+                        style={{ fontWeight: incGroup === 'fixed' ? '600' : '400' }}
+                      >
+                        Fijo
+                      </AppText>
+                    </Pressable>
+                    <Pressable
+                      testID="onboarding-income-group-variable"
+                      accessibilityRole="button"
+                      onPress={() => setIncGroup('variable')}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.pill,
+                        backgroundColor:
+                          incGroup === 'variable'
+                            ? colors.glass.surfaceElevatedTint
+                            : colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor:
+                          incGroup === 'variable' ? colors.glass.specularBorder : colors.glass.subtleBorder,
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <AppText
+                        variant="caption"
+                        style={{ fontWeight: incGroup === 'variable' ? '600' : '400' }}
+                      >
+                        Variable
+                      </AppText>
+                    </Pressable>
+                    <Pressable
+                      testID="onboarding-income-persist-toggle"
+                      accessibilityRole="button"
+                      onPress={() => setIncPersist((v) => !v)}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.pill,
+                        backgroundColor: incPersist
+                          ? colors.glass.surfaceElevatedTint
+                          : colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: incPersist ? colors.glass.specularBorder : colors.glass.subtleBorder,
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <AppText variant="caption">
+                        {incPersist ? 'Persiste cada mes' : 'Solo este mes'}
+                      </AppText>
+                    </Pressable>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+                    <Pressable
+                      testID="onboarding-add-income-button"
+                      accessibilityRole="button"
+                      onPress={handleAddIncome}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.lg,
+                        paddingVertical: spacing.xs,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.semantic.incomeSoft,
+                        borderWidth: 1,
+                        borderColor: colors.semantic.income,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <AppText variant="caption" color={colors.semantic.income} style={{ fontWeight: '600' }}>
+                        + Agregar Ingreso
+                      </AppText>
+                    </Pressable>
+                    <Pressable
+                      testID="onboarding-cancel-add-income"
+                      accessibilityRole="button"
+                      onPress={() => {
+                        triggerSubtleAccordionAnimation();
+                        setIsAddIncomeOpen(false);
+                      }}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.md,
+                        paddingVertical: spacing.xs,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <AppText variant="caption" color={colors.text.secondary}>
+                        Cancelar
+                      </AppText>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
             </View>
           </GlassSurface>
 
@@ -1058,232 +1282,15 @@
                 ))
               )}
 
-              <View style={{ gap: spacing.sm }}>
-                <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                  <TextInput
-                    testID="onboarding-expense-name-input"
-                    value={expName}
-                    onChangeText={setExpName}
-                    placeholder="Concepto (ej. Arriendo)"
-                    placeholderTextColor={colors.text.muted}
-                    style={{
-                      flex: 1.4,
-                      minHeight: 46,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      color: colors.text.primary,
-                    }}
-                  />
-                  <TextInput
-                    testID="onboarding-expense-amount-input"
-                    value={expAmount}
-                    onChangeText={setExpAmount}
-                    keyboardType="numeric"
-                    placeholder="Valor $"
-                    placeholderTextColor={colors.text.muted}
-                    style={{
-                      flex: 1,
-                      minHeight: 46,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      color: colors.text.primary,
-                    }}
-                  />
-                </View>
-
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center' }}>
-                  <Pressable
-                    testID="onboarding-expense-group-fixed"
-                    accessibilityRole="button"
-                    onPress={() => setExpGroup('fixed')}
-                    style={{
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.pill,
-                      backgroundColor:
-                        expGroup === 'fixed'
-                          ? colors.glass.surfaceElevatedTint
-                          : colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor:
-                        expGroup === 'fixed' ? colors.glass.specularBorder : colors.glass.subtleBorder,
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <AppText
-                      variant="caption"
-                      style={{ fontWeight: expGroup === 'fixed' ? '600' : '400' }}
-                    >
-                      Fijo
-                    </AppText>
-                  </Pressable>
-                  <Pressable
-                    testID="onboarding-expense-group-variable"
-                    accessibilityRole="button"
-                    onPress={() => setExpGroup('variable')}
-                    style={{
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.pill,
-                      backgroundColor:
-                        expGroup === 'variable'
-                          ? colors.glass.surfaceElevatedTint
-                          : colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor:
-                        expGroup === 'variable' ? colors.glass.specularBorder : colors.glass.subtleBorder,
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <AppText
-                      variant="caption"
-                      style={{ fontWeight: expGroup === 'variable' ? '600' : '400' }}
-                    >
-                      Variable
-                    </AppText>
-                  </Pressable>
-                  <Pressable
-                    testID="onboarding-expense-persist-toggle"
-                    accessibilityRole="button"
-                    onPress={() => setExpPersist((v) => !v)}
-                    style={{
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.pill,
-                      backgroundColor: expPersist
-                        ? colors.glass.surfaceElevatedTint
-                        : colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: expPersist ? colors.glass.specularBorder : colors.glass.subtleBorder,
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <AppText variant="caption">
-                      {expPersist ? 'Persiste cada mes' : 'Solo este mes'}
-                    </AppText>
-                  </Pressable>
-                </View>
-
-                {/* Optional Savings Bucket Link */}
-                {savingsBuckets.length > 0 ? (
-                  <View style={{ gap: spacing.xxs }}>
-                    <AppText variant="caption" color={colors.text.secondary}>
-                      Vincular a fondo de ahorro (opcional):
-                    </AppText>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={() => setExpBucketKey(null)}
-                        style={{
-                          minHeight: MIN_TOUCH_TARGET_PT,
-                          paddingHorizontal: spacing.md,
-                          borderRadius: radius.pill,
-                          backgroundColor:
-                            expBucketKey === null
-                              ? colors.glass.surfaceElevatedTint
-                              : colors.glass.surfaceTint,
-                          borderWidth: 1,
-                          borderColor:
-                            expBucketKey === null ? colors.glass.specularBorder : colors.glass.subtleBorder,
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <AppText variant="caption">Sin fondo</AppText>
-                      </Pressable>
-                      {savingsBuckets.map((b) => (
-                        <Pressable
-                          key={b.id ?? b.name}
-                          testID={`onboarding-expense-bucket-${b.id}`}
-                          accessibilityRole="button"
-                          onPress={() => setExpBucketKey(b.id ?? b.name)}
-                          style={{
-                            minHeight: MIN_TOUCH_TARGET_PT,
-                            paddingHorizontal: spacing.md,
-                            borderRadius: radius.pill,
-                            backgroundColor:
-                              expBucketKey === (b.id ?? b.name)
-                                ? colors.semantic.savingsSoft
-                                : colors.glass.surfaceTint,
-                            borderWidth: 1,
-                            borderColor:
-                              expBucketKey === (b.id ?? b.name)
-                                ? colors.semantic.savings
-                                : colors.glass.subtleBorder,
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <AppText variant="caption">{`Aporta a: ${b.name}`}</AppText>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </View>
-                ) : null}
-
-                {/* Optional Debt Link */}
-                {debts.length > 0 ? (
-                  <View style={{ gap: spacing.xxs }}>
-                    <AppText variant="caption" color={colors.text.secondary}>
-                      Vincular a deuda (opcional):
-                    </AppText>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={() => setExpDebtKey(null)}
-                        style={{
-                          minHeight: MIN_TOUCH_TARGET_PT,
-                          paddingHorizontal: spacing.md,
-                          borderRadius: radius.pill,
-                          backgroundColor:
-                            expDebtKey === null
-                              ? colors.glass.surfaceElevatedTint
-                              : colors.glass.surfaceTint,
-                          borderWidth: 1,
-                          borderColor:
-                            expDebtKey === null ? colors.glass.specularBorder : colors.glass.subtleBorder,
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <AppText variant="caption">Sin deuda</AppText>
-                      </Pressable>
-                      {debts.map((d) => (
-                        <Pressable
-                          key={d.key ?? d.name}
-                          testID={`onboarding-expense-debt-${d.key ?? d.name}`}
-                          accessibilityRole="button"
-                          onPress={() => setExpDebtKey(d.key ?? d.name)}
-                          style={{
-                            minHeight: MIN_TOUCH_TARGET_PT,
-                            paddingHorizontal: spacing.md,
-                            borderRadius: radius.pill,
-                            backgroundColor:
-                              expDebtKey === (d.key ?? d.name)
-                                ? colors.semantic.debtSoft
-                                : colors.glass.surfaceTint,
-                            borderWidth: 1,
-                            borderColor:
-                              expDebtKey === (d.key ?? d.name)
-                                ? colors.semantic.debt
-                                : colors.glass.subtleBorder,
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <AppText variant="caption">{`Abona a: ${d.name}`}</AppText>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </View>
-                ) : null}
-
+              {!isAddExpenseOpen ? (
                 <Pressable
-                  testID="onboarding-add-expense-button"
+                  testID="onboarding-toggle-add-expense"
                   accessibilityRole="button"
-                  onPress={handleAddExpense}
+                  accessibilityLabel="Agregar nuevo gasto"
+                  onPress={() => {
+                    triggerSubtleAccordionAnimation();
+                    setIsAddExpenseOpen(true);
+                  }}
                   style={{
                     alignSelf: 'flex-start',
                     minHeight: MIN_TOUCH_TARGET_PT,
@@ -1301,7 +1308,285 @@
                     + Agregar Gasto
                   </AppText>
                 </Pressable>
-              </View>
+              ) : (
+                <View
+                  style={{
+                    gap: spacing.sm,
+                    padding: spacing.md,
+                    borderRadius: radius.md,
+                    backgroundColor: colors.glass.surfaceTint,
+                    borderWidth: 1,
+                    borderColor: colors.glass.subtleBorder,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                    <TextInput
+                      testID="onboarding-expense-name-input"
+                      value={expName}
+                      onChangeText={setExpName}
+                      placeholder="Concepto (ej. Arriendo)"
+                      placeholderTextColor={colors.text.muted}
+                      style={{
+                        flex: 1.4,
+                        minHeight: 46,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        color: colors.text.primary,
+                      }}
+                    />
+                    <TextInput
+                      testID="onboarding-expense-amount-input"
+                      value={expAmount}
+                      onChangeText={setExpAmount}
+                      keyboardType="numeric"
+                      placeholder="Valor $"
+                      placeholderTextColor={colors.text.muted}
+                      style={{
+                        flex: 1,
+                        minHeight: 46,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        color: colors.text.primary,
+                      }}
+                    />
+                  </View>
+
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center' }}>
+                    <Pressable
+                      testID="onboarding-expense-group-fixed"
+                      accessibilityRole="button"
+                      onPress={() => setExpGroup('fixed')}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.pill,
+                        backgroundColor:
+                          expGroup === 'fixed'
+                            ? colors.glass.surfaceElevatedTint
+                            : colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor:
+                          expGroup === 'fixed' ? colors.glass.specularBorder : colors.glass.subtleBorder,
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <AppText
+                        variant="caption"
+                        style={{ fontWeight: expGroup === 'fixed' ? '600' : '400' }}
+                      >
+                        Fijo
+                      </AppText>
+                    </Pressable>
+                    <Pressable
+                      testID="onboarding-expense-group-variable"
+                      accessibilityRole="button"
+                      onPress={() => setExpGroup('variable')}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.pill,
+                        backgroundColor:
+                          expGroup === 'variable'
+                            ? colors.glass.surfaceElevatedTint
+                            : colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor:
+                          expGroup === 'variable' ? colors.glass.specularBorder : colors.glass.subtleBorder,
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <AppText
+                        variant="caption"
+                        style={{ fontWeight: expGroup === 'variable' ? '600' : '400' }}
+                      >
+                        Variable
+                      </AppText>
+                    </Pressable>
+                    <Pressable
+                      testID="onboarding-expense-persist-toggle"
+                      accessibilityRole="button"
+                      onPress={() => setExpPersist((v) => !v)}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.pill,
+                        backgroundColor: expPersist
+                          ? colors.glass.surfaceElevatedTint
+                          : colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: expPersist ? colors.glass.specularBorder : colors.glass.subtleBorder,
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <AppText variant="caption">
+                        {expPersist ? 'Persiste cada mes' : 'Solo este mes'}
+                      </AppText>
+                    </Pressable>
+                  </View>
+
+                  {/* Optional Savings Bucket Link */}
+                  {savingsBuckets.length > 0 ? (
+                    <View style={{ gap: spacing.xxs }}>
+                      <AppText variant="caption" color={colors.text.secondary}>
+                        Vincular a fondo de ahorro (opcional):
+                      </AppText>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => setExpBucketKey(null)}
+                          style={{
+                            minHeight: MIN_TOUCH_TARGET_PT,
+                            paddingHorizontal: spacing.md,
+                            borderRadius: radius.pill,
+                            backgroundColor:
+                              expBucketKey === null
+                                ? colors.glass.surfaceElevatedTint
+                                : colors.glass.surfaceTint,
+                            borderWidth: 1,
+                            borderColor:
+                              expBucketKey === null ? colors.glass.specularBorder : colors.glass.subtleBorder,
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <AppText variant="caption">Sin fondo</AppText>
+                        </Pressable>
+                        {savingsBuckets.map((b) => (
+                          <Pressable
+                            key={b.id ?? b.name}
+                            testID={`onboarding-expense-bucket-${b.id}`}
+                            accessibilityRole="button"
+                            onPress={() => setExpBucketKey(b.id ?? b.name)}
+                            style={{
+                              minHeight: MIN_TOUCH_TARGET_PT,
+                              paddingHorizontal: spacing.md,
+                              borderRadius: radius.pill,
+                              backgroundColor:
+                                expBucketKey === (b.id ?? b.name)
+                                  ? colors.semantic.savingsSoft
+                                  : colors.glass.surfaceTint,
+                              borderWidth: 1,
+                              borderColor:
+                                expBucketKey === (b.id ?? b.name)
+                                  ? colors.semantic.savings
+                                  : colors.glass.subtleBorder,
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <AppText variant="caption">{`Aporta a: ${b.name}`}</AppText>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+                  ) : null}
+
+                  {/* Optional Debt Link */}
+                  {debts.length > 0 ? (
+                    <View style={{ gap: spacing.xxs }}>
+                      <AppText variant="caption" color={colors.text.secondary}>
+                        Vincular a deuda (opcional):
+                      </AppText>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => setExpDebtKey(null)}
+                          style={{
+                            minHeight: MIN_TOUCH_TARGET_PT,
+                            paddingHorizontal: spacing.md,
+                            borderRadius: radius.pill,
+                            backgroundColor:
+                              expDebtKey === null
+                                ? colors.glass.surfaceElevatedTint
+                                : colors.glass.surfaceTint,
+                            borderWidth: 1,
+                            borderColor:
+                              expDebtKey === null ? colors.glass.specularBorder : colors.glass.subtleBorder,
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <AppText variant="caption">Sin deuda</AppText>
+                        </Pressable>
+                        {debts.map((d) => (
+                          <Pressable
+                            key={d.key ?? d.name}
+                            testID={`onboarding-expense-debt-${d.key ?? d.name}`}
+                            accessibilityRole="button"
+                            onPress={() => setExpDebtKey(d.key ?? d.name)}
+                            style={{
+                              minHeight: MIN_TOUCH_TARGET_PT,
+                              paddingHorizontal: spacing.md,
+                              borderRadius: radius.pill,
+                              backgroundColor:
+                                expDebtKey === (d.key ?? d.name)
+                                  ? colors.semantic.debtSoft
+                                  : colors.glass.surfaceTint,
+                              borderWidth: 1,
+                              borderColor:
+                                expDebtKey === (d.key ?? d.name)
+                                  ? colors.semantic.debt
+                                  : colors.glass.subtleBorder,
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <AppText variant="caption">{`Abona a: ${d.name}`}</AppText>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+                  ) : null}
+
+                  <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+                    <Pressable
+                      testID="onboarding-add-expense-button"
+                      accessibilityRole="button"
+                      onPress={handleAddExpense}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.lg,
+                        paddingVertical: spacing.xs,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.semantic.expenseSoft,
+                        borderWidth: 1,
+                        borderColor: colors.semantic.expense,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <AppText variant="caption" color={colors.semantic.expense} style={{ fontWeight: '600' }}>
+                        + Agregar Gasto
+                      </AppText>
+                    </Pressable>
+                    <Pressable
+                      testID="onboarding-cancel-add-expense"
+                      accessibilityRole="button"
+                      onPress={() => {
+                        triggerSubtleAccordionAnimation();
+                        setIsAddExpenseOpen(false);
+                      }}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.md,
+                        paddingVertical: spacing.xs,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <AppText variant="caption" color={colors.text.secondary}>
+                        Cancelar
+                      </AppText>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
             </View>
           </GlassSurface>
 
@@ -1364,97 +1649,15 @@
                 ))
               )}
 
-              <View style={{ gap: spacing.sm }}>
-                <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                  <TextInput
-                    testID="onboarding-provision-name-input"
-                    value={provName}
-                    onChangeText={setProvName}
-                    placeholder="Meta (ej. Vacaciones)"
-                    placeholderTextColor={colors.text.muted}
-                    style={{
-                      flex: 1.4,
-                      minHeight: 46,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      color: colors.text.primary,
-                    }}
-                  />
-                  <TextInput
-                    testID="onboarding-provision-amount-input"
-                    value={provAmount}
-                    onChangeText={setProvAmount}
-                    keyboardType="numeric"
-                    placeholder="Costo $"
-                    placeholderTextColor={colors.text.muted}
-                    style={{
-                      flex: 1,
-                      minHeight: 46,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      color: colors.text.primary,
-                    }}
-                  />
-                </View>
-
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                    <TextInput
-                      testID="onboarding-provision-months-input"
-                      value={provMonths}
-                      onChangeText={setProvMonths}
-                      keyboardType="numeric"
-                      placeholder="12"
-                      placeholderTextColor={colors.text.muted}
-                      style={{
-                        width: 90,
-                        minHeight: 46,
-                        paddingHorizontal: spacing.md,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                        color: colors.text.primary,
-                        textAlign: 'center',
-                      }}
-                    />
-                    <AppText variant="caption" color={colors.text.secondary}>
-                      meses
-                    </AppText>
-                  </View>
-
-                  <Pressable
-                    testID="onboarding-provision-kind-toggle"
-                    accessibilityRole="button"
-                    onPress={() =>
-                      setProvKind((k) => (k === 'recurring' ? 'target_goal' : 'recurring'))
-                    }
-                    style={{
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.pill,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <AppText variant="caption">
-                      {provKind === 'recurring' ? 'Provisión Periódica' : 'Meta Específica'}
-                    </AppText>
-                  </Pressable>
-                </View>
-
+              {!isAddProvisionOpen ? (
                 <Pressable
-                  testID="onboarding-add-provision-button"
+                  testID="onboarding-toggle-add-provision"
                   accessibilityRole="button"
-                  onPress={handleAddProvision}
+                  accessibilityLabel="Agregar nueva provisión o meta"
+                  onPress={() => {
+                    triggerSubtleAccordionAnimation();
+                    setIsAddProvisionOpen(true);
+                  }}
                   style={{
                     alignSelf: 'flex-start',
                     minHeight: MIN_TOUCH_TARGET_PT,
@@ -1472,7 +1675,150 @@
                     + Agregar Provisión
                   </AppText>
                 </Pressable>
-              </View>
+              ) : (
+                <View
+                  style={{
+                    gap: spacing.sm,
+                    padding: spacing.md,
+                    borderRadius: radius.md,
+                    backgroundColor: colors.glass.surfaceTint,
+                    borderWidth: 1,
+                    borderColor: colors.glass.subtleBorder,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                    <TextInput
+                      testID="onboarding-provision-name-input"
+                      value={provName}
+                      onChangeText={setProvName}
+                      placeholder="Meta (ej. Vacaciones)"
+                      placeholderTextColor={colors.text.muted}
+                      style={{
+                        flex: 1.4,
+                        minHeight: 46,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        color: colors.text.primary,
+                      }}
+                    />
+                    <TextInput
+                      testID="onboarding-provision-amount-input"
+                      value={provAmount}
+                      onChangeText={setProvAmount}
+                      keyboardType="numeric"
+                      placeholder="Costo $"
+                      placeholderTextColor={colors.text.muted}
+                      style={{
+                        flex: 1,
+                        minHeight: 46,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        color: colors.text.primary,
+                      }}
+                    />
+                  </View>
+
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                      <TextInput
+                        testID="onboarding-provision-months-input"
+                        value={provMonths}
+                        onChangeText={setProvMonths}
+                        keyboardType="numeric"
+                        placeholder="12"
+                        placeholderTextColor={colors.text.muted}
+                        style={{
+                          width: 90,
+                          minHeight: 46,
+                          paddingHorizontal: spacing.md,
+                          borderRadius: radius.md,
+                          backgroundColor: colors.glass.surfaceTint,
+                          borderWidth: 1,
+                          borderColor: colors.glass.subtleBorder,
+                          color: colors.text.primary,
+                          textAlign: 'center',
+                        }}
+                      />
+                      <AppText variant="caption" color={colors.text.secondary}>
+                        meses
+                      </AppText>
+                    </View>
+
+                    <Pressable
+                      testID="onboarding-provision-kind-toggle"
+                      accessibilityRole="button"
+                      onPress={() =>
+                        setProvKind((k) => (k === 'recurring' ? 'target_goal' : 'recurring'))
+                      }
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.md,
+                        borderRadius: radius.pill,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <AppText variant="caption">
+                        {provKind === 'recurring' ? 'Provisión Periódica' : 'Meta Específica'}
+                      </AppText>
+                    </Pressable>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+                    <Pressable
+                      testID="onboarding-add-provision-button"
+                      accessibilityRole="button"
+                      onPress={handleAddProvision}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.lg,
+                        paddingVertical: spacing.xs,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.semantic.motoSoft,
+                        borderWidth: 1,
+                        borderColor: colors.semantic.moto,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <AppText variant="caption" color={colors.semantic.moto} style={{ fontWeight: '600' }}>
+                        + Agregar Provisión
+                      </AppText>
+                    </Pressable>
+                    <Pressable
+                      testID="onboarding-cancel-add-provision"
+                      accessibilityRole="button"
+                      onPress={() => {
+                        triggerSubtleAccordionAnimation();
+                        setIsAddProvisionOpen(false);
+                      }}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.md,
+                        paddingVertical: spacing.xs,
+                        borderRadius: radius.md,
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <AppText variant="caption" color={colors.text.secondary}>
+                        Cancelar
+                      </AppText>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
             </View>
           </GlassSurface>
 

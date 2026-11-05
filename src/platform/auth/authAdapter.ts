@@ -26,6 +26,8 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Platform } from 'react-native';
 import { getFirebaseAuth, getFirebaseDb } from '../../data/firebase/firebaseConfig';
 import { stripUndefinedFields } from '../../data/mappers/firestoreSchemas';
+import { isOwnerCanonicalEmail } from '../../data/repositories/budgetRepository';
+import { toBogotaMonthKey } from '../../domain/date/monthKey';
 
 export interface BFlowAuthUser {
   uid: string;
@@ -155,8 +157,21 @@ async function syncUserProfileDocument(
   const createdAt =
     typeof existingData.createdAt === 'string' ? existingData.createdAt : nowIso;
 
-  const activeMonthKey =
-    typeof existingData.activeMonthKey === 'string' ? existingData.activeMonthKey : '2026-10';
+  const isOwner = isOwnerCanonicalEmail(firebaseUser.email);
+  const hasValidExistingMonth =
+    typeof existingData.activeMonthKey === 'string' &&
+    /^\d{4}-(0[1-9]|1[0-2])$/.test(existingData.activeMonthKey) &&
+    !(
+      !isOwner &&
+      existingData.activeMonthKey === '2026-10' &&
+      existingData.onboardingCompleted !== true
+    );
+
+  const activeMonthKey = hasValidExistingMonth
+    ? (existingData.activeMonthKey as string)
+    : isOwner
+      ? '2026-10'
+      : `${toBogotaMonthKey().slice(0, 4)}-01`;
 
   const profilePayload = stripUndefinedFields({
     uid: firebaseUser.uid,
@@ -167,7 +182,7 @@ async function syncUserProfileDocument(
     authProvider: resolvedProvider,
     createdAt,
     lastLoginAt: nowIso,
-    activeMonthKey,
+    ...(!hasValidExistingMonth ? { activeMonthKey } : {}),
     updatedAt: nowIso,
   });
 

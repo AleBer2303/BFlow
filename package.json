@@ -4,6 +4,7 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
+    "postinstall": "node scripts/patch-extension-storage.mjs",
     "start": "expo start",
     "ios": "expo start --ios",
     "web": "expo start --web",
@@ -14,6 +15,7 @@
     "extract:excel": "node scripts/extract-excel-fixture.mjs"
   },
   "dependencies": {
+    "@bacons/apple-targets": "^5.0.0",
     "expo": "~58.0.21",
     "expo-blur": "~58.0.5",
     "expo-constants": "~58.0.14",
@@ -37,7 +39,6 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
-    "@bacons/apple-targets": "^5.0.0",
     "@react-native/jest-preset": "0.88.1",
     "@testing-library/react-native": "^13.2.0",
     "@types/jest": "^29.5.14",

@@ -23,8 +23,12 @@ export interface DebtItemStatus {
   debtId: string;
   name: string;
   lender: string;
+  groupKey?: string;
   openingBalance: number;
   monthlyInterestRate?: number;
+  annualInterestRate?: number;
+  interestRateType?: 'monthly' | 'annual';
+  monthlyInstallment?: number;
   accruedInterestThisMonth: number;
   appliedPrincipalThisMonth: number;
   remainingBalance: number;
@@ -55,7 +59,8 @@ export interface FunfamiDebtSummary {
 export function buildDebtPaymentsForInstallment(
   installmentEntry: MonthEntry,
   debts: readonly Debt[],
-  customAllocations?: readonly DebtAllocationInput[]
+  customAllocations?: readonly DebtAllocationInput[],
+  preferredTargetDebtId?: string
 ): DebtPayment[] {
   const installmentAmount = assertSafeMoneyInteger(
     installmentEntry.actualAmount,
@@ -95,9 +100,21 @@ export function buildDebtPaymentsForInstallment(
     });
   }
 
-  // Default confirmed rule: prioritize CB300F - MOTO first, then remaining FUNFAMI debts in order
-  const funfamiDebts = debts.filter((d) => !d.groupKey || d.groupKey === 'FUNFAMI');
-  const orderedDebts = [...funfamiDebts].sort((a, b) => {
+  // If a specific target debt is linked and exists in `debts`, target that debt first (and cascade within its group if needed)
+  const explicitTarget =
+    preferredTargetDebtId && preferredTargetDebtId !== 'ALL_FUNFAMI'
+      ? debts.find((d) => d.id === preferredTargetDebtId)
+      : undefined;
+
+  const candidateDebts = explicitTarget
+    ? debts.filter((d) => (d.groupKey || 'FUNFAMI') === (explicitTarget.groupKey || 'FUNFAMI'))
+    : debts.filter((d) => !d.groupKey || d.groupKey === 'FUNFAMI');
+
+  const orderedDebts = [...candidateDebts].sort((a, b) => {
+    if (explicitTarget) {
+      if (a.id === explicitTarget.id) return -1;
+      if (b.id === explicitTarget.id) return 1;
+    }
     if (a.id === 'debt_cb300f_moto') return -1;
     if (b.id === 'debt_cb300f_moto') return 1;
     return a.id.localeCompare(b.id);
@@ -195,7 +212,12 @@ export function calculateFunfamiDebtSummary(
       activePayments.filter((p) => p.debtId === debt.id).map((p) => p.principalAmount)
     );
     const principalAfterPayments = Math.max(0, debt.openingBalance - appliedPrincipalThisMonth);
-    const interestRate = debt.monthlyInterestRate ?? 0;
+    const interestRate =
+      debt.monthlyInterestRate !== undefined
+        ? debt.monthlyInterestRate
+        : debt.annualInterestRate !== undefined
+          ? Math.round((debt.annualInterestRate / 12) * 10000) / 10000
+          : 0;
     const accruedInterestThisMonth =
       interestRate > 0 && principalAfterPayments > 0
         ? Math.round(principalAfterPayments * (interestRate / 100))
@@ -208,8 +230,20 @@ export function calculateFunfamiDebtSummary(
       debtId: debt.id,
       name: debt.name,
       lender: debt.lender,
+      ...(debt.groupKey ? { groupKey: debt.groupKey } : {}),
       openingBalance: debt.openingBalance,
-      monthlyInterestRate: debt.monthlyInterestRate,
+      ...(debt.monthlyInterestRate !== undefined
+        ? { monthlyInterestRate: debt.monthlyInterestRate }
+        : interestRate > 0
+          ? { monthlyInterestRate: interestRate }
+          : {}),
+      ...(debt.annualInterestRate !== undefined
+        ? { annualInterestRate: debt.annualInterestRate }
+        : {}),
+      ...(debt.interestRateType ? { interestRateType: debt.interestRateType } : {}),
+      ...(debt.monthlyInstallment !== undefined
+        ? { monthlyInstallment: debt.monthlyInstallment }
+        : {}),
       accruedInterestThisMonth,
       appliedPrincipalThisMonth,
       remainingBalance,
@@ -223,7 +257,16 @@ export function calculateFunfamiDebtSummary(
   );
   const totalRemainingDebt = sumMoneyIntegers(debtItems.map((d) => d.remainingBalance));
 
-  const installmentForProjection = funfamiEntry?.plannedAmount ?? defaultMonthlyInstallment;
+  const configuredDebtInstallmentsSum = sumMoneyIntegers(
+    debtItems.map((d) => d.monthlyInstallment ?? 0)
+  );
+  const installmentForProjection =
+    funfamiEntry?.plannedAmount ??
+    (configuredDebtInstallmentsSum > 0
+      ? configuredDebtInstallmentsSum
+      : appliedInstallmentThisMonth > 0
+        ? appliedInstallmentThisMonth
+        : defaultMonthlyInstallment);
   const projection = projectDebtPayoff(totalRemainingDebt, installmentForProjection, monthKey);
 
   return {
@@ -231,7 +274,9 @@ export function calculateFunfamiDebtSummary(
     openingTotalDebt,
     appliedInstallmentThisMonth,
     totalRemainingDebt,
-    isInstallmentPaid: Boolean(funfamiEntry && funfamiEntry.status === 'completed'),
+    isInstallmentPaid: funfamiEntry
+      ? funfamiEntry.status === 'completed'
+      : activePayments.length > 0,
     debts: debtItems,
     projection,
   };

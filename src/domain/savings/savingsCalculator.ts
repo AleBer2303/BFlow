@@ -22,6 +22,7 @@ import { sumMoneyIntegers } from '../money/money';
 
 export interface MotoBucketSummary {
   bucketId: 'moto';
+  name: string;
   openingBalance: number;
   paidContributionsThisMonth: number;
   pendingContributionsThisMonth: number;
@@ -38,6 +39,7 @@ export interface MotoBucketSummary {
 
 export interface GeneralSavingsBucketSummary {
   bucketId: 'savings';
+  name: string;
   openingBalance: number;
   netCashFlowContribution: number;
   currentBalance: number;
@@ -45,10 +47,31 @@ export interface GeneralSavingsBucketSummary {
   projectedFullMonthBalance: number;
 }
 
+export interface CustomSavingsBucketSummary {
+  id: string;
+  bucketId: string;
+  name: string;
+  openingBalance: number;
+  paidContributionsThisMonth: number;
+  pendingContributionsThisMonth: number;
+  currentBalance: number;
+  projectedBalanceIfAllPaid: number;
+  contributingEntries: ReadonlyArray<{
+    entryId: string;
+    conceptId: string;
+    conceptName: string;
+    amount: number;
+    status: 'pending' | 'completed';
+  }>;
+}
+
 export interface MonthlySavingsSummary {
   monthKey: string;
+  hasMotoBucket: boolean;
+  hasSavingsBucket: boolean;
   moto: MotoBucketSummary;
   savings: GeneralSavingsBucketSummary;
+  customBuckets: CustomSavingsBucketSummary[];
   totalCurrentSavings: number;
   totalProjectedAfterPendingExpenses: number;
 }
@@ -64,10 +87,8 @@ export function calculateMonthlySavingsSummary(
 
   const motoBucket = buckets.find((b) => b.id === 'moto');
   const savingsBucket = buckets.find((b) => b.id === 'savings');
-
-  if (!motoBucket || !savingsBucket) {
-    throw new Error('Both "moto" and "savings" buckets are required to calculate savings summary.');
-  }
+  const hasMotoBucket = Boolean(motoBucket);
+  const hasSavingsBucket = Boolean(savingsBucket);
 
   const motoConceptIds = new Set(
     concepts
@@ -76,34 +97,103 @@ export function calculateMonthlySavingsSummary(
   );
 
   const monthEntries = entries.filter((e) => e.monthKey === monthKey);
-  const motoEntries = monthEntries.filter((e) => motoConceptIds.has(e.conceptId));
+  const motoEntries = hasMotoBucket
+    ? monthEntries.filter((e) => motoConceptIds.has(e.conceptId))
+    : [];
 
-  const paidContributionsThisMonth = sumMoneyIntegers(
-    motoEntries.filter((e) => e.status === 'completed').map((e) => e.actualAmount)
+  const paidContributionsThisMonth = hasMotoBucket
+    ? sumMoneyIntegers(
+        motoEntries.filter((e) => e.status === 'completed').map((e) => e.actualAmount)
+      )
+    : 0;
+  const pendingContributionsThisMonth = hasMotoBucket
+    ? sumMoneyIntegers(
+        motoEntries.filter((e) => e.status === 'pending').map((e) => e.plannedAmount)
+      )
+    : 0;
+
+  const motoOpening = motoBucket?.openingBalance ?? 0;
+  const motoCurrentBalance = hasMotoBucket ? motoOpening + paidContributionsThisMonth : 0;
+  const motoProjectedBalanceIfAllPaid = hasMotoBucket
+    ? motoCurrentBalance + pendingContributionsThisMonth
+    : 0;
+
+  // Also include any explicit expense contributions linked directly to the 'savings' bucket
+  const directSavingsConceptIds = new Set(
+    concepts
+      .filter((c) => !c.archived && c.savingsContribution?.bucketId === 'savings')
+      .map((c) => c.id)
   );
-  const pendingContributionsThisMonth = sumMoneyIntegers(
-    motoEntries.filter((e) => e.status === 'pending').map((e) => e.plannedAmount)
+  const directSavingsPaid = hasSavingsBucket
+    ? sumMoneyIntegers(
+        monthEntries
+          .filter((e) => directSavingsConceptIds.has(e.conceptId) && e.status === 'completed')
+          .map((e) => e.actualAmount)
+      )
+    : 0;
+
+  const savingsOpening = savingsBucket?.openingBalance ?? 0;
+  const savingsCurrentBalance = hasSavingsBucket
+    ? savingsOpening + budgetSummary.netCashFlow + directSavingsPaid
+    : 0;
+  const savingsProjectedAfterPendingExpenses = hasSavingsBucket
+    ? savingsCurrentBalance - budgetSummary.pendingExpenses
+    : 0;
+  const savingsProjectedFullMonthBalance = hasSavingsBucket
+    ? savingsOpening + budgetSummary.projectedNetFlow + directSavingsPaid
+    : 0;
+
+  const extraBuckets = buckets.filter((b) => b.id !== 'moto' && b.id !== 'savings');
+  const customBuckets: CustomSavingsBucketSummary[] = extraBuckets.map((cb) => {
+    const linkedConceptIds = new Set(
+      concepts
+        .filter((c) => !c.archived && c.savingsContribution?.bucketId === cb.id)
+        .map((c) => c.id)
+    );
+    const cbEntries = monthEntries.filter((e) => linkedConceptIds.has(e.conceptId));
+    const cbPaid = sumMoneyIntegers(
+      cbEntries.filter((e) => e.status === 'completed').map((e) => e.actualAmount)
+    );
+    const cbPending = sumMoneyIntegers(
+      cbEntries.filter((e) => e.status === 'pending').map((e) => e.plannedAmount)
+    );
+    const cbCurrent = cb.openingBalance + cbPaid;
+    return {
+      id: cb.id,
+      bucketId: cb.id,
+      name: cb.name,
+      openingBalance: cb.openingBalance,
+      paidContributionsThisMonth: cbPaid,
+      pendingContributionsThisMonth: cbPending,
+      currentBalance: cbCurrent,
+      projectedBalanceIfAllPaid: cbCurrent + cbPending,
+      contributingEntries: cbEntries.map((e) => ({
+        entryId: e.id,
+        conceptId: e.conceptId,
+        conceptName: e.conceptName,
+        amount: e.status === 'completed' ? e.actualAmount : e.plannedAmount,
+        status: e.status,
+      })),
+    };
+  });
+
+  const customBucketsCurrentTotal = sumMoneyIntegers(
+    customBuckets.map((cb) => cb.currentBalance)
   );
 
-  const motoCurrentBalance = motoBucket.openingBalance + paidContributionsThisMonth;
-  const motoProjectedBalanceIfAllPaid =
-    motoCurrentBalance + pendingContributionsThisMonth;
-
-  const savingsCurrentBalance = savingsBucket.openingBalance + budgetSummary.netCashFlow;
-  const savingsProjectedAfterPendingExpenses =
-    savingsCurrentBalance - budgetSummary.pendingExpenses;
-  const savingsProjectedFullMonthBalance =
-    savingsBucket.openingBalance + budgetSummary.projectedNetFlow;
-
-  const totalCurrentSavings = motoCurrentBalance + savingsCurrentBalance;
+  const totalCurrentSavings =
+    motoCurrentBalance + savingsCurrentBalance + customBucketsCurrentTotal;
   const totalProjectedAfterPendingExpenses =
-    motoCurrentBalance + savingsProjectedAfterPendingExpenses;
+    motoCurrentBalance + savingsProjectedAfterPendingExpenses + customBucketsCurrentTotal;
 
   return {
     monthKey,
+    hasMotoBucket,
+    hasSavingsBucket,
     moto: {
       bucketId: 'moto',
-      openingBalance: motoBucket.openingBalance,
+      name: motoBucket?.name ?? 'Fondo Moto',
+      openingBalance: motoOpening,
       paidContributionsThisMonth,
       pendingContributionsThisMonth,
       currentBalance: motoCurrentBalance,
@@ -118,12 +208,14 @@ export function calculateMonthlySavingsSummary(
     },
     savings: {
       bucketId: 'savings',
-      openingBalance: savingsBucket.openingBalance,
-      netCashFlowContribution: budgetSummary.netCashFlow,
+      name: savingsBucket?.name ?? 'Fondo Ahorros',
+      openingBalance: savingsOpening,
+      netCashFlowContribution: hasSavingsBucket ? budgetSummary.netCashFlow : 0,
       currentBalance: savingsCurrentBalance,
       projectedAfterPendingExpenses: savingsProjectedAfterPendingExpenses,
       projectedFullMonthBalance: savingsProjectedFullMonthBalance,
     },
+    customBuckets,
     totalCurrentSavings,
     totalProjectedAfterPendingExpenses,
   };

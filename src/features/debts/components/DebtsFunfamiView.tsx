@@ -22,6 +22,7 @@ import {
 import {
   formatCop,
   formatMonthKeyLabelEs,
+  type DebtInterestRateType,
   type FunfamiDebtSummary,
   type MonthEntry,
 } from '../../../domain';
@@ -31,6 +32,9 @@ export interface CreateDebtInput {
   lender: string;
   openingBalance: number;
   monthlyInterestRate?: number;
+  annualInterestRate?: number;
+  interestRateType?: DebtInterestRateType;
+  monthlyInstallment?: number;
 }
 
 export interface UpdateDebtInput {
@@ -38,6 +42,9 @@ export interface UpdateDebtInput {
   lender?: string;
   openingBalance?: number;
   monthlyInterestRate?: number;
+  annualInterestRate?: number;
+  interestRateType?: DebtInterestRateType;
+  monthlyInstallment?: number;
 }
 
 export interface DebtsFunfamiViewProps {
@@ -78,6 +85,9 @@ export function DebtsFunfamiView({
   const [formLender, setFormLender] = useState('');
   const [formOpeningBalance, setFormOpeningBalance] = useState('');
   const [formInterestRate, setFormInterestRate] = useState('');
+  const [formInterestRateType, setFormInterestRateType] =
+    useState<DebtInterestRateType>('monthly');
+  const [formMonthlyInstallment, setFormMonthlyInstallment] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -129,17 +139,30 @@ export function DebtsFunfamiView({
     setFormLender('');
     setFormOpeningBalance('');
     setFormInterestRate('0');
+    setFormInterestRateType('monthly');
+    setFormMonthlyInstallment('');
     setFormError(null);
     setIsFormOpen(true);
   };
 
   const openEditForm = (debt: (typeof debtSummary.debts)[number]) => {
+    const rateType: DebtInterestRateType = debt.interestRateType ?? 'monthly';
     setEditingDebtId(debt.debtId);
     setFormName(debt.name);
     setFormLender(debt.lender);
     setFormOpeningBalance(String(debt.openingBalance));
+    setFormInterestRateType(rateType);
     setFormInterestRate(
-      debt.monthlyInterestRate !== undefined ? String(debt.monthlyInterestRate) : '0'
+      rateType === 'annual' && debt.annualInterestRate !== undefined
+        ? String(debt.annualInterestRate)
+        : debt.monthlyInterestRate !== undefined
+          ? String(debt.monthlyInterestRate)
+          : '0'
+    );
+    setFormMonthlyInstallment(
+      debt.monthlyInstallment !== undefined && debt.monthlyInstallment > 0
+        ? String(debt.monthlyInstallment)
+        : ''
     );
     setFormError(null);
     setIsFormOpen(true);
@@ -163,10 +186,23 @@ export function DebtsFunfamiView({
 
     const cleanRate = formInterestRate.replace(',', '.').trim();
     const parsedRate = cleanRate ? parseFloat(cleanRate) : 0;
-    if (isNaN(parsedRate) || parsedRate < 0 || parsedRate > 100) {
-      setFormError('La tasa de interés mensual debe ser entre 0% y 100%.');
+    const maxAllowedRate = formInterestRateType === 'annual' ? 200 : 100;
+    if (isNaN(parsedRate) || parsedRate < 0 || parsedRate > maxAllowedRate) {
+      setFormError(`La tasa de interés debe ser entre 0% y ${maxAllowedRate}%.`);
       return;
     }
+
+    const cleanInstallment = formMonthlyInstallment.replace(/[^0-9]/g, '');
+    const parsedInstallment = cleanInstallment ? Number(cleanInstallment) : 0;
+
+    const monthlyRate =
+      formInterestRateType === 'annual'
+        ? Number((parsedRate / 12).toFixed(4))
+        : parsedRate;
+    const annualRate =
+      formInterestRateType === 'annual'
+        ? parsedRate
+        : Number((parsedRate * 12).toFixed(4));
 
     setFormError(null);
     if (editingDebtId) {
@@ -175,7 +211,10 @@ export function DebtsFunfamiView({
           name: formName.trim(),
           lender: formLender.trim(),
           openingBalance: parsedBalance,
-          monthlyInterestRate: parsedRate,
+          monthlyInterestRate: monthlyRate,
+          annualInterestRate: annualRate,
+          interestRateType: formInterestRateType,
+          monthlyInstallment: parsedInstallment,
         });
       }
     } else {
@@ -184,7 +223,10 @@ export function DebtsFunfamiView({
           name: formName.trim(),
           lender: formLender.trim(),
           openingBalance: parsedBalance,
-          monthlyInterestRate: parsedRate,
+          monthlyInterestRate: monthlyRate,
+          annualInterestRate: annualRate,
+          interestRateType: formInterestRateType,
+          monthlyInstallment: parsedInstallment,
         });
       }
     }
@@ -481,14 +523,55 @@ export function DebtsFunfamiView({
 
             <View style={{ gap: spacing.xxs }}>
               <AppText variant="caption" color={colors.text.secondary}>
-                Tasa de interés mensual (%):
+                Tipo y porcentaje de interés:
               </AppText>
+              <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                {(
+                  [
+                    { id: 'monthly', label: 'Interés Mensual (%)' },
+                    { id: 'annual', label: 'Interés Anual (%)' },
+                  ] as const
+                ).map((opt) => {
+                  const active = formInterestRateType === opt.id;
+                  return (
+                    <Pressable
+                      key={opt.id}
+                      testID={`debt-form-rate-type-${opt.id}`}
+                      accessibilityRole="button"
+                      onPress={() => setFormInterestRateType(opt.id)}
+                      style={{
+                        flex: 1,
+                        minHeight: 38,
+                        borderRadius: radius.md,
+                        backgroundColor: active
+                          ? colors.semantic.debtSoft
+                          : colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: active ? colors.semantic.debt : colors.glass.subtleBorder,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <AppText
+                        variant="micro"
+                        color={active ? colors.semantic.debt : colors.text.secondary}
+                      >
+                        {opt.label}
+                      </AppText>
+                    </Pressable>
+                  );
+                })}
+              </View>
               <TextInput
                 testID="debt-form-interest-rate-input"
                 value={formInterestRate}
                 onChangeText={setFormInterestRate}
                 keyboardType="decimal-pad"
-                placeholder="Ej. 0.9 o 2.0 (0 si no cobra interés)"
+                placeholder={
+                  formInterestRateType === 'annual'
+                    ? 'Ej. 12.0 o 24.0 anual (0 si no cobra interés)'
+                    : 'Ej. 0.9 o 2.0 mensual (0 si no cobra interés)'
+                }
                 placeholderTextColor={colors.text.muted}
                 style={{
                   minHeight: MIN_TOUCH_TARGET_PT,
@@ -501,8 +584,31 @@ export function DebtsFunfamiView({
                 }}
               />
               <AppText variant="micro" color={colors.text.muted}>
-                Ej. 0,9% o 2% mensual. Al pasar de mes los intereses se calculan y suman al saldo automáticamente.
+                Se conserva mes a mes y entre sesiones a menos que lo edites directamente.
               </AppText>
+            </View>
+
+            <View style={{ gap: spacing.xxs }}>
+              <AppText variant="caption" color={colors.text.secondary}>
+                Cuota mensual pactada que aportas a esta deuda (COP, opcional)
+              </AppText>
+              <TextInput
+                testID="debt-form-installment-input"
+                value={formMonthlyInstallment}
+                onChangeText={setFormMonthlyInstallment}
+                keyboardType="numeric"
+                placeholder="Ej. 500000"
+                placeholderTextColor={colors.text.muted}
+                style={{
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.md,
+                  backgroundColor: colors.glass.surfaceTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.subtleBorder,
+                  color: colors.text.primary,
+                }}
+              />
             </View>
 
             {formError ? (
@@ -603,9 +709,16 @@ export function DebtsFunfamiView({
                 gap: spacing.xs,
               }}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' }}>
                 <AppText variant="title2">{debt.name}</AppText>
-                {debt.monthlyInterestRate !== undefined && debt.monthlyInterestRate > 0 ? (
+                {debt.interestRateType === 'annual' &&
+                debt.annualInterestRate !== undefined &&
+                debt.annualInterestRate > 0 ? (
+                  <StatusBadge
+                    label={`${debt.annualInterestRate}% anual (${debt.monthlyInterestRate ?? 0}% mes)`}
+                    status="moto"
+                  />
+                ) : debt.monthlyInterestRate !== undefined && debt.monthlyInterestRate > 0 ? (
                   <StatusBadge
                     label={`${debt.monthlyInterestRate}% mes`}
                     status="moto"
@@ -654,7 +767,7 @@ export function DebtsFunfamiView({
                   {`Saldo apertura (${debtSummary.monthKey}): ${formatCop(debt.openingBalance)}`}
                 </AppText>
                 <AppText variant="caption" color={colors.text.secondary}>
-                  {`Acreedor: ${debt.lender}`}
+                  {`Acreedor: ${debt.lender}${debt.monthlyInstallment && debt.monthlyInstallment > 0 ? ` · Cuota: ${formatCop(debt.monthlyInstallment)}/mes` : ''}`}
                 </AppText>
               </View>
 

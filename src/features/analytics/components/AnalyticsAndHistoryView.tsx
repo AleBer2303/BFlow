@@ -11,9 +11,8 @@
  * - Native Mode A / Mode B & iloader 7-day signature diagnostics
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
 import {
   AppText,
   CurrencyText,
@@ -49,6 +48,7 @@ export interface AnalyticsAndHistoryViewProps {
   onReopenClosedMonth?: (monthKey: string) => void;
   onDeleteOrRevertMonth?: (monthKey: string) => void;
   onResetOctoberSeed?: () => void;
+  onResetFullAccount?: () => void;
 }
 
 export function AnalyticsAndHistoryView({
@@ -66,8 +66,10 @@ export function AnalyticsAndHistoryView({
   onReopenClosedMonth,
   onDeleteOrRevertMonth,
   onResetOctoberSeed: _onResetOctoberSeed,
+  onResetFullAccount,
 }: AnalyticsAndHistoryViewProps): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
+  const [confirmingAccountReset, setConfirmingAccountReset] = useState(false);
 
   const paidExpenseRatio =
     budget.plannedExpenses > 0 ? budget.paidExpenses / budget.plannedExpenses : 0;
@@ -78,15 +80,11 @@ export function AnalyticsAndHistoryView({
     .filter((e) => e.monthKey === activeMonthKey && e.type === 'expense')
     .sort((a, b) => b.plannedAmount - a.plannedAmount);
 
-  const radiusCircle = 42;
-  const circumference = 2 * Math.PI * radiusCircle;
-  const strokeDashoffset = circumference * (1 - Math.min(1, Math.max(0, paidExpenseRatio)));
-
   return (
     <View style={{ gap: spacing.md }} testID="analytics-and-history-view">
-      {/* Screen 05: Charts & Visual Analytics */}
+      {/* Screen 05: Minimalist Visual Analytics */}
       <GlassSurface elevated testID="charts-analytics-card">
-        <View style={{ gap: spacing.sm }}>
+        <View style={{ gap: spacing.md }}>
           <View
             style={{
               flexDirection: 'row',
@@ -96,93 +94,187 @@ export function AnalyticsAndHistoryView({
               gap: spacing.xs,
             }}
           >
-            <AppText variant="title2">Analítica Visual del Mes</AppText>
+            <View>
+              <AppText variant="title2">Analítica Visual del Mes</AppText>
+              <AppText variant="caption" color={colors.text.secondary}>
+                Ejecución presupuestal simplificada
+              </AppText>
+            </View>
             <StatusBadge
               label={`Pagado ${paidExpensePercent}% · Pendiente ${pendingExpensePercent}%`}
               status="info"
             />
           </View>
 
-          {/* SVG Ring + Cash Flow Bars */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
-            <View style={{ width: 104, height: 104, justifyContent: 'center', alignItems: 'center' }}>
-              <Svg width={104} height={104} viewBox="0 0 104 104">
-                <Circle
-                  cx={52}
-                  cy={52}
-                  r={radiusCircle}
-                  stroke={colors.glass.subtleBorder}
-                  strokeWidth={10}
-                  fill="none"
-                />
-                <Circle
-                  cx={52}
-                  cy={52}
-                  r={radiusCircle}
-                  stroke={colors.semantic.completed}
-                  strokeWidth={10}
-                  strokeDasharray={`${circumference} ${circumference}`}
-                  strokeDashoffset={strokeDashoffset}
-                  strokeLinecap="round"
-                  fill="none"
-                />
-              </Svg>
+          {/* Minimalist Horizontal Execution Bar */}
+          <View style={{ gap: spacing.xs }} testID="analytics-paid-progress-bar">
+            <View
+              style={{
+                height: 10,
+                borderRadius: radius.pill,
+                backgroundColor: colors.glass.surfaceTint,
+                overflow: 'hidden',
+                borderWidth: 1,
+                borderColor: colors.glass.subtleBorder,
+              }}
+            >
+              <View
+                style={{
+                  width: `${Math.min(100, Math.max(0, paidExpensePercent))}%`,
+                  height: '100%',
+                  borderRadius: radius.pill,
+                  backgroundColor: colors.semantic.completed,
+                }}
+              />
             </View>
-
-            <View style={{ flex: 1, gap: spacing.xs }}>
-              <AppText variant="caption" color={colors.semantic.income}>
-                {`Ingresos Recibidos: ${formatCop(budget.receivedIncome)}`}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <AppText variant="micro" color={colors.text.secondary}>
+                {`Ejecutado: ${formatCop(budget.paidExpenses)}`}
               </AppText>
-              <AppText variant="caption" color={colors.semantic.expense}>
-                {`Gastos Pagados: ${formatCop(budget.paidExpenses)} (${paidExpensePercent}%)`}
-              </AppText>
-              <AppText variant="caption" color={colors.semantic.pending}>
-                {`Gastos Pendientes: ${formatCop(budget.pendingExpenses)} (${pendingExpensePercent}%)`}
-              </AppText>
-              <AppText variant="caption" color={colors.semantic.moto}>
-                {`Flujo Neto Hoy: ${formatCop(budget.netCashFlow)}`}
+              <AppText variant="micro" color={colors.text.secondary}>
+                {`Por pagar: ${formatCop(budget.pendingExpenses)}`}
               </AppText>
             </View>
           </View>
 
-          {/* Expense Distribution by Concept */}
-          <AppText variant="headline">Distribución de Gastos por Concepto</AppText>
+          {/* Minimalist 3-Metric Summary Pills */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+            <View
+              style={{
+                flex: 1,
+                minWidth: 130,
+                padding: spacing.sm,
+                borderRadius: radius.md,
+                backgroundColor: colors.glass.surfaceTint,
+                borderWidth: 1,
+                borderColor: colors.glass.subtleBorder,
+                gap: spacing.xxs,
+              }}
+            >
+              <AppText variant="micro" color={colors.text.secondary}>
+                INGRESOS RECIBIDOS
+              </AppText>
+              <CurrencyText amount={budget.receivedIncome} variant="headline" tone="income" />
+              <AppText variant="micro" color={colors.text.muted}>
+                {`Previsto: ${formatCop(budget.plannedIncome)}`}
+              </AppText>
+            </View>
+
+            <View
+              style={{
+                flex: 1,
+                minWidth: 130,
+                padding: spacing.sm,
+                borderRadius: radius.md,
+                backgroundColor: colors.glass.surfaceTint,
+                borderWidth: 1,
+                borderColor: colors.glass.subtleBorder,
+                gap: spacing.xxs,
+              }}
+            >
+              <AppText variant="micro" color={colors.text.secondary}>
+                GASTOS PAGADOS
+              </AppText>
+              <CurrencyText amount={budget.paidExpenses} variant="headline" tone="expense" />
+              <AppText variant="micro" color={colors.text.muted}>
+                {`Total mes: ${formatCop(budget.plannedExpenses)}`}
+              </AppText>
+            </View>
+
+            <View
+              style={{
+                flex: 1,
+                minWidth: 130,
+                padding: spacing.sm,
+                borderRadius: radius.md,
+                backgroundColor: colors.glass.surfaceTint,
+                borderWidth: 1,
+                borderColor: colors.glass.subtleBorder,
+                gap: spacing.xxs,
+              }}
+            >
+              <AppText variant="micro" color={colors.text.secondary}>
+                FLUJO NETO HOY
+              </AppText>
+              <CurrencyText
+                amount={budget.netCashFlow}
+                variant="headline"
+                tone={budget.netCashFlow >= 0 ? 'income' : 'expense'}
+              />
+              <AppText variant="micro" color={colors.text.muted}>
+                {`Proyectado: ${formatCop(budget.projectedNetFlow)}`}
+              </AppText>
+            </View>
+          </View>
+
+          {/* Minimalist Expense Breakdown */}
           <View style={{ gap: spacing.xs }}>
-            {expenseEntries.map((item) => {
-              const share =
-                budget.plannedExpenses > 0
-                  ? Math.round((item.plannedAmount / budget.plannedExpenses) * 1000) / 10
-                  : 0;
-              return (
-                <View key={item.id} style={{ gap: spacing.xxs }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <AppText variant="caption">
-                      {`${item.conceptName} (${share}%)`}
-                    </AppText>
-                    <CurrencyText amount={item.plannedAmount} variant="caption" tone="expense" />
-                  </View>
+            <AppText variant="headline">Distribución de Gastos</AppText>
+            {expenseEntries.length === 0 ? (
+              <AppText variant="caption" color={colors.text.secondary}>
+                No hay gastos registrados en este mes.
+              </AppText>
+            ) : (
+              expenseEntries.map((item) => {
+                const share =
+                  budget.plannedExpenses > 0
+                    ? Math.round((item.plannedAmount / budget.plannedExpenses) * 1000) / 10
+                    : 0;
+                const isCompleted = item.status === 'completed';
+                return (
                   <View
+                    key={item.id}
                     style={{
-                      height: 6,
-                      borderRadius: radius.pill,
+                      paddingVertical: spacing.xs,
+                      paddingHorizontal: spacing.sm,
+                      borderRadius: radius.md,
                       backgroundColor: colors.glass.surfaceTint,
-                      overflow: 'hidden',
+                      gap: spacing.xxs,
                     }}
                   >
                     <View
                       style={{
-                        width: `${Math.min(100, Math.max(3, share))}%`,
-                        height: '100%',
-                        backgroundColor:
-                          item.status === 'completed'
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                        <AppText
+                          variant="caption"
+                          color={isCompleted ? colors.semantic.completed : colors.semantic.pending}
+                        >
+                          {isCompleted ? '●' : '○'}
+                        </AppText>
+                        <AppText variant="caption">{item.conceptName}</AppText>
+                        <AppText variant="micro" color={colors.text.secondary}>
+                          {`${share}%`}
+                        </AppText>
+                      </View>
+                      <CurrencyText amount={item.plannedAmount} variant="caption" tone="expense" />
+                    </View>
+                    <View
+                      style={{
+                        height: 4,
+                        borderRadius: radius.pill,
+                        backgroundColor: colors.glass.subtleBorder,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: `${Math.min(100, Math.max(3, share))}%`,
+                          height: '100%',
+                          backgroundColor: isCompleted
                             ? colors.semantic.completed
                             : colors.semantic.pending,
-                      }}
-                    />
+                        }}
+                      />
+                    </View>
                   </View>
-                </View>
-              );
-            })}
+                );
+              })
+            )}
           </View>
         </View>
       </GlassSurface>
@@ -359,6 +451,98 @@ export function AnalyticsAndHistoryView({
               );
             })}
           </View>
+        </View>
+      </GlassSurface>
+
+      {/* Screen 11: Exclusive Account Reset Zone */}
+      <GlassSurface elevated testID="reset-account-card">
+        <View style={{ gap: spacing.sm }}>
+          <View>
+            <AppText variant="headline">Configuración de Cuenta</AppText>
+            <AppText variant="caption" color={colors.text.secondary}>
+              Si deseas comenzar desde cero y reconfigurar tu mes inicial, ingresos, gastos, deudas y
+              fondos de ahorro, puedes reiniciar toda la cuenta.
+            </AppText>
+          </View>
+
+          {!confirmingAccountReset ? (
+            <Pressable
+              testID="reset-full-account-button"
+              accessibilityRole="button"
+              onPress={() => setConfirmingAccountReset(true)}
+              style={{
+                width: '100%',
+                minHeight: MIN_TOUCH_TARGET_PT,
+                paddingVertical: spacing.sm,
+                paddingHorizontal: spacing.md,
+                borderRadius: radius.md,
+                backgroundColor: colors.semantic.expenseSoft,
+                borderWidth: 1,
+                borderColor: colors.semantic.expense,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <AppText variant="headline" color={colors.semantic.expense}>
+                Reiniciar toda la cuenta
+              </AppText>
+            </Pressable>
+          ) : (
+            <View
+              style={{
+                padding: spacing.sm,
+                borderRadius: radius.md,
+                backgroundColor: colors.semantic.expenseSoft,
+                borderWidth: 1,
+                borderColor: colors.semantic.expense,
+                gap: spacing.xs,
+              }}
+            >
+              <AppText variant="caption" color={colors.semantic.expense}>
+                ¿Estás seguro? Esta acción borrará tus meses actuales y abrirá el asistente de
+                configuración inicial desde cero.
+              </AppText>
+              <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                <Pressable
+                  testID="cancel-reset-full-account-button"
+                  accessibilityRole="button"
+                  onPress={() => setConfirmingAccountReset(false)}
+                  style={{
+                    flex: 1,
+                    minHeight: MIN_TOUCH_TARGET_PT,
+                    borderRadius: radius.md,
+                    backgroundColor: colors.glass.surfaceTint,
+                    borderWidth: 1,
+                    borderColor: colors.glass.subtleBorder,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <AppText variant="caption">Cancelar</AppText>
+                </Pressable>
+                <Pressable
+                  testID="confirm-reset-full-account-button"
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setConfirmingAccountReset(false);
+                    onResetFullAccount?.();
+                  }}
+                  style={{
+                    flex: 1,
+                    minHeight: MIN_TOUCH_TARGET_PT,
+                    borderRadius: radius.md,
+                    backgroundColor: colors.semantic.expense,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <AppText variant="headline" color={colors.text.primary}>
+                    Sí, reiniciar cuenta
+                  </AppText>
+                </Pressable>
+              </View>
+            </View>
+          )}
         </View>
       </GlassSurface>
     </View>

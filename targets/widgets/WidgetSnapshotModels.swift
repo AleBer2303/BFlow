@@ -89,6 +89,31 @@ public struct WidgetSnapshotV1: Codable, Hashable {
             WidgetPendingItemV1(id: "gasolina", name: "Gasolina y Peajes", amountCop: 100_000, type: "expense")
         ]
     )
+    /// Dynamic empty fallback for current Bogota month before first app sync
+    public static func emptyCurrentMonthFallback() -> WidgetSnapshotV1 {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM"
+        formatter.timeZone = TimeZone(identifier: "America/Bogota") ?? .current
+        let currentMonthKey = formatter.string(from: Date())
+        let isoFormatter = ISO8601DateFormatter()
+        return WidgetSnapshotV1(
+            schemaVersion: 1,
+            updatedAtIso: isoFormatter.string(from: Date()),
+            monthKey: currentMonthKey,
+            netCashFlowCop: 0,
+            receivedIncomeCop: 0,
+            paidExpensesCop: 0,
+            pendingExpensesCop: 0,
+            checklistCompleted: 0,
+            checklistTotal: 0,
+            totalDebtCop: 0,
+            openingDebtCop: 0,
+            motoSavingsCop: 0,
+            generalSavingsCop: 0,
+            totalSavingsCop: 0,
+            topPendingItems: []
+        )
+    }
 }
 
 // MARK: - App Group & Storage Bridge
@@ -109,11 +134,15 @@ public enum WidgetStorageBridge {
         var suites: [String] = []
         let dynamic = resolveAppGroupId()
         suites.append(dynamic)
-        if !suites.contains("group.com.bflow.app") {
-            suites.append("group.com.bflow.app")
-        }
         if let bundleId = Bundle.main.bundleIdentifier {
-            let parts = bundleId.components(separatedBy: ".")
+            var parts = bundleId.components(separatedBy: ".")
+            if parts.last == "widgets" {
+                parts.removeLast()
+                let parentGroup = "group.\(parts.joined(separator: "."))"
+                if !suites.contains(parentGroup) {
+                    suites.append(parentGroup)
+                }
+            }
             if parts.count >= 3 {
                 let firstThree = parts.prefix(3).joined(separator: ".")
                 let prefixGroup = "group.\(firstThree)"
@@ -122,25 +151,40 @@ public enum WidgetStorageBridge {
                 }
             }
         }
+        if !suites.contains("group.com.bflow.app") {
+            suites.append("group.com.bflow.app")
+        }
         return suites
     }
 
-    /// Loads the latest snapshot written by React Native from shared UserDefaults
+    /// Loads the latest snapshot written by React Native from shared App Group container file or UserDefaults
     public static func loadSnapshot() -> WidgetSnapshotV1 {
-        for suiteName in candidateSuiteNames() {
+        let candidates = candidateSuiteNames()
+
+        // 1. Check shared App Group container file first (atomic write bypasses cfprefsd caching)
+        for suiteName in candidates {
+            if let containerUrl = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: suiteName) {
+                let fileUrl = containerUrl.appendingPathComponent("\(storageKey).json")
+                if let fileData = try? Data(contentsOf: fileUrl),
+                   let decoded = try? JSONDecoder().decode(WidgetSnapshotV1.self, from: fileData) {
+                    return decoded
+                }
+            }
+        }
+
+        // 2. Check shared UserDefaults suites
+        for suiteName in candidates {
             guard let defaults = UserDefaults(suiteName: suiteName) else {
                 continue
             }
             defaults.synchronize()
 
-            // 1. Try JSON string (from ExtensionStorage setString)
             if let stringValue = defaults.string(forKey: storageKey),
                let data = stringValue.data(using: .utf8),
                let decoded = try? JSONDecoder().decode(WidgetSnapshotV1.self, from: data) {
                 return decoded
             }
 
-            // 2. Try raw JSON data (from ExtensionStorage setObject/setArray)
             if let data = defaults.data(forKey: storageKey),
                let decoded = try? JSONDecoder().decode(WidgetSnapshotV1.self, from: data) {
                 return decoded
@@ -159,7 +203,7 @@ public enum WidgetStorageBridge {
             return decoded
         }
 
-        return .goldenFallback
+        return .emptyCurrentMonthFallback()
     }
 }
 

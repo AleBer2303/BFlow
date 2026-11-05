@@ -3,18 +3,17 @@
  *
  * Full-screen Authentication & Personal Registration Gate (`01-auth`),
  * crafted following `.claude/skills/frontend-design/SKILL.md` and `DESIGN.md`:
- * - Grounded in BFlow's real subject matter (Colombian peso cash-flow, FUNFAMI debt, CB300F fund)
  * - Supports Sign-In (`email` + `password`), Personal Account Registration (`displayName`, `phone`,
- *   `financialGoal`, `email`, `password`), Google Sign-In (`GoogleAuthProvider`), and Password Recovery
+ *   `financialGoal`, `email`, `password`), and Password Recovery with Firebase
+ * - Includes password visibility toggle while typing
  * - Zero hardcoded hex values; uses semantic tokens from `useBFlowTheme()` and >= 44pt touch targets
  */
 
 import React, { useState } from 'react';
-import { Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import {
   AppText,
   GlassSurface,
-  GoogleLogoIcon,
   MIN_TOUCH_TARGET_PT,
   StatusBadge,
   ThemeToggleIconButton,
@@ -31,7 +30,6 @@ export interface AuthScreenProps {
   statusMessage: string | null;
   onSignInWithEmail: (email: string, password: string) => Promise<void>;
   onRegisterPersonalAccount: (input: RegisterPersonalAccountInput) => Promise<void>;
-  onSignInWithGoogle: () => Promise<void>;
   onSendPasswordRecovery: (email: string) => Promise<void>;
 }
 
@@ -42,7 +40,6 @@ export function AuthScreen({
   statusMessage,
   onSignInWithEmail,
   onRegisterPersonalAccount,
-  onSignInWithGoogle,
   onSendPasswordRecovery,
 }: AuthScreenProps): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
@@ -51,11 +48,13 @@ export function AuthScreen({
   const [displayName, setDisplayName] = useState('');
   const [phone, setPhone] = useState('');
   const [financialGoal, setFinancialGoal] = useState(
-    'Saldar deuda FUNFAMI y cubrir provisión CB300F'
+    'Saldar deudas y hacer crecer mis ahorros'
   );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [localValidationError, setLocalValidationError] = useState<string | null>(null);
 
   const switchMode = (nextMode: AuthFormMode) => {
@@ -322,31 +321,58 @@ export function AuthScreen({
               />
             </View>
 
-            {/* Password Fields */}
+            {/* Password Fields with Visibility Toggle */}
             {formMode !== 'recover' ? (
               <View style={{ gap: spacing.sm }}>
                 <View style={{ gap: spacing.xxs }}>
                   <AppText variant="caption" color={colors.text.secondary}>
                     Contraseña
                   </AppText>
-                  <TextInput
-                    testID="auth-password-input"
-                    value={password}
-                    onChangeText={setPassword}
-                    placeholder="Mínimo 6 caracteres"
-                    placeholderTextColor={colors.text.muted}
-                    secureTextEntry
-                    autoComplete={formMode === 'register' ? 'new-password' : 'current-password'}
+                  <View
                     style={{
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      paddingHorizontal: spacing.md,
+                      flexDirection: 'row',
+                      alignItems: 'center',
                       borderRadius: radius.md,
                       backgroundColor: colors.glass.surfaceTint,
                       borderWidth: 1,
                       borderColor: colors.glass.subtleBorder,
-                      color: colors.text.primary,
                     }}
-                  />
+                  >
+                    <TextInput
+                      testID="auth-password-input"
+                      value={password}
+                      onChangeText={setPassword}
+                      placeholder="Mínimo 6 caracteres"
+                      placeholderTextColor={colors.text.muted}
+                      secureTextEntry={!showPassword}
+                      autoComplete={formMode === 'register' ? 'new-password' : 'current-password'}
+                      style={{
+                        flex: 1,
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.md,
+                        color: colors.text.primary,
+                      }}
+                    />
+                    <Pressable
+                      testID="auth-password-visibility-toggle"
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        showPassword ? 'Ocultar contraseña' : 'Ver contraseña'
+                      }
+                      onPress={() => setShowPassword((prev) => !prev)}
+                      style={{
+                        minHeight: MIN_TOUCH_TARGET_PT,
+                        minWidth: MIN_TOUCH_TARGET_PT,
+                        paddingHorizontal: spacing.sm,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <AppText variant="caption" color={colors.text.secondary}>
+                        {showPassword ? 'Ocultar' : 'Ver'}
+                      </AppText>
+                    </Pressable>
+                  </View>
                 </View>
 
                 {formMode === 'register' ? (
@@ -354,23 +380,52 @@ export function AuthScreen({
                     <AppText variant="caption" color={colors.text.secondary}>
                       Confirmar contraseña
                     </AppText>
-                    <TextInput
-                      testID="auth-confirm-password-input"
-                      value={confirmPassword}
-                      onChangeText={setConfirmPassword}
-                      placeholder="Repite tu contraseña"
-                      placeholderTextColor={colors.text.muted}
-                      secureTextEntry
+                    <View
                       style={{
-                        minHeight: MIN_TOUCH_TARGET_PT,
-                        paddingHorizontal: spacing.md,
+                        flexDirection: 'row',
+                        alignItems: 'center',
                         borderRadius: radius.md,
                         backgroundColor: colors.glass.surfaceTint,
                         borderWidth: 1,
                         borderColor: colors.glass.subtleBorder,
-                        color: colors.text.primary,
                       }}
-                    />
+                    >
+                      <TextInput
+                        testID="auth-confirm-password-input"
+                        value={confirmPassword}
+                        onChangeText={setConfirmPassword}
+                        placeholder="Repite tu contraseña"
+                        placeholderTextColor={colors.text.muted}
+                        secureTextEntry={!showConfirmPassword}
+                        style={{
+                          flex: 1,
+                          minHeight: MIN_TOUCH_TARGET_PT,
+                          paddingHorizontal: spacing.md,
+                          color: colors.text.primary,
+                        }}
+                      />
+                      <Pressable
+                        testID="auth-confirm-password-visibility-toggle"
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          showConfirmPassword
+                            ? 'Ocultar confirmación de contraseña'
+                            : 'Ver confirmación de contraseña'
+                        }
+                        onPress={() => setShowConfirmPassword((prev) => !prev)}
+                        style={{
+                          minHeight: MIN_TOUCH_TARGET_PT,
+                          minWidth: MIN_TOUCH_TARGET_PT,
+                          paddingHorizontal: spacing.sm,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <AppText variant="caption" color={colors.text.secondary}>
+                          {showConfirmPassword ? 'Ocultar' : 'Ver'}
+                        </AppText>
+                      </Pressable>
+                    </View>
                   </View>
                 ) : null}
               </View>
@@ -439,39 +494,9 @@ export function AuthScreen({
               </AppText>
             </Pressable>
 
-            {/* Google Sign-In Option & Password Recovery Link */}
+            {/* Password Recovery Link */}
             {formMode !== 'recover' ? (
               <View style={{ gap: spacing.xs, marginTop: spacing.xs }}>
-                <View style={{ alignItems: 'center', paddingVertical: spacing.xxs }}>
-                  <AppText variant="micro" color={colors.text.muted}>
-                    O accede con tu cuenta de Google
-                  </AppText>
-                </View>
-
-                <Pressable
-                  testID="auth-google-button"
-                  accessibilityRole="button"
-                  disabled={isSubmitting}
-                  onPress={onSignInWithGoogle}
-                  style={{
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    borderRadius: radius.md,
-                    backgroundColor: colors.glass.surfaceElevatedTint,
-                    borderWidth: 1,
-                    borderColor: colors.glass.specularBorder,
-                    flexDirection: 'row',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    gap: spacing.sm,
-                    paddingVertical: spacing.sm,
-                    paddingHorizontal: spacing.md,
-                  }}
-                >
-                  <GoogleLogoIcon size={20} />
-                  <AppText variant="headline">Continuar con Google</AppText>
-                </Pressable>
-
-                {/* Password recovery option placed beneath Continuar con Google */}
                 <Pressable
                   testID="auth-mode-recover"
                   accessibilityRole="button"

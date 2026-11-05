@@ -53,7 +53,7 @@ const conceptRecurrenceSchema = z.discriminatedUnion('kind', [
 ]);
 
 const savingsContributionRuleSchema = z.object({
-  bucketId: z.enum(['moto', 'savings']),
+  bucketId: z.string().min(1).max(120),
   onlyWhenCompleted: z.boolean(),
 });
 
@@ -100,6 +100,9 @@ export const debtSchema: z.ZodType<Debt> = z.object({
   openingBalance: nonNegativeCopIntSchema,
   monthKey: monthKeyStringSchema,
   monthlyInterestRate: z.number().min(0).max(100).optional(),
+  annualInterestRate: z.number().min(0).max(1000).optional(),
+  interestRateType: z.enum(['monthly', 'annual']).optional(),
+  monthlyInstallment: nonNegativeCopIntSchema.optional(),
 });
 
 export const debtPaymentSchema: z.ZodType<DebtPayment> = z
@@ -122,9 +125,10 @@ export const debtPaymentSchema: z.ZodType<DebtPayment> = z
   });
 
 export const savingsBucketSchema: z.ZodType<SavingsBucket> = z.object({
-  id: z.enum(['moto', 'savings']),
-  name: z.string().min(1),
+  id: z.string().min(1).max(120),
+  name: z.string().min(1).max(120),
   openingBalance: nonNegativeCopIntSchema,
+  monthKey: monthKeyStringSchema.optional(),
 });
 
 export const provisionItemSpecSchema: z.ZodType<ProvisionItemSpec> = z.object({
@@ -141,6 +145,7 @@ export const provisionItemSpecSchema: z.ZodType<ProvisionItemSpec> = z.object({
   targetDateIso: z.string().min(1).optional(),
   includedInExcelTotalB43: z.boolean(),
   kind: z.enum(['recurring_provision', 'target_goal']),
+  notes: z.string().optional(),
 });
 
 export const idealMotoPlanSchema: z.ZodType<IdealMotoPlan> = z.object({
@@ -194,9 +199,15 @@ export const monthSnapshotSchema: z.ZodType<MonthSnapshot> = z.object({
     z.object({
       debtId: z.string().min(1),
       name: z.string().min(1),
+      lender: z.string().min(1).optional(),
+      groupKey: z.string().min(1).optional(),
       openingBalance: nonNegativeCopIntSchema,
       paidPrincipal: nonNegativeCopIntSchema,
       closingBalance: nonNegativeCopIntSchema,
+      monthlyInterestRate: z.number().min(0).max(100).optional(),
+      annualInterestRate: z.number().min(0).max(1000).optional(),
+      interestRateType: z.enum(['monthly', 'annual']).optional(),
+      monthlyInstallment: nonNegativeCopIntSchema.optional(),
     })
   ),
   totalClosingDebt: nonNegativeCopIntSchema,

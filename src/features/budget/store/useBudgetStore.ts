@@ -9,33 +9,42 @@
 
 import { create } from 'zustand';
 import {
+  EMPTY_PROVISION_PLAN,
+  ensureStandardSavingsBuckets,
   FirestoreBudgetRepository,
+  isOwnerCanonicalEmail,
   type FullCloudAccountData,
+  type InitialAccountSetupPayload,
 } from '../../../data/repositories/budgetRepository';
 import { buildOctober2026SeedPayload } from '../../../data/seed/october2026SeedData';
 import {
   buildDebtPaymentsForInstallment,
   closeMonthAndRollover,
   deleteMovement,
+  getMonthNumberFromMonthKey,
   registerMovement,
+  sumMoneyIntegers,
   toBogotaIsoDate,
+  toBogotaMonthKey,
   toggleMovementStatus,
-  uncompleteMovement,
   type CloseMonthResult,
   type Concept,
   type ConceptGroup,
   type ConceptType,
   type Debt,
+  type DebtInterestRateType,
   type DebtPayment,
   type IdealMotoPlan,
   type MonthEntry,
   type MonthSnapshot,
+  type ProvisionItemSpec,
   type RegisterOrCompleteMovementInput,
   type SavingsBucket,
 } from '../../../domain';
 import {
   DEMO_OWNER_USER,
   loadPersistedSession,
+  savePersistedSession,
   type BFlowAuthUser,
 } from '../../../platform/auth/authAdapter';
 import {
@@ -51,6 +60,9 @@ export interface EditEntryUpdates {
   actualAmount: number;
   plannedAmount?: number;
   note?: string;
+  targetDebtId?: string | null;
+  savingsBucketId?: string | null;
+  persistMonthly?: boolean;
 }
 
 export interface CreateCustomConceptInput {
@@ -60,6 +72,62 @@ export interface CreateCustomConceptInput {
   group: ConceptGroup;
   amountCop: number;
   note?: string;
+  targetDebtId?: string | null;
+  savingsBucketId?: string | null;
+  persistMonthly?: boolean;
+  markCompleted?: boolean;
+}
+
+export interface SaveProvisionItemInput {
+  id?: string;
+  name: string;
+  amount: number;
+  periodMonths: number;
+  priority: string;
+  kind: 'recurring' | 'target_goal';
+  notes?: string;
+}
+
+export interface InitialOnboardingConfigInput {
+  monthKey: string;
+  incomes: Array<{
+    name: string;
+    amountCop: number;
+    group: ConceptGroup;
+    persistMonthly: boolean;
+    completed?: boolean;
+  }>;
+  expenses: Array<{
+    name: string;
+    amountCop: number;
+    group: ConceptGroup;
+    persistMonthly: boolean;
+    targetDebtKey?: string | null;
+    savingsBucketKey?: string | null;
+    completed?: boolean;
+  }>;
+  debts: Array<{
+    key?: string;
+    name: string;
+    lender: string;
+    openingBalanceCop: number;
+    interestRate?: number;
+    interestRateType?: DebtInterestRateType;
+    monthlyInstallmentCop?: number;
+  }>;
+  savingsBuckets: Array<{
+    id?: string;
+    name: string;
+    openingBalanceCop: number;
+  }>;
+  provisions?: Array<{
+    name: string;
+    amountCop: number;
+    periodMonths: number;
+    priority: string;
+    kind: 'recurring' | 'target_goal';
+    notes?: string;
+  }>;
 }
 
 export interface BudgetStoreState {
@@ -76,12 +144,15 @@ export interface BudgetStoreState {
   authUser: BFlowAuthUser | null;
   syncMessage: string;
   isSyncing: boolean;
+  needsOnboarding: boolean;
 
   setActiveTab: (tab: BFlowWorkspaceTab) => void;
   setActiveMonthKey: (monthKey: string) => void;
   setAuthUser: (user: BFlowAuthUser | null) => void;
+  clearWorkspaceSession: () => void;
   requireAuthenticationGate: () => void;
   setSyncStatus: (message: string, isSyncing?: boolean) => void;
+  setNeedsOnboarding: (needsOnboarding: boolean) => void;
   applyCloudWorkspace: (payload: {
     monthKey: string;
     concepts: Concept[];
@@ -94,11 +165,23 @@ export interface BudgetStoreState {
   }) => void;
   applyFullCloudAccount: (payload: FullCloudAccountData) => void;
   toggleEntryStatus: (entryId: string, completedAtDateIso?: string) => Promise<void>;
-  addOrCompleteMovement: (input: RegisterOrCompleteMovementInput) => Promise<void>;
+  addOrCompleteMovement: (
+    input: RegisterOrCompleteMovementInput & {
+      targetDebtId?: string | null;
+      savingsBucketId?: string | null;
+    }
+  ) => Promise<void>;
   createCustomConceptAndMovement: (input: CreateCustomConceptInput) => Promise<void>;
   updateConcept: (
     conceptId: string,
-    updates: { name?: string; defaultAmount?: number; group?: ConceptGroup }
+    updates: {
+      name?: string;
+      defaultAmount?: number;
+      group?: ConceptGroup;
+      targetDebtId?: string | null;
+      savingsBucketId?: string | null;
+      persistMonthly?: boolean;
+    }
   ) => Promise<void>;
   deleteConcept: (conceptId: string) => Promise<void>;
   createDebt: (
@@ -108,9 +191,12 @@ export interface BudgetStoreState {
       lender: string;
       openingBalance: number;
       monthlyInterestRate?: number;
+      annualInterestRate?: number;
+      interestRateType?: DebtInterestRateType;
+      monthlyInstallment?: number;
       groupKey?: string;
     }
-  ) => Promise<void>;
+  ) => Promise<Debt>;
   updateDebt: (
     monthKey: string,
     debtId: string,
@@ -119,14 +205,26 @@ export interface BudgetStoreState {
       lender?: string;
       openingBalance?: number;
       monthlyInterestRate?: number;
+      annualInterestRate?: number;
+      interestRateType?: DebtInterestRateType;
+      monthlyInstallment?: number;
     }
   ) => Promise<void>;
   deleteDebt: (monthKey: string, debtId: string) => Promise<void>;
   updateSavingsOpeningBalance: (
     monthKey: string,
-    bucketId: 'moto' | 'savings',
-    newBalanceCop: number
+    bucketId: string,
+    newBalanceCop: number,
+    bucketName?: string
   ) => Promise<void>;
+  createSavingsBucket: (
+    monthKey: string,
+    name: string,
+    openingBalanceCop: number
+  ) => Promise<SavingsBucket | null>;
+  deleteSavingsBucket: (monthKey: string, bucketId: string) => Promise<void>;
+  saveProvisionItem: (input: SaveProvisionItemInput) => Promise<void>;
+  deleteProvisionItem: (itemId: string) => Promise<void>;
   editEntry: (entryId: string, updates: EditEntryUpdates) => Promise<void>;
   deleteEntryById: (entryId: string) => Promise<void>;
   removeOrResetEntry: (entryId: string) => Promise<void>;
@@ -134,18 +232,79 @@ export interface BudgetStoreState {
   closeCurrentMonth: (closedAtIso?: string) => Promise<CloseMonthResult>;
   reopenClosedMonth: (monthKey: string) => Promise<void>;
   deleteOrRevertMonth: (monthKey: string) => Promise<void>;
+  completeInitialAccountSetup: (input: InitialOnboardingConfigInput) => Promise<void>;
+  resetFullAccount: (newStartMonthKey?: string) => Promise<void>;
   resetToOctober2026GoldenState: () => void;
   syncActiveWidget: () => Promise<WidgetSyncResult>;
 }
 
+function recalculateProvisionPlan(items: readonly ProvisionItemSpec[]): IdealMotoPlan {
+  const normalizedItems = items.map((item) => ({ ...item }));
+  const recurringMonthlyTotalCop = sumMoneyIntegers(
+    normalizedItems
+      .filter((i) => i.kind === 'recurring_provision')
+      .map((i) => i.monthlyAmountCop)
+  );
+  const goalsTotalCop = sumMoneyIntegers(
+    normalizedItems
+      .filter((i) => i.kind === 'target_goal')
+      .map((i) => i.targetAmountCop ?? i.monthlyAmountCop)
+  );
+  const totalWithTargetGoalCop = recurringMonthlyTotalCop + goalsTotalCop;
+  return {
+    items: normalizedItems,
+    recurringMonthlyTotalCop,
+    totalWithTargetGoalCop,
+  };
+}
+
+function applyConceptLinkageUpdates(
+  concept: Concept,
+  monthKey: string,
+  monthDebts: readonly Debt[],
+  updates: {
+    targetDebtId?: string | null;
+    savingsBucketId?: string | null;
+    persistMonthly?: boolean;
+  }
+): Concept {
+  const next: Concept = { ...concept };
+
+  if (updates.targetDebtId !== undefined) {
+    if (updates.targetDebtId) {
+      const targetDebt = monthDebts.find((d) => d.id === updates.targetDebtId);
+      next.linkedDebtGroup = targetDebt?.groupKey ?? 'FUNFAMI';
+      next.defaultTargetDebtId = updates.targetDebtId;
+    } else {
+      delete next.linkedDebtGroup;
+      delete next.defaultTargetDebtId;
+    }
+  }
+
+  if (updates.savingsBucketId !== undefined) {
+    if (updates.savingsBucketId) {
+      next.savingsContribution = {
+        bucketId: updates.savingsBucketId,
+        onlyWhenCompleted: true,
+      };
+    } else {
+      delete next.savingsContribution;
+    }
+  }
+
+  if (updates.persistMonthly !== undefined) {
+    next.recurrence = updates.persistMonthly
+      ? { kind: 'monthly' }
+      : { kind: 'specific_months', months: [getMonthNumberFromMonthKey(monthKey)] };
+  }
+
+  return next;
+}
+
 function triggerWidgetSync(state: BudgetStoreState): Promise<WidgetSyncResult> {
   try {
-    const monthDebts =
-      state.debtsByMonth[state.activeMonthKey] ?? state.debtsByMonth['2026-10'] ?? [];
-    const monthSavings =
-      state.savingsBucketsByMonth[state.activeMonthKey] ??
-      state.savingsBucketsByMonth['2026-10'] ??
-      [];
+    const monthDebts = state.debtsByMonth[state.activeMonthKey] ?? [];
+    const monthSavings = state.savingsBucketsByMonth[state.activeMonthKey] ?? [];
     const snapshot = buildWidgetSnapshotV1({
       monthKey: state.activeMonthKey,
       concepts: state.concepts,
@@ -182,10 +341,45 @@ function resolveDefaultInitialAuthUser(): BFlowAuthUser | null {
   return loadPersistedSession();
 }
 
+function buildCleanEmptyWorkspaceState(authUser: BFlowAuthUser | null) {
+  const defaultMonth =
+    authUser?.activeMonthKey && /^\d{4}-(0[1-9]|1[0-2])$/.test(authUser.activeMonthKey)
+      ? authUser.activeMonthKey
+      : isOwnerCanonicalEmail(authUser?.email)
+        ? '2026-10'
+        : `${toBogotaMonthKey().slice(0, 4)}-01`;
+
+  return {
+    activeTab: 'summary' as BFlowWorkspaceTab,
+    activeMonthKey: defaultMonth,
+    availableMonths: [defaultMonth],
+    concepts: [] as Concept[],
+    entries: [] as MonthEntry[],
+    debtsByMonth: (authUser
+      ? { [defaultMonth]: [] }
+      : {}) as Record<string, Debt[]>,
+    debtPayments: [] as DebtPayment[],
+    savingsBucketsByMonth: (authUser
+      ? { [defaultMonth]: ensureStandardSavingsBuckets([], 0, 0) }
+      : {}) as Record<string, SavingsBucket[]>,
+    idealMotoPlan: { ...EMPTY_PROVISION_PLAN, items: [] },
+    closedSnapshots: {} as Record<string, MonthSnapshot>,
+    authUser,
+    syncMessage: '',
+    isSyncing: false,
+    needsOnboarding: false,
+  };
+}
+
 function buildInitialState(authUserOverride?: BFlowAuthUser | null) {
-  const seed = buildOctober2026SeedPayload();
   const resolvedUser =
     authUserOverride !== undefined ? authUserOverride : resolveDefaultInitialAuthUser();
+
+  if (process.env.NODE_ENV !== 'test' && !isOwnerCanonicalEmail(resolvedUser?.email)) {
+    return buildCleanEmptyWorkspaceState(resolvedUser);
+  }
+
+  const seed = buildOctober2026SeedPayload();
 
   return {
     activeTab: 'summary' as BFlowWorkspaceTab,
@@ -205,6 +399,7 @@ function buildInitialState(authUserOverride?: BFlowAuthUser | null) {
     authUser: resolvedUser,
     syncMessage: '',
     isSyncing: false,
+    needsOnboarding: false,
   };
 }
 
@@ -213,13 +408,64 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
 
   setActiveTab: (tab) => set({ activeTab: tab }),
 
-  setActiveMonthKey: (monthKey) => set({ activeMonthKey: monthKey }),
+  setActiveMonthKey: (monthKey) => {
+    const state = get();
+    const nextAvailable = state.availableMonths.includes(monthKey)
+      ? state.availableMonths
+      : [...state.availableMonths, monthKey].sort();
+    const updatedUser = state.authUser
+      ? { ...state.authUser, activeMonthKey: monthKey }
+      : null;
 
-  setAuthUser: (user) => set({ authUser: user }),
+    set({
+      activeMonthKey: monthKey,
+      availableMonths: nextAvailable,
+      ...(updatedUser ? { authUser: updatedUser } : {}),
+    });
+    if (updatedUser && process.env.NODE_ENV !== 'test') {
+      savePersistedSession(updatedUser);
+    }
+    triggerWidgetSync(get());
 
-  requireAuthenticationGate: () => set({ authUser: null }),
+    if (isRealAuthUser(state.authUser)) {
+      const repo = new FirestoreBudgetRepository();
+      void repo.saveActiveMonthKey(state.authUser.uid, monthKey).catch(() => {
+        // Non-fatal if offline
+      });
+    }
+  },
+
+  setAuthUser: (user) => {
+    const prevUser = get().authUser;
+    if (!user) {
+      set(buildCleanEmptyWorkspaceState(null));
+      return;
+    }
+    const isSwitchingAccount =
+      !prevUser ||
+      prevUser.uid !== user.uid ||
+      (prevUser.email ?? '').trim().toLowerCase() !== (user.email ?? '').trim().toLowerCase();
+
+    if (isSwitchingAccount) {
+      if (process.env.NODE_ENV === 'test' && isOwnerCanonicalEmail(user.email)) {
+        set(buildInitialState(user));
+      } else {
+        set(buildCleanEmptyWorkspaceState(user));
+      }
+      return;
+    }
+    set({ authUser: user });
+  },
+
+  clearWorkspaceSession: () => {
+    set(buildCleanEmptyWorkspaceState(null));
+  },
+
+  requireAuthenticationGate: () => set(buildCleanEmptyWorkspaceState(null)),
 
   setSyncStatus: (message, isSyncing = false) => set({ syncMessage: message, isSyncing }),
+
+  setNeedsOnboarding: (needsOnboarding) => set({ needsOnboarding }),
 
   applyCloudWorkspace: (payload) => {
     set((state) => ({
@@ -242,7 +488,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       ],
       savingsBucketsByMonth: {
         ...state.savingsBucketsByMonth,
-        [payload.monthKey]: payload.savingsBuckets,
+        [payload.monthKey]: ensureStandardSavingsBuckets(payload.savingsBuckets),
       },
       idealMotoPlan: payload.provisionPlan,
       closedSnapshots: payload.closedSnapshot
@@ -253,6 +499,11 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
   },
 
   applyFullCloudAccount: (payload) => {
+    const currentUser = get().authUser;
+    const updatedUser = currentUser
+      ? { ...currentUser, activeMonthKey: payload.activeMonthKey }
+      : null;
+
     set({
       activeMonthKey: payload.activeMonthKey,
       availableMonths: payload.availableMonths,
@@ -263,7 +514,12 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       savingsBucketsByMonth: payload.savingsBucketsByMonth,
       idealMotoPlan: payload.provisionPlan,
       closedSnapshots: payload.closedSnapshots,
+      needsOnboarding: payload.needsOnboarding ?? false,
+      ...(updatedUser ? { authUser: updatedUser } : {}),
     });
+    if (updatedUser && process.env.NODE_ENV !== 'test') {
+      savePersistedSession(updatedUser);
+    }
     triggerWidgetSync(get());
   },
 
@@ -280,10 +536,15 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     const concept = state.concepts.find((c) => c.id === target.conceptId);
 
     let nextDebtPayments = state.debtPayments;
-    if (concept?.linkedDebtGroup && updatedEntry) {
+    if ((concept?.linkedDebtGroup || concept?.defaultTargetDebtId) && updatedEntry) {
       const monthDebts =
         state.debtsByMonth[updatedEntry.monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
-      const cascadedPayments = buildDebtPaymentsForInstallment(updatedEntry, monthDebts);
+      const cascadedPayments = buildDebtPaymentsForInstallment(
+        updatedEntry,
+        monthDebts,
+        undefined,
+        concept.defaultTargetDebtId
+      );
       nextDebtPayments = [
         ...state.debtPayments.filter((dp) => dp.entryId !== updatedEntry.id),
         ...cascadedPayments,
@@ -313,35 +574,61 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
 
   addOrCompleteMovement: async (input) => {
     const state = get();
-    const nextEntries = registerMovement(state.entries, state.concepts, input);
-    const concept = state.concepts.find((c) => c.id === input.conceptId);
+    const monthDebts =
+      state.debtsByMonth[input.monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
+    let concept = state.concepts.find((c) => c.id === input.conceptId);
+    let nextConcepts = state.concepts;
+
+    if (
+      concept &&
+      (input.targetDebtId !== undefined || input.savingsBucketId !== undefined)
+    ) {
+      concept = applyConceptLinkageUpdates(concept, input.monthKey, monthDebts, {
+        targetDebtId: input.targetDebtId,
+        savingsBucketId: input.savingsBucketId,
+      });
+      nextConcepts = state.concepts.map((c) => (c.id === concept!.id ? concept! : c));
+    }
+
+    const nextEntries = registerMovement(state.entries, nextConcepts, input);
+    const updatedEntry = nextEntries.find(
+      (e) =>
+        e.monthKey === input.monthKey &&
+        e.conceptId === input.conceptId &&
+        (!state.entries.some((prev) => prev.id === e.id && prev.status === 'completed') ||
+          !concept?.allowMultiplePerMonth)
+    );
 
     let nextDebtPayments = state.debtPayments;
-    if (concept?.linkedDebtGroup) {
-      const updatedEntry = nextEntries.find(
-        (e) => e.monthKey === input.monthKey && e.conceptId === input.conceptId
+    if ((concept?.linkedDebtGroup || concept?.defaultTargetDebtId) && updatedEntry) {
+      const cascadedPayments = buildDebtPaymentsForInstallment(
+        updatedEntry,
+        monthDebts,
+        undefined,
+        concept.defaultTargetDebtId
       );
-      if (updatedEntry) {
-        const monthDebts =
-          state.debtsByMonth[updatedEntry.monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
-        const cascadedPayments = buildDebtPaymentsForInstallment(updatedEntry, monthDebts);
-        nextDebtPayments = [
-          ...state.debtPayments.filter((dp) => dp.entryId !== updatedEntry.id),
-          ...cascadedPayments,
-        ];
-      }
+      nextDebtPayments = [
+        ...state.debtPayments.filter((dp) => dp.entryId !== updatedEntry.id),
+        ...cascadedPayments,
+      ];
     }
 
     set({
+      concepts: nextConcepts,
       entries: nextEntries,
       debtPayments: nextDebtPayments,
     });
     triggerWidgetSync(get());
 
-    if (isRealAuthUser(state.authUser)) {
+    if (updatedEntry && isRealAuthUser(state.authUser)) {
       try {
         const repo = new FirestoreBudgetRepository();
-        await repo.addMonthEntry(state.authUser.uid, input);
+        await repo.saveOrUpdateEntry(
+          state.authUser.uid,
+          updatedEntry,
+          concept,
+          nextDebtPayments.filter((dp) => dp.entryId === updatedEntry.id)
+        );
       } catch {
         set({ syncMessage: '' });
       }
@@ -354,23 +641,40 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     const trimmedName = input.name.trim();
     if (!trimmedName || safeAmount <= 0) return;
 
+    const monthDebts =
+      state.debtsByMonth[input.monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
     const slug = trimmedName
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '_')
       .replace(/^_|_$/g, '');
     const customConceptId = `${input.type === 'income' ? 'inc' : 'exp'}_custom_${slug}_${Date.now().toString(36)}`;
-    const newConcept: Concept = {
+    const baseConcept: Concept = {
       id: customConceptId,
       name: trimmedName,
       type: input.type,
       group: input.group,
       defaultAmount: safeAmount,
-      recurrence: { kind: 'monthly' },
+      recurrence:
+        input.persistMonthly === false
+          ? { kind: 'specific_months', months: [getMonthNumberFromMonthKey(input.monthKey)] }
+          : { kind: 'monthly' },
       allowMultiplePerMonth: false,
       archived: false,
       order: state.concepts.length + 1,
     };
 
+    const newConcept = applyConceptLinkageUpdates(
+      baseConcept,
+      input.monthKey,
+      monthDebts,
+      {
+        targetDebtId: input.targetDebtId,
+        savingsBucketId: input.savingsBucketId,
+        persistMonthly: input.persistMonthly,
+      }
+    );
+
+    const isCompleted = input.markCompleted !== false;
     const newEntry: MonthEntry = {
       id: `${input.monthKey}_${customConceptId}`,
       monthKey: input.monthKey,
@@ -380,21 +684,42 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       group: input.group,
       plannedAmount: safeAmount,
       actualAmount: safeAmount,
-      status: 'completed',
-      completedAt: toBogotaIsoDate(),
+      status: isCompleted ? 'completed' : 'pending',
+      ...(isCompleted ? { completedAt: toBogotaIsoDate() } : {}),
       ...(input.note?.trim() ? { note: input.note.trim() } : {}),
     };
+
+    let createdPayments: DebtPayment[] = [];
+    let nextDebtPayments = state.debtPayments;
+    if (newConcept.linkedDebtGroup || newConcept.defaultTargetDebtId) {
+      createdPayments = buildDebtPaymentsForInstallment(
+        newEntry,
+        monthDebts,
+        undefined,
+        newConcept.defaultTargetDebtId
+      );
+      nextDebtPayments = [
+        ...state.debtPayments.filter((dp) => dp.entryId !== newEntry.id),
+        ...createdPayments,
+      ];
+    }
 
     set({
       concepts: [...state.concepts, newConcept],
       entries: [...state.entries, newEntry],
+      debtPayments: nextDebtPayments,
     });
     triggerWidgetSync(get());
 
     if (isRealAuthUser(state.authUser)) {
       try {
         const repo = new FirestoreBudgetRepository();
-        await repo.saveCustomConceptAndEntry(state.authUser.uid, newConcept, newEntry);
+        await repo.saveCustomConceptAndEntry(
+          state.authUser.uid,
+          newConcept,
+          newEntry,
+          createdPayments
+        );
       } catch {
         set({ syncMessage: '' });
       }
@@ -406,7 +731,9 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     const target = state.concepts.find((c) => c.id === conceptId);
     if (!target) return;
 
-    const updatedConcept: Concept = {
+    const monthDebts =
+      state.debtsByMonth[state.activeMonthKey] ?? state.debtsByMonth['2026-10'] ?? [];
+    const baseUpdated: Concept = {
       ...target,
       ...(updates.name?.trim() ? { name: updates.name.trim() } : {}),
       ...(updates.defaultAmount !== undefined
@@ -415,6 +742,17 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       ...(updates.group ? { group: updates.group } : {}),
     };
 
+    const updatedConcept = applyConceptLinkageUpdates(
+      baseUpdated,
+      state.activeMonthKey,
+      monthDebts,
+      {
+        targetDebtId: updates.targetDebtId,
+        savingsBucketId: updates.savingsBucketId,
+        persistMonthly: updates.persistMonthly,
+      }
+    );
+
     const nextConcepts = state.concepts.map((c) => (c.id === conceptId ? updatedConcept : c));
     const nextEntries = state.entries.map((entry) => {
       if (entry.conceptId !== conceptId) return entry;
@@ -422,19 +760,56 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
         ...entry,
         conceptName: updatedConcept.name,
         group: updatedConcept.group,
+        ...(entry.status === 'pending' && updates.defaultAmount !== undefined
+          ? {
+              plannedAmount: updatedConcept.defaultAmount,
+              actualAmount: updatedConcept.defaultAmount,
+            }
+          : {}),
       };
     });
+
+    let nextDebtPayments = state.debtPayments;
+    const activeEntry = nextEntries.find(
+      (e) => e.conceptId === conceptId && e.monthKey === state.activeMonthKey
+    );
+    if (activeEntry && updates.targetDebtId !== undefined) {
+      if (updatedConcept.linkedDebtGroup || updatedConcept.defaultTargetDebtId) {
+        const cascaded = buildDebtPaymentsForInstallment(
+          activeEntry,
+          monthDebts,
+          undefined,
+          updatedConcept.defaultTargetDebtId
+        );
+        nextDebtPayments = [
+          ...state.debtPayments.filter((dp) => dp.entryId !== activeEntry.id),
+          ...cascaded,
+        ];
+      } else {
+        nextDebtPayments = state.debtPayments.filter((dp) => dp.entryId !== activeEntry.id);
+      }
+    }
 
     set({
       concepts: nextConcepts,
       entries: nextEntries,
+      debtPayments: nextDebtPayments,
     });
     triggerWidgetSync(get());
 
     if (isRealAuthUser(state.authUser)) {
       try {
         const repo = new FirestoreBudgetRepository();
-        await repo.saveConcept(state.authUser.uid, updatedConcept);
+        if (activeEntry) {
+          await repo.saveOrUpdateEntry(
+            state.authUser.uid,
+            activeEntry,
+            updatedConcept,
+            nextDebtPayments.filter((dp) => dp.entryId === activeEntry.id)
+          );
+        } else {
+          await repo.saveConcept(state.authUser.uid, updatedConcept);
+        }
       } catch {
         set({ syncMessage: '' });
       }
@@ -467,6 +842,22 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
   createDebt: async (monthKey, input) => {
     const state = get();
     const id = `debt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const rateType: DebtInterestRateType = input.interestRateType ?? 'monthly';
+    const resolvedMonthlyRate =
+      rateType === 'annual' && input.annualInterestRate !== undefined
+        ? Number((input.annualInterestRate / 12).toFixed(4))
+        : input.monthlyInterestRate;
+    const resolvedAnnualRate =
+      rateType === 'annual' && input.annualInterestRate !== undefined
+        ? input.annualInterestRate
+        : input.monthlyInterestRate !== undefined
+          ? Number((input.monthlyInterestRate * 12).toFixed(4))
+          : undefined;
+    const safeInstallment =
+      input.monthlyInstallment !== undefined && input.monthlyInstallment >= 0
+        ? Math.round(input.monthlyInstallment)
+        : undefined;
+
     const newDebt: Debt = {
       id,
       groupKey: input.groupKey ?? 'PERSONAL',
@@ -474,12 +865,18 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       lender: input.lender.trim(),
       openingBalance: Math.max(0, Math.round(input.openingBalance)),
       monthKey,
-      ...(input.monthlyInterestRate !== undefined && input.monthlyInterestRate >= 0
-        ? { monthlyInterestRate: input.monthlyInterestRate }
+      interestRateType: rateType,
+      ...(resolvedMonthlyRate !== undefined && resolvedMonthlyRate >= 0
+        ? { monthlyInterestRate: resolvedMonthlyRate }
         : {}),
+      ...(resolvedAnnualRate !== undefined && resolvedAnnualRate >= 0
+        ? { annualInterestRate: resolvedAnnualRate }
+        : {}),
+      ...(safeInstallment !== undefined ? { monthlyInstallment: safeInstallment } : {}),
     };
 
-    const currentDebts = state.debtsByMonth[monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
+    const fallbackMonth = state.availableMonths[state.availableMonths.length - 1] ?? monthKey;
+    const currentDebts = state.debtsByMonth[monthKey] ?? state.debtsByMonth[fallbackMonth] ?? [];
     const nextDebts = [...currentDebts, newDebt];
 
     set({
@@ -498,33 +895,94 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
         set({ syncMessage: '' });
       }
     }
+
+    return newDebt;
   },
 
   updateDebt: async (monthKey, debtId, updates) => {
     const state = get();
-    const currentDebts = state.debtsByMonth[monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
+    const fallbackMonth = state.availableMonths[state.availableMonths.length - 1] ?? monthKey;
+    const currentDebts = state.debtsByMonth[monthKey] ?? state.debtsByMonth[fallbackMonth] ?? [];
     let updatedDebt: Debt | null = null;
     const nextDebts = currentDebts.map((d) => {
       if (d.id !== debtId) return d;
+      const rateType: DebtInterestRateType =
+        updates.interestRateType ?? d.interestRateType ?? 'monthly';
+      const resolvedMonthlyRate =
+        rateType === 'annual' && updates.annualInterestRate !== undefined
+          ? Number((updates.annualInterestRate / 12).toFixed(4))
+          : updates.monthlyInterestRate !== undefined
+            ? updates.monthlyInterestRate
+            : d.monthlyInterestRate;
+      const resolvedAnnualRate =
+        rateType === 'annual' && updates.annualInterestRate !== undefined
+          ? updates.annualInterestRate
+          : updates.monthlyInterestRate !== undefined
+            ? Number((updates.monthlyInterestRate * 12).toFixed(4))
+            : d.annualInterestRate;
+      const resolvedInstallment =
+        updates.monthlyInstallment !== undefined
+          ? Math.max(0, Math.round(updates.monthlyInstallment))
+          : d.monthlyInstallment;
+
       updatedDebt = {
         ...d,
+        monthKey,
+        interestRateType: rateType,
         ...(updates.name !== undefined ? { name: updates.name.trim() } : {}),
         ...(updates.lender !== undefined ? { lender: updates.lender.trim() } : {}),
         ...(updates.openingBalance !== undefined
           ? { openingBalance: Math.max(0, Math.round(updates.openingBalance)) }
           : {}),
-        ...(updates.monthlyInterestRate !== undefined
-          ? { monthlyInterestRate: updates.monthlyInterestRate }
+        ...(resolvedMonthlyRate !== undefined
+          ? { monthlyInterestRate: resolvedMonthlyRate }
+          : {}),
+        ...(resolvedAnnualRate !== undefined
+          ? { annualInterestRate: resolvedAnnualRate }
+          : {}),
+        ...(resolvedInstallment !== undefined
+          ? { monthlyInstallment: resolvedInstallment }
           : {}),
       };
       return updatedDebt;
     });
 
+    const nextDebtsByMonth: Record<string, Debt[]> = {
+      ...state.debtsByMonth,
+      [monthKey]: nextDebts,
+    };
+
+    if (updatedDebt) {
+      const targetUpdated = updatedDebt as Debt;
+      for (const [mk, list] of Object.entries(nextDebtsByMonth)) {
+        if (mk === monthKey) continue;
+        if (!list.some((d) => d.id === debtId)) continue;
+        nextDebtsByMonth[mk] = list.map((d) =>
+          d.id === debtId
+            ? {
+                ...d,
+                name: targetUpdated.name,
+                lender: targetUpdated.lender,
+                ...(targetUpdated.interestRateType
+                  ? { interestRateType: targetUpdated.interestRateType }
+                  : {}),
+                ...(targetUpdated.monthlyInterestRate !== undefined
+                  ? { monthlyInterestRate: targetUpdated.monthlyInterestRate }
+                  : {}),
+                ...(targetUpdated.annualInterestRate !== undefined
+                  ? { annualInterestRate: targetUpdated.annualInterestRate }
+                  : {}),
+                ...(targetUpdated.monthlyInstallment !== undefined
+                  ? { monthlyInstallment: targetUpdated.monthlyInstallment }
+                  : {}),
+              }
+            : d
+        );
+      }
+    }
+
     set({
-      debtsByMonth: {
-        ...state.debtsByMonth,
-        [monthKey]: nextDebts,
-      },
+      debtsByMonth: nextDebtsByMonth,
     });
     triggerWidgetSync(get());
 
@@ -540,14 +998,16 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
 
   deleteDebt: async (monthKey, debtId) => {
     const state = get();
-    const currentDebts = state.debtsByMonth[monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
-    const nextDebts = currentDebts.filter((d) => d.id !== debtId);
+    const nextDebtsByMonth: Record<string, Debt[]> = {};
+    for (const [mk, list] of Object.entries(state.debtsByMonth)) {
+      nextDebtsByMonth[mk] = list.filter((d) => d.id !== debtId);
+    }
+    if (!nextDebtsByMonth[monthKey]) {
+      nextDebtsByMonth[monthKey] = [];
+    }
 
     set({
-      debtsByMonth: {
-        ...state.debtsByMonth,
-        [monthKey]: nextDebts,
-      },
+      debtsByMonth: nextDebtsByMonth,
     });
     triggerWidgetSync(get());
 
@@ -561,14 +1021,80 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     }
   },
 
-  updateSavingsOpeningBalance: async (monthKey, bucketId, newBalanceCop) => {
+  updateSavingsOpeningBalance: async (monthKey, bucketId, newBalanceCop, bucketName) => {
     const state = get();
     const safeAmount = Math.max(0, Math.round(newBalanceCop));
-    const monthBuckets =
-      state.savingsBucketsByMonth[monthKey] ?? state.savingsBucketsByMonth['2026-10'] ?? [];
-    const nextBuckets = monthBuckets.map((b) =>
-      b.id === bucketId ? { ...b, openingBalance: safeAmount } : b
+    const monthBuckets = ensureStandardSavingsBuckets(
+      state.savingsBucketsByMonth[monthKey] ?? []
     );
+    const targetBucket = monthBuckets.find((b) => b.id === bucketId);
+    const resolvedName = bucketName?.trim() || targetBucket?.name || bucketId;
+    const nextBuckets = targetBucket
+      ? monthBuckets.map((b) =>
+          b.id === bucketId
+            ? { ...b, name: resolvedName, openingBalance: safeAmount, monthKey }
+            : b
+        )
+      : [
+          ...monthBuckets,
+          { id: bucketId, name: resolvedName, openingBalance: safeAmount, monthKey },
+        ];
+
+    const nextSavingsByMonth: Record<string, SavingsBucket[]> = {
+      ...state.savingsBucketsByMonth,
+      [monthKey]: nextBuckets,
+    };
+    for (const [mk, list] of Object.entries(nextSavingsByMonth)) {
+      if (mk === monthKey) continue;
+      if (!list.some((b) => b.id === bucketId)) continue;
+      nextSavingsByMonth[mk] = list.map((b) =>
+        b.id === bucketId ? { ...b, name: resolvedName } : b
+      );
+    }
+
+    set({
+      savingsBucketsByMonth: nextSavingsByMonth,
+    });
+    triggerWidgetSync(get());
+
+    if (isRealAuthUser(state.authUser)) {
+      try {
+        const repo = new FirestoreBudgetRepository();
+        await repo.saveSavingsBucket(
+          state.authUser.uid,
+          bucketId,
+          safeAmount,
+          monthKey,
+          resolvedName
+        );
+      } catch {
+        set({ syncMessage: '' });
+      }
+    }
+  },
+
+  createSavingsBucket: async (monthKey, name, openingBalanceCop) => {
+    const state = get();
+    const trimmedName = name.trim();
+    if (!trimmedName) return null;
+
+    const safeAmount = Math.max(0, Math.round(openingBalanceCop));
+    const slug = trimmedName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_|_$/g, '');
+    const bucketId = `bucket_${slug || 'ahorro'}_${Date.now().toString(36)}`;
+    const newBucket: SavingsBucket = {
+      id: bucketId,
+      name: trimmedName,
+      openingBalance: safeAmount,
+      monthKey,
+    };
+
+    const monthBuckets = ensureStandardSavingsBuckets(
+      state.savingsBucketsByMonth[monthKey] ?? []
+    );
+    const nextBuckets = [...monthBuckets, newBucket];
 
     set({
       savingsBucketsByMonth: {
@@ -581,7 +1107,111 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     if (isRealAuthUser(state.authUser)) {
       try {
         const repo = new FirestoreBudgetRepository();
-        await repo.saveSavingsBucket(state.authUser.uid, bucketId, safeAmount, monthKey);
+        await repo.saveSavingsBucket(
+          state.authUser.uid,
+          bucketId,
+          safeAmount,
+          monthKey,
+          trimmedName
+        );
+      } catch {
+        set({ syncMessage: '' });
+      }
+    }
+
+    return newBucket;
+  },
+
+  deleteSavingsBucket: async (monthKey, bucketId) => {
+    const state = get();
+    const nextSavingsByMonth: Record<string, SavingsBucket[]> = {};
+    for (const [mk, list] of Object.entries(state.savingsBucketsByMonth)) {
+      nextSavingsByMonth[mk] = list.filter((b) => b.id !== bucketId);
+    }
+    if (!nextSavingsByMonth[monthKey]) {
+      nextSavingsByMonth[monthKey] = [];
+    }
+
+    const nextConcepts = state.concepts.map((c) => {
+      if (c.savingsContribution?.bucketId !== bucketId) return c;
+      const { savingsContribution: _removed, ...rest } = c;
+      return rest;
+    });
+
+    set({
+      concepts: nextConcepts,
+      savingsBucketsByMonth: nextSavingsByMonth,
+    });
+    triggerWidgetSync(get());
+
+    if (isRealAuthUser(state.authUser)) {
+      try {
+        const repo = new FirestoreBudgetRepository();
+        await repo.deleteSavingsBucket(state.authUser.uid, bucketId);
+      } catch {
+        set({ syncMessage: '' });
+      }
+    }
+  },
+
+  saveProvisionItem: async (input) => {
+    const state = get();
+    const trimmedName = input.name.trim();
+    const safeAmount = Math.max(0, Math.round(input.amount));
+    const safePeriodMonths = Math.max(1, Math.round(input.periodMonths));
+    if (!trimmedName || safeAmount <= 0) return;
+
+    const monthlyContribution = Math.ceil(safeAmount / safePeriodMonths);
+    const itemId =
+      input.id ??
+      `prov_${trimmedName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_|_$/g, '')}_${Date.now().toString(36)}`;
+
+    const nextItem: ProvisionItemSpec = {
+      id: itemId,
+      excelRawName: trimmedName,
+      displayName: trimmedName,
+      monthlyAmountCop: monthlyContribution,
+      cycleCostCop: safeAmount,
+      periodMonths: safePeriodMonths,
+      ceilMonthlyCop: monthlyContribution,
+      ...(input.kind === 'target_goal' ? { targetAmountCop: safeAmount } : {}),
+      includedInExcelTotalB43: input.kind === 'recurring',
+      kind: input.kind === 'target_goal' ? 'target_goal' : 'recurring_provision',
+      ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
+    };
+
+    const existingItems = state.idealMotoPlan.items;
+    const exists = existingItems.some((i) => i.id === itemId);
+    const nextItems = exists
+      ? existingItems.map((i) => (i.id === itemId ? nextItem : i))
+      : [...existingItems, nextItem];
+
+    const nextPlan = recalculateProvisionPlan(nextItems);
+    set({ idealMotoPlan: nextPlan });
+
+    if (isRealAuthUser(state.authUser)) {
+      try {
+        const repo = new FirestoreBudgetRepository();
+        await repo.saveProvisionPlan(state.authUser.uid, nextPlan);
+      } catch {
+        set({ syncMessage: '' });
+      }
+    }
+  },
+
+  deleteProvisionItem: async (itemId) => {
+    const state = get();
+    const nextItems = state.idealMotoPlan.items.filter((i) => i.id !== itemId);
+    const nextPlan = recalculateProvisionPlan(nextItems);
+    set({ idealMotoPlan: nextPlan });
+
+    if (isRealAuthUser(state.authUser)) {
+      try {
+        const repo = new FirestoreBudgetRepository();
+        await repo.saveProvisionPlan(state.authUser.uid, nextPlan);
       } catch {
         set({ syncMessage: '' });
       }
@@ -612,21 +1242,49 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       delete (updatedEntry as { note?: string }).note;
     }
 
+    const monthDebts =
+      state.debtsByMonth[updatedEntry.monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
+    const existingConcept = state.concepts.find((c) => c.id === target.conceptId);
+    const updatedConcept = existingConcept
+      ? applyConceptLinkageUpdates(
+          {
+            ...existingConcept,
+            name: nextName,
+            defaultAmount: safePlanned,
+          },
+          updatedEntry.monthKey,
+          monthDebts,
+          {
+            targetDebtId: updates.targetDebtId,
+            savingsBucketId: updates.savingsBucketId,
+            persistMonthly: updates.persistMonthly,
+          }
+        )
+      : undefined;
+
     const nextEntries = state.entries.map((e) => (e.id === entryId ? updatedEntry : e));
     const nextConcepts = state.concepts.map((c) =>
-      c.id === target.conceptId ? { ...c, name: nextName, defaultAmount: safePlanned } : c
+      c.id === target.conceptId && updatedConcept ? updatedConcept : c
     );
 
     let nextDebtPayments = state.debtPayments;
-    const concept = state.concepts.find((c) => c.id === target.conceptId);
-    if (concept?.linkedDebtGroup) {
-      const monthDebts =
-        state.debtsByMonth[updatedEntry.monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
-      const cascadedPayments = buildDebtPaymentsForInstallment(updatedEntry, monthDebts);
+    let entryPaymentsForCloud: DebtPayment[] | undefined;
+
+    if (updatedConcept?.linkedDebtGroup || updatedConcept?.defaultTargetDebtId) {
+      const cascadedPayments = buildDebtPaymentsForInstallment(
+        updatedEntry,
+        monthDebts,
+        undefined,
+        updatedConcept.defaultTargetDebtId
+      );
       nextDebtPayments = [
         ...state.debtPayments.filter((dp) => dp.entryId !== updatedEntry.id),
         ...cascadedPayments,
       ];
+      entryPaymentsForCloud = cascadedPayments;
+    } else if (updates.targetDebtId === null || updates.targetDebtId === '') {
+      nextDebtPayments = state.debtPayments.filter((dp) => dp.entryId !== updatedEntry.id);
+      entryPaymentsForCloud = [];
     }
 
     set({
@@ -639,12 +1297,11 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     if (isRealAuthUser(state.authUser)) {
       try {
         const repo = new FirestoreBudgetRepository();
-        const updatedConcept = nextConcepts.find((c) => c.id === target.conceptId);
         await repo.saveOrUpdateEntry(
           state.authUser.uid,
           updatedEntry,
           updatedConcept,
-          nextDebtPayments.filter((dp) => dp.entryId === entryId)
+          entryPaymentsForCloud ?? nextDebtPayments.filter((dp) => dp.entryId === entryId)
         );
       } catch {
         set({ syncMessage: '' });
@@ -683,7 +1340,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     const concept = target ? state.concepts.find((c) => c.id === target.conceptId) : undefined;
 
     let nextDebtPayments = state.debtPayments;
-    if (target && concept?.linkedDebtGroup) {
+    if (target && (concept?.linkedDebtGroup || concept?.defaultTargetDebtId)) {
       nextDebtPayments = state.debtPayments.map((dp) => {
         if (dp.entryId !== entryId) return dp;
         const { completedAt: _removed, ...restPayment } = dp;
@@ -761,12 +1418,10 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
   closeCurrentMonth: async (closedAtIso = new Date().toISOString()) => {
     const state = get();
     const currentMonthKey = state.activeMonthKey;
-    const currentDebts =
-      state.debtsByMonth[currentMonthKey] ?? state.debtsByMonth['2026-10'] ?? [];
-    const currentBuckets =
-      state.savingsBucketsByMonth[currentMonthKey] ??
-      state.savingsBucketsByMonth['2026-10'] ??
-      [];
+    const currentDebts = state.debtsByMonth[currentMonthKey] ?? [];
+    const currentBuckets = ensureStandardSavingsBuckets(
+      state.savingsBucketsByMonth[currentMonthKey] ?? []
+    );
     const currentDebtPayments = state.debtPayments.filter(
       (dp) => dp.monthKey === currentMonthKey
     );
@@ -782,6 +1437,9 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     });
 
     const otherMonthsEntries = state.entries.filter((e) => e.monthKey !== result.nextMonthKey);
+    const updatedUser = state.authUser
+      ? { ...state.authUser, activeMonthKey: result.nextMonthKey }
+      : null;
 
     set({
       activeMonthKey: result.nextMonthKey,
@@ -801,13 +1459,17 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
         ...state.closedSnapshots,
         [currentMonthKey]: result.snapshot,
       },
+      ...(updatedUser ? { authUser: updatedUser } : {}),
     });
+    if (updatedUser && process.env.NODE_ENV !== 'test') {
+      savePersistedSession(updatedUser);
+    }
     triggerWidgetSync(get());
 
     if (isRealAuthUser(state.authUser)) {
       try {
         const repo = new FirestoreBudgetRepository();
-        await repo.closeMonth(state.authUser.uid, currentMonthKey, closedAtIso);
+        await repo.persistMonthCloseResult(state.authUser.uid, currentMonthKey, result);
       } catch {
         set({ syncMessage: '' });
       }
@@ -842,7 +1504,6 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     const sortedMonths = [...state.availableMonths].sort();
 
     if (sortedMonths.length <= 1) {
-      // Only 1 month exists: simply clear any closed snapshot on it so it returns to open state
       const nextSnapshots = { ...state.closedSnapshots };
       delete nextSnapshots[monthKey];
       set({
@@ -874,7 +1535,6 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
 
     const nextSnapshots = { ...state.closedSnapshots };
     delete nextSnapshots[monthKey];
-    // Also reopen the previous month snapshot so if the user closed it by accident, it's open again
     delete nextSnapshots[fallbackMonth];
 
     set({
@@ -892,6 +1552,345 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       try {
         const repo = new FirestoreBudgetRepository();
         await repo.deleteMonthInCloud(state.authUser.uid, monthKey, fallbackMonth);
+      } catch {
+        set({ syncMessage: '' });
+      }
+    }
+  },
+
+  completeInitialAccountSetup: async (input) => {
+    const state = get();
+    const monthKey = /^\d{4}-(0[1-9]|1[0-2])$/.test(input.monthKey)
+      ? input.monthKey
+      : `${toBogotaMonthKey().slice(0, 4)}-01`;
+
+    // 1. Build savings buckets (always ensuring 'moto' and 'savings' standard buckets)
+    const rawBuckets: SavingsBucket[] = input.savingsBuckets
+      .filter((b) => b.name.trim().length > 0)
+      .map((b, idx) => {
+        const slug = b.name
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/^_|_$/g, '');
+        return {
+          id: b.id ?? `bucket_${slug || idx}_${idx + 1}`,
+          name: b.name.trim(),
+          openingBalance: Math.max(0, Math.round(b.openingBalanceCop)),
+          monthKey,
+        };
+      });
+    const savingsBuckets = ensureStandardSavingsBuckets(rawBuckets, 0, 0);
+
+    // 2. Build debts
+    const debtIdByKey = new Map<string, Debt>();
+    const debts: Debt[] = input.debts
+      .filter((d) => d.name.trim().length > 0 && d.openingBalanceCop > 0)
+      .map((d, idx) => {
+        const slug = d.name
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/^_|_$/g, '');
+        const id = d.key || `debt_${slug || 'personal'}_${idx + 1}`;
+        const rateType: DebtInterestRateType = d.interestRateType ?? 'monthly';
+        const rawRate = d.interestRate ?? 0;
+        const monthlyInterestRate =
+          rateType === 'annual' ? Number((rawRate / 12).toFixed(4)) : rawRate;
+        const annualInterestRate =
+          rateType === 'annual' ? rawRate : Number((rawRate * 12).toFixed(4));
+        const monthlyInstallment = Math.max(0, Math.round(d.monthlyInstallmentCop ?? 0));
+
+        const built: Debt = {
+          id,
+          groupKey: 'PERSONAL',
+          name: d.name.trim(),
+          lender: d.lender.trim() || 'Entidad',
+          openingBalance: Math.max(0, Math.round(d.openingBalanceCop)),
+          monthKey,
+          interestRateType: rateType,
+          monthlyInterestRate,
+          annualInterestRate,
+          ...(monthlyInstallment > 0 ? { monthlyInstallment } : {}),
+        };
+        if (d.key) {
+          debtIdByKey.set(d.key, built);
+        }
+        debtIdByKey.set(id, built);
+        return built;
+      });
+
+    // 3. Build income and expense concepts & entries
+    const concepts: Concept[] = [];
+    const entries: MonthEntry[] = [];
+    const debtPayments: DebtPayment[] = [];
+    let orderCounter = 1;
+
+    for (const inc of input.incomes) {
+      const trimmedName = inc.name.trim();
+      const safeAmount = Math.max(0, Math.round(inc.amountCop));
+      if (!trimmedName || safeAmount <= 0) continue;
+
+      const slug = trimmedName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_|_$/g, '');
+      const conceptId = `inc_${slug || orderCounter}_${orderCounter}`;
+      const concept: Concept = {
+        id: conceptId,
+        name: trimmedName,
+        type: 'income',
+        group: inc.group,
+        defaultAmount: safeAmount,
+        recurrence: inc.persistMonthly
+          ? { kind: 'monthly' }
+          : { kind: 'specific_months', months: [getMonthNumberFromMonthKey(monthKey)] },
+        allowMultiplePerMonth: false,
+        archived: false,
+        order: orderCounter++,
+      };
+      concepts.push(concept);
+
+      const isCompleted = inc.completed === true;
+      entries.push({
+        id: `${monthKey}_${conceptId}`,
+        monthKey,
+        conceptId,
+        conceptName: trimmedName,
+        type: 'income',
+        group: inc.group,
+        plannedAmount: safeAmount,
+        actualAmount: safeAmount,
+        status: isCompleted ? 'completed' : 'pending',
+        ...(isCompleted ? { completedAt: toBogotaIsoDate() } : {}),
+      });
+    }
+
+    const explicitlyLinkedDebtIds = new Set<string>();
+
+    for (const exp of input.expenses) {
+      const trimmedName = exp.name.trim();
+      const safeAmount = Math.max(0, Math.round(exp.amountCop));
+      if (!trimmedName || safeAmount <= 0) continue;
+
+      const slug = trimmedName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_|_$/g, '');
+      const conceptId = `exp_${slug || orderCounter}_${orderCounter}`;
+
+      const linkedDebt = exp.targetDebtKey ? debtIdByKey.get(exp.targetDebtKey) : undefined;
+      if (linkedDebt) {
+        explicitlyLinkedDebtIds.add(linkedDebt.id);
+      }
+
+      const concept: Concept = {
+        id: conceptId,
+        name: trimmedName,
+        type: 'expense',
+        group: exp.group,
+        defaultAmount: safeAmount,
+        recurrence: exp.persistMonthly
+          ? { kind: 'monthly' }
+          : { kind: 'specific_months', months: [getMonthNumberFromMonthKey(monthKey)] },
+        allowMultiplePerMonth: false,
+        archived: false,
+        order: orderCounter++,
+        ...(linkedDebt
+          ? {
+              linkedDebtGroup: linkedDebt.groupKey,
+              defaultTargetDebtId: linkedDebt.id,
+            }
+          : {}),
+        ...(exp.savingsBucketKey
+          ? {
+              savingsContribution: {
+                bucketId: exp.savingsBucketKey,
+                onlyWhenCompleted: true,
+              },
+            }
+          : {}),
+      };
+      concepts.push(concept);
+
+      const isCompleted = exp.completed === true;
+      const entry: MonthEntry = {
+        id: `${monthKey}_${conceptId}`,
+        monthKey,
+        conceptId,
+        conceptName: trimmedName,
+        type: 'expense',
+        group: exp.group,
+        plannedAmount: safeAmount,
+        actualAmount: safeAmount,
+        status: isCompleted ? 'completed' : 'pending',
+        ...(isCompleted ? { completedAt: toBogotaIsoDate() } : {}),
+      };
+      entries.push(entry);
+
+      if (linkedDebt) {
+        const payments = buildDebtPaymentsForInstallment(
+          entry,
+          debts,
+          undefined,
+          linkedDebt.id
+        );
+        debtPayments.push(...payments);
+      }
+    }
+
+    // 4. For any debt with a monthlyInstallment > 0 that doesn't already have an explicit checklist expense,
+    // auto-create its monthly installment expense in the checklist linked to that debt.
+    for (const debt of debts) {
+      if (
+        debt.monthlyInstallment &&
+        debt.monthlyInstallment > 0 &&
+        !explicitlyLinkedDebtIds.has(debt.id)
+      ) {
+        const conceptId = `exp_cuota_${debt.id}`;
+        const conceptName = `Cuota ${debt.name}`;
+        const concept: Concept = {
+          id: conceptId,
+          name: conceptName,
+          type: 'expense',
+          group: 'fixed',
+          defaultAmount: debt.monthlyInstallment,
+          recurrence: { kind: 'monthly' },
+          allowMultiplePerMonth: false,
+          archived: false,
+          order: orderCounter++,
+          linkedDebtGroup: debt.groupKey,
+          defaultTargetDebtId: debt.id,
+        };
+        concepts.push(concept);
+
+        const entry: MonthEntry = {
+          id: `${monthKey}_${conceptId}`,
+          monthKey,
+          conceptId,
+          conceptName,
+          type: 'expense',
+          group: 'fixed',
+          plannedAmount: debt.monthlyInstallment,
+          actualAmount: debt.monthlyInstallment,
+          status: 'pending',
+        };
+        entries.push(entry);
+
+        const payments = buildDebtPaymentsForInstallment(entry, debts, undefined, debt.id);
+        debtPayments.push(...payments);
+      }
+    }
+
+    // 5. Build provisions plan
+    const provisionItems: ProvisionItemSpec[] = (input.provisions ?? [])
+      .filter((p) => p.name.trim().length > 0 && p.amountCop > 0)
+      .map((p, idx) => {
+        const safeAmount = Math.max(0, Math.round(p.amountCop));
+        const safeMonths = Math.max(1, Math.round(p.periodMonths));
+        const monthlyContribution = Math.ceil(safeAmount / safeMonths);
+        const trimmedName = p.name.trim();
+        return {
+          id: `prov_${idx + 1}_${Date.now().toString(36)}`,
+          excelRawName: trimmedName,
+          displayName: trimmedName,
+          monthlyAmountCop: monthlyContribution,
+          cycleCostCop: safeAmount,
+          periodMonths: safeMonths,
+          ceilMonthlyCop: monthlyContribution,
+          ...(p.kind === 'target_goal' ? { targetAmountCop: safeAmount } : {}),
+          includedInExcelTotalB43: p.kind === 'recurring',
+          kind: p.kind === 'target_goal' ? 'target_goal' : 'recurring_provision',
+          ...(p.notes?.trim() ? { notes: p.notes.trim() } : {}),
+        };
+      });
+    const provisionPlan = recalculateProvisionPlan(provisionItems);
+
+    const payload: InitialAccountSetupPayload = {
+      monthKey,
+      concepts,
+      entries,
+      debts,
+      debtPayments,
+      savingsBuckets,
+      provisionPlan,
+    };
+
+    const updatedUser = state.authUser
+      ? { ...state.authUser, activeMonthKey: monthKey }
+      : null;
+
+    set({
+      activeTab: 'summary',
+      activeMonthKey: monthKey,
+      availableMonths: [monthKey],
+      concepts,
+      entries,
+      debtsByMonth: {
+        [monthKey]: debts,
+      },
+      debtPayments,
+      savingsBucketsByMonth: {
+        [monthKey]: savingsBuckets,
+      },
+      idealMotoPlan: provisionPlan,
+      closedSnapshots: {},
+      needsOnboarding: false,
+      ...(updatedUser ? { authUser: updatedUser } : {}),
+    });
+    if (updatedUser && process.env.NODE_ENV !== 'test') {
+      savePersistedSession(updatedUser);
+    }
+    triggerWidgetSync(get());
+
+    if (isRealAuthUser(state.authUser)) {
+      try {
+        const repo = new FirestoreBudgetRepository();
+        await repo.saveInitialAccountSetup(state.authUser.uid, payload);
+      } catch {
+        set({ syncMessage: '' });
+      }
+    }
+  },
+
+  resetFullAccount: async (newStartMonthKey) => {
+    const state = get();
+    const startMonth =
+      newStartMonthKey && /^\d{4}-(0[1-9]|1[0-2])$/.test(newStartMonthKey)
+        ? newStartMonthKey
+        : `${toBogotaMonthKey().slice(0, 4)}-01`;
+    const emptyBuckets = ensureStandardSavingsBuckets([], 0, 0);
+    const updatedUser = state.authUser
+      ? { ...state.authUser, activeMonthKey: startMonth }
+      : null;
+
+    set({
+      activeTab: 'summary',
+      activeMonthKey: startMonth,
+      availableMonths: [startMonth],
+      concepts: [],
+      entries: [],
+      debtsByMonth: {
+        [startMonth]: [],
+      },
+      debtPayments: [],
+      savingsBucketsByMonth: {
+        [startMonth]: emptyBuckets,
+      },
+      idealMotoPlan: { ...EMPTY_PROVISION_PLAN, items: [] },
+      closedSnapshots: {},
+      needsOnboarding: true,
+      ...(updatedUser ? { authUser: updatedUser } : {}),
+    });
+    if (updatedUser && process.env.NODE_ENV !== 'test') {
+      savePersistedSession(updatedUser);
+    }
+    triggerWidgetSync(get());
+
+    if (isRealAuthUser(state.authUser)) {
+      try {
+        const repo = new FirestoreBudgetRepository();
+        await repo.resetFullAccountInCloud(state.authUser.uid, startMonth);
       } catch {
         set({ syncMessage: '' });
       }

@@ -25,9 +25,11 @@ import {
   type Concept,
   type ConceptGroup,
   type ConceptType,
+  type Debt,
   type MonthEntry,
   type MonthlyBudgetSummary,
   type RegisterOrCompleteMovementInput,
+  type SavingsBucket,
 } from '../../../domain';
 import type {
   CreateCustomConceptInput,
@@ -41,12 +43,26 @@ export interface ChecklistWorkspaceViewProps {
   concepts: readonly Concept[];
   entries: readonly MonthEntry[];
   budget: MonthlyBudgetSummary;
+  debts?: readonly Debt[];
+  savingsBuckets?: readonly SavingsBucket[];
   onToggleEntry: (entry: MonthEntry) => void;
-  onAddOrCompleteMovement: (input: RegisterOrCompleteMovementInput) => void;
+  onAddOrCompleteMovement: (
+    input: RegisterOrCompleteMovementInput & {
+      targetDebtId?: string | null;
+      savingsBucketId?: string | null;
+    }
+  ) => void;
   onCreateCustomMovement?: (input: CreateCustomConceptInput) => void;
   onUpdateConcept?: (
     conceptId: string,
-    updates: { name?: string; defaultAmount?: number; group?: ConceptGroup }
+    updates: {
+      name?: string;
+      defaultAmount?: number;
+      group?: ConceptGroup;
+      targetDebtId?: string | null;
+      savingsBucketId?: string | null;
+      persistMonthly?: boolean;
+    }
   ) => void;
   onDeleteConcept?: (conceptId: string) => void;
   onEditEntry?: (entryId: string, updates: EditEntryUpdates) => void;
@@ -59,6 +75,8 @@ export function ChecklistWorkspaceView({
   concepts,
   entries,
   budget,
+  debts = [],
+  savingsBuckets = [],
   onToggleEntry,
   onAddOrCompleteMovement,
   onCreateCustomMovement,
@@ -80,6 +98,9 @@ export function ChecklistWorkspaceView({
   const [selectedConceptId, setSelectedConceptId] = useState<string>('');
   const [amountInput, setAmountInput] = useState<string>('');
   const [noteInput, setNoteInput] = useState<string>('');
+  const [selectedTargetDebtId, setSelectedTargetDebtId] = useState<string | null>(null);
+  const [selectedSavingsBucketId, setSelectedSavingsBucketId] = useState<string | null>(null);
+  const [persistMonthly, setPersistMonthly] = useState<boolean>(true);
   const [formError, setFormError] = useState<string | null>(null);
 
   // Concept Edit / Delete state
@@ -94,6 +115,9 @@ export function ChecklistWorkspaceView({
   const [editNameInput, setEditNameInput] = useState<string>('');
   const [editAmountInput, setEditAmountInput] = useState<string>('');
   const [editNoteInput, setEditNoteInput] = useState<string>('');
+  const [editTargetDebtId, setEditTargetDebtId] = useState<string | null>(null);
+  const [editSavingsBucketId, setEditSavingsBucketId] = useState<string | null>(null);
+  const [editPersistMonthly, setEditPersistMonthly] = useState<boolean>(true);
   const [editError, setEditError] = useState<string | null>(null);
 
   const monthEntries = useMemo(
@@ -141,6 +165,9 @@ export function ChecklistWorkspaceView({
     const first = avail[0];
     setSelectedConceptId(first?.id ?? '');
     setAmountInput(first && first.defaultAmount > 0 ? String(first.defaultAmount) : '');
+    setSelectedTargetDebtId(first?.defaultTargetDebtId ?? null);
+    setSelectedSavingsBucketId(first?.savingsContribution?.bucketId ?? null);
+    setPersistMonthly(first ? first.recurrence.kind === 'monthly' : true);
     setNoteInput('');
     setFormError(null);
     setIsAddModalOpen(true);
@@ -150,6 +177,9 @@ export function ChecklistWorkspaceView({
     setIsCustomConceptMode(false);
     setSelectedConceptId(concept.id);
     setAmountInput(concept.defaultAmount > 0 ? String(concept.defaultAmount) : '');
+    setSelectedTargetDebtId(concept.defaultTargetDebtId ?? null);
+    setSelectedSavingsBucketId(concept.savingsContribution?.bucketId ?? null);
+    setPersistMonthly(concept.recurrence.kind === 'monthly');
     setIsEditingConcept(false);
     setConfirmDeleteConceptId(null);
     setFormError(null);
@@ -173,6 +203,9 @@ export function ChecklistWorkspaceView({
         name: conceptEditName.trim(),
         defaultAmount: parsedAmount,
         group: conceptEditGroup,
+        targetDebtId: selectedType === 'expense' ? selectedTargetDebtId : null,
+        savingsBucketId: selectedType === 'expense' ? selectedSavingsBucketId : null,
+        persistMonthly,
       });
     }
     setIsEditingConcept(false);
@@ -199,6 +232,9 @@ export function ChecklistWorkspaceView({
           type: selectedType,
           group: customConceptGroup,
           amountCop: parsedCustomAmount,
+          targetDebtId: selectedType === 'expense' ? selectedTargetDebtId : null,
+          savingsBucketId: selectedType === 'expense' ? selectedSavingsBucketId : null,
+          persistMonthly,
           ...(noteInput.trim() ? { note: noteInput.trim() } : {}),
         });
       }
@@ -224,6 +260,8 @@ export function ChecklistWorkspaceView({
       conceptId: activeSelectedConcept.id,
       actualAmount: parsedAmount,
       completedAt: toBogotaIsoDate(),
+      targetDebtId: selectedType === 'expense' ? selectedTargetDebtId : null,
+      savingsBucketId: selectedType === 'expense' ? selectedSavingsBucketId : null,
       ...(noteInput.trim() ? { note: noteInput.trim() } : {}),
     });
 
@@ -232,10 +270,19 @@ export function ChecklistWorkspaceView({
   };
 
   const handleOpenEditModal = (entry: MonthEntry) => {
+    const concept = concepts.find((c) => c.id === entry.conceptId);
     setEditingEntryId(entry.id);
     setEditNameInput(entry.conceptName);
     setEditAmountInput(String(entry.actualAmount > 0 ? entry.actualAmount : entry.plannedAmount));
     setEditNoteInput(entry.note ?? '');
+    setEditTargetDebtId(
+      concept?.defaultTargetDebtId ??
+        (concept?.linkedDebtGroup
+          ? debts.find((d) => d.groupKey === concept.linkedDebtGroup)?.id ?? debts[0]?.id ?? null
+          : null)
+    );
+    setEditSavingsBucketId(concept?.savingsContribution?.bucketId ?? null);
+    setEditPersistMonthly(concept ? concept.recurrence.kind === 'monthly' : true);
     setEditError(null);
   };
 
@@ -252,11 +299,17 @@ export function ChecklistWorkspaceView({
       return;
     }
 
+    const editingEntry = monthEntries.find((e) => e.id === editingEntryId);
+    const isExpenseEntry = editingEntry?.type !== 'income';
+
     if (onEditEntry) {
       onEditEntry(editingEntryId, {
         conceptName: editNameInput.trim(),
         actualAmount: parsedAmount,
         plannedAmount: parsedAmount,
+        targetDebtId: isExpenseEntry ? editTargetDebtId : null,
+        savingsBucketId: isExpenseEntry ? editSavingsBucketId : null,
+        persistMonthly: editPersistMonthly,
         ...(editNoteInput.trim() ? { note: editNoteInput.trim() } : {}),
       });
     }
@@ -276,6 +329,14 @@ export function ChecklistWorkspaceView({
     const concept = concepts.find((c) => c.id === entry.conceptId);
     const isCompleted = entry.status === 'completed';
     const isRepeatable = Boolean(concept?.allowMultiplePerMonth);
+    const linkedDebt = concept?.defaultTargetDebtId
+      ? debts.find((d) => d.id === concept.defaultTargetDebtId)
+      : concept?.linkedDebtGroup
+        ? debts.find((d) => d.groupKey === concept.linkedDebtGroup)
+        : undefined;
+    const linkedBucket = concept?.savingsContribution?.bucketId
+      ? savingsBuckets.find((b) => b.id === concept.savingsContribution?.bucketId)
+      : undefined;
 
     return (
       <View
@@ -321,9 +382,21 @@ export function ChecklistWorkspaceView({
               <AppText variant="body">{`${isCompleted ? '✓ ' : '○ '}${entry.conceptName}`}</AppText>
               {concept?.savingsContribution?.bucketId === 'moto' ? (
                 <StatusBadge label="→ Fondo Moto" status="moto" />
+              ) : linkedBucket ? (
+                <StatusBadge label={`→ ${linkedBucket.name}`} status="savings" />
+              ) : concept?.savingsContribution?.bucketId ? (
+                <StatusBadge
+                  label={`→ ${concept.savingsContribution.bucketId}`}
+                  status="savings"
+                />
               ) : null}
-              {concept?.linkedDebtGroup ? (
+              {linkedDebt ? (
+                <StatusBadge label={`→ ${linkedDebt.name}`} status="debt" />
+              ) : concept?.linkedDebtGroup ? (
                 <StatusBadge label="→ Deuda FUNFAMI" status="debt" />
+              ) : null}
+              {concept?.recurrence.kind === 'specific_months' ? (
+                <StatusBadge label="Solo este mes" status="info" />
               ) : null}
               {isRepeatable ? <StatusBadge label="Múltiple/mes" status="info" /> : null}
             </View>
@@ -579,6 +652,172 @@ export function ChecklistWorkspaceView({
                 color: colors.text.primary,
               }}
             />
+
+            {/* Adjustable Debt & Savings Linkage when editing an expense */}
+            {monthEntries.find((e) => e.id === editingEntryId)?.type !== 'income' ? (
+              <View style={{ gap: spacing.xs }}>
+                <AppText variant="micro" color={colors.text.secondary}>
+                  Vincular pago a una deuda (actualiza Deudas automáticamente al pagar):
+                </AppText>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+                  <Pressable
+                    testID="edit-entry-debt-none"
+                    accessibilityRole="button"
+                    onPress={() => setEditTargetDebtId(null)}
+                    style={{
+                      minHeight: 36,
+                      paddingHorizontal: spacing.sm,
+                      borderRadius: radius.pill,
+                      backgroundColor:
+                        editTargetDebtId === null
+                          ? colors.glass.surfaceElevatedTint
+                          : colors.glass.surfaceTint,
+                      borderWidth: 1,
+                      borderColor:
+                        editTargetDebtId === null
+                          ? colors.glass.specularBorder
+                          : colors.glass.subtleBorder,
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <AppText variant="micro">Ninguna deuda</AppText>
+                  </Pressable>
+                  {debts.map((debt) => {
+                    const isLinked = editTargetDebtId === debt.id;
+                    return (
+                      <Pressable
+                        key={debt.id}
+                        testID={`edit-entry-debt-${debt.id}`}
+                        accessibilityRole="button"
+                        onPress={() => setEditTargetDebtId(debt.id)}
+                        style={{
+                          minHeight: 36,
+                          paddingHorizontal: spacing.sm,
+                          borderRadius: radius.pill,
+                          backgroundColor: isLinked
+                            ? colors.semantic.debtSoft
+                            : colors.glass.surfaceTint,
+                          borderWidth: 1,
+                          borderColor: isLinked
+                            ? colors.semantic.debt
+                            : colors.glass.subtleBorder,
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <AppText
+                          variant="micro"
+                          color={isLinked ? colors.semantic.debt : colors.text.primary}
+                        >
+                          {`→ ${debt.name}`}
+                        </AppText>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                {savingsBuckets.length > 0 ? (
+                  <>
+                    <AppText variant="micro" color={colors.text.secondary}>
+                      Vincular gasto a un fondo de ahorro:
+                    </AppText>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+                      <Pressable
+                        testID="edit-entry-bucket-none"
+                        accessibilityRole="button"
+                        onPress={() => setEditSavingsBucketId(null)}
+                        style={{
+                          minHeight: 36,
+                          paddingHorizontal: spacing.sm,
+                          borderRadius: radius.pill,
+                          backgroundColor:
+                            editSavingsBucketId === null
+                              ? colors.glass.surfaceElevatedTint
+                              : colors.glass.surfaceTint,
+                          borderWidth: 1,
+                          borderColor:
+                            editSavingsBucketId === null
+                              ? colors.glass.specularBorder
+                              : colors.glass.subtleBorder,
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <AppText variant="micro">Ningún fondo</AppText>
+                      </Pressable>
+                      {savingsBuckets.map((bucket) => {
+                        const isLinked = editSavingsBucketId === bucket.id;
+                        return (
+                          <Pressable
+                            key={bucket.id}
+                            testID={`edit-entry-bucket-${bucket.id}`}
+                            accessibilityRole="button"
+                            onPress={() => setEditSavingsBucketId(bucket.id)}
+                            style={{
+                              minHeight: 36,
+                              paddingHorizontal: spacing.sm,
+                              borderRadius: radius.pill,
+                              backgroundColor: isLinked
+                                ? colors.semantic.savingsSoft
+                                : colors.glass.surfaceTint,
+                              borderWidth: 1,
+                              borderColor: isLinked
+                                ? colors.semantic.savings
+                                : colors.glass.subtleBorder,
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <AppText
+                              variant="micro"
+                              color={isLinked ? colors.semantic.savings : colors.text.primary}
+                            >
+                              {`→ ${bucket.name}`}
+                            </AppText>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </>
+                ) : null}
+              </View>
+            ) : null}
+
+            {/* Month-to-month persistence toggle */}
+            <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+              {(
+                [
+                  { value: true, label: 'Persiste cada mes' },
+                  { value: false, label: 'Solo este mes' },
+                ] as const
+              ).map((opt) => {
+                const active = editPersistMonthly === opt.value;
+                return (
+                  <Pressable
+                    key={String(opt.value)}
+                    testID={`edit-entry-persist-${opt.value ? 'monthly' : 'once'}`}
+                    accessibilityRole="button"
+                    onPress={() => setEditPersistMonthly(opt.value)}
+                    style={{
+                      flex: 1,
+                      minHeight: 38,
+                      borderRadius: radius.md,
+                      backgroundColor: active
+                        ? colors.semantic.incomeSoft
+                        : colors.glass.surfaceTint,
+                      borderWidth: 1,
+                      borderColor: active ? colors.semantic.income : colors.glass.subtleBorder,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <AppText
+                      variant="micro"
+                      color={active ? colors.semantic.income : colors.text.secondary}
+                    >
+                      {opt.label}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
+            </View>
 
             {editError ? (
               <AppText variant="caption" color={colors.semantic.expense}>
@@ -1112,6 +1351,172 @@ export function ChecklistWorkspaceView({
                 color: colors.text.primary,
               }}
             />
+
+            {/* Adjustable Debt & Savings Fund Linkage for Expense Movements */}
+            {selectedType === 'expense' ? (
+              <View style={{ gap: spacing.xs }}>
+                <AppText variant="micro" color={colors.text.secondary}>
+                  Vincular pago a una deuda (actualiza Deudas al marcar pagado):
+                </AppText>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+                  <Pressable
+                    testID="add-movement-debt-none"
+                    accessibilityRole="button"
+                    onPress={() => setSelectedTargetDebtId(null)}
+                    style={{
+                      minHeight: 36,
+                      paddingHorizontal: spacing.sm,
+                      borderRadius: radius.pill,
+                      backgroundColor:
+                        selectedTargetDebtId === null
+                          ? colors.glass.surfaceElevatedTint
+                          : colors.glass.surfaceTint,
+                      borderWidth: 1,
+                      borderColor:
+                        selectedTargetDebtId === null
+                          ? colors.glass.specularBorder
+                          : colors.glass.subtleBorder,
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <AppText variant="micro">Ninguna deuda</AppText>
+                  </Pressable>
+                  {debts.map((debt) => {
+                    const isLinked = selectedTargetDebtId === debt.id;
+                    return (
+                      <Pressable
+                        key={debt.id}
+                        testID={`add-movement-debt-${debt.id}`}
+                        accessibilityRole="button"
+                        onPress={() => setSelectedTargetDebtId(debt.id)}
+                        style={{
+                          minHeight: 36,
+                          paddingHorizontal: spacing.sm,
+                          borderRadius: radius.pill,
+                          backgroundColor: isLinked
+                            ? colors.semantic.debtSoft
+                            : colors.glass.surfaceTint,
+                          borderWidth: 1,
+                          borderColor: isLinked
+                            ? colors.semantic.debt
+                            : colors.glass.subtleBorder,
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <AppText
+                          variant="micro"
+                          color={isLinked ? colors.semantic.debt : colors.text.primary}
+                        >
+                          {`→ ${debt.name}`}
+                        </AppText>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                {savingsBuckets.length > 0 ? (
+                  <>
+                    <AppText variant="micro" color={colors.text.secondary}>
+                      Vincular gasto a un fondo de ahorro:
+                    </AppText>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+                      <Pressable
+                        testID="add-movement-bucket-none"
+                        accessibilityRole="button"
+                        onPress={() => setSelectedSavingsBucketId(null)}
+                        style={{
+                          minHeight: 36,
+                          paddingHorizontal: spacing.sm,
+                          borderRadius: radius.pill,
+                          backgroundColor:
+                            selectedSavingsBucketId === null
+                              ? colors.glass.surfaceElevatedTint
+                              : colors.glass.surfaceTint,
+                          borderWidth: 1,
+                          borderColor:
+                            selectedSavingsBucketId === null
+                              ? colors.glass.specularBorder
+                              : colors.glass.subtleBorder,
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <AppText variant="micro">Ningún fondo</AppText>
+                      </Pressable>
+                      {savingsBuckets.map((bucket) => {
+                        const isLinked = selectedSavingsBucketId === bucket.id;
+                        return (
+                          <Pressable
+                            key={bucket.id}
+                            testID={`add-movement-bucket-${bucket.id}`}
+                            accessibilityRole="button"
+                            onPress={() => setSelectedSavingsBucketId(bucket.id)}
+                            style={{
+                              minHeight: 36,
+                              paddingHorizontal: spacing.sm,
+                              borderRadius: radius.pill,
+                              backgroundColor: isLinked
+                                ? colors.semantic.savingsSoft
+                                : colors.glass.surfaceTint,
+                              borderWidth: 1,
+                              borderColor: isLinked
+                                ? colors.semantic.savings
+                                : colors.glass.subtleBorder,
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <AppText
+                              variant="micro"
+                              color={isLinked ? colors.semantic.savings : colors.text.primary}
+                            >
+                              {`→ ${bucket.name}`}
+                            </AppText>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </>
+                ) : null}
+              </View>
+            ) : null}
+
+            {/* Month-to-month persistence toggle */}
+            <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+              {(
+                [
+                  { value: true, label: 'Persiste cada mes' },
+                  { value: false, label: 'Solo este mes' },
+                ] as const
+              ).map((opt) => {
+                const active = persistMonthly === opt.value;
+                return (
+                  <Pressable
+                    key={String(opt.value)}
+                    testID={`add-movement-persist-${opt.value ? 'monthly' : 'once'}`}
+                    accessibilityRole="button"
+                    onPress={() => setPersistMonthly(opt.value)}
+                    style={{
+                      flex: 1,
+                      minHeight: 38,
+                      borderRadius: radius.md,
+                      backgroundColor: active
+                        ? colors.semantic.incomeSoft
+                        : colors.glass.surfaceTint,
+                      borderWidth: 1,
+                      borderColor: active ? colors.semantic.income : colors.glass.subtleBorder,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <AppText
+                      variant="micro"
+                      color={active ? colors.semantic.income : colors.text.secondary}
+                    >
+                      {opt.label}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
+            </View>
 
             {formError ? (
               <AppText variant="caption" color={colors.semantic.expense}>

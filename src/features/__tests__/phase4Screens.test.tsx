@@ -207,4 +207,66 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     expect(screen.getByText('Mes Abierto')).toBeTruthy();
     expect(screen.queryByTestId('history-month-pill-2026-11')).toBeNull();
   });
+
+  it('links a checklist expense to a debt, manages custom savings funds & provisions, and resets account into InitialAccountSetupView', async () => {
+    render(
+      <BFlowThemeProvider initialMode="dark">
+        <PhaseOneHomeScreen />
+      </BFlowThemeProvider>
+    );
+
+    // Tab label is renamed to "Ahorros"
+    expect(screen.getByTestId('workspace-tab-savings')).toHaveTextContent('Ahorros');
+
+    // Link Smart Fit ($ 90.000 pending) to debt_esp_ia and complete it
+    fireEvent.press(screen.getByTestId('workspace-tab-checklist'));
+    fireEvent.press(screen.getByTestId('edit-entry-2026-10_exp_smart_fit'));
+    fireEvent.press(screen.getByTestId('edit-entry-debt-debt_esp_ia'));
+    fireEvent.press(screen.getByTestId('save-edit-entry-button'));
+
+    // Mark Smart Fit ($ 100.000) as completed -> should deduct $ 100.000 from ESP. IA ($ 3.600.000 -> $ 3.500.000)
+    fireEvent.press(screen.getByTestId('checklist-workspace-item-2026-10_exp_smart_fit'));
+    fireEvent.press(screen.getByTestId('workspace-tab-debts'));
+    expect(screen.getByTestId('debt-remaining-debt_esp_ia')).toHaveTextContent('$ 3.500.000');
+
+    // Create a custom savings fund and a custom provision in Ahorros tab
+    fireEvent.press(screen.getByTestId('workspace-tab-savings'));
+    fireEvent.press(screen.getByTestId('open-add-savings-bucket-button'));
+    fireEvent.changeText(screen.getByTestId('new-bucket-name-input'), 'Fondo Viaje');
+    fireEvent.changeText(screen.getByTestId('new-bucket-balance-input'), '500000');
+    fireEvent.press(screen.getByTestId('submit-new-bucket-button'));
+    expect(screen.getByText('Fondo Viaje')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('open-add-provision-button'));
+    fireEvent.changeText(screen.getByTestId('provision-name-input'), 'Impuesto Vehicular');
+    fireEvent.changeText(screen.getByTestId('provision-amount-input'), '240000');
+    fireEvent.changeText(screen.getByTestId('provision-months-input'), '12');
+    fireEvent.press(screen.getByTestId('submit-provision-button'));
+    expect(screen.getByText('Impuesto Vehicular')).toBeTruthy();
+
+    // Go to Analytics & Cierre and click "Reiniciar toda la cuenta"
+    fireEvent.press(screen.getByTestId('workspace-tab-analytics'));
+    expect(screen.getByTestId('analytics-paid-progress-bar')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('reset-full-account-button'));
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('confirm-reset-full-account-button'));
+    });
+
+    // Must render InitialAccountSetupView
+    expect(screen.getByTestId('initial-account-setup-view')).toBeTruthy();
+
+    // Configure an income and complete setup
+    fireEvent.changeText(screen.getByTestId('onboarding-income-name-input'), 'Salario Mensual');
+    fireEvent.changeText(screen.getByTestId('onboarding-income-amount-input'), '5000000');
+    fireEvent.press(screen.getByTestId('onboarding-add-income-button'));
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('complete-initial-setup-button'));
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('initial-account-setup-view')).toBeNull();
+      expect(screen.getByTestId('net-flow-hero-card')).toBeTruthy();
+    });
+  });
 });

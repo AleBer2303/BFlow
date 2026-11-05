@@ -27,6 +27,7 @@ export interface EvaluatedProvisionItem {
   linkedConceptId?: string;
   actualBudgetedAmountCop?: number;
   varianceAgainstBudgetCop?: number;
+  notes?: string;
 }
 
 export interface EvaluatedTargetGoal {
@@ -36,6 +37,7 @@ export interface EvaluatedTargetGoal {
   targetMonthKey: string;
   monthsUntilTarget: number;
   suggestedMonthlySavingCop: number;
+  notes?: string;
 }
 
 export interface MotoIdealComparisonSummary {

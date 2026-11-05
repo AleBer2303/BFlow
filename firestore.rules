@@ -18,6 +18,8 @@ rules_version = '2';
 //      - createdAt: timestamp | string | null (optional, <= 64 chars)
 //      - lastLoginAt: timestamp | string | null (optional, <= 64 chars)
 //      - seededOctober2026: bool (optional)
+//      - onboardingCompleted: bool | null (optional)
+//      - accountResetByUser: bool | null (optional)
 //      - activeMonthKey: string (optional, YYYY-MM)
 //      - updatedAt: timestamp | string | null (optional, <= 64 chars)
 //
@@ -111,7 +113,7 @@ service cloud.firestore {
         (data.savingsContribution is map &&
           data.savingsContribution.keys().hasAll(['bucketId', 'onlyWhenCompleted']) &&
           data.savingsContribution.keys().hasOnly(['bucketId', 'onlyWhenCompleted']) &&
-          data.savingsContribution.bucketId in ['moto', 'savings'] &&
+          isNonEmptyString(data.savingsContribution.bucketId, 120) &&
           data.savingsContribution.onlyWhenCompleted is bool);
     }
 
@@ -130,6 +132,8 @@ service cloud.firestore {
           'createdAt',
           'lastLoginAt',
           'seededOctober2026',
+          'onboardingCompleted',
+          'accountResetByUser',
           'activeMonthKey',
           'updatedAt'
         ]) &&
@@ -146,6 +150,8 @@ service cloud.firestore {
         isOptionalTimestampOrString(data, 'createdAt', 64) &&
         isOptionalTimestampOrString(data, 'lastLoginAt', 64) &&
         (!('seededOctober2026' in data) || data.seededOctober2026 is bool) &&
+        (!('onboardingCompleted' in data) || data.onboardingCompleted == null || data.onboardingCompleted is bool) &&
+        (!('accountResetByUser' in data) || data.accountResetByUser == null || data.accountResetByUser is bool) &&
         (!('activeMonthKey' in data) || isValidMonthKey(data.activeMonthKey)) &&
         isValidUpdatedAt(data);
     }
@@ -259,6 +265,9 @@ service cloud.firestore {
           'openingBalance',
           'monthKey',
           'monthlyInterestRate',
+          'annualInterestRate',
+          'interestRateType',
+          'monthlyInstallment',
           'updatedAt'
         ]) &&
         data.id is string &&
@@ -273,6 +282,18 @@ service cloud.firestore {
           (data.monthlyInterestRate is number &&
             data.monthlyInterestRate >= 0 &&
             data.monthlyInterestRate <= 100)) &&
+        (!('annualInterestRate' in data) ||
+          data.annualInterestRate == null ||
+          (data.annualInterestRate is number &&
+            data.annualInterestRate >= 0 &&
+            data.annualInterestRate <= 1000)) &&
+        (!('interestRateType' in data) ||
+          data.interestRateType == null ||
+          (data.interestRateType is string &&
+            data.interestRateType in ['monthly', 'annual'])) &&
+        (!('monthlyInstallment' in data) ||
+          data.monthlyInstallment == null ||
+          isNonNegativeInt(data.monthlyInstallment)) &&
         isValidUpdatedAt(data);
     }
 
@@ -323,12 +344,14 @@ service cloud.firestore {
           'id',
           'name',
           'openingBalance',
+          'monthKey',
           'updatedAt'
         ]) &&
-        data.id in ['moto', 'savings'] &&
+        isNonEmptyString(data.id, 120) &&
         data.id == bucketId &&
         isNonEmptyString(data.name, 120) &&
         isNonNegativeInt(data.openingBalance) &&
+        (!('monthKey' in data) || data.monthKey == null || isValidMonthKey(data.monthKey)) &&
         isValidUpdatedAt(data);
     }
 

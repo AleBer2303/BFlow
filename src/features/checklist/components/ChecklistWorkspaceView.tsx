@@ -393,7 +393,14 @@ export function ChecklistWorkspaceView({
               {linkedDebt ? (
                 <StatusBadge label={`→ ${linkedDebt.name}`} status="debt" />
               ) : concept?.linkedDebtGroup ? (
-                <StatusBadge label="→ Deuda FUNFAMI" status="debt" />
+                <StatusBadge
+                  label={
+                    concept.linkedDebtGroup === 'FUNFAMI'
+                      ? '→ Deuda'
+                      : `→ ${concept.linkedDebtGroup}`
+                  }
+                  status="debt"
+                />
               ) : null}
               {concept?.recurrence.kind === 'specific_months' ? (
                 <StatusBadge label="Solo este mes" status="info" />

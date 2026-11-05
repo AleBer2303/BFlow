@@ -81,7 +81,7 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     fireEvent.press(screen.getByTestId('close-add-movement-modal-button'));
   });
 
-  it('renders Deudas FUNFAMI screen, modifies monthly installment amount, and cascades payoff from CB300F - MOTO into ESP. IA', () => {
+  it('renders Deudas screen and manages obligations with monthly interest rate', () => {
     render(
       <BFlowThemeProvider initialMode="dark">
         <PhaseOneHomeScreen />
@@ -90,29 +90,12 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
 
     fireEvent.press(screen.getByTestId('workspace-tab-debts'));
     expect(screen.getByTestId('debts-funfami-view')).toBeTruthy();
+    expect(screen.getByText('Total Deudas')).toBeTruthy();
     expect(screen.getByTestId('funfami-hero-remaining')).toHaveTextContent('$ 6.200.000');
     expect(screen.getByTestId('debt-remaining-debt_cb300f_moto')).toHaveTextContent(
       '$ 2.600.000'
     );
     expect(screen.getByTestId('debt-remaining-debt_esp_ia')).toHaveTextContent('$ 3.600.000');
-
-    // Modify monthly installment amount to $ 5.000.000 (which pays off $ 4.400.000 CB300F - MOTO and subtracts $ 600.000 from ESP. IA)
-    fireEvent.changeText(screen.getByTestId('funfami-installment-amount-input'), '5000000');
-    fireEvent.press(screen.getByTestId('funfami-apply-installment-button'));
-
-    // CB300F - MOTO is now 0 and removed from active obligations, and ESP. IA drops from $ 3.600.000 to $ 3.000.000!
-    expect(screen.queryByTestId('debt-card-debt_cb300f_moto')).toBeNull();
-    expect(screen.getByTestId('moto-debt-completed-banner')).toBeTruthy();
-    expect(screen.getByTestId('debt-remaining-debt_esp_ia')).toHaveTextContent('$ 3.000.000');
-    expect(screen.getByTestId('funfami-hero-remaining')).toHaveTextContent('$ 3.000.000');
-
-    // Dismiss the banner
-    fireEvent.press(screen.getByTestId('moto-debt-banner-dismiss-button'));
-    expect(screen.queryByTestId('moto-debt-completed-banner')).toBeNull();
-
-    // Toggle installment to pending -> restores total debt to $ 8.000.000
-    fireEvent.press(screen.getByTestId('debts-view-toggle-installment'));
-    expect(screen.getByTestId('funfami-hero-remaining')).toHaveTextContent('$ 8.000.000');
 
     // Create a new debt with monthly interest rate
     fireEvent.press(screen.getByTestId('debts-add-new-debt-button'));

@@ -33,12 +33,15 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     expect(screen.queryByTestId('auth-google-button')).toBeNull();
     expect(screen.queryByText(/Continuar con Google/i)).toBeNull();
 
-    // Password visibility toggle must allow viewing password while typing
+    // Password visibility toggle must allow viewing password while typing with minimalist eye icons
     expect(screen.getByTestId('auth-password-input').props.secureTextEntry).toBe(true);
+    expect(screen.getByTestId('icon-eye-closed')).toBeTruthy();
     fireEvent.press(screen.getByTestId('auth-password-visibility-toggle'));
     expect(screen.getByTestId('auth-password-input').props.secureTextEntry).toBe(false);
+    expect(screen.getByTestId('icon-eye-open')).toBeTruthy();
     fireEvent.press(screen.getByTestId('auth-password-visibility-toggle'));
     expect(screen.getByTestId('auth-password-input').props.secureTextEntry).toBe(true);
+    expect(screen.getByTestId('icon-eye-closed')).toBeTruthy();
 
     // Switch to Personal Registration ("Crear cuenta")
     fireEvent.press(screen.getByTestId('auth-mode-register'));
@@ -47,10 +50,12 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     expect(screen.getByTestId('auth-phone-input')).toBeTruthy();
     expect(screen.getByTestId('auth-goal-input')).toBeTruthy();
 
-    // Confirm password visibility toggle also works
+    // Confirm password visibility toggle also works with minimalist eye icons
     expect(screen.getByTestId('auth-confirm-password-input').props.secureTextEntry).toBe(true);
+    expect(screen.getByTestId('icon-confirm-eye-closed')).toBeTruthy();
     fireEvent.press(screen.getByTestId('auth-confirm-password-visibility-toggle'));
     expect(screen.getByTestId('auth-confirm-password-input').props.secureTextEntry).toBe(false);
+    expect(screen.getByTestId('icon-confirm-eye-open')).toBeTruthy();
 
     // Validate missing name error
     fireEvent.press(screen.getByTestId('auth-primary-submit-button'));

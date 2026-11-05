@@ -22,7 +22,8 @@ describe('design-system & PhaseOneHomeScreen (RNTL)', () => {
     expect(screen.getByText('BFlow · Octubre 2026')).toBeTruthy();
     expect(screen.getByTestId('golden-net-flow')).toHaveTextContent('$ 1.080.000');
     expect(screen.getByText('Checklist 6 de 12')).toBeTruthy();
-    expect(screen.getByText('CB300F - MOTO: $ 2.600.000 · ESP. IA: $ 3.600.000')).toBeTruthy();
+    expect(screen.getByText('Control Deudas')).toBeTruthy();
+    expect(screen.getByText('Control Ahorros')).toBeTruthy();
   });
 
   it('toggles theme mode, completes/uncompletes checklist items live, and updates FUNFAMI debt', () => {

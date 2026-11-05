@@ -322,7 +322,7 @@ export function AnalyticsAndHistoryView({
           >
             <AppText variant="headline">Resumen de Arrastre Automático al Siguiente Mes:</AppText>
             <AppText variant="caption" color={colors.text.secondary}>
-              {`• Deuda FUNFAMI apertura: ${formatCop(debtSummary.totalRemainingDebt)}`}
+              {`• Deudas apertura: ${formatCop(debtSummary.totalRemainingDebt)}`}
             </AppText>
             <AppText variant="caption" color={colors.text.secondary}>
               {`• Fondo Moto apertura: ${formatCop(savingsSummary.moto.currentBalance)}`}

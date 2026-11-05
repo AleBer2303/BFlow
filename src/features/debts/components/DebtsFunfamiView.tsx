@@ -9,7 +9,7 @@
  * - 100% pure COP integers, >= 44pt touch targets, Apple Liquid Glass aesthetics
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Alert, Pressable, TextInput, View } from 'react-native';
 import {
   AppText,
@@ -59,23 +59,12 @@ export interface DebtsFunfamiViewProps {
 
 export function DebtsFunfamiView({
   debtSummary,
-  funfamiEntry,
-  onToggleFunfamiInstallment,
-  onUpdateFunfamiInstallmentAmount,
   onCreateDebt,
   onUpdateDebt,
   onDeleteDebt,
 }: DebtsFunfamiViewProps): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
 
-  const installmentAmount =
-    funfamiEntry?.actualAmount ||
-    funfamiEntry?.plannedAmount ||
-    debtSummary.appliedInstallmentThisMonth ||
-    1_800_000;
-
-  const [installmentInput, setInstallmentInput] = useState<string>(String(installmentAmount));
-  const [amountError, setAmountError] = useState<string | null>(null);
   const [dismissedBannerMonth, setDismissedBannerMonth] = useState<string | null>(null);
 
   // Form modal/drawer state for adding or editing a debt
@@ -90,34 +79,15 @@ export function DebtsFunfamiView({
   const [formMonthlyInstallment, setFormMonthlyInstallment] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setInstallmentInput(String(installmentAmount));
-  }, [installmentAmount]);
-
   const paydownRatio =
     debtSummary.openingTotalDebt > 0
       ? debtSummary.appliedInstallmentThisMonth / debtSummary.openingTotalDebt
       : 0;
   const paydownPercent = Math.round(paydownRatio * 1000) / 10;
   const estimatedRemainingMonths = debtSummary.projection.remainingMonths;
-  const monthShortLabel =
-    formatMonthKeyLabelEs(debtSummary.monthKey).split(' ')[0]?.slice(0, 3) ?? 'Mes';
   const payoffLabel = debtSummary.projection.estimatedPayoffMonthKey
     ? formatMonthKeyLabelEs(debtSummary.projection.estimatedPayoffMonthKey)
     : 'Sin cuota activa';
-
-  const handleApplyInstallmentAmount = () => {
-    const digitsOnly = installmentInput.replace(/[^0-9]/g, '');
-    const parsed = digitsOnly ? Number(digitsOnly) : 0;
-    if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-      setAmountError('Ingresa una cuota entera mayor a $ 0 en pesos colombianos.');
-      return;
-    }
-    setAmountError(null);
-    if (onUpdateFunfamiInstallmentAmount) {
-      onUpdateFunfamiInstallmentAmount(parsed);
-    }
-  };
 
   const motoDebtItem = debtSummary.debts.find((d) => d.debtId === 'debt_cb300f_moto');
 
@@ -254,7 +224,7 @@ export function DebtsFunfamiView({
 
   return (
     <View style={{ gap: spacing.md }} testID="debts-funfami-view">
-      {/* Hero Card: Total Deuda FUNFAMI */}
+      {/* Hero Card: Total Deudas */}
       <GlassSurface elevated testID="funfami-hero-card">
         <View style={{ gap: spacing.sm }}>
           <View
@@ -267,15 +237,15 @@ export function DebtsFunfamiView({
             }}
           >
             <AppText variant="caption" color={colors.text.secondary}>
-              Total Deuda FUNFAMI
+              Total Deudas
             </AppText>
             <StatusBadge
               label={
-                debtSummary.isInstallmentPaid
-                  ? `Cuota ${monthShortLabel} Pagada (${formatCop(installmentAmount)})`
-                  : `Cuota ${monthShortLabel} Pendiente`
+                debtSummary.appliedInstallmentThisMonth > 0
+                  ? `Abonado este mes: ${formatCop(debtSummary.appliedInstallmentThisMonth)}`
+                  : 'Sin abonos este mes'
               }
-              status={debtSummary.isInstallmentPaid ? 'completed' : 'pending'}
+              status={debtSummary.appliedInstallmentThisMonth > 0 ? 'completed' : 'pending'}
             />
           </View>
 
@@ -287,7 +257,7 @@ export function DebtsFunfamiView({
           />
 
           <AppText variant="caption" color={colors.text.secondary}>
-            {`Apertura mes: ${formatCop(debtSummary.openingTotalDebt)} · Abono a capital (100%): - ${formatCop(debtSummary.appliedInstallmentThisMonth)}`}
+            {`Apertura mes: ${formatCop(debtSummary.openingTotalDebt)} · Abono a capital: - ${formatCop(debtSummary.appliedInstallmentThisMonth)}`}
           </AppText>
 
           {/* Progress Bar */}
@@ -326,92 +296,6 @@ export function DebtsFunfamiView({
               {`Proyección libertad financiera: ~${estimatedRemainingMonths} cuotas (${payoffLabel})`}
             </AppText>
           </View>
-
-          {/* Modify Monthly Installment Amount */}
-          <View style={{ gap: spacing.xs, paddingTop: spacing.xxs }}>
-            <AppText variant="micro" color={colors.text.secondary}>
-              Modificar monto a pagar este mes (COP):
-            </AppText>
-            <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
-              <TextInput
-                testID="funfami-installment-amount-input"
-                value={installmentInput}
-                onChangeText={setInstallmentInput}
-                keyboardType="numeric"
-                placeholder="Ej. 1800000"
-                placeholderTextColor={colors.text.muted}
-                style={{
-                  flex: 1,
-                  minHeight: MIN_TOUCH_TARGET_PT,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: colors.glass.subtleBorder,
-                  color: colors.text.primary,
-                }}
-              />
-              <Pressable
-                testID="funfami-apply-installment-button"
-                accessibilityRole="button"
-                onPress={handleApplyInstallmentAmount}
-                style={{
-                  minHeight: MIN_TOUCH_TARGET_PT,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.glass.surfaceElevatedTint,
-                  borderWidth: 1,
-                  borderColor: colors.glass.specularBorder,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
-              >
-                <AppText variant="caption">Actualizar cuota</AppText>
-              </Pressable>
-            </View>
-            {amountError ? (
-              <AppText variant="micro" color={colors.semantic.expense}>
-                {amountError}
-              </AppText>
-            ) : null}
-          </View>
-
-          {funfamiEntry && onToggleFunfamiInstallment ? (
-            <Pressable
-              testID="debts-view-toggle-installment"
-              accessibilityRole="button"
-              onPress={() => onToggleFunfamiInstallment(funfamiEntry)}
-              style={{
-                width: '100%',
-                minHeight: MIN_TOUCH_TARGET_PT,
-                paddingVertical: spacing.xs,
-                paddingHorizontal: spacing.md,
-                borderRadius: radius.md,
-                backgroundColor: debtSummary.isInstallmentPaid
-                  ? colors.semantic.completedSoft
-                  : colors.semantic.debtSoft,
-                borderWidth: 1,
-                borderColor: debtSummary.isInstallmentPaid
-                  ? colors.semantic.completed
-                  : colors.semantic.debt,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <AppText
-                variant="caption"
-                color={
-                  debtSummary.isInstallmentPaid
-                    ? colors.semantic.completed
-                    : colors.semantic.debt
-                }
-              >
-                {debtSummary.isInstallmentPaid
-                  ? `✓ Cuota FUNFAMI Pagada (${formatCop(installmentAmount)}) · Toca para marcar pendiente`
-                  : `○ Marcar Cuota FUNFAMI (${formatCop(installmentAmount)}) como Pagada`}
-              </AppText>
-            </Pressable>
-          ) : null}
         </View>
       </GlassSurface>
 

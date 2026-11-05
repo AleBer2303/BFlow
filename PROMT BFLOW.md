@@ -180,11 +180,11 @@ Verifica rutas y formatos vigentes de Antigravity y crea:
 - Fase 4: UI principal: resumen, checklist, agregar, historial, conceptos.
 - Fase 5: módulos Deuda FUNFAMI, Ahorros y Moto, Moto ideal (UI + datos).
 - Fase 6: gráficos animados.
-- Fase 7: widgets y Live Activity / Isla Dinámica (Modo B).
+- Fase 7: widgets.
 - Fase 8: pulido (animaciones, haptics, accesibilidad, Liquid Glass), E2E Maestro, release automatizado.
 
 # FORMA DE TRABAJAR
 - Empieza SOLO por la Fase 0 y entrégame: (1) resumen de riesgos y viabilidad, (2) árbol de carpetas, (3) contenido de AGENTS.md, skills y workflows, (4) comandos exactos para Windows, (5) mapeo Excel → modelo de dominio con tu decisión propuesta para cada una de las 9 inconsistencias, y (6) las preguntas que necesites que responda (nombre de la app, bundle id, moneda, proyecto de Firebase, URL del repo, y las preguntas abiertas del Excel).
 - Pide confirmación antes de decisiones irreversibles. Si una librería o API pudo cambiar, verifica la documentación oficial actual en lugar de asumir.
-- No inventes datos ni reglas que no estén en el Excel o que yo no haya confirmado.
+- No inventes datos ni regla que yo no haya confirmado.
 - Al final de cada fase entrega: qué se hizo, tests agregados, resultado de la suite, y cómo probarlo en mi iPhone (Expo Go o .ipa).

@@ -13,6 +13,8 @@ import React, { useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import {
   AppText,
+  EyeIcon,
+  EyeOffIcon,
   GlassSurface,
   MIN_TOUCH_TARGET_PT,
   StatusBadge,
@@ -149,8 +151,8 @@ export function AuthScreen({
         {/* Grounded Ledger Preview Strip */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
           <StatusBadge label="Presupuesto en COP enteros" status="completed" />
-          <StatusBadge label="Control Deuda FUNFAMI" status="debt" />
-          <StatusBadge label="Provisión CB300F" status="moto" />
+          <StatusBadge label="Control Deudas" status="debt" />
+          <StatusBadge label="Control Ahorros" status="moto" />
         </View>
 
         {/* Main Liquid Glass Authentication Card */}
@@ -279,7 +281,7 @@ export function AuthScreen({
                     testID="auth-goal-input"
                     value={financialGoal}
                     onChangeText={setFinancialGoal}
-                    placeholder="Ej. Saldar FUNFAMI y ahorrar para apartamento"
+                    placeholder="Ej. Saldar deudas y ahorrar para apartamento"
                     placeholderTextColor={colors.text.muted}
                     style={{
                       minHeight: MIN_TOUCH_TARGET_PT,
@@ -368,9 +370,11 @@ export function AuthScreen({
                         alignItems: 'center',
                       }}
                     >
-                      <AppText variant="caption" color={colors.text.secondary}>
-                        {showPassword ? 'Ocultar' : 'Ver'}
-                      </AppText>
+                      {showPassword ? (
+                        <EyeIcon size={20} color={colors.text.secondary} testID="icon-eye-open" />
+                      ) : (
+                        <EyeOffIcon size={20} color={colors.text.secondary} testID="icon-eye-closed" />
+                      )}
                     </Pressable>
                   </View>
                 </View>
@@ -421,9 +425,11 @@ export function AuthScreen({
                           alignItems: 'center',
                         }}
                       >
-                        <AppText variant="caption" color={colors.text.secondary}>
-                          {showConfirmPassword ? 'Ocultar' : 'Ver'}
-                        </AppText>
+                        {showConfirmPassword ? (
+                          <EyeIcon size={20} color={colors.text.secondary} testID="icon-confirm-eye-open" />
+                        ) : (
+                          <EyeOffIcon size={20} color={colors.text.secondary} testID="icon-confirm-eye-closed" />
+                        )}
                       </Pressable>
                     </View>
                   </View>

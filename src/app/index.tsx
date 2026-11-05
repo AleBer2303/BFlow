@@ -398,8 +398,6 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     await triggerHaptic('success');
   };
 
-  const cb300fDebt = debtSummary.debts.find((d) => d.debtId === 'debt_cb300f_moto');
-  const espIaDebt = debtSummary.debts.find((d) => d.debtId === 'debt_esp_ia');
   const funfamiEntry = entries.find(
     (e) => e.monthKey === activeMonthKey && e.conceptId === 'exp_cuota_funfami'
   );
@@ -598,14 +596,14 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                       gap: spacing.xs,
                     }}
                   >
-                    <AppText variant="headline">Control Deuda FUNFAMI</AppText>
+                    <AppText variant="headline">Control Deudas</AppText>
                     <StatusBadge
                       label={
-                        debtSummary.isInstallmentPaid
-                          ? `Cuota ${formatCop(debtSummary.appliedInstallmentThisMonth)} Pagada`
-                          : `Cuota ${formatCop(funfamiEntry?.plannedAmount ?? 1_800_000)} Pendiente`
+                        debtSummary.appliedInstallmentThisMonth > 0
+                          ? `Abonos: ${formatCop(debtSummary.appliedInstallmentThisMonth)}`
+                          : 'Sin abonos este mes'
                       }
-                      status={debtSummary.isInstallmentPaid ? 'debt' : 'pending'}
+                      status={debtSummary.appliedInstallmentThisMonth > 0 ? 'debt' : 'pending'}
                     />
                   </View>
                   <CurrencyText
@@ -614,9 +612,6 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                     variant="title2"
                     tone="debt"
                   />
-                  <AppText variant="caption" color={colors.text.secondary}>
-                    {`CB300F - MOTO: ${formatCop(cb300fDebt?.remainingBalance ?? 0)} · ESP. IA: ${formatCop(espIaDebt?.remainingBalance ?? 0)}`}
-                  </AppText>
                 </View>
               </GlassSurface>
 
@@ -631,9 +626,13 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                       gap: spacing.xs,
                     }}
                   >
-                    <AppText variant="headline">Control Ahorros y Moto</AppText>
+                    <AppText variant="headline">Control Ahorros</AppText>
                     <StatusBadge
-                      label={`IDEAL Moto: ${formatCop(motoIdealSummary.excelRecurringMonthlyTotalCop)}/mes`}
+                      label={
+                        motoIdealSummary.excelRecurringMonthlyTotalCop > 0
+                          ? `Provisiones: ${formatCop(motoIdealSummary.excelRecurringMonthlyTotalCop)}/mes`
+                          : `${(savingsSummary.hasMotoBucket ? 1 : 0) + (savingsSummary.hasSavingsBucket ? 1 : 0) + (savingsSummary.customBuckets?.length ?? 0)} Fondos`
+                      }
                       status="moto"
                     />
                   </View>
@@ -643,9 +642,6 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                     variant="title2"
                     tone="moto"
                   />
-                  <AppText variant="caption" color={colors.text.secondary}>
-                    {`Moto Ahora: ${formatCop(savingsSummary.moto.currentBalance)} · Ahorros Ahora: ${formatCop(savingsSummary.savings.currentBalance)} (Tras pendientes: ${formatCop(savingsSummary.savings.projectedAfterPendingExpenses)})`}
-                  </AppText>
                 </View>
               </GlassSurface>
 
@@ -1026,12 +1022,6 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
           {activeTab === 'debts' ? (
             <DebtsFunfamiView
               debtSummary={debtSummary}
-              funfamiEntry={funfamiEntry}
-              onToggleFunfamiInstallment={handleToggleEntry}
-              onUpdateFunfamiInstallmentAmount={(newAmountCop) => {
-                void updateFunfamiInstallmentAmount(activeMonthKey, newAmountCop);
-                void triggerHaptic('success');
-              }}
               onCreateDebt={(input) => {
                 void createDebt(activeMonthKey, input);
                 void triggerHaptic('success');

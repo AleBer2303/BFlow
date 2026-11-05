@@ -10,9 +10,10 @@
  */
 
 import React, { useState } from 'react';
-import { Alert, Pressable, TextInput, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
 import {
   AppText,
+  AppTextInput,
   CurrencyText,
   GlassSurface,
   MIN_TOUCH_TARGET_PT,
@@ -342,21 +343,11 @@ export function DebtsFunfamiView({
               <AppText variant="caption" color={colors.text.secondary}>
                 Nombre de la deuda
               </AppText>
-              <TextInput
+              <AppTextInput
                 testID="debt-form-name-input"
                 value={formName}
                 onChangeText={setFormName}
                 placeholder="Ej. Tarjeta Bancolombia, Libre Inversión"
-                placeholderTextColor={colors.text.muted}
-                style={{
-                  minHeight: MIN_TOUCH_TARGET_PT,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: colors.glass.subtleBorder,
-                  color: colors.text.primary,
-                }}
               />
             </View>
 
@@ -364,21 +355,11 @@ export function DebtsFunfamiView({
               <AppText variant="caption" color={colors.text.secondary}>
                 Acreedor / Entidad
               </AppText>
-              <TextInput
+              <AppTextInput
                 testID="debt-form-lender-input"
                 value={formLender}
                 onChangeText={setFormLender}
                 placeholder="Ej. Bancolombia, Davivienda, Familiar"
-                placeholderTextColor={colors.text.muted}
-                style={{
-                  minHeight: MIN_TOUCH_TARGET_PT,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: colors.glass.subtleBorder,
-                  color: colors.text.primary,
-                }}
               />
             </View>
 
@@ -386,22 +367,12 @@ export function DebtsFunfamiView({
               <AppText variant="caption" color={colors.text.secondary}>
                 Saldo inicial (COP enteros)
               </AppText>
-              <TextInput
+              <AppTextInput
                 testID="debt-form-amount-input"
                 value={formOpeningBalance}
                 onChangeText={setFormOpeningBalance}
                 keyboardType="numeric"
                 placeholder="Ej. 2500000"
-                placeholderTextColor={colors.text.muted}
-                style={{
-                  minHeight: MIN_TOUCH_TARGET_PT,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: colors.glass.subtleBorder,
-                  color: colors.text.primary,
-                }}
               />
             </View>
 
@@ -446,7 +417,7 @@ export function DebtsFunfamiView({
                   );
                 })}
               </View>
-              <TextInput
+              <AppTextInput
                 testID="debt-form-interest-rate-input"
                 value={formInterestRate}
                 onChangeText={setFormInterestRate}
@@ -456,16 +427,6 @@ export function DebtsFunfamiView({
                     ? 'Ej. 12.0 o 24.0 anual (0 si no cobra interés)'
                     : 'Ej. 0.9 o 2.0 mensual (0 si no cobra interés)'
                 }
-                placeholderTextColor={colors.text.muted}
-                style={{
-                  minHeight: MIN_TOUCH_TARGET_PT,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: colors.glass.subtleBorder,
-                  color: colors.text.primary,
-                }}
               />
               <AppText variant="micro" color={colors.text.muted}>
                 Se conserva mes a mes y entre sesiones a menos que lo edites directamente.
@@ -476,22 +437,12 @@ export function DebtsFunfamiView({
               <AppText variant="caption" color={colors.text.secondary}>
                 Cuota mensual pactada que aportas a esta deuda (COP, opcional)
               </AppText>
-              <TextInput
+              <AppTextInput
                 testID="debt-form-installment-input"
                 value={formMonthlyInstallment}
                 onChangeText={setFormMonthlyInstallment}
                 keyboardType="numeric"
                 placeholder="Ej. 500000"
-                placeholderTextColor={colors.text.muted}
-                style={{
-                  minHeight: MIN_TOUCH_TARGET_PT,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: colors.glass.subtleBorder,
-                  color: colors.text.primary,
-                }}
               />
             </View>
 

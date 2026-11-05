@@ -9,9 +9,10 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import {
   AppText,
+  AppTextInput,
   CurrencyText,
   GlassSurface,
   StatusBadge,
@@ -296,50 +297,28 @@ export function SavingsAndMotoIdealView({
                   <AppText variant="headline" style={{ flex: 1 }}>
                     {savingsSummary.moto.name || 'Fondo Moto'}
                   </AppText>
-                  <View style={{ flexDirection: 'row', gap: spacing.xxs }}>
+                  {onDeleteSavingsBucket ? (
                     <Pressable
-                      testID="edit-savings-bucket-moto"
+                      testID="delete-savings-bucket-moto"
                       accessibilityRole="button"
-                      accessibilityLabel="Editar Fondo Moto"
-                      onPress={openEditFundsSheet}
+                      accessibilityLabel="Eliminar Fondo Moto"
+                      onPress={() => onDeleteSavingsBucket('moto')}
                       style={{
                         minHeight: MIN_TOUCH_TARGET_PT,
-                        paddingHorizontal: spacing.xs,
+                        minWidth: MIN_TOUCH_TARGET_PT,
                         borderRadius: radius.md,
-                        backgroundColor: colors.glass.surfaceTint,
+                        backgroundColor: colors.semantic.expenseSoft,
                         borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
+                        borderColor: colors.semantic.expense,
                         justifyContent: 'center',
                         alignItems: 'center',
                       }}
                     >
-                      <AppText variant="caption" color={colors.text.secondary}>
-                        Editar
+                      <AppText variant="caption" color={colors.semantic.expense}>
+                        ✕
                       </AppText>
                     </Pressable>
-                    {onDeleteSavingsBucket ? (
-                      <Pressable
-                        testID="delete-savings-bucket-moto"
-                        accessibilityRole="button"
-                        accessibilityLabel="Eliminar Fondo Moto"
-                        onPress={() => onDeleteSavingsBucket('moto')}
-                        style={{
-                          minHeight: MIN_TOUCH_TARGET_PT,
-                          minWidth: MIN_TOUCH_TARGET_PT,
-                          borderRadius: radius.md,
-                          backgroundColor: colors.semantic.expenseSoft,
-                          borderWidth: 1,
-                          borderColor: colors.semantic.expense,
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <AppText variant="caption" color={colors.semantic.expense}>
-                          ✕
-                        </AppText>
-                      </Pressable>
-                    ) : null}
-                  </View>
+                  ) : null}
                 </View>
                 <CurrencyText
                   testID="bucket-moto-current"
@@ -371,50 +350,28 @@ export function SavingsAndMotoIdealView({
                   <AppText variant="headline" style={{ flex: 1 }}>
                     {savingsSummary.savings.name || 'Fondo Ahorros'}
                   </AppText>
-                  <View style={{ flexDirection: 'row', gap: spacing.xxs }}>
+                  {onDeleteSavingsBucket ? (
                     <Pressable
-                      testID="edit-savings-bucket-savings"
+                      testID="delete-savings-bucket-savings"
                       accessibilityRole="button"
-                      accessibilityLabel="Editar Fondo Ahorros"
-                      onPress={openEditFundsSheet}
+                      accessibilityLabel="Eliminar Fondo Ahorros"
+                      onPress={() => onDeleteSavingsBucket('savings')}
                       style={{
                         minHeight: MIN_TOUCH_TARGET_PT,
-                        paddingHorizontal: spacing.xs,
+                        minWidth: MIN_TOUCH_TARGET_PT,
                         borderRadius: radius.md,
-                        backgroundColor: colors.glass.surfaceTint,
+                        backgroundColor: colors.semantic.expenseSoft,
                         borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
+                        borderColor: colors.semantic.expense,
                         justifyContent: 'center',
                         alignItems: 'center',
                       }}
                     >
-                      <AppText variant="caption" color={colors.text.secondary}>
-                        Editar
+                      <AppText variant="caption" color={colors.semantic.expense}>
+                        ✕
                       </AppText>
                     </Pressable>
-                    {onDeleteSavingsBucket ? (
-                      <Pressable
-                        testID="delete-savings-bucket-savings"
-                        accessibilityRole="button"
-                        accessibilityLabel="Eliminar Fondo Ahorros"
-                        onPress={() => onDeleteSavingsBucket('savings')}
-                        style={{
-                          minHeight: MIN_TOUCH_TARGET_PT,
-                          minWidth: MIN_TOUCH_TARGET_PT,
-                          borderRadius: radius.md,
-                          backgroundColor: colors.semantic.expenseSoft,
-                          borderWidth: 1,
-                          borderColor: colors.semantic.expense,
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <AppText variant="caption" color={colors.semantic.expense}>
-                          ✕
-                        </AppText>
-                      </Pressable>
-                    ) : null}
-                  </View>
+                  ) : null}
                 </View>
                 <CurrencyText
                   testID="bucket-savings-current"
@@ -452,50 +409,28 @@ export function SavingsAndMotoIdealView({
                 {`Saldo anterior: ${formatCop(cb.openingBalance)} · + Aportes pagados: ${formatCop(cb.paidContributionsThisMonth)}`}
               </AppText>
             </View>
-            <View style={{ flexDirection: 'row', gap: spacing.xxs }}>
+            {onDeleteSavingsBucket ? (
               <Pressable
-                testID={`edit-savings-bucket-${cb.id}`}
+                testID={`delete-savings-bucket-${cb.id}`}
                 accessibilityRole="button"
-                accessibilityLabel={`Editar fondo ${cb.name}`}
-                onPress={openEditFundsSheet}
+                accessibilityLabel={`Eliminar fondo ${cb.name}`}
+                onPress={() => onDeleteSavingsBucket(cb.id)}
                 style={{
                   minHeight: MIN_TOUCH_TARGET_PT,
-                  paddingHorizontal: spacing.xs,
+                  minWidth: MIN_TOUCH_TARGET_PT,
                   borderRadius: radius.md,
-                  backgroundColor: colors.glass.surfaceTint,
+                  backgroundColor: colors.semantic.expenseSoft,
                   borderWidth: 1,
-                  borderColor: colors.glass.subtleBorder,
+                  borderColor: colors.semantic.expense,
                   justifyContent: 'center',
                   alignItems: 'center',
                 }}
               >
-                <AppText variant="caption" color={colors.text.secondary}>
-                  Editar
+                <AppText variant="caption" color={colors.semantic.expense}>
+                  ✕
                 </AppText>
               </Pressable>
-              {onDeleteSavingsBucket ? (
-                <Pressable
-                  testID={`delete-savings-bucket-${cb.id}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Eliminar fondo ${cb.name}`}
-                  onPress={() => onDeleteSavingsBucket(cb.id)}
-                  style={{
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    minWidth: MIN_TOUCH_TARGET_PT,
-                    borderRadius: radius.md,
-                    backgroundColor: colors.semantic.expenseSoft,
-                    borderWidth: 1,
-                    borderColor: colors.semantic.expense,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                >
-                  <AppText variant="caption" color={colors.semantic.expense}>
-                    ✕
-                  </AppText>
-                </Pressable>
-              ) : null}
-            </View>
+            ) : null}
           </View>
         </GlassSurface>
       ))}
@@ -514,7 +449,7 @@ export function SavingsAndMotoIdealView({
         <Pressable
           testID="open-edit-opening-balance-button"
           accessibilityRole="button"
-          accessibilityLabel="Ajustar saldos mes anterior"
+          accessibilityLabel="Editar Fondos/Ahorros"
           onPress={() => {
             if (isEditingBalances) {
               setIsEditingBalances(false);
@@ -543,7 +478,7 @@ export function SavingsAndMotoIdealView({
             variant="caption"
             color={isEditingBalances ? colors.text.primary : colors.text.secondary}
           >
-            {isEditingBalances ? '✕ Cancelar ajuste' : '✏️ Ajustar saldos mes anterior'}
+            {isEditingBalances ? '✕ Cancelar edición' : '✏️ Editar Fondos/Ahorros'}
           </AppText>
         </Pressable>
 
@@ -583,39 +518,19 @@ export function SavingsAndMotoIdealView({
               Podrás vincular cualquier gasto de tu Checklist a este fondo para que sume automáticamente al marcarlo como pagado.
             </AppText>
 
-            <TextInput
+            <AppTextInput
               testID="new-bucket-name-input"
               value={newBucketName}
               onChangeText={setNewBucketName}
               placeholder="Nombre del fondo (ej. Fondo Viaje, Emergencias)"
-              placeholderTextColor={colors.text.muted}
-              style={{
-                minHeight: MIN_TOUCH_TARGET_PT,
-                paddingHorizontal: spacing.md,
-                borderRadius: radius.md,
-                backgroundColor: colors.glass.surfaceTint,
-                borderWidth: 1,
-                borderColor: colors.glass.subtleBorder,
-                color: colors.text.primary,
-              }}
             />
 
-            <TextInput
+            <AppTextInput
               testID="new-bucket-balance-input"
               value={newBucketBalance}
               onChangeText={setNewBucketBalance}
               keyboardType="numeric"
               placeholder="Saldo actual o del mes anterior en COP (ej. 500000)"
-              placeholderTextColor={colors.text.muted}
-              style={{
-                minHeight: MIN_TOUCH_TARGET_PT,
-                paddingHorizontal: spacing.md,
-                borderRadius: radius.md,
-                backgroundColor: colors.glass.surfaceTint,
-                borderWidth: 1,
-                borderColor: colors.glass.subtleBorder,
-                color: colors.text.primary,
-              }}
             />
 
             {newBucketError ? (
@@ -659,38 +574,18 @@ export function SavingsAndMotoIdealView({
             {hasMotoBucket ? (
               <View style={{ gap: spacing.xs }}>
                 <AppText variant="caption">Nombre y saldo mes anterior Fondo Moto</AppText>
-                <TextInput
+                <AppTextInput
                   testID="moto-bucket-name-input"
                   value={motoNameInput}
                   onChangeText={setMotoNameInput}
                   placeholder="Nombre del fondo"
-                  placeholderTextColor={colors.text.muted}
-                  style={{
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    paddingHorizontal: spacing.md,
-                    borderRadius: radius.md,
-                    backgroundColor: colors.glass.surfaceTint,
-                    borderWidth: 1,
-                    borderColor: colors.glass.subtleBorder,
-                    color: colors.text.primary,
-                  }}
                 />
-                <TextInput
+                <AppTextInput
                   testID="moto-opening-balance-input"
                   value={motoBalanceInput}
                   onChangeText={setMotoBalanceInput}
                   keyboardType="numeric"
                   placeholder="0"
-                  placeholderTextColor={colors.text.muted}
-                  style={{
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    paddingHorizontal: spacing.md,
-                    borderRadius: radius.md,
-                    backgroundColor: colors.glass.surfaceTint,
-                    borderWidth: 1,
-                    borderColor: colors.glass.subtleBorder,
-                    color: colors.text.primary,
-                  }}
                 />
               </View>
             ) : null}
@@ -698,38 +593,18 @@ export function SavingsAndMotoIdealView({
             {hasSavingsBucket ? (
               <View style={{ gap: spacing.xs }}>
                 <AppText variant="caption">Nombre y saldo mes anterior Fondo Ahorros</AppText>
-                <TextInput
+                <AppTextInput
                   testID="savings-bucket-name-input"
                   value={savingsNameInput}
                   onChangeText={setSavingsNameInput}
                   placeholder="Nombre del fondo"
-                  placeholderTextColor={colors.text.muted}
-                  style={{
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    paddingHorizontal: spacing.md,
-                    borderRadius: radius.md,
-                    backgroundColor: colors.glass.surfaceTint,
-                    borderWidth: 1,
-                    borderColor: colors.glass.subtleBorder,
-                    color: colors.text.primary,
-                  }}
                 />
-                <TextInput
+                <AppTextInput
                   testID="savings-opening-balance-input"
                   value={savingsBalanceInput}
                   onChangeText={setSavingsBalanceInput}
                   keyboardType="numeric"
                   placeholder="0"
-                  placeholderTextColor={colors.text.muted}
-                  style={{
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    paddingHorizontal: spacing.md,
-                    borderRadius: radius.md,
-                    backgroundColor: colors.glass.surfaceTint,
-                    borderWidth: 1,
-                    borderColor: colors.glass.subtleBorder,
-                    color: colors.text.primary,
-                  }}
                 />
               </View>
             ) : null}
@@ -737,25 +612,15 @@ export function SavingsAndMotoIdealView({
             {customBuckets.map((cb) => (
               <View key={cb.id} style={{ gap: spacing.xs }}>
                 <AppText variant="caption">{`Nombre y saldo mes anterior ${cb.name}`}</AppText>
-                <TextInput
+                <AppTextInput
                   testID={`custom-bucket-name-input-${cb.id}`}
                   value={customNameInputs[cb.id] ?? cb.name}
                   onChangeText={(text) =>
                     setCustomNameInputs((prev) => ({ ...prev, [cb.id]: text }))
                   }
                   placeholder="Nombre del fondo"
-                  placeholderTextColor={colors.text.muted}
-                  style={{
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    paddingHorizontal: spacing.md,
-                    borderRadius: radius.md,
-                    backgroundColor: colors.glass.surfaceTint,
-                    borderWidth: 1,
-                    borderColor: colors.glass.subtleBorder,
-                    color: colors.text.primary,
-                  }}
                 />
-                <TextInput
+                <AppTextInput
                   testID={`custom-opening-balance-input-${cb.id}`}
                   value={customBalanceInputs[cb.id] ?? String(cb.openingBalance)}
                   onChangeText={(text) =>
@@ -763,16 +628,6 @@ export function SavingsAndMotoIdealView({
                   }
                   keyboardType="numeric"
                   placeholder="0"
-                  placeholderTextColor={colors.text.muted}
-                  style={{
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    paddingHorizontal: spacing.md,
-                    borderRadius: radius.md,
-                    backgroundColor: colors.glass.surfaceTint,
-                    borderWidth: 1,
-                    borderColor: colors.glass.subtleBorder,
-                    color: colors.text.primary,
-                  }}
                 />
               </View>
             ))}
@@ -906,74 +761,34 @@ export function SavingsAndMotoIdealView({
                 })}
               </View>
 
-              <TextInput
+              <AppTextInput
                 testID="provision-name-input"
                 value={provisionName}
                 onChangeText={setProvisionName}
                 placeholder="Nombre (ej. SOAT, Impuestos, Mantenimiento)"
-                placeholderTextColor={colors.text.muted}
-                style={{
-                  minHeight: MIN_TOUCH_TARGET_PT,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: colors.glass.subtleBorder,
-                  color: colors.text.primary,
-                }}
               />
 
-              <TextInput
+              <AppTextInput
                 testID="provision-amount-input"
                 value={provisionAmount}
                 onChangeText={setProvisionAmount}
                 keyboardType="numeric"
                 placeholder="Costo total del ciclo en COP (ej. 690000)"
-                placeholderTextColor={colors.text.muted}
-                style={{
-                  minHeight: MIN_TOUCH_TARGET_PT,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: colors.glass.subtleBorder,
-                  color: colors.text.primary,
-                }}
               />
 
-              <TextInput
+              <AppTextInput
                 testID="provision-months-input"
                 value={provisionMonths}
                 onChangeText={setProvisionMonths}
                 keyboardType="numeric"
                 placeholder="Periodo en meses (ej. 1 mensual, 12 anual)"
-                placeholderTextColor={colors.text.muted}
-                style={{
-                  minHeight: MIN_TOUCH_TARGET_PT,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: colors.glass.subtleBorder,
-                  color: colors.text.primary,
-                }}
               />
 
-              <TextInput
+              <AppTextInput
                 testID="provision-notes-input"
                 value={provisionNotes}
                 onChangeText={setProvisionNotes}
                 placeholder="Nota o fecha objetivo opcional"
-                placeholderTextColor={colors.text.muted}
-                style={{
-                  minHeight: MIN_TOUCH_TARGET_PT,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: colors.glass.subtleBorder,
-                  color: colors.text.primary,
-                }}
               />
 
               {provisionError ? (

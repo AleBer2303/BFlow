@@ -1,8 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
+import { TextInput } from 'react-native';
 import PhaseOneHomeScreen from '../../app/index';
 import { useBudgetStore } from '../../features/budget/store/useBudgetStore';
+import { AppTextInput } from '../components/AppTextInput';
 import { CurrencyText } from '../components/CurrencyText';
+import { KeyboardAwareScrollView } from '../components/KeyboardAwareScrollView';
 import { StatusBadge } from '../components/StatusBadge';
 import { AppText } from '../components/Typography';
 import { BFlowThemeProvider } from '../theme/ThemeContext';
@@ -64,5 +67,36 @@ describe('design-system & PhaseOneHomeScreen (RNTL)', () => {
     expect(screen.getByTestId('sample-text')).toHaveTextContent('Texto de Prueba');
     expect(screen.getByTestId('sample-currency')).toHaveTextContent('$ 1.080.000');
     expect(screen.getByTestId('sample-badge')).toHaveTextContent('Al Día');
+  });
+
+  it('renders KeyboardAwareScrollView and AppTextInput with automatic focus tracking and forwardRef', () => {
+    const onFocusMock = jest.fn();
+    const inputRef = React.createRef<any>();
+
+    render(
+      <BFlowThemeProvider initialMode="dark">
+        <KeyboardAwareScrollView testID="test-keyboard-scroll-view" extraScrollHeight={24}>
+          <AppText variant="headline">Formulario de Prueba</AppText>
+          <AppTextInput
+            ref={inputRef}
+            testID="test-app-text-input"
+            placeholder="Campo de prueba"
+            onFocus={onFocusMock}
+            focusScrollOffset={24}
+          />
+        </KeyboardAwareScrollView>
+      </BFlowThemeProvider>
+    );
+
+    const input = screen.getByTestId('test-app-text-input');
+    expect(input).toBeTruthy();
+    expect(screen.getByTestId('test-keyboard-scroll-view')).toBeTruthy();
+
+    // Verify focus handling
+    fireEvent(input, 'focus');
+    expect(onFocusMock).toHaveBeenCalledTimes(1);
+
+    // Verify forwarded ref is attached
+    expect(inputRef.current).toBeTruthy();
   });
 });

@@ -361,8 +361,8 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     expect(screen.getByTestId('bucket-moto-card')).toBeTruthy();
     expect(screen.getByTestId('bucket-savings-card')).toBeTruthy();
 
-    // Edit Fondo Moto name and balance
-    fireEvent.press(screen.getByTestId('edit-savings-bucket-moto'));
+    // Edit Fondo Moto name and balance via Editar Fondos/Ahorros
+    fireEvent.press(screen.getByTestId('open-edit-opening-balance-button'));
     fireEvent.changeText(screen.getByTestId('moto-bucket-name-input'), 'Fondo Moto Personal');
     fireEvent.changeText(screen.getByTestId('moto-opening-balance-input'), '2000000');
     await act(async () => {

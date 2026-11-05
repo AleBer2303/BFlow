@@ -9,9 +9,10 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import {
   AppText,
+  AppTextInput,
   CurrencyText,
   GlassSurface,
   MIN_TOUCH_TARGET_PT,
@@ -608,56 +609,26 @@ export function ChecklistWorkspaceView({
               </Pressable>
             </View>
 
-            <TextInput
+            <AppTextInput
               testID="edit-entry-name-input"
               value={editNameInput}
               onChangeText={setEditNameInput}
               placeholder="Nombre del ingreso o gasto"
-              placeholderTextColor={colors.text.muted}
-              style={{
-                minHeight: MIN_TOUCH_TARGET_PT,
-                paddingHorizontal: spacing.md,
-                borderRadius: radius.md,
-                backgroundColor: colors.glass.surfaceTint,
-                borderWidth: 1,
-                borderColor: colors.glass.subtleBorder,
-                color: colors.text.primary,
-              }}
             />
 
-            <TextInput
+            <AppTextInput
               testID="edit-entry-amount-input"
               value={editAmountInput}
               onChangeText={setEditAmountInput}
               keyboardType="numeric"
               placeholder="Monto en COP enteros"
-              placeholderTextColor={colors.text.muted}
-              style={{
-                minHeight: MIN_TOUCH_TARGET_PT,
-                paddingHorizontal: spacing.md,
-                borderRadius: radius.md,
-                backgroundColor: colors.glass.surfaceTint,
-                borderWidth: 1,
-                borderColor: colors.glass.subtleBorder,
-                color: colors.text.primary,
-              }}
             />
 
-            <TextInput
+            <AppTextInput
               testID="edit-entry-note-input"
               value={editNoteInput}
               onChangeText={setEditNoteInput}
               placeholder="Nota opcional"
-              placeholderTextColor={colors.text.muted}
-              style={{
-                minHeight: MIN_TOUCH_TARGET_PT,
-                paddingHorizontal: spacing.md,
-                borderRadius: radius.md,
-                backgroundColor: colors.glass.surfaceTint,
-                borderWidth: 1,
-                borderColor: colors.glass.subtleBorder,
-                color: colors.text.primary,
-              }}
             />
 
             {/* Adjustable Debt & Savings Linkage when editing an expense */}
@@ -1179,37 +1150,23 @@ export function ChecklistWorkspaceView({
 
                 {isEditingConcept ? (
                   <View style={{ gap: spacing.xs, paddingTop: spacing.xxs }}>
-                    <TextInput
+                    <AppTextInput
                       testID="edit-concept-name-input"
                       value={conceptEditName}
                       onChangeText={setConceptEditName}
                       placeholder="Nombre del concepto"
-                      placeholderTextColor={colors.text.muted}
                       style={{
-                        minHeight: MIN_TOUCH_TARGET_PT,
-                        paddingHorizontal: spacing.md,
-                        borderRadius: radius.md,
                         backgroundColor: colors.glass.surfaceElevatedTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                        color: colors.text.primary,
                       }}
                     />
-                    <TextInput
+                    <AppTextInput
                       testID="edit-concept-amount-input"
                       value={conceptEditAmount}
                       onChangeText={setConceptEditAmount}
                       keyboardType="numeric"
                       placeholder="Monto por defecto en COP (ej. 150000)"
-                      placeholderTextColor={colors.text.muted}
                       style={{
-                        minHeight: MIN_TOUCH_TARGET_PT,
-                        paddingHorizontal: spacing.md,
-                        borderRadius: radius.md,
                         backgroundColor: colors.glass.surfaceElevatedTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                        color: colors.text.primary,
                       }}
                     />
                     <View style={{ flexDirection: 'row', gap: spacing.xs }}>
@@ -1271,21 +1228,11 @@ export function ChecklistWorkspaceView({
 
             {isCustomConceptMode ? (
               <View style={{ gap: spacing.xs }}>
-                <TextInput
+                <AppTextInput
                   testID="custom-concept-name-input"
                   value={customConceptName}
                   onChangeText={setCustomConceptName}
                   placeholder="Nombre del nuevo ítem (ej. Bono extra o Parqueadero)"
-                  placeholderTextColor={colors.text.muted}
-                  style={{
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    paddingHorizontal: spacing.md,
-                    borderRadius: radius.md,
-                    backgroundColor: colors.glass.surfaceTint,
-                    borderWidth: 1,
-                    borderColor: colors.glass.subtleBorder,
-                    color: colors.text.primary,
-                  }}
                 />
                 <View style={{ flexDirection: 'row', gap: spacing.xs }}>
                   {(
@@ -1324,39 +1271,19 @@ export function ChecklistWorkspaceView({
               </View>
             ) : null}
 
-            <TextInput
+            <AppTextInput
               testID="movement-amount-input"
               value={amountInput}
               onChangeText={setAmountInput}
               keyboardType="numeric"
               placeholder="Monto en COP enteros (ej. 130000)"
-              placeholderTextColor={colors.text.muted}
-              style={{
-                minHeight: MIN_TOUCH_TARGET_PT,
-                paddingHorizontal: spacing.md,
-                borderRadius: radius.md,
-                backgroundColor: colors.glass.surfaceTint,
-                borderWidth: 1,
-                borderColor: colors.glass.subtleBorder,
-                color: colors.text.primary,
-              }}
             />
 
-            <TextInput
+            <AppTextInput
               testID="movement-note-input"
               value={noteInput}
               onChangeText={setNoteInput}
               placeholder="Nota opcional (ej. Pago PSE o gasto variable)"
-              placeholderTextColor={colors.text.muted}
-              style={{
-                minHeight: MIN_TOUCH_TARGET_PT,
-                paddingHorizontal: spacing.md,
-                borderRadius: radius.md,
-                backgroundColor: colors.glass.surfaceTint,
-                borderWidth: 1,
-                borderColor: colors.glass.subtleBorder,
-                color: colors.text.primary,
-              }}
             />
 
             {/* Adjustable Debt & Savings Fund Linkage for Expense Movements */}

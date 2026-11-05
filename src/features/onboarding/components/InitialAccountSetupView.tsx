@@ -9,9 +9,10 @@
      */
 
     import React, { useMemo, useState } from 'react';
-    import { LayoutAnimation, Platform, Pressable, TextInput, UIManager, View } from 'react-native';
+    import { LayoutAnimation, Platform, Pressable, UIManager, View } from 'react-native';
     import {
       AppText,
+      AppTextInput,
       CurrencyText,
       GlassSurface,
       IosWheelPickerModal,
@@ -482,22 +483,14 @@
                     <AppText variant="body" style={{ flex: 1 }}>
                       {bucket.name}
                     </AppText>
-                    <TextInput
+                    <AppTextInput
                       testID={`onboarding-bucket-balance-${bucket.id}`}
                       value={bucket.openingBalanceCop > 0 ? String(bucket.openingBalanceCop) : ''}
                       onChangeText={(txt) => handleUpdateBucketBalance(bucket.id ?? 'savings', txt)}
                       keyboardType="numeric"
                       placeholder="Saldo $ (0)"
-                      placeholderTextColor={colors.text.muted}
                       style={{
                         flex: 1,
-                        minHeight: 46,
-                        paddingHorizontal: spacing.md,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                        color: colors.text.primary,
                       }}
                     />
                     <Pressable
@@ -562,39 +555,23 @@
                   }}
                 >
                   <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                    <TextInput
+                    <AppTextInput
                       testID="onboarding-new-bucket-name-input"
                       value={newBucketName}
                       onChangeText={setNewBucketName}
                       placeholder="Nombre fondo (ej. Vacaciones)"
-                      placeholderTextColor={colors.text.muted}
                       style={{
                         flex: 1.4,
-                        minHeight: 46,
-                        paddingHorizontal: spacing.md,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                        color: colors.text.primary,
                       }}
                     />
-                    <TextInput
+                    <AppTextInput
                       testID="onboarding-new-bucket-balance-input"
                       value={newBucketBalance}
                       onChangeText={setNewBucketBalance}
                       keyboardType="numeric"
                       placeholder="Saldo inicial $"
-                      placeholderTextColor={colors.text.muted}
                       style={{
                         flex: 1,
-                        minHeight: 46,
-                        paddingHorizontal: spacing.md,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                        color: colors.text.primary,
                       }}
                     />
                   </View>
@@ -750,77 +727,45 @@
                   }}
                 >
                   <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                    <TextInput
+                    <AppTextInput
                       testID="onboarding-debt-name-input"
                       value={debtName}
                       onChangeText={setDebtName}
                       placeholder="Nombre de la deuda"
-                      placeholderTextColor={colors.text.muted}
                       style={{
                         flex: 1.2,
-                        minHeight: 46,
-                        paddingHorizontal: spacing.md,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                        color: colors.text.primary,
                       }}
                     />
-                    <TextInput
+                    <AppTextInput
                       testID="onboarding-debt-lender-input"
                       value={debtLender}
                       onChangeText={setDebtLender}
                       placeholder="Entidad o Banco"
-                      placeholderTextColor={colors.text.muted}
                       style={{
                         flex: 1,
-                        minHeight: 46,
-                        paddingHorizontal: spacing.md,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                        color: colors.text.primary,
                       }}
                     />
                   </View>
 
                   <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                    <TextInput
+                    <AppTextInput
                       testID="onboarding-debt-balance-input"
                       value={debtBalance}
                       onChangeText={setDebtBalance}
                       keyboardType="numeric"
                       placeholder="Saldo actual $"
-                      placeholderTextColor={colors.text.muted}
                       style={{
                         flex: 1,
-                        minHeight: 46,
-                        paddingHorizontal: spacing.md,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                        color: colors.text.primary,
                       }}
                     />
-                    <TextInput
+                    <AppTextInput
                       testID="onboarding-debt-installment-input"
                       value={debtInstallment}
                       onChangeText={setDebtInstallment}
                       keyboardType="numeric"
                       placeholder="Cuota mensual $"
-                      placeholderTextColor={colors.text.muted}
                       style={{
                         flex: 1,
-                        minHeight: 46,
-                        paddingHorizontal: spacing.md,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                        color: colors.text.primary,
                       }}
                     />
                   </View>
@@ -880,23 +825,15 @@
                         Interés Anual (% E.A.)
                       </AppText>
                     </Pressable>
-                    <TextInput
+                    <AppTextInput
                       testID="onboarding-debt-rate-input"
                       value={debtRate}
                       onChangeText={setDebtRate}
                       keyboardType="decimal-pad"
                       placeholder="Tasa % (ej. 0.5)"
-                      placeholderTextColor={colors.text.muted}
                       style={{
                         flex: 1,
                         minWidth: 120,
-                        minHeight: 46,
-                        paddingHorizontal: spacing.md,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                        color: colors.text.primary,
                       }}
                     />
                   </View>
@@ -1055,39 +992,23 @@
                   }}
                 >
                   <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                    <TextInput
+                    <AppTextInput
                       testID="onboarding-income-name-input"
                       value={incName}
                       onChangeText={setIncName}
                       placeholder="Concepto (ej. Salario)"
-                      placeholderTextColor={colors.text.muted}
                       style={{
                         flex: 1.4,
-                        minHeight: 46,
-                        paddingHorizontal: spacing.md,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                        color: colors.text.primary,
                       }}
                     />
-                    <TextInput
+                    <AppTextInput
                       testID="onboarding-income-amount-input"
                       value={incAmount}
                       onChangeText={setIncAmount}
                       keyboardType="numeric"
                       placeholder="Valor $"
-                      placeholderTextColor={colors.text.muted}
                       style={{
                         flex: 1,
-                        minHeight: 46,
-                        paddingHorizontal: spacing.md,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                        color: colors.text.primary,
                       }}
                     />
                   </View>
@@ -1320,39 +1241,23 @@
                   }}
                 >
                   <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                    <TextInput
+                    <AppTextInput
                       testID="onboarding-expense-name-input"
                       value={expName}
                       onChangeText={setExpName}
                       placeholder="Concepto (ej. Arriendo)"
-                      placeholderTextColor={colors.text.muted}
                       style={{
                         flex: 1.4,
-                        minHeight: 46,
-                        paddingHorizontal: spacing.md,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                        color: colors.text.primary,
                       }}
                     />
-                    <TextInput
+                    <AppTextInput
                       testID="onboarding-expense-amount-input"
                       value={expAmount}
                       onChangeText={setExpAmount}
                       keyboardType="numeric"
                       placeholder="Valor $"
-                      placeholderTextColor={colors.text.muted}
                       style={{
                         flex: 1,
-                        minHeight: 46,
-                        paddingHorizontal: spacing.md,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                        color: colors.text.primary,
                       }}
                     />
                   </View>
@@ -1687,61 +1592,37 @@
                   }}
                 >
                   <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                    <TextInput
+                    <AppTextInput
                       testID="onboarding-provision-name-input"
                       value={provName}
                       onChangeText={setProvName}
                       placeholder="Meta (ej. Vacaciones)"
-                      placeholderTextColor={colors.text.muted}
                       style={{
                         flex: 1.4,
-                        minHeight: 46,
-                        paddingHorizontal: spacing.md,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                        color: colors.text.primary,
                       }}
                     />
-                    <TextInput
+                    <AppTextInput
                       testID="onboarding-provision-amount-input"
                       value={provAmount}
                       onChangeText={setProvAmount}
                       keyboardType="numeric"
                       placeholder="Costo $"
-                      placeholderTextColor={colors.text.muted}
                       style={{
                         flex: 1,
-                        minHeight: 46,
-                        paddingHorizontal: spacing.md,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                        color: colors.text.primary,
                       }}
                     />
                   </View>
 
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center' }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                      <TextInput
+                      <AppTextInput
                         testID="onboarding-provision-months-input"
                         value={provMonths}
                         onChangeText={setProvMonths}
                         keyboardType="numeric"
                         placeholder="12"
-                        placeholderTextColor={colors.text.muted}
                         style={{
                           width: 90,
-                          minHeight: 46,
-                          paddingHorizontal: spacing.md,
-                          borderRadius: radius.md,
-                          backgroundColor: colors.glass.surfaceTint,
-                          borderWidth: 1,
-                          borderColor: colors.glass.subtleBorder,
-                          color: colors.text.primary,
                           textAlign: 'center',
                         }}
                       />

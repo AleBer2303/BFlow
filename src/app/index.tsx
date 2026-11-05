@@ -1,14 +1,16 @@
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useMemo, useState } from 'react';
-import { AppState, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { AppState, Platform, Pressable, View } from 'react-native';
 import {
   ensureStandardSavingsBuckets,
   FirestoreBudgetRepository,
 } from '../data/repositories/budgetRepository';
 import {
   AppText,
+  AppTextInput,
   CurrencyText,
   GlassSurface,
+  KeyboardAwareScrollView,
   MIN_TOUCH_TARGET_PT,
   StatusBadge,
   ThemeToggleIconButton,
@@ -403,7 +405,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
   );
 
   return (
-    <ScrollView
+    <KeyboardAwareScrollView
       style={{ flex: 1, backgroundColor: colors.background.primary }}
       contentContainerStyle={{
         paddingHorizontal: spacing.lg,
@@ -822,20 +824,10 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
 
                         {isSummaryCustomMode ? (
                           <View style={{ gap: spacing.xs }}>
-                            <TextInput
+                            <AppTextInput
                               value={summaryCustomName}
                               onChangeText={setSummaryCustomName}
                               placeholder="Nombre del nuevo ítem"
-                              placeholderTextColor={colors.text.muted}
-                              style={{
-                                minHeight: MIN_TOUCH_TARGET_PT,
-                                paddingHorizontal: spacing.md,
-                                borderRadius: radius.md,
-                                backgroundColor: colors.glass.surfaceTint,
-                                borderWidth: 1,
-                                borderColor: colors.glass.subtleBorder,
-                                color: colors.text.primary,
-                              }}
                             />
                             <View style={{ flexDirection: 'row', gap: spacing.xs }}>
                               {(
@@ -873,37 +865,17 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                           </View>
                         ) : null}
 
-                        <TextInput
+                        <AppTextInput
                           value={summaryAmountInput}
                           onChangeText={setSummaryAmountInput}
                           keyboardType="numeric"
                           placeholder="Monto en COP enteros"
-                          placeholderTextColor={colors.text.muted}
-                          style={{
-                            minHeight: MIN_TOUCH_TARGET_PT,
-                            paddingHorizontal: spacing.md,
-                            borderRadius: radius.md,
-                            backgroundColor: colors.glass.surfaceTint,
-                            borderWidth: 1,
-                            borderColor: colors.glass.subtleBorder,
-                            color: colors.text.primary,
-                          }}
                         />
 
-                        <TextInput
+                        <AppTextInput
                           value={summaryNoteInput}
                           onChangeText={setSummaryNoteInput}
                           placeholder="Nota opcional"
-                          placeholderTextColor={colors.text.muted}
-                          style={{
-                            minHeight: MIN_TOUCH_TARGET_PT,
-                            paddingHorizontal: spacing.md,
-                            borderRadius: radius.md,
-                            backgroundColor: colors.glass.surfaceTint,
-                            borderWidth: 1,
-                            borderColor: colors.glass.subtleBorder,
-                            color: colors.text.primary,
-                          }}
                         />
 
                         {summaryFormError ? (
@@ -1095,6 +1067,6 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
           ) : null}
         </>
       )}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }

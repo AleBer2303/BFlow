@@ -10,12 +10,14 @@
  */
 
 import React, { useState } from 'react';
-import { Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import {
   AppText,
+  AppTextInput,
   EyeIcon,
   EyeOffIcon,
   GlassSurface,
+  KeyboardAwareScrollView,
   MIN_TOUCH_TARGET_PT,
   StatusBadge,
   ThemeToggleIconButton,
@@ -117,7 +119,7 @@ export function AuthScreen({
   const activeError = localValidationError ?? errorMessage;
 
   return (
-    <ScrollView
+    <KeyboardAwareScrollView
       testID="auth-gate-screen"
       style={{ flex: 1, backgroundColor: colors.background.primary }}
       contentContainerStyle={{
@@ -126,7 +128,6 @@ export function AuthScreen({
         paddingHorizontal: spacing.lg,
         paddingVertical: spacing.xxxl,
       }}
-      keyboardShouldPersistTaps="handled"
     >
       <View
         style={{
@@ -231,22 +232,12 @@ export function AuthScreen({
                   <AppText variant="caption" color={colors.text.secondary}>
                     Nombre completo
                   </AppText>
-                  <TextInput
+                  <AppTextInput
                     testID="auth-name-input"
                     value={displayName}
                     onChangeText={setDisplayName}
                     placeholder="Ej. Alejandro Bernal Garnica"
-                    placeholderTextColor={colors.text.muted}
                     autoCapitalize="words"
-                    style={{
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      color: colors.text.primary,
-                    }}
                   />
                 </View>
 
@@ -254,22 +245,12 @@ export function AuthScreen({
                   <AppText variant="caption" color={colors.text.secondary}>
                     Celular (opcional)
                   </AppText>
-                  <TextInput
+                  <AppTextInput
                     testID="auth-phone-input"
                     value={phone}
                     onChangeText={setPhone}
                     placeholder="Ej. +57 300 123 4567"
-                    placeholderTextColor={colors.text.muted}
                     keyboardType="phone-pad"
-                    style={{
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      color: colors.text.primary,
-                    }}
                   />
                 </View>
 
@@ -277,21 +258,11 @@ export function AuthScreen({
                   <AppText variant="caption" color={colors.text.secondary}>
                     Meta financiera principal (opcional)
                   </AppText>
-                  <TextInput
+                  <AppTextInput
                     testID="auth-goal-input"
                     value={financialGoal}
                     onChangeText={setFinancialGoal}
                     placeholder="Ej. Saldar deudas y ahorrar para apartamento"
-                    placeholderTextColor={colors.text.muted}
-                    style={{
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      color: colors.text.primary,
-                    }}
                   />
                 </View>
               </View>
@@ -302,24 +273,14 @@ export function AuthScreen({
               <AppText variant="caption" color={colors.text.secondary}>
                 Correo electrónico
               </AppText>
-              <TextInput
+              <AppTextInput
                 testID="auth-email-input"
                 value={email}
                 onChangeText={setEmail}
                 placeholder="tu-correo@ejemplo.com"
-                placeholderTextColor={colors.text.muted}
                 autoCapitalize="none"
                 keyboardType="email-address"
                 autoComplete="email"
-                style={{
-                  minHeight: MIN_TOUCH_TARGET_PT,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: colors.glass.subtleBorder,
-                  color: colors.text.primary,
-                }}
               />
             </View>
 
@@ -340,19 +301,17 @@ export function AuthScreen({
                       borderColor: colors.glass.subtleBorder,
                     }}
                   >
-                    <TextInput
+                    <AppTextInput
                       testID="auth-password-input"
                       value={password}
                       onChangeText={setPassword}
                       placeholder="Mínimo 6 caracteres"
-                      placeholderTextColor={colors.text.muted}
                       secureTextEntry={!showPassword}
                       autoComplete={formMode === 'register' ? 'new-password' : 'current-password'}
                       style={{
                         flex: 1,
-                        minHeight: MIN_TOUCH_TARGET_PT,
-                        paddingHorizontal: spacing.md,
-                        color: colors.text.primary,
+                        backgroundColor: 'transparent',
+                        borderWidth: 0,
                       }}
                     />
                     <Pressable
@@ -394,18 +353,16 @@ export function AuthScreen({
                         borderColor: colors.glass.subtleBorder,
                       }}
                     >
-                      <TextInput
+                      <AppTextInput
                         testID="auth-confirm-password-input"
                         value={confirmPassword}
                         onChangeText={setConfirmPassword}
                         placeholder="Repite tu contraseña"
-                        placeholderTextColor={colors.text.muted}
                         secureTextEntry={!showConfirmPassword}
                         style={{
                           flex: 1,
-                          minHeight: MIN_TOUCH_TARGET_PT,
-                          paddingHorizontal: spacing.md,
-                          color: colors.text.primary,
+                          backgroundColor: 'transparent',
+                          borderWidth: 0,
                         }}
                       />
                       <Pressable
@@ -541,6 +498,6 @@ export function AuthScreen({
           </View>
         </GlassSurface>
       </View>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }

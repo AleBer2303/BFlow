@@ -17,7 +17,9 @@ import {
   CurrencyText,
   GlassSurface,
   MIN_TOUCH_TARGET_PT,
+  PencilEditIcon,
   StatusBadge,
+  TrashBinIcon,
   useBFlowTheme,
 } from '../../../design-system';
 import {
@@ -266,6 +268,7 @@ export function DebtsFunfamiView({
             style={{
               height: 10,
               borderRadius: radius.pill,
+              borderCurve: 'continuous',
               backgroundColor: colors.glass.surfaceTint,
               overflow: 'hidden',
               borderWidth: 1,
@@ -276,6 +279,8 @@ export function DebtsFunfamiView({
               style={{
                 width: `${Math.min(100, Math.max(4, paydownPercent))}%`,
                 height: '100%',
+                borderRadius: radius.pill,
+                borderCurve: 'continuous',
                 backgroundColor: colors.semantic.debt,
               }}
             />
@@ -318,14 +323,15 @@ export function DebtsFunfamiView({
             paddingHorizontal: spacing.md,
             paddingVertical: spacing.xs,
             borderRadius: radius.md,
-            backgroundColor: colors.semantic.incomeSoft,
+            borderCurve: 'continuous',
+            backgroundColor: colors.glass.surfaceElevatedTint,
             borderWidth: 1,
-            borderColor: colors.semantic.income,
+            borderColor: colors.glass.specularBorder,
             justifyContent: 'center',
             alignItems: 'center',
           }}
         >
-          <AppText variant="caption" color={colors.semantic.income}>
+          <AppText variant="callout" color={colors.text.primary}>
             + Nueva Deuda
           </AppText>
         </Pressable>
@@ -402,7 +408,7 @@ export function DebtsFunfamiView({
                           ? colors.semantic.debtSoft
                           : colors.glass.surfaceTint,
                         borderWidth: 1,
-                        borderColor: active ? colors.semantic.debt : colors.glass.subtleBorder,
+                        borderColor: active ? colors.glass.specularBorder : colors.glass.subtleBorder,
                         justifyContent: 'center',
                         alignItems: 'center',
                       }}
@@ -478,14 +484,15 @@ export function DebtsFunfamiView({
                   minHeight: MIN_TOUCH_TARGET_PT,
                   paddingHorizontal: spacing.lg,
                   borderRadius: radius.md,
-                  backgroundColor: colors.semantic.incomeSoft,
+                  borderCurve: 'continuous',
+                  backgroundColor: colors.glass.surfaceElevatedTint,
                   borderWidth: 1,
-                  borderColor: colors.semantic.income,
+                  borderColor: colors.glass.specularBorder,
                   justifyContent: 'center',
                   alignItems: 'center',
                 }}
               >
-                <AppText variant="caption" color={colors.semantic.income}>
+                <AppText variant="headline" color={colors.semantic.income}>
                   Guardar Deuda
                 </AppText>
               </Pressable>
@@ -511,7 +518,8 @@ export function DebtsFunfamiView({
                   minHeight: MIN_TOUCH_TARGET_PT,
                   paddingHorizontal: spacing.sm,
                   paddingVertical: spacing.xxs,
-                  borderRadius: radius.sm,
+                  borderRadius: radius.md,
+                  borderCurve: 'continuous',
                   backgroundColor: colors.glass.surfaceElevatedTint,
                   borderWidth: 1,
                   borderColor: colors.glass.subtleBorder,
@@ -520,7 +528,7 @@ export function DebtsFunfamiView({
                 }}
               >
                 <AppText variant="micro" color={colors.text.secondary}>
-                  ✕ Descartar
+                  Descartar
                 </AppText>
               </Pressable>
             </View>
@@ -617,15 +625,20 @@ export function DebtsFunfamiView({
                     minHeight: MIN_TOUCH_TARGET_PT,
                     paddingHorizontal: spacing.sm,
                     paddingVertical: spacing.xxs,
-                    borderRadius: radius.sm,
+                    borderRadius: radius.md,
+                    borderCurve: 'continuous',
                     backgroundColor: colors.glass.surfaceElevatedTint,
                     borderWidth: 1,
                     borderColor: colors.glass.specularBorder,
-                    justifyContent: 'center',
+                    flexDirection: 'row',
                     alignItems: 'center',
+                    gap: spacing.xxs,
                   }}
                 >
-                  <AppText variant="micro">✏️ Editar</AppText>
+                  <PencilEditIcon size={14} color={colors.text.secondary} />
+                  <AppText variant="micro" color={colors.text.primary}>
+                    Editar
+                  </AppText>
                 </Pressable>
 
                 <Pressable
@@ -635,19 +648,19 @@ export function DebtsFunfamiView({
                   onPress={() => handleDeleteDebtConfirm(debt.debtId, debt.name)}
                   style={{
                     minHeight: MIN_TOUCH_TARGET_PT,
+                    minWidth: MIN_TOUCH_TARGET_PT,
                     paddingHorizontal: spacing.sm,
                     paddingVertical: spacing.xxs,
-                    borderRadius: radius.sm,
+                    borderRadius: radius.md,
+                    borderCurve: 'continuous',
                     backgroundColor: colors.semantic.expenseSoft,
                     borderWidth: 1,
-                    borderColor: colors.semantic.expense,
+                    borderColor: colors.glass.subtleBorder,
                     justifyContent: 'center',
                     alignItems: 'center',
                   }}
                 >
-                  <AppText variant="micro" color={colors.semantic.expense}>
-                    🗑️
-                  </AppText>
+                  <TrashBinIcon size={16} color={colors.semantic.expense} />
                 </Pressable>
               </View>
             </View>

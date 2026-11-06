@@ -16,7 +16,10 @@ import {
   CurrencyText,
   GlassSurface,
   MIN_TOUCH_TARGET_PT,
+  PencilEditIcon,
   StatusBadge,
+  TrashBinIcon,
+  hapticService,
   useBFlowTheme,
 } from '../../../design-system';
 import {
@@ -353,6 +356,7 @@ export function ChecklistWorkspaceView({
           accessibilityRole="checkbox"
           accessibilityState={{ checked: isCompleted }}
           accessibilityLabel={`${entry.conceptName}, ${formatCop(entry.actualAmount)}`}
+          onPressIn={() => hapticService.trigger(isCompleted ? 'light' : 'success')}
           onPress={() => onToggleEntry(entry)}
           style={{
             flex: 1,
@@ -364,11 +368,14 @@ export function ChecklistWorkspaceView({
             paddingVertical: spacing.sm,
             paddingHorizontal: spacing.md,
             borderRadius: radius.md,
+            borderCurve: 'continuous',
             backgroundColor: isCompleted
               ? colors.semantic.completedSoft
               : colors.glass.surfaceTint,
             borderWidth: 1,
-            borderColor: isCompleted ? colors.semantic.completed : colors.glass.subtleBorder,
+            borderColor: isCompleted
+              ? colors.glass.specularBorder
+              : colors.glass.subtleBorder,
           }}
         >
           <View style={{ flex: 1, gap: spacing.xxs }}>
@@ -380,7 +387,7 @@ export function ChecklistWorkspaceView({
                 flexWrap: 'wrap',
               }}
             >
-              <AppText variant="body">{`${isCompleted ? '✓ ' : '○ '}${entry.conceptName}`}</AppText>
+              <AppText variant="body">{`${isCompleted ? '✓ ' : ''}${entry.conceptName}`}</AppText>
               {concept?.savingsContribution?.bucketId === 'moto' ? (
                 <StatusBadge label="→ Fondo Moto" status="moto" />
               ) : linkedBucket ? (
@@ -428,11 +435,13 @@ export function ChecklistWorkspaceView({
           testID={`edit-entry-${entry.id}`}
           accessibilityRole="button"
           accessibilityLabel={`Editar ${entry.conceptName}`}
+          onPressIn={() => hapticService.light()}
           onPress={() => handleOpenEditModal(entry)}
           style={{
             minHeight: MIN_TOUCH_TARGET_PT,
             minWidth: MIN_TOUCH_TARGET_PT,
             borderRadius: radius.md,
+            borderCurve: 'continuous',
             backgroundColor: colors.glass.surfaceElevatedTint,
             borderWidth: 1,
             borderColor: colors.glass.specularBorder,
@@ -440,9 +449,7 @@ export function ChecklistWorkspaceView({
             alignItems: 'center',
           }}
         >
-          <AppText variant="caption" color={colors.text.primary}>
-            ✎
-          </AppText>
+          <PencilEditIcon size={16} color={colors.text.secondary} />
         </Pressable>
 
         {/* Delete Entry Button */}
@@ -450,21 +457,21 @@ export function ChecklistWorkspaceView({
           testID={`delete-entry-${entry.id}`}
           accessibilityRole="button"
           accessibilityLabel={`Eliminar ${entry.conceptName}`}
+          onPressIn={() => hapticService.warning()}
           onPress={() => handleDeleteEntry(entry)}
           style={{
             minHeight: MIN_TOUCH_TARGET_PT,
             minWidth: MIN_TOUCH_TARGET_PT,
             borderRadius: radius.md,
+            borderCurve: 'continuous',
             backgroundColor: colors.semantic.expenseSoft,
             borderWidth: 1,
-            borderColor: colors.semantic.expense,
+            borderColor: colors.glass.subtleBorder,
             justifyContent: 'center',
             alignItems: 'center',
           }}
         >
-          <AppText variant="caption" color={colors.semantic.expense}>
-            ✕
-          </AppText>
+          <TrashBinIcon size={16} color={colors.semantic.expense} />
         </Pressable>
       </View>
     );
@@ -495,9 +502,6 @@ export function ChecklistWorkspaceView({
           >
             <View style={{ flex: 1 }}>
               <AppText variant="headline">Checklist del Mes</AppText>
-              <AppText variant="micro" color={colors.text.secondary}>
-                Ingresos y gastos operativos
-              </AppText>
             </View>
             <StatusBadge
               label={`${completedTotalCount}/${monthEntries.length} completados`}
@@ -509,6 +513,7 @@ export function ChecklistWorkspaceView({
             testID="open-add-movement-modal-button"
             accessibilityRole="button"
             accessibilityLabel="Agregar o completar movimiento"
+            onPressIn={() => hapticService.light()}
             onPress={() => handleOpenAddModal('expense')}
             style={{
               width: '100%',
@@ -516,15 +521,16 @@ export function ChecklistWorkspaceView({
               paddingVertical: spacing.sm,
               paddingHorizontal: spacing.md,
               borderRadius: radius.md,
-              backgroundColor: colors.semantic.incomeSoft,
+              borderCurve: 'continuous',
+              backgroundColor: colors.glass.surfaceElevatedTint,
               borderWidth: 1,
-              borderColor: colors.semantic.income,
+              borderColor: colors.glass.specularBorder,
               flexDirection: 'row',
               justifyContent: 'center',
               alignItems: 'center',
             }}
           >
-            <AppText variant="headline" color={colors.semantic.income}>
+            <AppText variant="headline" color={colors.text.primary}>
               + Nuevo Movimiento
             </AppText>
           </Pressable>
@@ -544,12 +550,14 @@ export function ChecklistWorkspaceView({
                   testID={`checklist-filter-${seg.id}`}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
+                  onPressIn={() => hapticService.selection()}
                   onPress={() => setFilterMode(seg.id)}
                   style={{
                     flex: 1,
                     minHeight: MIN_TOUCH_TARGET_PT,
                     paddingHorizontal: spacing.xxs,
                     borderRadius: radius.md,
+                    borderCurve: 'continuous',
                     backgroundColor: active
                       ? colors.glass.surfaceElevatedTint
                       : colors.glass.surfaceTint,
@@ -677,7 +685,7 @@ export function ChecklistWorkspaceView({
                             : colors.glass.surfaceTint,
                           borderWidth: 1,
                           borderColor: isLinked
-                            ? colors.semantic.debt
+                            ? colors.glass.specularBorder
                             : colors.glass.subtleBorder,
                           justifyContent: 'center',
                         }}
@@ -738,7 +746,7 @@ export function ChecklistWorkspaceView({
                                 : colors.glass.surfaceTint,
                               borderWidth: 1,
                               borderColor: isLinked
-                                ? colors.semantic.savings
+                                ? colors.glass.specularBorder
                                 : colors.glass.subtleBorder,
                               justifyContent: 'center',
                             }}
@@ -781,7 +789,7 @@ export function ChecklistWorkspaceView({
                         ? colors.semantic.incomeSoft
                         : colors.glass.surfaceTint,
                       borderWidth: 1,
-                      borderColor: active ? colors.semantic.income : colors.glass.subtleBorder,
+                      borderColor: active ? colors.glass.specularBorder : colors.glass.subtleBorder,
                       justifyContent: 'center',
                       alignItems: 'center',
                     }}
@@ -811,9 +819,10 @@ export function ChecklistWorkspaceView({
                 width: '100%',
                 minHeight: MIN_TOUCH_TARGET_PT,
                 borderRadius: radius.md,
-                backgroundColor: colors.semantic.incomeSoft,
+                borderCurve: 'continuous',
+                backgroundColor: colors.glass.surfaceElevatedTint,
                 borderWidth: 1,
-                borderColor: colors.semantic.income,
+                borderColor: colors.glass.specularBorder,
                 justifyContent: 'center',
                 alignItems: 'center',
               }}
@@ -921,12 +930,15 @@ export function ChecklistWorkspaceView({
                         : colors.glass.surfaceTint,
                       borderWidth: 1,
                       borderColor: isSelected
-                        ? colors.semantic.income
+                        ? colors.glass.specularBorder
                         : colors.glass.subtleBorder,
                       justifyContent: 'center',
                     }}
                   >
-                    <AppText variant="caption">
+                    <AppText
+                      variant="caption"
+                      color={isSelected ? colors.semantic.income : colors.text.primary}
+                    >
                       {`${concept.name}${concept.defaultAmount > 0 ? ` (${formatCop(concept.defaultAmount)})` : ' (Múltiple)'}`}
                     </AppText>
                   </Pressable>
@@ -951,12 +963,17 @@ export function ChecklistWorkspaceView({
                     : colors.glass.surfaceTint,
                   borderWidth: 1,
                   borderColor: isCustomConceptMode
-                    ? colors.semantic.moto
+                    ? colors.glass.specularBorder
                     : colors.glass.subtleBorder,
                   justifyContent: 'center',
                 }}
               >
-                <AppText variant="caption">+ Crear nuevo ítem</AppText>
+                <AppText
+                  variant="caption"
+                  color={isCustomConceptMode ? colors.semantic.moto : colors.text.secondary}
+                >
+                  + Crear nuevo ítem
+                </AppText>
               </Pressable>
             </View>
 
@@ -1007,7 +1024,7 @@ export function ChecklistWorkspaceView({
                         borderWidth: 1,
                         borderColor:
                           activeSelectedConcept.group === 'fixed'
-                            ? colors.semantic.income
+                            ? colors.glass.specularBorder
                             : colors.glass.subtleBorder,
                       }}
                     >
@@ -1085,17 +1102,23 @@ export function ChecklistWorkspaceView({
                         : colors.glass.surfaceTint,
                       borderWidth: 1,
                       borderColor: isEditingConcept
-                        ? colors.semantic.income
+                        ? colors.glass.specularBorder
                         : colors.glass.subtleBorder,
+                      flexDirection: 'row',
+                      gap: spacing.xxs,
                       justifyContent: 'center',
                       alignItems: 'center',
                     }}
                   >
+                    <PencilEditIcon
+                      size={14}
+                      color={isEditingConcept ? colors.semantic.income : colors.text.secondary}
+                    />
                     <AppText
                       variant="caption"
                       color={isEditingConcept ? colors.semantic.income : colors.text.primary}
                     >
-                      {isEditingConcept ? '✕ Cancelar edición' : '✏️ Editar concepto'}
+                      {isEditingConcept ? 'Cancelar edición' : 'Editar concepto'}
                     </AppText>
                   </Pressable>
 
@@ -1127,12 +1150,22 @@ export function ChecklistWorkspaceView({
                       borderWidth: 1,
                       borderColor:
                         confirmDeleteConceptId === activeSelectedConcept.id
-                          ? colors.semantic.expense
+                          ? colors.glass.specularBorder
                           : colors.glass.subtleBorder,
+                      flexDirection: 'row',
+                      gap: spacing.xxs,
                       justifyContent: 'center',
                       alignItems: 'center',
                     }}
                   >
+                    <TrashBinIcon
+                      size={14}
+                      color={
+                        confirmDeleteConceptId === activeSelectedConcept.id
+                          ? colors.semantic.expense
+                          : colors.text.secondary
+                      }
+                    />
                     <AppText
                       variant="caption"
                       color={
@@ -1142,8 +1175,8 @@ export function ChecklistWorkspaceView({
                       }
                     >
                       {confirmDeleteConceptId === activeSelectedConcept.id
-                        ? '⚠️ ¿Confirmar eliminar?'
-                        : '🗑️ Eliminar concepto'}
+                        ? 'Confirmar eliminar'
+                        : 'Eliminar concepto'}
                     </AppText>
                   </Pressable>
                 </View>
@@ -1210,9 +1243,10 @@ export function ChecklistWorkspaceView({
                       style={{
                         minHeight: MIN_TOUCH_TARGET_PT,
                         borderRadius: radius.md,
-                        backgroundColor: colors.semantic.incomeSoft,
+                        borderCurve: 'continuous',
+                        backgroundColor: colors.glass.surfaceElevatedTint,
                         borderWidth: 1,
-                        borderColor: colors.semantic.income,
+                        borderColor: colors.glass.specularBorder,
                         justifyContent: 'center',
                         alignItems: 'center',
                       }}
@@ -1332,7 +1366,7 @@ export function ChecklistWorkspaceView({
                             : colors.glass.surfaceTint,
                           borderWidth: 1,
                           borderColor: isLinked
-                            ? colors.semantic.debt
+                            ? colors.glass.specularBorder
                             : colors.glass.subtleBorder,
                           justifyContent: 'center',
                         }}
@@ -1393,7 +1427,7 @@ export function ChecklistWorkspaceView({
                                 : colors.glass.surfaceTint,
                               borderWidth: 1,
                               borderColor: isLinked
-                                ? colors.semantic.savings
+                                ? colors.glass.specularBorder
                                 : colors.glass.subtleBorder,
                               justifyContent: 'center',
                             }}
@@ -1436,7 +1470,7 @@ export function ChecklistWorkspaceView({
                         ? colors.semantic.incomeSoft
                         : colors.glass.surfaceTint,
                       borderWidth: 1,
-                      borderColor: active ? colors.semantic.income : colors.glass.subtleBorder,
+                      borderColor: active ? colors.glass.specularBorder : colors.glass.subtleBorder,
                       justifyContent: 'center',
                       alignItems: 'center',
                     }}
@@ -1466,9 +1500,10 @@ export function ChecklistWorkspaceView({
                 width: '100%',
                 minHeight: MIN_TOUCH_TARGET_PT,
                 borderRadius: radius.md,
-                backgroundColor: colors.semantic.incomeSoft,
+                borderCurve: 'continuous',
+                backgroundColor: colors.glass.surfaceElevatedTint,
                 borderWidth: 1,
-                borderColor: colors.semantic.income,
+                borderColor: colors.glass.specularBorder,
                 justifyContent: 'center',
                 alignItems: 'center',
               }}

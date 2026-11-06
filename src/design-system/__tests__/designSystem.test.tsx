@@ -9,6 +9,7 @@ import { KeyboardAwareScrollView } from '../components/KeyboardAwareScrollView';
 import { StatusBadge } from '../components/StatusBadge';
 import { AppText } from '../components/Typography';
 import { BFlowThemeProvider } from '../theme/ThemeContext';
+import { palettes, radius, spacing, springConfigs, typography } from '../tokens';
 
 describe('design-system & PhaseOneHomeScreen (RNTL)', () => {
   beforeEach(() => {
@@ -98,5 +99,38 @@ describe('design-system & PhaseOneHomeScreen (RNTL)', () => {
 
     // Verify forwarded ref is attached
     expect(inputRef.current).toBeTruthy();
+  });
+
+  it('validates DESIGN.md token specifications for neutral minimal palettes, typography and kinematics', () => {
+    // Dark mode warm obsidian luxury foundation
+    expect(palettes.dark.background.primary).toBe('#0D0F12');
+    expect(palettes.dark.background.secondary).toBe('#14171C');
+    expect(palettes.dark.background.elevated).toBe('#1B1F26');
+    expect(palettes.dark.text.primary).toBe('#F4F5F7');
+    expect(palettes.dark.semantic.income).toBe('#2EBD85');
+    expect(palettes.dark.semantic.expense).toBe('#E06A6A');
+
+    // Light mode warm ivory alabaster luxury foundation
+    expect(palettes.light.background.primary).toBe('#F8F8F6');
+    expect(palettes.light.background.secondary).toBe('#EFEFEA');
+    expect(palettes.light.background.elevated).toBe('#FFFFFF');
+    expect(palettes.light.text.primary).toBe('#12151B');
+    expect(palettes.light.semantic.income).toBe('#16825B');
+    expect(palettes.light.semantic.expense).toBe('#B83A3A');
+
+    // Typography additions and refinements
+    expect(typography.heroCurrency.fontSize).toBe(38);
+    expect(typography.heroCurrency.letterSpacing).toBe(-1.0);
+    expect(typography.callout.fontSize).toBe(14);
+    expect(typography.callout.fontWeight).toBe('500');
+
+    // Spacing and radius additions
+    expect(spacing.huge).toBe(56);
+    expect(radius.xs).toBe(6);
+
+    // Spring kinematics
+    expect(springConfigs.snappy.stiffness).toBe(260);
+    expect(springConfigs.sheet.damping).toBe(30);
+    expect(springConfigs.sheet.stiffness).toBe(160);
   });
 });

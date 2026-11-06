@@ -8,6 +8,7 @@ import {
   savePersistedSession,
   type BFlowAuthUser,
 } from '../../../platform/auth/authAdapter';
+import { peekVerificationCode } from '../../../platform/auth/verificationCodeService';
 import { useBudgetStore } from '../../budget/store/useBudgetStore';
 
 describe('Authentication Gate, Personal Registration & Multi-Device Session Persistence', () => {
@@ -98,6 +99,9 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
         <PhaseOneHomeScreen />
       </BFlowThemeProvider>
     );
+
+    // Navigate to the new Account tab in the floating dock
+    fireEvent.press(screen.getByTestId('workspace-tab-account'));
 
     expect(screen.getByTestId('authenticated-user-name')).toHaveTextContent(
       'Hola, Alejandro Bernal Garnica'
@@ -381,5 +385,57 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     });
     expect(screen.queryByTestId('bucket-savings-card')).toBeNull();
     expect(screen.getByTestId('empty-savings-buckets-card')).toBeTruthy();
+  });
+
+  it('supports in-app password recovery using 6-digit verification code from the Login screen', async () => {
+    useBudgetStore.getState().requireAuthenticationGate();
+
+    render(
+      <BFlowThemeProvider initialMode="dark">
+        <PhaseOneHomeScreen />
+      </BFlowThemeProvider>
+    );
+
+    expect(screen.getByTestId('auth-gate-screen')).toBeTruthy();
+
+    // Click "¿Olvidaste tu contraseña? Recuperar clave"
+    fireEvent.press(screen.getByTestId('auth-mode-recover'));
+    expect(screen.getByText('Recupera el acceso a tu cuenta')).toBeTruthy();
+    expect(
+      screen.getByText(/Escribe tu correo electrónico para enviarte un código de verificación de 6 dígitos/i)
+    ).toBeTruthy();
+
+    // Enter email and request 6-digit verification code
+    fireEvent.changeText(screen.getByTestId('auth-email-input'), 'abernalg2303@gmail.com');
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('auth-primary-submit-button'));
+    });
+
+    // Form switches to verify step with 6-digit code input
+    expect(screen.getByText('Restablecer contraseña')).toBeTruthy();
+    expect(screen.getByTestId('auth-recovery-code-input')).toBeTruthy();
+    expect(screen.getByTestId('auth-password-input')).toBeTruthy();
+    expect(screen.getByTestId('auth-confirm-password-input')).toBeTruthy();
+
+    // Retrieve the active 6-digit code generated for this email
+    const generatedCode = peekVerificationCode('abernalg2303@gmail.com');
+    expect(generatedCode).toMatch(/^\d{6}$/);
+
+    // Enter the code and new password
+    fireEvent.changeText(screen.getByTestId('auth-recovery-code-input'), generatedCode!);
+    fireEvent.changeText(screen.getByTestId('auth-password-input'), 'nuevaClaveBFlow99');
+    fireEvent.changeText(screen.getByTestId('auth-confirm-password-input'), 'nuevaClaveBFlow99');
+
+    // Submit password reset internally in the app
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('auth-primary-submit-button'));
+    });
+
+    // Switches back to Login mode with success status banner
+    expect(screen.getByText('Entra a tu cuenta personal')).toBeTruthy();
+    expect(screen.getByTestId('auth-status-banner')).toHaveTextContent(
+      /Contraseña actualizada exitosamente/i
+    );
+    expect(screen.getByTestId('auth-email-input').props.value).toBe('abernalg2303@gmail.com');
   });
 });

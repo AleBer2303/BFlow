@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, View } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
+import { hapticService } from '../../platform/haptics/hapticService';
 import { useBFlowTheme } from '../theme/ThemeContext';
 import { MIN_TOUCH_TARGET_PT } from '../tokens';
 
@@ -23,6 +24,7 @@ export function ThemeToggleIconButton({
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+      onPressIn={() => hapticService.light()}
       onPress={toggleTheme}
       style={{
         width: MIN_TOUCH_TARGET_PT,
@@ -166,6 +168,67 @@ export function EyeOffIcon({
           stroke={strokeColor}
           strokeWidth={1.8}
           strokeLinecap="round"
+        />
+      </Svg>
+    </View>
+  );
+}
+
+export interface VectorIconProps {
+  size?: number;
+  color?: string;
+  testID?: string;
+}
+
+/**
+ * Minimalist luxury Trash Bin vector icon (eliminates cheap emojis like 🗑️).
+ */
+export function TrashBinIcon({
+  size = 18,
+  color,
+  testID = 'icon-trash-bin',
+}: VectorIconProps): React.JSX.Element {
+  const { colors } = useBFlowTheme();
+  const strokeColor = color ?? colors.semantic.expense;
+
+  return (
+    <View testID={testID} style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
+      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <Path d="M3 6h18" stroke={strokeColor} strokeWidth={1.8} strokeLinecap="round" />
+        <Path
+          d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+          stroke={strokeColor}
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <Line x1={10} y1={11} x2={10} y2={17} stroke={strokeColor} strokeWidth={1.8} strokeLinecap="round" />
+        <Line x1={14} y1={11} x2={14} y2={17} stroke={strokeColor} strokeWidth={1.8} strokeLinecap="round" />
+      </Svg>
+    </View>
+  );
+}
+
+/**
+ * Minimalist luxury Pencil Edit vector icon (eliminates cheap emojis like ✏️).
+ */
+export function PencilEditIcon({
+  size = 18,
+  color,
+  testID = 'icon-pencil-edit',
+}: VectorIconProps): React.JSX.Element {
+  const { colors } = useBFlowTheme();
+  const strokeColor = color ?? colors.text.secondary;
+
+  return (
+    <View testID={testID} style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
+      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <Path
+          d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"
+          stroke={strokeColor}
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
         />
       </Svg>
     </View>

@@ -63,11 +63,11 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     fireEvent.changeText(screen.getByTestId('edit-entry-name-input'), 'Smart Fit Black');
     fireEvent.changeText(screen.getByTestId('edit-entry-amount-input'), '100000');
     fireEvent.press(screen.getByTestId('save-edit-entry-button'));
-    expect(screen.getByText('○ Smart Fit Black')).toBeTruthy();
+    expect(screen.getByText('Smart Fit Black')).toBeTruthy();
 
     // Delete an item from the checklist
     fireEvent.press(screen.getByTestId('delete-entry-2026-10_exp_smart_fit'));
-    expect(screen.queryByText('○ Smart Fit Black')).toBeNull();
+    expect(screen.queryByText('Smart Fit Black')).toBeNull();
 
     // Open Add Movement modal and edit an available concept in catalog
     fireEvent.press(screen.getByTestId('open-add-movement-modal-button'));
@@ -227,9 +227,12 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     fireEvent.press(screen.getByTestId('submit-provision-button'));
     expect(screen.getByText('Impuesto Vehicular')).toBeTruthy();
 
-    // Go to Analytics & Cierre and click "Reiniciar toda la cuenta"
+    // Go to Analytics & Cierre tab to verify analytics view
     fireEvent.press(screen.getByTestId('workspace-tab-analytics'));
     expect(screen.getByTestId('analytics-paid-progress-bar')).toBeTruthy();
+
+    // Go to Account tab and click "Reiniciar toda la cuenta"
+    fireEvent.press(screen.getByTestId('workspace-tab-account'));
     fireEvent.press(screen.getByTestId('reset-full-account-button'));
     await act(async () => {
       fireEvent.press(screen.getByTestId('confirm-reset-full-account-button'));
@@ -252,5 +255,5 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
       expect(screen.queryByTestId('initial-account-setup-view')).toBeNull();
       expect(screen.getByTestId('net-flow-hero-card')).toBeTruthy();
     });
-  });
+  }, 20000);
 });

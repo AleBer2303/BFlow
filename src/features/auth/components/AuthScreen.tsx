@@ -24,6 +24,10 @@ import {
   useBFlowTheme,
 } from '../../../design-system';
 import type { RegisterPersonalAccountInput } from '../../../platform/auth/authAdapter';
+import {
+  confirmPasswordResetWithCode as defaultConfirmPasswordReset,
+  requestPasswordResetCode as defaultRequestPasswordResetCode,
+} from '../../../platform/auth/verificationCodeService';
 
 export type AuthFormMode = 'login' | 'register' | 'recover';
 
@@ -35,6 +39,12 @@ export interface AuthScreenProps {
   onSignInWithEmail: (email: string, password: string) => Promise<void>;
   onRegisterPersonalAccount: (input: RegisterPersonalAccountInput) => Promise<void>;
   onSendPasswordRecovery: (email: string) => Promise<void>;
+  onRequestPasswordResetCode?: (email: string) => Promise<void>;
+  onConfirmPasswordResetWithCode?: (
+    email: string,
+    code: string,
+    newPassword: string
+  ) => Promise<void>;
 }
 
 export function AuthScreen({
@@ -45,10 +55,14 @@ export function AuthScreen({
   onSignInWithEmail,
   onRegisterPersonalAccount,
   onSendPasswordRecovery,
+  onRequestPasswordResetCode,
+  onConfirmPasswordResetWithCode,
 }: AuthScreenProps): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
 
   const [formMode, setFormMode] = useState<AuthFormMode>(initialMode);
+  const [recoverStep, setRecoverStep] = useState<'request' | 'verify'>('request');
+  const [recoveryCode, setRecoveryCode] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [phone, setPhone] = useState('');
   const [financialGoal, setFinancialGoal] = useState(
@@ -60,23 +74,103 @@ export function AuthScreen({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [localValidationError, setLocalValidationError] = useState<string | null>(null);
+  const [internalRecoverySuccess, setInternalRecoverySuccess] = useState<string | null>(null);
 
   const switchMode = (nextMode: AuthFormMode) => {
     setFormMode(nextMode);
+    setRecoverStep('request');
+    setRecoveryCode('');
     setLocalValidationError(null);
+    setInternalRecoverySuccess(null);
+  };
+
+  const handleResendRecoveryCode = async () => {
+    if (!email.trim().includes('@')) return;
+    setLocalValidationError(null);
+    try {
+      if (onRequestPasswordResetCode) {
+        await onRequestPasswordResetCode(email.trim());
+      } else {
+        await defaultRequestPasswordResetCode(email.trim());
+      }
+      setInternalRecoverySuccess(
+        `Código de 6 dígitos reenviado exitosamente a ${email.trim()}.`
+      );
+    } catch (err) {
+      setLocalValidationError(
+        err instanceof Error ? err.message : 'Error al reenviar el código de verificación.'
+      );
+    }
   };
 
   const handlePrimarySubmit = async () => {
     setLocalValidationError(null);
 
     if (formMode === 'recover') {
-      if (!email.trim().includes('@')) {
-        setLocalValidationError(
-          'Escribe el correo electrónico con el que registraste tu cuenta.'
-        );
+      if (recoverStep === 'request') {
+        if (!email.trim().includes('@')) {
+          setLocalValidationError(
+            'Escribe el correo electrónico con el que registraste tu cuenta.'
+          );
+          return;
+        }
+
+        try {
+          if (onRequestPasswordResetCode) {
+            await onRequestPasswordResetCode(email.trim());
+          } else {
+            try {
+              await defaultRequestPasswordResetCode(email.trim());
+            } catch {
+              await onSendPasswordRecovery(email.trim());
+            }
+          }
+          setRecoverStep('verify');
+          setInternalRecoverySuccess(
+            `Hemos enviado el código de 6 dígitos a ${email.trim()}. Ingrésalo a continuación junto con tu nueva contraseña.`
+          );
+        } catch (err) {
+          setLocalValidationError(
+            err instanceof Error ? err.message : 'Error al solicitar el código de verificación.'
+          );
+        }
         return;
       }
-      await onSendPasswordRecovery(email);
+
+      // recoverStep === 'verify'
+      if (recoveryCode.trim().length < 6) {
+        setLocalValidationError('Escribe o pega el código o enlace recibido en tu correo.');
+        return;
+      }
+      if (password.length < 6) {
+        setLocalValidationError('Usa una contraseña de al menos 6 caracteres.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setLocalValidationError('Las dos contraseñas no coinciden. Verifícalas e intenta de nuevo.');
+        return;
+      }
+
+      try {
+        if (onConfirmPasswordResetWithCode) {
+          await onConfirmPasswordResetWithCode(email.trim(), recoveryCode.trim(), password);
+        } else {
+          await defaultConfirmPasswordReset(email.trim(), recoveryCode.trim(), password);
+        }
+
+        setInternalRecoverySuccess(
+          '✓ Contraseña actualizada exitosamente. Ya puedes entrar con tu nueva clave.'
+        );
+        setFormMode('login');
+        setRecoverStep('request');
+        setPassword('');
+        setConfirmPassword('');
+        setRecoveryCode('');
+      } catch (err) {
+        setLocalValidationError(
+          err instanceof Error ? err.message : 'Error al actualizar la contraseña.'
+        );
+      }
       return;
     }
 
@@ -117,6 +211,7 @@ export function AuthScreen({
   };
 
   const activeError = localValidationError ?? errorMessage;
+  const activeStatusMessage = internalRecoverySuccess ?? statusMessage;
 
   return (
     <KeyboardAwareScrollView
@@ -216,11 +311,15 @@ export function AuthScreen({
                   ? 'Entra a tu cuenta personal'
                   : formMode === 'register'
                     ? 'Registra tus datos personales'
-                    : 'Recupera el acceso a tu cuenta'}
+                    : recoverStep === 'request'
+                      ? 'Recupera el acceso a tu cuenta'
+                      : 'Restablecer contraseña'}
               </AppText>
               {formMode === 'recover' ? (
                 <AppText variant="caption" color={colors.text.secondary}>
-                  Te enviaremos un enlace seguro a tu correo para definir una nueva contraseña.
+                  {recoverStep === 'request'
+                    ? 'Escribe tu correo electrónico para enviarte un código de verificación de 6 dígitos.'
+                    : 'Ingresa el código de 6 dígitos enviado a tu correo y define tu nueva contraseña para cambiarla en la app.'}
                 </AppText>
               ) : null}
             </View>
@@ -262,7 +361,7 @@ export function AuthScreen({
                     testID="auth-goal-input"
                     value={financialGoal}
                     onChangeText={setFinancialGoal}
-                    placeholder="Ej. Saldar deudas y ahorrar para apartamento"
+                    placeholder="Ej. Ahorro para un proyecto personal"
                   />
                 </View>
               </View>
@@ -284,18 +383,39 @@ export function AuthScreen({
               />
             </View>
 
+            {/* Verification Code or Email Link Field (Recovery Step: Verify) */}
+            {formMode === 'recover' && recoverStep === 'verify' ? (
+              <View style={{ gap: spacing.xxs }}>
+                <AppText variant="caption" color={colors.text.secondary}>
+                  Código de verificación o enlace del correo
+                </AppText>
+                <AppTextInput
+                  testID="auth-recovery-code-input"
+                  value={recoveryCode}
+                  onChangeText={setRecoveryCode}
+                  placeholder="Ej: 123456 o pega el código/enlace"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <AppText variant="micro" color={colors.text.muted}>
+                  Ingresa el código de 6 dígitos enviado por correo para actualizar tu contraseña inmediatamente en Firebase.
+                </AppText>
+              </View>
+            ) : null}
+
             {/* Password Fields with Visibility Toggle */}
-            {formMode !== 'recover' ? (
+            {formMode !== 'recover' || recoverStep === 'verify' ? (
               <View style={{ gap: spacing.sm }}>
                 <View style={{ gap: spacing.xxs }}>
                   <AppText variant="caption" color={colors.text.secondary}>
-                    Contraseña
+                    {formMode === 'recover' ? 'Nueva contraseña' : 'Contraseña'}
                   </AppText>
                   <View
                     style={{
                       flexDirection: 'row',
                       alignItems: 'center',
                       borderRadius: radius.md,
+                      borderCurve: 'continuous',
                       backgroundColor: colors.glass.surfaceTint,
                       borderWidth: 1,
                       borderColor: colors.glass.subtleBorder,
@@ -307,7 +427,11 @@ export function AuthScreen({
                       onChangeText={setPassword}
                       placeholder="Mínimo 6 caracteres"
                       secureTextEntry={!showPassword}
-                      autoComplete={formMode === 'register' ? 'new-password' : 'current-password'}
+                      autoComplete={
+                        formMode === 'register' || formMode === 'recover'
+                          ? 'new-password'
+                          : 'current-password'
+                      }
                       style={{
                         flex: 1,
                         backgroundColor: 'transparent',
@@ -338,16 +462,19 @@ export function AuthScreen({
                   </View>
                 </View>
 
-                {formMode === 'register' ? (
+                {formMode === 'register' || (formMode === 'recover' && recoverStep === 'verify') ? (
                   <View style={{ gap: spacing.xxs }}>
                     <AppText variant="caption" color={colors.text.secondary}>
-                      Confirmar contraseña
+                      {formMode === 'recover'
+                        ? 'Confirmar nueva contraseña'
+                        : 'Confirmar contraseña'}
                     </AppText>
                     <View
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
                         borderRadius: radius.md,
+                        borderCurve: 'continuous',
                         backgroundColor: colors.glass.surfaceTint,
                         borderWidth: 1,
                         borderColor: colors.glass.subtleBorder,
@@ -357,7 +484,11 @@ export function AuthScreen({
                         testID="auth-confirm-password-input"
                         value={confirmPassword}
                         onChangeText={setConfirmPassword}
-                        placeholder="Repite tu contraseña"
+                        placeholder={
+                          formMode === 'recover'
+                            ? 'Repite tu nueva contraseña'
+                            : 'Repite tu contraseña'
+                        }
                         secureTextEntry={!showConfirmPassword}
                         style={{
                           flex: 1,
@@ -403,7 +534,7 @@ export function AuthScreen({
                   borderRadius: radius.md,
                   backgroundColor: colors.semantic.expenseSoft,
                   borderWidth: 1,
-                  borderColor: colors.semantic.expense,
+                  borderColor: colors.glass.subtleBorder,
                 }}
               >
                 <AppText variant="caption" color={colors.semantic.expense}>
@@ -412,7 +543,7 @@ export function AuthScreen({
               </View>
             ) : null}
 
-            {statusMessage ? (
+            {activeStatusMessage ? (
               <View
                 testID="auth-status-banner"
                 style={{
@@ -420,11 +551,11 @@ export function AuthScreen({
                   borderRadius: radius.md,
                   backgroundColor: colors.semantic.incomeSoft,
                   borderWidth: 1,
-                  borderColor: colors.semantic.income,
+                  borderColor: colors.glass.subtleBorder,
                 }}
               >
                 <AppText variant="caption" color={colors.semantic.income}>
-                  {statusMessage}
+                  {activeStatusMessage}
                 </AppText>
               </View>
             ) : null}
@@ -438,26 +569,29 @@ export function AuthScreen({
               style={{
                 minHeight: MIN_TOUCH_TARGET_PT,
                 borderRadius: radius.md,
-                backgroundColor: colors.semantic.incomeSoft,
+                borderCurve: 'continuous',
+                backgroundColor: colors.glass.surfaceElevatedTint,
                 borderWidth: 1,
-                borderColor: colors.semantic.income,
+                borderColor: colors.glass.specularBorder,
                 justifyContent: 'center',
                 alignItems: 'center',
                 paddingVertical: spacing.sm,
               }}
             >
-              <AppText variant="headline" color={colors.semantic.income}>
+              <AppText variant="headline" color={colors.text.primary}>
                 {isSubmitting
                   ? 'Sincronizando tu cuenta...'
                   : formMode === 'login'
                     ? 'Entrar a mi presupuesto'
                     : formMode === 'register'
                       ? 'Crear mi cuenta y sincronizar'
-                      : 'Enviar enlace de recuperación'}
+                      : recoverStep === 'request'
+                        ? 'Enviar código de verificación'
+                        : 'Restablecer y cambiar contraseña'}
               </AppText>
             </Pressable>
 
-            {/* Password Recovery Link */}
+            {/* Password Recovery Link or Back To Login */}
             {formMode !== 'recover' ? (
               <View style={{ gap: spacing.xs, marginTop: spacing.xs }}>
                 <Pressable
@@ -478,22 +612,43 @@ export function AuthScreen({
                 </Pressable>
               </View>
             ) : (
-              <Pressable
-                testID="auth-back-to-login-button"
-                accessibilityRole="button"
-                accessibilityLabel="Volver a iniciar sesión"
-                onPress={() => switchMode('login')}
-                style={{
-                  minHeight: MIN_TOUCH_TARGET_PT,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  paddingVertical: spacing.xs,
-                }}
-              >
-                <AppText variant="caption" color={colors.text.secondary}>
-                  ← Volver a iniciar sesión
-                </AppText>
-              </Pressable>
+              <View style={{ gap: spacing.xs, marginTop: spacing.xs }}>
+                {recoverStep === 'verify' ? (
+                  <Pressable
+                    testID="auth-recovery-resend-button"
+                    accessibilityRole="button"
+                    accessibilityLabel="Reenviar código de verificación"
+                    onPress={handleResendRecoveryCode}
+                    style={{
+                      minHeight: MIN_TOUCH_TARGET_PT,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      paddingVertical: spacing.xs,
+                    }}
+                  >
+                    <AppText variant="caption" color={colors.text.secondary}>
+                      Reenviar código de verificación
+                    </AppText>
+                  </Pressable>
+                ) : null}
+
+                <Pressable
+                  testID="auth-back-to-login-button"
+                  accessibilityRole="button"
+                  accessibilityLabel="Volver a iniciar sesión"
+                  onPress={() => switchMode('login')}
+                  style={{
+                    minHeight: MIN_TOUCH_TARGET_PT,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    paddingVertical: spacing.xs,
+                  }}
+                >
+                  <AppText variant="caption" color={colors.text.secondary}>
+                    ← Volver a iniciar sesión
+                  </AppText>
+                </Pressable>
+              </View>
             )}
           </View>
         </GlassSurface>

@@ -14,6 +14,8 @@ import { useBFlowTheme } from '../../design-system/theme/ThemeContext';
 export interface GlassSurfaceProps {
   children: React.ReactNode;
   elevated?: boolean;
+  noPadding?: boolean;
+  contentStyle?: StyleProp<ViewStyle>;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }
@@ -21,6 +23,8 @@ export interface GlassSurfaceProps {
 export function GlassSurface({
   children,
   elevated = false,
+  noPadding = false,
+  contentStyle,
   style,
   testID,
 }: GlassSurfaceProps): React.JSX.Element {
@@ -28,15 +32,18 @@ export function GlassSurface({
 
   const containerStyle: ViewStyle = {
     borderRadius: radius.lg,
+    borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: elevated ? colors.glass.specularBorder : colors.glass.subtleBorder,
     backgroundColor: elevated ? colors.glass.surfaceElevatedTint : colors.glass.surfaceTint,
     overflow: 'hidden',
   };
 
+  const innerPadding = noPadding ? undefined : { padding: spacing.lg };
+
   if (Platform.OS === 'web') {
     return (
-      <View testID={testID} style={[containerStyle, { padding: spacing.lg }, style]}>
+      <View testID={testID} style={[containerStyle, innerPadding, style, contentStyle]}>
         {children}
       </View>
     );
@@ -49,7 +56,7 @@ export function GlassSurface({
         tint={colors.glass.blurTint}
         style={StyleSheet.absoluteFill}
       />
-      <View style={{ padding: spacing.lg }}>{children}</View>
+      <View style={[innerPadding, contentStyle]}>{children}</View>
     </View>
   );
 }

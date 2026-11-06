@@ -15,7 +15,9 @@ import {
   AppTextInput,
   CurrencyText,
   GlassSurface,
+  PencilEditIcon,
   StatusBadge,
+  TrashBinIcon,
   useBFlowTheme,
 } from '../../../design-system';
 import {
@@ -307,16 +309,15 @@ export function SavingsAndMotoIdealView({
                         minHeight: MIN_TOUCH_TARGET_PT,
                         minWidth: MIN_TOUCH_TARGET_PT,
                         borderRadius: radius.md,
+                        borderCurve: 'continuous',
                         backgroundColor: colors.semantic.expenseSoft,
                         borderWidth: 1,
-                        borderColor: colors.semantic.expense,
+                        borderColor: colors.glass.subtleBorder,
                         justifyContent: 'center',
                         alignItems: 'center',
                       }}
                     >
-                      <AppText variant="caption" color={colors.semantic.expense}>
-                        ✕
-                      </AppText>
+                      <TrashBinIcon size={16} color={colors.semantic.expense} />
                     </Pressable>
                   ) : null}
                 </View>
@@ -360,16 +361,15 @@ export function SavingsAndMotoIdealView({
                         minHeight: MIN_TOUCH_TARGET_PT,
                         minWidth: MIN_TOUCH_TARGET_PT,
                         borderRadius: radius.md,
+                        borderCurve: 'continuous',
                         backgroundColor: colors.semantic.expenseSoft,
                         borderWidth: 1,
-                        borderColor: colors.semantic.expense,
+                        borderColor: colors.glass.subtleBorder,
                         justifyContent: 'center',
                         alignItems: 'center',
                       }}
                     >
-                      <AppText variant="caption" color={colors.semantic.expense}>
-                        ✕
-                      </AppText>
+                      <TrashBinIcon size={16} color={colors.semantic.expense} />
                     </Pressable>
                   ) : null}
                 </View>
@@ -419,16 +419,15 @@ export function SavingsAndMotoIdealView({
                   minHeight: MIN_TOUCH_TARGET_PT,
                   minWidth: MIN_TOUCH_TARGET_PT,
                   borderRadius: radius.md,
+                  borderCurve: 'continuous',
                   backgroundColor: colors.semantic.expenseSoft,
                   borderWidth: 1,
-                  borderColor: colors.semantic.expense,
+                  borderColor: colors.glass.subtleBorder,
                   justifyContent: 'center',
                   alignItems: 'center',
                 }}
               >
-                <AppText variant="caption" color={colors.semantic.expense}>
-                  ✕
-                </AppText>
+                <TrashBinIcon size={16} color={colors.semantic.expense} />
               </Pressable>
             ) : null}
           </View>
@@ -470,15 +469,21 @@ export function SavingsAndMotoIdealView({
             borderColor: isEditingBalances
               ? colors.glass.specularBorder
               : colors.glass.subtleBorder,
+            flexDirection: 'row',
+            gap: spacing.xxs,
             justifyContent: 'center',
             alignItems: 'center',
           }}
         >
+          <PencilEditIcon
+            size={14}
+            color={isEditingBalances ? colors.text.primary : colors.text.secondary}
+          />
           <AppText
             variant="caption"
             color={isEditingBalances ? colors.text.primary : colors.text.secondary}
           >
-            {isEditingBalances ? '✕ Cancelar edición' : '✏️ Editar Fondos/Ahorros'}
+            {isEditingBalances ? 'Cancelar edición' : 'Editar Fondos/Ahorros'}
           </AppText>
         </Pressable>
 
@@ -496,15 +501,16 @@ export function SavingsAndMotoIdealView({
             paddingVertical: spacing.sm,
             paddingHorizontal: spacing.sm,
             borderRadius: radius.md,
-            backgroundColor: colors.semantic.savingsSoft,
+            borderCurve: 'continuous',
+            backgroundColor: colors.glass.surfaceElevatedTint,
             borderWidth: 1,
-            borderColor: colors.semantic.savings,
+            borderColor: colors.glass.specularBorder,
             justifyContent: 'center',
             alignItems: 'center',
           }}
         >
-          <AppText variant="caption" color={colors.semantic.savings}>
-            {isAddingBucket ? '✕ Cerrar' : '+ Nuevo Fondo'}
+          <AppText variant="caption" color={colors.text.primary}>
+            {isAddingBucket ? 'Cerrar' : '+ Nuevo Fondo'}
           </AppText>
         </Pressable>
       </View>
@@ -546,9 +552,10 @@ export function SavingsAndMotoIdealView({
               style={{
                 minHeight: MIN_TOUCH_TARGET_PT,
                 borderRadius: radius.md,
-                backgroundColor: colors.semantic.incomeSoft,
+                borderCurve: 'continuous',
+                backgroundColor: colors.glass.surfaceElevatedTint,
                 borderWidth: 1,
-                borderColor: colors.semantic.income,
+                borderColor: colors.glass.specularBorder,
                 justifyContent: 'center',
                 alignItems: 'center',
               }}
@@ -646,9 +653,10 @@ export function SavingsAndMotoIdealView({
               style={{
                 minHeight: MIN_TOUCH_TARGET_PT,
                 borderRadius: radius.md,
-                backgroundColor: colors.semantic.incomeSoft,
+                borderCurve: 'continuous',
+                backgroundColor: colors.glass.surfaceElevatedTint,
                 borderWidth: 1,
-                borderColor: colors.semantic.income,
+                borderColor: colors.glass.specularBorder,
                 justifyContent: 'center',
                 alignItems: 'center',
               }}
@@ -695,14 +703,15 @@ export function SavingsAndMotoIdealView({
               paddingVertical: spacing.xs,
               paddingHorizontal: spacing.md,
               borderRadius: radius.md,
-              backgroundColor: colors.semantic.incomeSoft,
+              borderCurve: 'continuous',
+              backgroundColor: colors.glass.surfaceElevatedTint,
               borderWidth: 1,
-              borderColor: colors.semantic.income,
+              borderColor: colors.glass.specularBorder,
               justifyContent: 'center',
               alignItems: 'center',
             }}
           >
-            <AppText variant="caption" color={colors.semantic.income}>
+            <AppText variant="caption" color={colors.text.primary}>
               + Agregar Provisión o Meta
             </AppText>
           </Pressable>
@@ -745,7 +754,7 @@ export function SavingsAndMotoIdealView({
                           ? colors.semantic.motoSoft
                           : colors.glass.surfaceTint,
                         borderWidth: 1,
-                        borderColor: active ? colors.semantic.moto : colors.glass.subtleBorder,
+                        borderColor: active ? colors.glass.specularBorder : colors.glass.subtleBorder,
                         justifyContent: 'center',
                         alignItems: 'center',
                       }}
@@ -821,9 +830,10 @@ export function SavingsAndMotoIdealView({
                     minHeight: MIN_TOUCH_TARGET_PT,
                     paddingHorizontal: spacing.md,
                     borderRadius: radius.md,
-                    backgroundColor: colors.semantic.incomeSoft,
+                    borderCurve: 'continuous',
+                    backgroundColor: colors.glass.surfaceElevatedTint,
                     borderWidth: 1,
-                    borderColor: colors.semantic.income,
+                    borderColor: colors.glass.specularBorder,
                     justifyContent: 'center',
                     alignItems: 'center',
                   }}
@@ -895,7 +905,8 @@ export function SavingsAndMotoIdealView({
                           style={{
                             minHeight: 36,
                             minWidth: 36,
-                            borderRadius: radius.sm,
+                            borderRadius: radius.md,
+                            borderCurve: 'continuous',
                             backgroundColor: colors.glass.surfaceElevatedTint,
                             borderWidth: 1,
                             borderColor: colors.glass.specularBorder,
@@ -903,7 +914,7 @@ export function SavingsAndMotoIdealView({
                             alignItems: 'center',
                           }}
                         >
-                          <AppText variant="micro">✎</AppText>
+                          <PencilEditIcon size={14} color={colors.text.secondary} />
                         </Pressable>
                       ) : null}
                       {onDeleteProvisionItem ? (
@@ -914,17 +925,16 @@ export function SavingsAndMotoIdealView({
                           style={{
                             minHeight: 36,
                             minWidth: 36,
-                            borderRadius: radius.sm,
+                            borderRadius: radius.md,
+                            borderCurve: 'continuous',
                             backgroundColor: colors.semantic.expenseSoft,
                             borderWidth: 1,
-                            borderColor: colors.semantic.expense,
+                            borderColor: colors.glass.subtleBorder,
                             justifyContent: 'center',
                             alignItems: 'center',
                           }}
                         >
-                          <AppText variant="micro" color={colors.semantic.expense}>
-                            ✕
-                          </AppText>
+                          <TrashBinIcon size={14} color={colors.semantic.expense} />
                         </Pressable>
                       ) : null}
                     </View>
@@ -946,7 +956,7 @@ export function SavingsAndMotoIdealView({
                   borderRadius: radius.md,
                   backgroundColor: colors.semantic.motoSoft,
                   borderWidth: 1,
-                  borderColor: colors.semantic.moto,
+                  borderColor: colors.glass.specularBorder,
                   gap: spacing.xs,
                 }}
               >
@@ -981,7 +991,8 @@ export function SavingsAndMotoIdealView({
                         style={{
                           minHeight: 34,
                           minWidth: 34,
-                          borderRadius: radius.sm,
+                          borderRadius: radius.md,
+                          borderCurve: 'continuous',
                           backgroundColor: colors.glass.surfaceElevatedTint,
                           borderWidth: 1,
                           borderColor: colors.glass.specularBorder,
@@ -989,7 +1000,7 @@ export function SavingsAndMotoIdealView({
                           alignItems: 'center',
                         }}
                       >
-                        <AppText variant="micro">✎</AppText>
+                        <PencilEditIcon size={14} color={colors.text.secondary} />
                       </Pressable>
                     ) : null}
                     {onDeleteProvisionItem ? (
@@ -1000,17 +1011,16 @@ export function SavingsAndMotoIdealView({
                         style={{
                           minHeight: 34,
                           minWidth: 34,
-                          borderRadius: radius.sm,
+                          borderRadius: radius.md,
+                          borderCurve: 'continuous',
                           backgroundColor: colors.semantic.expenseSoft,
                           borderWidth: 1,
-                          borderColor: colors.semantic.expense,
+                          borderColor: colors.glass.subtleBorder,
                           justifyContent: 'center',
                           alignItems: 'center',
                         }}
                       >
-                        <AppText variant="micro" color={colors.semantic.expense}>
-                          ✕
-                        </AppText>
+                        <TrashBinIcon size={14} color={colors.semantic.expense} />
                       </Pressable>
                     ) : null}
                   </View>

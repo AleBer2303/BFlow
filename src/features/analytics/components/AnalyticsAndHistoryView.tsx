@@ -18,7 +18,9 @@ import {
   CurrencyText,
   GlassSurface,
   MIN_TOUCH_TARGET_PT,
+  PencilEditIcon,
   StatusBadge,
+  TrashBinIcon,
   useBFlowTheme,
 } from '../../../design-system';
 import {
@@ -48,7 +50,6 @@ export interface AnalyticsAndHistoryViewProps {
   onReopenClosedMonth?: (monthKey: string) => void;
   onDeleteOrRevertMonth?: (monthKey: string) => void;
   onResetOctoberSeed?: () => void;
-  onResetFullAccount?: () => void;
 }
 
 export function AnalyticsAndHistoryView({
@@ -66,10 +67,8 @@ export function AnalyticsAndHistoryView({
   onReopenClosedMonth,
   onDeleteOrRevertMonth,
   onResetOctoberSeed: _onResetOctoberSeed,
-  onResetFullAccount,
 }: AnalyticsAndHistoryViewProps): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
-  const [confirmingAccountReset, setConfirmingAccountReset] = useState(false);
 
   const paidExpenseRatio =
     budget.plannedExpenses > 0 ? budget.paidExpenses / budget.plannedExpenses : 0;
@@ -112,6 +111,7 @@ export function AnalyticsAndHistoryView({
               style={{
                 height: 10,
                 borderRadius: radius.pill,
+                borderCurve: 'continuous',
                 backgroundColor: colors.glass.surfaceTint,
                 overflow: 'hidden',
                 borderWidth: 1,
@@ -123,6 +123,7 @@ export function AnalyticsAndHistoryView({
                   width: `${Math.min(100, Math.max(0, paidExpensePercent))}%`,
                   height: '100%',
                   borderRadius: radius.pill,
+                  borderCurve: 'continuous',
                   backgroundColor: colors.semantic.completed,
                 }}
               />
@@ -145,6 +146,7 @@ export function AnalyticsAndHistoryView({
                 minWidth: 130,
                 padding: spacing.sm,
                 borderRadius: radius.md,
+                borderCurve: 'continuous',
                 backgroundColor: colors.glass.surfaceTint,
                 borderWidth: 1,
                 borderColor: colors.glass.subtleBorder,
@@ -166,6 +168,7 @@ export function AnalyticsAndHistoryView({
                 minWidth: 130,
                 padding: spacing.sm,
                 borderRadius: radius.md,
+                borderCurve: 'continuous',
                 backgroundColor: colors.glass.surfaceTint,
                 borderWidth: 1,
                 borderColor: colors.glass.subtleBorder,
@@ -205,76 +208,6 @@ export function AnalyticsAndHistoryView({
                 {`Proyectado: ${formatCop(budget.projectedNetFlow)}`}
               </AppText>
             </View>
-          </View>
-
-          {/* Minimalist Expense Breakdown */}
-          <View style={{ gap: spacing.xs }}>
-            <AppText variant="headline">Distribución de Gastos</AppText>
-            {expenseEntries.length === 0 ? (
-              <AppText variant="caption" color={colors.text.secondary}>
-                No hay gastos registrados en este mes.
-              </AppText>
-            ) : (
-              expenseEntries.map((item) => {
-                const share =
-                  budget.plannedExpenses > 0
-                    ? Math.round((item.plannedAmount / budget.plannedExpenses) * 1000) / 10
-                    : 0;
-                const isCompleted = item.status === 'completed';
-                return (
-                  <View
-                    key={item.id}
-                    style={{
-                      paddingVertical: spacing.xs,
-                      paddingHorizontal: spacing.sm,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      gap: spacing.xxs,
-                    }}
-                  >
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                        <AppText
-                          variant="caption"
-                          color={isCompleted ? colors.semantic.completed : colors.semantic.pending}
-                        >
-                          {isCompleted ? '●' : '○'}
-                        </AppText>
-                        <AppText variant="caption">{item.conceptName}</AppText>
-                        <AppText variant="micro" color={colors.text.secondary}>
-                          {`${share}%`}
-                        </AppText>
-                      </View>
-                      <CurrencyText amount={item.plannedAmount} variant="caption" tone="expense" />
-                    </View>
-                    <View
-                      style={{
-                        height: 4,
-                        borderRadius: radius.pill,
-                        backgroundColor: colors.glass.subtleBorder,
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <View
-                        style={{
-                          width: `${Math.min(100, Math.max(3, share))}%`,
-                          height: '100%',
-                          backgroundColor: isCompleted
-                            ? colors.semantic.completed
-                            : colors.semantic.pending,
-                        }}
-                      />
-                    </View>
-                  </View>
-                );
-              })
-            )}
           </View>
         </View>
       </GlassSurface>
@@ -345,15 +278,16 @@ export function AnalyticsAndHistoryView({
               paddingVertical: spacing.sm,
               paddingHorizontal: spacing.md,
               borderRadius: radius.md,
-              backgroundColor: colors.semantic.incomeSoft,
+              borderCurve: 'continuous',
+              backgroundColor: colors.glass.surfaceElevatedTint,
               borderWidth: 1,
-              borderColor: colors.semantic.income,
+              borderColor: colors.glass.specularBorder,
               justifyContent: 'center',
               alignItems: 'center',
             }}
           >
             <AppText variant="headline" color={colors.semantic.income}>
-              {`Confirmar Cierre de ${formatMonthKeyLabelEs(activeMonthKey)} y Abrir Siguiente Mes`}
+              {`Confirmar ${formatMonthKeyLabelEs(activeMonthKey)} y Siguiente Mes`}
             </AppText>
           </Pressable>
 
@@ -413,13 +347,17 @@ export function AnalyticsAndHistoryView({
                           minHeight: MIN_TOUCH_TARGET_PT,
                           paddingHorizontal: spacing.md,
                           borderRadius: radius.md,
+                          borderCurve: 'continuous',
                           backgroundColor: colors.glass.surfaceElevatedTint,
                           borderWidth: 1,
                           borderColor: colors.glass.specularBorder,
-                          justifyContent: 'center',
+                          flexDirection: 'row',
                           alignItems: 'center',
+                          gap: spacing.xxs,
+                          justifyContent: 'center',
                         }}
                       >
+                        <PencilEditIcon size={14} color={colors.text.secondary} />
                         <AppText variant="caption">Editar mes</AppText>
                       </Pressable>
                     ) : null}
@@ -434,13 +372,17 @@ export function AnalyticsAndHistoryView({
                           minHeight: MIN_TOUCH_TARGET_PT,
                           paddingHorizontal: spacing.md,
                           borderRadius: radius.md,
+                          borderCurve: 'continuous',
                           backgroundColor: colors.semantic.expenseSoft,
                           borderWidth: 1,
-                          borderColor: colors.semantic.expense,
-                          justifyContent: 'center',
+                          borderColor: colors.glass.subtleBorder,
+                          flexDirection: 'row',
                           alignItems: 'center',
+                          gap: spacing.xxs,
+                          justifyContent: 'center',
                         }}
                       >
+                        <TrashBinIcon size={14} color={colors.semantic.expense} />
                         <AppText variant="caption" color={colors.semantic.expense}>
                           Eliminar
                         </AppText>
@@ -451,98 +393,6 @@ export function AnalyticsAndHistoryView({
               );
             })}
           </View>
-        </View>
-      </GlassSurface>
-
-      {/* Screen 11: Exclusive Account Reset Zone */}
-      <GlassSurface elevated testID="reset-account-card">
-        <View style={{ gap: spacing.sm }}>
-          <View>
-            <AppText variant="headline">Configuración de Cuenta</AppText>
-            <AppText variant="caption" color={colors.text.secondary}>
-              Si deseas comenzar desde cero y reconfigurar tu mes inicial, ingresos, gastos, deudas y
-              fondos de ahorro, puedes reiniciar toda la cuenta.
-            </AppText>
-          </View>
-
-          {!confirmingAccountReset ? (
-            <Pressable
-              testID="reset-full-account-button"
-              accessibilityRole="button"
-              onPress={() => setConfirmingAccountReset(true)}
-              style={{
-                width: '100%',
-                minHeight: MIN_TOUCH_TARGET_PT,
-                paddingVertical: spacing.sm,
-                paddingHorizontal: spacing.md,
-                borderRadius: radius.md,
-                backgroundColor: colors.semantic.expenseSoft,
-                borderWidth: 1,
-                borderColor: colors.semantic.expense,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <AppText variant="headline" color={colors.semantic.expense}>
-                Reiniciar toda la cuenta
-              </AppText>
-            </Pressable>
-          ) : (
-            <View
-              style={{
-                padding: spacing.sm,
-                borderRadius: radius.md,
-                backgroundColor: colors.semantic.expenseSoft,
-                borderWidth: 1,
-                borderColor: colors.semantic.expense,
-                gap: spacing.xs,
-              }}
-            >
-              <AppText variant="caption" color={colors.semantic.expense}>
-                ¿Estás seguro? Esta acción borrará tus meses actuales y abrirá el asistente de
-                configuración inicial desde cero.
-              </AppText>
-              <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-                <Pressable
-                  testID="cancel-reset-full-account-button"
-                  accessibilityRole="button"
-                  onPress={() => setConfirmingAccountReset(false)}
-                  style={{
-                    flex: 1,
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    borderRadius: radius.md,
-                    backgroundColor: colors.glass.surfaceTint,
-                    borderWidth: 1,
-                    borderColor: colors.glass.subtleBorder,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                >
-                  <AppText variant="caption">Cancelar</AppText>
-                </Pressable>
-                <Pressable
-                  testID="confirm-reset-full-account-button"
-                  accessibilityRole="button"
-                  onPress={() => {
-                    setConfirmingAccountReset(false);
-                    onResetFullAccount?.();
-                  }}
-                  style={{
-                    flex: 1,
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    borderRadius: radius.md,
-                    backgroundColor: colors.semantic.expense,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                >
-                  <AppText variant="headline" color={colors.text.primary}>
-                    Sí, reiniciar cuenta
-                  </AppText>
-                </Pressable>
-              </View>
-            </View>
-          )}
         </View>
       </GlassSurface>
     </View>

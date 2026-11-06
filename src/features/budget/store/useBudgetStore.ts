@@ -53,7 +53,13 @@ import {
   type WidgetSyncResult,
 } from '../../../platform/widgets';
 
-export type BFlowWorkspaceTab = 'summary' | 'checklist' | 'debts' | 'savings' | 'analytics';
+export type BFlowWorkspaceTab =
+  | 'summary'
+  | 'checklist'
+  | 'debts'
+  | 'savings'
+  | 'analytics'
+  | 'account';
 
 export interface EditEntryUpdates {
   conceptName: string;
@@ -149,6 +155,11 @@ export interface BudgetStoreState {
   setActiveTab: (tab: BFlowWorkspaceTab) => void;
   setActiveMonthKey: (monthKey: string) => void;
   setAuthUser: (user: BFlowAuthUser | null) => void;
+  updateAuthUserProfile: (updates: {
+    displayName?: string;
+    email?: string;
+    financialGoal?: string;
+  }) => Promise<void>;
   clearWorkspaceSession: () => void;
   requireAuthenticationGate: () => void;
   setSyncStatus: (message: string, isSyncing?: boolean) => void;
@@ -455,6 +466,21 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       return;
     }
     set({ authUser: user });
+  },
+
+  updateAuthUserProfile: async (updates) => {
+    const current = get().authUser;
+    if (!current) return;
+    const updatedUser: BFlowAuthUser = {
+      ...current,
+      ...(updates.displayName !== undefined
+        ? { displayName: updates.displayName.trim() || current.displayName }
+        : {}),
+      ...(updates.email !== undefined ? { email: updates.email.trim() || current.email } : {}),
+      ...(updates.financialGoal !== undefined ? { financialGoal: updates.financialGoal.trim() } : {}),
+    };
+    savePersistedSession(updatedUser);
+    set({ authUser: updatedUser });
   },
 
   clearWorkspaceSession: () => {

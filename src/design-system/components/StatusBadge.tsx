@@ -3,7 +3,7 @@ import { View, ViewStyle } from 'react-native';
 import { useBFlowTheme } from '../theme/ThemeContext';
 import { AppText } from './Typography';
 
-export type BadgeStatus = 'completed' | 'pending' | 'info' | 'moto' | 'debt' | 'savings';
+export type BadgeStatus = 'completed' | 'pending' | 'info' | 'moto' | 'debt' | 'savings' | 'expense';
 
 export interface StatusBadgeProps {
   label: string;
@@ -21,6 +21,7 @@ export function StatusBadge({ label, status, testID }: StatusBadgeProps): React.
     savings: { bg: colors.semantic.savingsSoft, fg: colors.semantic.savings },
     moto: { bg: colors.semantic.motoSoft, fg: colors.semantic.moto },
     debt: { bg: colors.semantic.debtSoft, fg: colors.semantic.debt },
+    expense: { bg: colors.semantic.expenseSoft, fg: colors.semantic.expense },
   };
 
   const selected = paletteMap[status];
@@ -28,6 +29,9 @@ export function StatusBadge({ label, status, testID }: StatusBadgeProps): React.
   const badgeStyle: ViewStyle = {
     backgroundColor: selected.bg,
     borderRadius: radius.pill,
+    borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: colors.glass.subtleBorder,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     alignSelf: 'flex-start',

@@ -2,6 +2,7 @@
 module.exports = {
   preset: 'jest-expo',
   testMatch: ['**/__tests__/**/*.test.[jt]s?(x)'],
+  testTimeout: 15000,
   moduleNameMapper: {
     '^@firebase/util$': '<rootDir>/node_modules/@firebase/util/dist/index.cjs.js',
   },

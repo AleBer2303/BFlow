@@ -10,7 +10,7 @@
  * 3. Works consistently for existing and all future forms in the application.
  */
 
-import React, { useImperativeHandle, useRef } from 'react';
+import React, { useImperativeHandle, useRef, useState } from 'react';
 import {
   TextInput,
   type NativeSyntheticEvent,
@@ -36,6 +36,7 @@ export const AppTextInput = React.forwardRef<AppTextInputElement, AppTextInputPr
       style,
       placeholderTextColor,
       onFocus,
+      onBlur,
       focusScrollOffset = 24,
       ...rest
     },
@@ -43,30 +44,41 @@ export const AppTextInput = React.forwardRef<AppTextInputElement, AppTextInputPr
   ) {
     const { colors, spacing, radius } = useBFlowTheme();
     const innerRef = useRef<AppTextInputElement | null>(null);
+    const [isFocused, setIsFocused] = useState(false);
     const { registerInputFocus } = useKeyboardAware();
 
     useImperativeHandle(forwardedRef, () => innerRef.current as AppTextInputElement);
 
     const handleFocus = (e: any) => {
+      setIsFocused(true);
       onFocus?.(e);
       if (innerRef.current) {
         registerInputFocus(innerRef.current, focusScrollOffset);
       }
     };
 
+    const handleBlur = (e: any) => {
+      setIsFocused(false);
+      onBlur?.(e);
+    };
+
     return (
       <TextInput
         ref={innerRef}
         onFocus={handleFocus}
+        onBlur={handleBlur}
         placeholderTextColor={placeholderTextColor ?? colors.text.muted}
         style={[
           {
             minHeight: MIN_TOUCH_TARGET_PT,
             paddingHorizontal: spacing.md,
             borderRadius: radius.md,
-            backgroundColor: colors.glass.surfaceTint,
+            borderCurve: 'continuous',
+            backgroundColor: isFocused
+              ? colors.glass.surfaceElevatedTint
+              : colors.glass.surfaceTint,
             borderWidth: 1,
-            borderColor: colors.glass.subtleBorder,
+            borderColor: isFocused ? colors.glass.specularBorder : colors.glass.subtleBorder,
             color: colors.text.primary,
             fontSize: typography.body.fontSize,
           },

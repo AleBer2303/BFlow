@@ -16,7 +16,6 @@
  */
 
 import { BlurView } from 'expo-blur';
-import * as Haptics from 'expo-haptics';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal,
@@ -28,6 +27,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import { hapticService } from '../../platform/haptics/hapticService';
 import { useBFlowTheme } from '../theme/ThemeContext';
 import { MIN_TOUCH_TARGET_PT } from '../tokens';
 import { AppText } from './Typography';
@@ -92,11 +92,7 @@ export function IosWheelPickerModal<T extends string = string>({
   }, [visible, initialIndex, selectedValue]);
 
   const triggerWheelHaptic = () => {
-    try {
-      void Haptics.selectionAsync();
-    } catch {
-      // Safe fallback on unsupported platforms
-    }
+    hapticService.selection();
   };
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -131,6 +127,7 @@ export function IosWheelPickerModal<T extends string = string>({
   };
 
   const handleConfirm = () => {
+    hapticService.medium();
     onConfirm(tempValue);
   };
 
@@ -197,6 +194,7 @@ export function IosWheelPickerModal<T extends string = string>({
             }}
           >
             <Pressable
+              onPressIn={() => hapticService.light()}
               onPress={onCancel}
               accessibilityRole="button"
               accessibilityLabel="Cancelar selección"
@@ -295,6 +293,7 @@ export function IosWheelPickerModal<T extends string = string>({
                     accessibilityRole="button"
                     accessibilityState={{ selected: isSelected }}
                     accessibilityLabel={option.label}
+                    onPressIn={() => handleSelectOptionDirectly(idx, option.value)}
                     onPress={() => handleSelectOptionDirectly(idx, option.value)}
                     style={{
                       height: ITEM_HEIGHT,

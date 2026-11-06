@@ -1,4 +1,3 @@
-import * as Haptics from 'expo-haptics';
 import React, { useEffect, useMemo, useState } from 'react';
 import { AppState, Platform, Pressable, View } from 'react-native';
 import {
@@ -9,12 +8,15 @@ import {
   AppText,
   AppTextInput,
   CurrencyText,
+  FloatingLiquidGlassDock,
   GlassSurface,
   KeyboardAwareScrollView,
   MIN_TOUCH_TARGET_PT,
   StatusBadge,
   ThemeToggleIconButton,
+  hapticService,
   useBFlowTheme,
+  type HapticType,
 } from '../design-system';
 import {
   calculateChecklistProgress,
@@ -32,6 +34,7 @@ import {
   type RegisterOrCompleteMovementInput,
 } from '../domain';
 import { AnalyticsAndHistoryView } from '../features/analytics/components/AnalyticsAndHistoryView';
+import { AccountProfileWorkspaceView } from '../features/auth/components/AccountProfileWorkspaceView';
 import { AuthScreen } from '../features/auth/components/AuthScreen';
 import {
   useBudgetStore,
@@ -50,14 +53,10 @@ import {
   type BFlowAuthUser,
   type RegisterPersonalAccountInput,
 } from '../platform/auth/authAdapter';
-
-const WORKSPACE_TABS: ReadonlyArray<{ id: BFlowWorkspaceTab; label: string }> = [
-  { id: 'summary', label: 'Resumen' },
-  { id: 'checklist', label: 'Checklist' },
-  { id: 'debts', label: 'Deudas' },
-  { id: 'savings', label: 'Ahorros' },
-  { id: 'analytics', label: 'Análisis & Cierre' },
-];
+import {
+  confirmPasswordResetWithCode,
+  requestPasswordResetCode,
+} from '../platform/auth/verificationCodeService';
 
 export default function PhaseOneHomeScreen(): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
@@ -74,10 +73,12 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     closedSnapshots,
     needsOnboarding,
     authUser,
+    syncMessage,
     isSyncing,
     setActiveTab,
     setActiveMonthKey,
     setAuthUser,
+    updateAuthUserProfile,
     clearWorkspaceSession,
     setSyncStatus,
     applyFullCloudAccount,
@@ -123,17 +124,8 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
 
   const activeMonthLabel = formatMonthKeyLabelEs(activeMonthKey);
 
-  const triggerHaptic = async (type: 'success' | 'light') => {
-    if (Platform.OS === 'web') return;
-    try {
-      if (type === 'success') {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-    } catch {
-      // Ignore haptics errors on unsupported devices
-    }
+  const triggerHaptic = (type: HapticType) => {
+    hapticService.trigger(type);
   };
 
   const syncUserCloudAccount = async (
@@ -197,8 +189,8 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     try {
       const user = await signInWithEmail(email, password);
       setAuthUser(user);
+      triggerHaptic('success');
       await syncUserCloudAccount(user, { isRegistration: false });
-      await triggerHaptic('success');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'No fue posible iniciar sesión.';
       setAuthErrorMessage(msg);
@@ -213,8 +205,8 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     try {
       const user = await registerWithPersonalProfile(input);
       setAuthUser(user);
+      triggerHaptic('success');
       await syncUserCloudAccount(user, { isRegistration: true });
-      await triggerHaptic('success');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'No fue posible crear tu cuenta.';
       setAuthErrorMessage(msg);
@@ -225,18 +217,55 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
   const handleSendPasswordRecovery = async (email: string) => {
     setAuthErrorMessage(null);
     setAuthStatusMessage(null);
-    setSyncStatus('Enviando enlace de recuperación...', true);
+    setSyncStatus('Enviando código de verificación...', true);
     try {
-      await sendPasswordRecoveryEmail(email);
-      setAuthStatusMessage(
-        `Enviamos un enlace de recuperación a ${email.trim()}. Revisa tu bandeja de entrada.`
-      );
-      setSyncStatus('Enlace de recuperación enviado.', false);
+      const res = await requestPasswordResetCode(email);
+      setAuthStatusMessage(res.message);
+      setSyncStatus('Código de verificación enviado.', false);
     } catch (err) {
       const msg =
-        err instanceof Error ? err.message : 'No fue posible enviar el correo de recuperación.';
+        err instanceof Error ? err.message : 'No fue posible enviar el código de recuperación.';
       setAuthErrorMessage(msg);
       setSyncStatus(msg, false);
+    }
+  };
+
+  const handleRequestPasswordResetCode = async (email: string) => {
+    setAuthErrorMessage(null);
+    setAuthStatusMessage(null);
+    setSyncStatus('Enviando código de verificación de 6 dígitos...', true);
+    try {
+      const res = await requestPasswordResetCode(email);
+      setAuthStatusMessage(res.message);
+      setSyncStatus('Código enviado a tu correo.', false);
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : 'No fue posible enviar el código de verificación.';
+      setAuthErrorMessage(msg);
+      setSyncStatus(msg, false);
+      throw err;
+    }
+  };
+
+  const handleConfirmPasswordResetWithCode = async (
+    email: string,
+    code: string,
+    newPassword: string
+  ) => {
+    setAuthErrorMessage(null);
+    setAuthStatusMessage(null);
+    setSyncStatus('Actualizando contraseña internamente...', true);
+    try {
+      const res = await confirmPasswordResetWithCode(email, code, newPassword);
+      setAuthStatusMessage(res.message);
+      setSyncStatus('Contraseña actualizada correctamente.', false);
+      triggerHaptic('success');
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : 'No fue posible actualizar la contraseña.';
+      setAuthErrorMessage(msg);
+      setSyncStatus(msg, false);
+      throw err;
     }
   };
 
@@ -314,22 +343,25 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         onSignInWithEmail={handleSignInWithEmail}
         onRegisterPersonalAccount={handleRegisterPersonalAccount}
         onSendPasswordRecovery={handleSendPasswordRecovery}
+        onRequestPasswordResetCode={handleRequestPasswordResetCode}
+        onConfirmPasswordResetWithCode={handleConfirmPasswordResetWithCode}
       />
     );
   }
 
   const handleToggleEntry = async (entry: MonthEntry) => {
     const wasCompleted = entry.status === 'completed';
+    triggerHaptic(wasCompleted ? 'light' : 'success');
     await toggleEntryStatus(entry.id, toBogotaIsoDate());
-    await triggerHaptic(wasCompleted ? 'light' : 'success');
   };
 
   const handleAddMovement = async (input: RegisterOrCompleteMovementInput) => {
+    triggerHaptic('success');
     await addOrCompleteMovement(input);
-    await triggerHaptic('success');
   };
 
   const handleSummaryOpenAddModal = (type: ConceptType = 'expense') => {
+    triggerHaptic('light');
     setSummaryMovementType(type);
     setIsSummaryCustomMode(false);
     setSummaryCustomName('');
@@ -355,6 +387,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         setSummaryFormError('Ingresa un monto entero mayor a $ 0 en pesos colombianos.');
         return;
       }
+      triggerHaptic('success');
       await createCustomConceptAndMovement({
         monthKey: activeMonthKey,
         name: summaryCustomName.trim(),
@@ -365,7 +398,6 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
       });
       setIsSummaryAddModalOpen(false);
       setSummaryFormError(null);
-      await triggerHaptic('success');
       return;
     }
 
@@ -383,6 +415,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
       return;
     }
 
+    triggerHaptic('success');
     await handleAddMovement({
       monthKey: activeMonthKey,
       conceptId: activeConcept.id,
@@ -396,8 +429,8 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
   };
 
   const handleCloseMonth = async () => {
+    triggerHaptic('success');
     await closeCurrentMonth();
-    await triggerHaptic('success');
   };
 
   const funfamiEntry = entries.find(
@@ -405,31 +438,17 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
   );
 
   return (
-    <KeyboardAwareScrollView
-      style={{ flex: 1, backgroundColor: colors.background.primary }}
-      contentContainerStyle={{
-        paddingHorizontal: spacing.lg,
-        paddingTop: spacing.xxxl,
-        paddingBottom: spacing.xxl,
-        gap: spacing.md,
-      }}
-    >
-      {/* Header */}
-      <View
-        style={{
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: spacing.sm,
+    <View style={{ flex: 1, backgroundColor: colors.background.primary }}>
+      <KeyboardAwareScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingHorizontal: spacing.lg,
+          paddingTop: spacing.xl,
+          paddingBottom: Platform.OS === 'ios' ? 84 : 76,
+          gap: spacing.md,
         }}
       >
-        <AppText variant="title1">{`BFlow · ${activeMonthLabel}`}</AppText>
-
-        <ThemeToggleIconButton testID="theme-toggle-button" />
-      </View>
-
-      {/* Authenticated User Personal Profile & Cloud Session Card */}
-      <GlassSurface testID="authenticated-user-profile-card">
+        {/* Header */}
         <View
           style={{
             flexDirection: 'row',
@@ -438,92 +457,22 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
             gap: spacing.sm,
           }}
         >
-          <View style={{ flex: 1, gap: spacing.xxs }}>
-            <AppText variant="headline" testID="authenticated-user-name">
-              {`Hola, ${authUser.displayName ?? 'Usuario BFlow'}`}
-            </AppText>
-            <AppText variant="micro" color={colors.text.secondary}>
-              {`${authUser.email ?? authUser.uid}${authUser.phone ? ` · ${authUser.phone}` : ''}`}
-            </AppText>
-            {authUser.financialGoal ? (
-              <AppText variant="micro" color={colors.semantic.moto}>
-                {`Meta: ${authUser.financialGoal}`}
-              </AppText>
-            ) : null}
-          </View>
+          <AppText variant="title1">{`BFlow · ${activeMonthLabel}`}</AppText>
 
-          <Pressable
-            testID="sign-out-button"
-            accessibilityRole="button"
-            accessibilityLabel="Cerrar sesión"
-            onPress={handleSignOut}
-            style={{
-              minHeight: MIN_TOUCH_TARGET_PT,
-              paddingHorizontal: spacing.md,
-              borderRadius: radius.pill,
-              backgroundColor: colors.glass.surfaceElevatedTint,
-              borderWidth: 1,
-              borderColor: colors.glass.specularBorder,
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
-            <AppText variant="caption">Cerrar sesión</AppText>
-          </Pressable>
+          <ThemeToggleIconButton testID="theme-toggle-button" />
         </View>
-      </GlassSurface>
 
-      {needsOnboarding ? (
-        <InitialAccountSetupView
-          onCompleteSetup={(config) => {
-            void completeInitialAccountSetup(config);
-            void triggerHaptic('success');
-          }}
-        />
-      ) : (
-        <>
-          {/* Floating iOS 26 Liquid Glass Navigation Tab Bar */}
-          <GlassSurface elevated testID="liquid-glass-tab-bar">
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-              {WORKSPACE_TABS.map((tab) => {
-                const isSelected = activeTab === tab.id;
-                return (
-                  <Pressable
-                    key={tab.id}
-                    testID={`workspace-tab-${tab.id}`}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: isSelected }}
-                    onPress={() => setActiveTab(tab.id)}
-                    style={{
-                      flexGrow: 1,
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      paddingHorizontal: spacing.sm,
-                      borderRadius: radius.pill,
-                      backgroundColor: isSelected
-                        ? colors.glass.surfaceElevatedTint
-                        : colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: isSelected
-                        ? colors.glass.specularBorder
-                        : colors.glass.subtleBorder,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <AppText
-                      variant="caption"
-                      color={isSelected ? colors.text.primary : colors.text.secondary}
-                    >
-                      {tab.label}
-                    </AppText>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </GlassSurface>
-
-          {/* Active Workspace Content */}
-          {activeTab === 'summary' ? (
+        {needsOnboarding ? (
+          <InitialAccountSetupView
+            onCompleteSetup={(config) => {
+              void completeInitialAccountSetup(config);
+              void triggerHaptic('success');
+            }}
+          />
+        ) : (
+          <>
+            {/* Active Workspace Content */}
+            {activeTab === 'summary' ? (
             <>
               <GlassSurface elevated testID="net-flow-hero-card">
                 <View style={{ gap: spacing.xs }}>
@@ -670,6 +619,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                     testID="summary-quick-open-checklist-add"
                     accessibilityRole="button"
                     accessibilityLabel="Registrar Nuevo Movimiento"
+                    onPressIn={() => triggerHaptic('light')}
                     onPress={() => handleSummaryOpenAddModal('expense')}
                     style={{
                       width: '100%',
@@ -677,14 +627,15 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                       paddingVertical: spacing.xs,
                       paddingHorizontal: spacing.md,
                       borderRadius: radius.md,
-                      backgroundColor: colors.semantic.incomeSoft,
+                      borderCurve: 'continuous',
+                      backgroundColor: colors.glass.surfaceElevatedTint,
                       borderWidth: 1,
-                      borderColor: colors.semantic.income,
+                      borderColor: colors.glass.specularBorder,
                       justifyContent: 'center',
                       alignItems: 'center',
                     }}
                   >
-                    <AppText variant="caption" color={colors.semantic.income}>
+                    <AppText variant="callout" color={colors.text.primary}>
                       Registrar Nuevo Movimiento
                     </AppText>
                   </Pressable>
@@ -702,6 +653,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                           <AppText variant="title2">Registrar Movimiento</AppText>
                           <Pressable
                             accessibilityRole="button"
+                            onPressIn={() => triggerHaptic('light')}
                             onPress={() => setIsSummaryAddModalOpen(false)}
                             style={{
                               paddingVertical: 4,
@@ -730,6 +682,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                               <Pressable
                                 key={tab.type}
                                 accessibilityRole="button"
+                                onPressIn={() => triggerHaptic('light')}
                                 onPress={() => handleSummaryOpenAddModal(tab.type)}
                                 style={{
                                   flex: 1,
@@ -766,6 +719,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                                 key={concept.id}
                                 testID={`summary-concept-chip-${concept.id}`}
                                 accessibilityRole="button"
+                                onPressIn={() => triggerHaptic('selection')}
                                 onPress={() => {
                                   setIsSummaryCustomMode(false);
                                   setSummarySelectedConceptId(concept.id);
@@ -784,12 +738,15 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                                     : colors.glass.surfaceTint,
                                   borderWidth: 1,
                                   borderColor: isSelected
-                                    ? colors.semantic.income
+                                    ? colors.glass.specularBorder
                                     : colors.glass.subtleBorder,
                                   justifyContent: 'center',
                                 }}
                               >
-                                <AppText variant="caption">
+                                <AppText
+                                  variant="caption"
+                                  color={isSelected ? colors.semantic.income : colors.text.primary}
+                                >
                                   {`${concept.name}${concept.defaultAmount > 0 ? ` (${formatCop(concept.defaultAmount)})` : ' (Múltiple)'}`}
                                 </AppText>
                               </Pressable>
@@ -798,6 +755,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
 
                           <Pressable
                             accessibilityRole="button"
+                            onPressIn={() => triggerHaptic('light')}
                             onPress={() => {
                               setIsSummaryCustomMode(true);
                               setSummaryAmountInput('');
@@ -813,12 +771,17 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                                 : colors.glass.surfaceTint,
                               borderWidth: 1,
                               borderColor: isSummaryCustomMode
-                                ? colors.semantic.moto
+                                ? colors.glass.specularBorder
                                 : colors.glass.subtleBorder,
                               justifyContent: 'center',
                             }}
                           >
-                            <AppText variant="caption">+ Crear nuevo ítem</AppText>
+                            <AppText
+                              variant="caption"
+                              color={isSummaryCustomMode ? colors.semantic.moto : colors.text.secondary}
+                            >
+                              + Crear nuevo ítem
+                            </AppText>
                           </Pressable>
                         </View>
 
@@ -841,6 +804,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                                   <Pressable
                                     key={g.id}
                                     accessibilityRole="button"
+                                    onPressIn={() => triggerHaptic('selection')}
                                     onPress={() => setSummaryCustomGroup(g.id)}
                                     style={{
                                       flex: 1,
@@ -887,18 +851,20 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                         <Pressable
                           testID="summary-submit-movement-button"
                           accessibilityRole="button"
+                          onPressIn={() => triggerHaptic('medium')}
                           onPress={handleSummarySubmitMovement}
                           style={{
                             minHeight: MIN_TOUCH_TARGET_PT,
                             borderRadius: radius.md,
-                            backgroundColor: colors.semantic.incomeSoft,
+                            borderCurve: 'continuous',
+                            backgroundColor: colors.glass.surfaceElevatedTint,
                             borderWidth: 1,
-                            borderColor: colors.semantic.income,
+                            borderColor: colors.glass.specularBorder,
                             justifyContent: 'center',
                             alignItems: 'center',
                           }}
                         >
-                          <AppText variant="body" color={colors.semantic.income}>
+                          <AppText variant="headline" color={colors.semantic.income}>
                             Guardar Movimiento
                           </AppText>
                         </Pressable>
@@ -915,6 +881,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                         accessibilityRole="checkbox"
                         accessibilityState={{ checked: isDone }}
                         accessibilityLabel={`${entry.conceptName}, ${formatCop(entry.actualAmount)}`}
+                        onPressIn={() => triggerHaptic(isDone ? 'light' : 'success')}
                         onPress={() => handleToggleEntry(entry)}
                         style={{
                           minHeight: MIN_TOUCH_TARGET_PT,
@@ -930,12 +897,12 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                             : colors.glass.surfaceTint,
                           borderWidth: 1,
                           borderColor: isDone
-                            ? colors.semantic.completed
+                            ? colors.glass.specularBorder
                             : colors.glass.subtleBorder,
                         }}
                       >
                         <View style={{ flex: 1, gap: spacing.xxs }}>
-                          <AppText variant="body">{`${isDone ? '✓ ' : '○ '}${entry.conceptName}`}</AppText>
+                          <AppText variant="body">{`${isDone ? '✓ ' : ''}${entry.conceptName}`}</AppText>
                           <AppText variant="micro" color={colors.text.secondary}>
                             {isDone
                               ? `${entry.type === 'income' ? 'Recibido' : 'Pagado'}${entry.completedAt ? ` · ${entry.completedAt}` : ''}`
@@ -968,24 +935,24 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
               onToggleEntry={handleToggleEntry}
               onAddOrCompleteMovement={handleAddMovement}
               onCreateCustomMovement={(input) => {
+                triggerHaptic('success');
                 void createCustomConceptAndMovement(input);
-                void triggerHaptic('success');
               }}
               onUpdateConcept={(conceptId, updates) => {
+                triggerHaptic('success');
                 void updateConcept(conceptId, updates);
-                void triggerHaptic('success');
               }}
               onDeleteConcept={(conceptId) => {
+                triggerHaptic('light');
                 void deleteConcept(conceptId);
-                void triggerHaptic('light');
               }}
               onEditEntry={(entryId, updates) => {
+                triggerHaptic('success');
                 void editEntry(entryId, updates);
-                void triggerHaptic('success');
               }}
               onDeleteEntry={(entryId) => {
+                triggerHaptic('light');
                 void deleteEntryById(entryId);
-                void triggerHaptic('light');
               }}
               onRemoveRepeatableEntry={removeOrResetEntry}
             />
@@ -995,16 +962,16 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
             <DebtsFunfamiView
               debtSummary={debtSummary}
               onCreateDebt={(input) => {
+                triggerHaptic('success');
                 void createDebt(activeMonthKey, input);
-                void triggerHaptic('success');
               }}
               onUpdateDebt={(debtId, updates) => {
+                triggerHaptic('success');
                 void updateDebt(activeMonthKey, debtId, updates);
-                void triggerHaptic('success');
               }}
               onDeleteDebt={(debtId) => {
+                triggerHaptic('light');
                 void deleteDebt(activeMonthKey, debtId);
-                void triggerHaptic('light');
               }}
             />
           ) : null}
@@ -1015,24 +982,24 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
               motoIdealSummary={motoIdealSummary}
               provisionPlan={idealMotoPlan}
               onUpdateOpeningBalance={(bucketId, newBalanceCop, newName) => {
+                triggerHaptic('success');
                 void updateSavingsOpeningBalance(activeMonthKey, bucketId, newBalanceCop, newName);
-                void triggerHaptic('success');
               }}
               onCreateSavingsBucket={(name, openingBalanceCop) => {
+                triggerHaptic('success');
                 void createSavingsBucket(activeMonthKey, name, openingBalanceCop);
-                void triggerHaptic('success');
               }}
               onDeleteSavingsBucket={(bucketId) => {
+                triggerHaptic('light');
                 void deleteSavingsBucket(activeMonthKey, bucketId);
-                void triggerHaptic('light');
               }}
               onSaveProvisionItem={(item) => {
+                triggerHaptic('success');
                 void saveProvisionItem(item);
-                void triggerHaptic('success');
               }}
               onDeleteProvisionItem={(itemId) => {
+                triggerHaptic('light');
                 void deleteProvisionItem(itemId);
-                void triggerHaptic('light');
               }}
             />
           ) : null}
@@ -1051,22 +1018,59 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
               onSelectMonth={setActiveMonthKey}
               onCloseCurrentMonth={handleCloseMonth}
               onReopenClosedMonth={(mk) => {
+                triggerHaptic('light');
                 void reopenClosedMonth(mk);
-                void triggerHaptic('light');
               }}
               onDeleteOrRevertMonth={(mk) => {
+                triggerHaptic('light');
                 void deleteOrRevertMonth(mk);
-                void triggerHaptic('light');
               }}
               onResetOctoberSeed={resetToOctober2026GoldenState}
+            />
+          ) : null}
+
+          {activeTab === 'account' ? (
+            <AccountProfileWorkspaceView
+              authUser={authUser}
+              syncStatusMessage={syncMessage}
+              isSyncing={isSyncing}
+              onSignOut={handleSignOut}
+              onManualSync={() => {
+                triggerHaptic('light');
+                void syncUserCloudAccount(authUser);
+              }}
+              onUpdateProfile={async (updates) => {
+                triggerHaptic('success');
+                await updateAuthUserProfile(updates);
+              }}
+              onSendPasswordReset={async (email) => {
+                triggerHaptic('light');
+                await handleSendPasswordRecovery(email);
+              }}
+              onRequestPasswordResetCode={async (email) => {
+                triggerHaptic('light');
+                await handleRequestPasswordResetCode(email);
+              }}
+              onConfirmPasswordResetWithCode={async (email, code, newPassword) => {
+                await handleConfirmPasswordResetWithCode(email, code, newPassword);
+              }}
               onResetFullAccount={() => {
+                triggerHaptic('light');
                 void resetFullAccount();
-                void triggerHaptic('light');
               }}
             />
           ) : null}
         </>
       )}
     </KeyboardAwareScrollView>
-  );
+
+    {!needsOnboarding ? (
+      <FloatingLiquidGlassDock
+        testID="liquid-glass-tab-bar"
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+      />
+    ) : null}
+  </View>
+);
 }

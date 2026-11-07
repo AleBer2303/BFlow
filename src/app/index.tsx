@@ -36,6 +36,7 @@ import {
 import { AnalyticsAndHistoryView } from '../features/analytics/components/AnalyticsAndHistoryView';
 import { AccountProfileWorkspaceView } from '../features/auth/components/AccountProfileWorkspaceView';
 import { AuthScreen } from '../features/auth/components/AuthScreen';
+import { SummaryAddMovementModal } from '../features/budget/components/SummaryAddMovementModal';
 import {
   useBudgetStore,
   type BFlowWorkspaceTab,
@@ -111,16 +112,9 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
   const [authErrorMessage, setAuthErrorMessage] = useState<string | null>(null);
   const [authStatusMessage, setAuthStatusMessage] = useState<string | null>(null);
 
-  // Summary Add Movement Modal state
+  // Summary Add Movement Modal state (isolated in SummaryAddMovementModal to eliminate keystroke re-renders)
   const [isSummaryAddModalOpen, setIsSummaryAddModalOpen] = useState(false);
-  const [summaryMovementType, setSummaryMovementType] = useState<ConceptType>('expense');
-  const [summarySelectedConceptId, setSummarySelectedConceptId] = useState<string>('');
-  const [summaryAmountInput, setSummaryAmountInput] = useState<string>('');
-  const [summaryNoteInput, setSummaryNoteInput] = useState<string>('');
-  const [summaryCustomName, setSummaryCustomName] = useState<string>('');
-  const [summaryCustomGroup, setSummaryCustomGroup] = useState<ConceptGroup>('variable');
-  const [isSummaryCustomMode, setIsSummaryCustomMode] = useState<boolean>(false);
-  const [summaryFormError, setSummaryFormError] = useState<string | null>(null);
+  const [summaryAddModalType, setSummaryAddModalType] = useState<ConceptType>('expense');
 
   const activeMonthLabel = formatMonthKeyLabelEs(activeMonthKey);
 
@@ -376,70 +370,8 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
 
   const handleSummaryOpenAddModal = (type: ConceptType = 'expense') => {
     triggerHaptic('light');
-    setSummaryMovementType(type);
-    setIsSummaryCustomMode(false);
-    setSummaryCustomName('');
-    const avail = getAvailableConcepts(concepts, entries, activeMonthKey, type);
-    const first = avail[0];
-    setSummarySelectedConceptId(first?.id ?? '');
-    setSummaryAmountInput(first && first.defaultAmount > 0 ? String(first.defaultAmount) : '');
-    setSummaryNoteInput('');
-    setSummaryFormError(null);
+    setSummaryAddModalType(type);
     setIsSummaryAddModalOpen(true);
-  };
-
-  const handleSummarySubmitMovement = async () => {
-    const digitsOnly = summaryAmountInput.replace(/[^0-9]/g, '');
-
-    if (isSummaryCustomMode) {
-      if (!summaryCustomName.trim()) {
-        setSummaryFormError('Ingresa el nombre del nuevo ítem.');
-        return;
-      }
-      const parsedAmount = digitsOnly ? Number(digitsOnly) : 0;
-      if (!Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
-        setSummaryFormError('Ingresa un monto entero mayor a $ 0 en pesos colombianos.');
-        return;
-      }
-      triggerHaptic('success');
-      await createCustomConceptAndMovement({
-        monthKey: activeMonthKey,
-        name: summaryCustomName.trim(),
-        type: summaryMovementType,
-        group: summaryCustomGroup,
-        amountCop: parsedAmount,
-        ...(summaryNoteInput.trim() ? { note: summaryNoteInput.trim() } : {}),
-      });
-      setIsSummaryAddModalOpen(false);
-      setSummaryFormError(null);
-      return;
-    }
-
-    const available = getAvailableConcepts(concepts, entries, activeMonthKey, summaryMovementType);
-    const activeConcept =
-      available.find((c) => c.id === summarySelectedConceptId) ?? available[0];
-    if (!activeConcept) {
-      setSummaryFormError('No hay conceptos disponibles en esta categoría.');
-      return;
-    }
-
-    const parsedAmount = digitsOnly ? Number(digitsOnly) : activeConcept.defaultAmount;
-    if (!Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
-      setSummaryFormError('Ingresa un monto entero mayor a $ 0 en pesos colombianos.');
-      return;
-    }
-
-    triggerHaptic('success');
-    await handleAddMovement({
-      monthKey: activeMonthKey,
-      conceptId: activeConcept.id,
-      actualAmount: parsedAmount,
-      completedAt: toBogotaIsoDate(),
-      ...(summaryNoteInput.trim() ? { note: summaryNoteInput.trim() } : {}),
-    });
-
-    setIsSummaryAddModalOpen(false);
-    setSummaryFormError(null);
   };
 
   const handleCloseMonth = async () => {
@@ -654,237 +586,16 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                     </AppText>
                   </Pressable>
 
-                  {isSummaryAddModalOpen ? (
-                    <GlassSurface elevated testID="summary-add-movement-modal-card">
-                      <View style={{ gap: spacing.sm }}>
-                        <View
-                          style={{
-                            flexDirection: 'row',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <AppText variant="title2">Registrar Movimiento</AppText>
-                          <Pressable
-                            accessibilityRole="button"
-                            onPressIn={() => triggerHaptic('light')}
-                            onPress={() => setIsSummaryAddModalOpen(false)}
-                            style={{
-                              paddingVertical: 4,
-                              paddingHorizontal: spacing.sm,
-                              borderRadius: radius.pill,
-                              backgroundColor: colors.glass.surfaceTint,
-                              borderWidth: 1,
-                              borderColor: colors.glass.subtleBorder,
-                            }}
-                          >
-                            <AppText variant="caption" color={colors.text.secondary}>
-                              Cerrar
-                            </AppText>
-                          </Pressable>
-                        </View>
-
-                        <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-                          {(
-                            [
-                              { type: 'expense', label: 'Gasto' },
-                              { type: 'income', label: 'Ingreso' },
-                            ] as const
-                          ).map((tab) => {
-                            const isSelected = summaryMovementType === tab.type;
-                            return (
-                              <Pressable
-                                key={tab.type}
-                                accessibilityRole="button"
-                                onPressIn={() => triggerHaptic('light')}
-                                onPress={() => handleSummaryOpenAddModal(tab.type)}
-                                style={{
-                                  flex: 1,
-                                  minHeight: 36,
-                                  borderRadius: radius.md,
-                                  backgroundColor: isSelected
-                                    ? colors.glass.surfaceElevatedTint
-                                    : colors.glass.surfaceTint,
-                                  borderWidth: 1,
-                                  borderColor: isSelected
-                                    ? colors.glass.specularBorder
-                                    : colors.glass.subtleBorder,
-                                  justifyContent: 'center',
-                                  alignItems: 'center',
-                                }}
-                              >
-                                <AppText variant="caption">{tab.label}</AppText>
-                              </Pressable>
-                            );
-                          })}
-                        </View>
-
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-                          {getAvailableConcepts(
-                            concepts,
-                            entries,
-                            activeMonthKey,
-                            summaryMovementType
-                          ).map((concept) => {
-                            const isSelected =
-                              !isSummaryCustomMode && summarySelectedConceptId === concept.id;
-                            return (
-                              <Pressable
-                                key={concept.id}
-                                testID={`summary-concept-chip-${concept.id}`}
-                                accessibilityRole="button"
-                                onPressIn={() => triggerHaptic('selection')}
-                                onPress={() => {
-                                  setIsSummaryCustomMode(false);
-                                  setSummarySelectedConceptId(concept.id);
-                                  setSummaryAmountInput(
-                                    concept.defaultAmount > 0 ? String(concept.defaultAmount) : ''
-                                  );
-                                  setSummaryFormError(null);
-                                }}
-                                style={{
-                                  minHeight: 36,
-                                  paddingVertical: spacing.xs,
-                                  paddingHorizontal: spacing.md,
-                                  borderRadius: radius.pill,
-                                  backgroundColor: isSelected
-                                    ? colors.semantic.incomeSoft
-                                    : colors.glass.surfaceTint,
-                                  borderWidth: 1,
-                                  borderColor: isSelected
-                                    ? colors.glass.specularBorder
-                                    : colors.glass.subtleBorder,
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                <AppText
-                                  variant="caption"
-                                  color={isSelected ? colors.semantic.income : colors.text.primary}
-                                >
-                                  {`${concept.name}${concept.defaultAmount > 0 ? ` (${formatCop(concept.defaultAmount)})` : ' (Múltiple)'}`}
-                                </AppText>
-                              </Pressable>
-                            );
-                          })}
-
-                          <Pressable
-                            accessibilityRole="button"
-                            onPressIn={() => triggerHaptic('light')}
-                            onPress={() => {
-                              setIsSummaryCustomMode(true);
-                              setSummaryAmountInput('');
-                              setSummaryFormError(null);
-                            }}
-                            style={{
-                              minHeight: 36,
-                              paddingVertical: spacing.xs,
-                              paddingHorizontal: spacing.md,
-                              borderRadius: radius.pill,
-                              backgroundColor: isSummaryCustomMode
-                                ? colors.semantic.motoSoft
-                                : colors.glass.surfaceTint,
-                              borderWidth: 1,
-                              borderColor: isSummaryCustomMode
-                                ? colors.glass.specularBorder
-                                : colors.glass.subtleBorder,
-                              justifyContent: 'center',
-                            }}
-                          >
-                            <AppText
-                              variant="caption"
-                              color={isSummaryCustomMode ? colors.semantic.moto : colors.text.secondary}
-                            >
-                              + Crear nuevo ítem
-                            </AppText>
-                          </Pressable>
-                        </View>
-
-                        {isSummaryCustomMode ? (
-                          <View style={{ gap: spacing.xs }}>
-                            <AppTextInput
-                              value={summaryCustomName}
-                              onChangeText={setSummaryCustomName}
-                              placeholder="Nombre del nuevo ítem"
-                            />
-                            <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-                              {(
-                                [
-                                  { id: 'fixed', label: 'Fijo' },
-                                  { id: 'variable', label: 'Variable' },
-                                ] as const
-                              ).map((g) => {
-                                const active = summaryCustomGroup === g.id;
-                                return (
-                                  <Pressable
-                                    key={g.id}
-                                    accessibilityRole="button"
-                                    onPressIn={() => triggerHaptic('selection')}
-                                    onPress={() => setSummaryCustomGroup(g.id)}
-                                    style={{
-                                      flex: 1,
-                                      minHeight: 36,
-                                      borderRadius: radius.md,
-                                      backgroundColor: active
-                                        ? colors.glass.surfaceElevatedTint
-                                        : colors.glass.surfaceTint,
-                                      borderWidth: 1,
-                                      borderColor: active
-                                        ? colors.glass.specularBorder
-                                        : colors.glass.subtleBorder,
-                                      justifyContent: 'center',
-                                      alignItems: 'center',
-                                    }}
-                                  >
-                                    <AppText variant="caption">{g.label}</AppText>
-                                  </Pressable>
-                                );
-                              })}
-                            </View>
-                          </View>
-                        ) : null}
-
-                        <AppTextInput
-                          value={summaryAmountInput}
-                          onChangeText={setSummaryAmountInput}
-                          keyboardType="numeric"
-                          placeholder="Monto en COP enteros"
-                        />
-
-                        <AppTextInput
-                          value={summaryNoteInput}
-                          onChangeText={setSummaryNoteInput}
-                          placeholder="Nota opcional"
-                        />
-
-                        {summaryFormError ? (
-                          <AppText variant="caption" color={colors.semantic.expense}>
-                            {summaryFormError}
-                          </AppText>
-                        ) : null}
-
-                        <Pressable
-                          testID="summary-submit-movement-button"
-                          accessibilityRole="button"
-                          onPressIn={() => triggerHaptic('medium')}
-                          onPress={handleSummarySubmitMovement}
-                          style={{
-                            minHeight: MIN_TOUCH_TARGET_PT,
-                            borderRadius: radius.md,
-                            borderCurve: 'continuous',
-                            backgroundColor: colors.glass.surfaceElevatedTint,
-                            borderWidth: 1,
-                            borderColor: colors.glass.specularBorder,
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <AppText variant="headline" color={colors.semantic.income}>
-                            Guardar Movimiento
-                          </AppText>
-                        </Pressable>
-                      </View>
-                    </GlassSurface>
-                  ) : null}
+                  <SummaryAddMovementModal
+                    isOpen={isSummaryAddModalOpen}
+                    onClose={() => setIsSummaryAddModalOpen(false)}
+                    concepts={concepts}
+                    entries={entries}
+                    activeMonthKey={activeMonthKey}
+                    initialType={summaryAddModalType}
+                    onSubmitMovement={handleAddMovement}
+                    onSubmitCustomMovement={createCustomConceptAndMovement}
+                  />
 
                   {allMonthEntries.map((entry) => {
                     const isDone = entry.status === 'completed';

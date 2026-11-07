@@ -31,17 +31,17 @@ import {
   type RegisterOrCompleteMovementInput,
 } from '../../domain/checklist/checklist';
 import { calculateMonthlyBudgetSummary } from '../../domain/budget/budgetCalculator';
-import { addMonthsToMonthKey, toBogotaIsoDate, toBogotaMonthKey } from '../../domain/date/monthKey';
+import { addMonthsToMonthKey, toAppIsoDate, toAppMonthKey } from '../../domain/date/monthKey';
 import {
   buildDebtPaymentsForInstallment,
-  calculateFunfamiDebtSummary,
+  calculateDebtsSummary,
 } from '../../domain/debts/debtCalculator';
 import { closeMonthAndRollover, type CloseMonthResult } from '../../domain/month-close/monthClose';
 import type {
   Concept,
   Debt,
   DebtPayment,
-  IdealMotoPlan,
+  ProvisionPlan as IdealMotoPlan,
   MonthEntry,
   MonthSnapshot,
   SavingsBucket,
@@ -53,14 +53,14 @@ import {
   parseConceptFromFirestore,
   parseDebtFromFirestore,
   parseDebtPaymentFromFirestore,
-  parseIdealMotoPlanFromFirestore,
+  parseProvisionPlanFromFirestore as parseIdealMotoPlanFromFirestore,
   parseMonthEntryFromFirestore,
   parseMonthSnapshotFromFirestore,
   parseSavingsBucketFromFirestore,
   serializeConceptForFirestore,
   serializeDebtForFirestore,
   serializeDebtPaymentForFirestore,
-  serializeIdealMotoPlanForFirestore,
+  serializeProvisionPlanForFirestore as serializeIdealMotoPlanForFirestore,
   serializeMonthEntryForFirestore,
   serializeMonthSnapshotForFirestore,
   serializeSavingsBucketForFirestore,
@@ -347,7 +347,7 @@ export class InMemoryBudgetRepository implements BudgetRepository {
     uid: string,
     userEmail?: string | null
   ): Promise<{ seeded: boolean; monthKey: string }> {
-    const defaultNewUserMonth = `${toBogotaMonthKey().slice(0, 4)}-01`;
+    const defaultNewUserMonth = `${toAppMonthKey().slice(0, 4)}-01`;
     if (this.resetUsers.has(uid)) {
       return {
         seeded: false,
@@ -516,7 +516,7 @@ export class InMemoryBudgetRepository implements BudgetRepository {
 
     const nextEntries = toggleMovementStatus(allEntries, entryId, {
       actualAmount: options?.actualAmount ?? existing.plannedAmount,
-      completedAt: options?.completedAtDateIso ?? toBogotaIsoDate(),
+      completedAt: options?.completedAtDateIso ?? toAppIsoDate(),
     });
 
     const updatedEntry = nextEntries.find((e) => e.id === entryId);
@@ -531,7 +531,7 @@ export class InMemoryBudgetRepository implements BudgetRepository {
 
     if (concept?.linkedDebtGroup || concept?.defaultTargetDebtId) {
       const monthDebts = this.debtsByMonth.get(monthKey) ?? [];
-      const fallbackDebtId = monthDebts[0]?.id ?? 'debt_cb300f_moto';
+      const fallbackDebtId = monthDebts[0]?.id ?? 'debt_obligation_primary';
       const targetDebtId =
         options?.targetDebtId ?? concept.defaultTargetDebtId ?? fallbackDebtId;
       const paymentId = `${updatedEntry.id}_${targetDebtId}`;
@@ -581,7 +581,7 @@ export class InMemoryBudgetRepository implements BudgetRepository {
     const concept = this.concepts.get(created.conceptId);
     if (concept?.linkedDebtGroup || concept?.defaultTargetDebtId) {
       const monthDebts = this.debtsByMonth.get(input.monthKey) ?? [];
-      const fallbackDebtId = monthDebts[0]?.id ?? 'debt_cb300f_moto';
+      const fallbackDebtId = monthDebts[0]?.id ?? 'debt_obligation_primary';
       const targetDebtId = concept.defaultTargetDebtId ?? fallbackDebtId;
       const paymentId = `${created.id}_${targetDebtId}`;
       this.debtPayments.set(paymentId, {
@@ -946,7 +946,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
         ? (userData.activeMonthKey as string)
         : isOwnerCanonicalEmail(resolvedEmail)
           ? '2026-10'
-          : `${toBogotaMonthKey().slice(0, 4)}-01`;
+          : `${toAppMonthKey().slice(0, 4)}-01`;
 
     if (userData?.accountResetByUser === true) {
       return { seeded: false, monthKey: existingActive };
@@ -1334,7 +1334,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
 
     if (monthsSet.size === 0) {
       const fallbackStartMonth =
-        isOwner && !isResetByUser ? '2026-10' : `${toBogotaMonthKey().slice(0, 4)}-01`;
+        isOwner && !isResetByUser ? '2026-10' : `${toAppMonthKey().slice(0, 4)}-01`;
       monthsSet.add(fallbackStartMonth);
     }
 
@@ -1473,7 +1473,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
         }
 
         const prevPayments = paymentList.filter((dp) => dp.monthKey === prevMk);
-        const prevDebtSummary = calculateFunfamiDebtSummary(
+        const prevDebtSummary = calculateDebtsSummary(
           prevDebts,
           entries,
           prevMk,
@@ -1658,7 +1658,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
 
     const nextEntries = toggleMovementStatus([currentEntry], entryId, {
       actualAmount: options?.actualAmount ?? currentEntry.plannedAmount,
-      completedAt: options?.completedAtDateIso ?? toBogotaIsoDate(),
+      completedAt: options?.completedAtDateIso ?? toAppIsoDate(),
     });
 
     const updatedEntry = nextEntries[0];
@@ -1677,7 +1677,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     let updatedDebtPayment: DebtPayment | undefined;
     if (concept?.linkedDebtGroup || concept?.defaultTargetDebtId) {
       const targetDebtId =
-        options?.targetDebtId ?? concept.defaultTargetDebtId ?? 'debt_cb300f_moto';
+        options?.targetDebtId ?? concept.defaultTargetDebtId ?? 'debt_obligation_primary';
       const paymentId = `${updatedEntry.id}_${targetDebtId}`;
       const paymentRef = doc(this.db, 'users', uid, 'debtPayments', paymentId);
 
@@ -1748,7 +1748,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
 
     const concept = concepts.find((c) => c.id === created.conceptId);
     if (concept?.linkedDebtGroup || concept?.defaultTargetDebtId) {
-      const targetDebtId = concept.defaultTargetDebtId ?? 'debt_cb300f_moto';
+      const targetDebtId = concept.defaultTargetDebtId ?? 'debt_obligation_primary';
       const paymentId = `${created.id}_${targetDebtId}`;
       const paymentRef = doc(this.db, 'users', uid, 'debtPayments', paymentId);
       batch.set(paymentRef, {
@@ -1796,7 +1796,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
         });
 
         if (concept?.linkedDebtGroup || concept?.defaultTargetDebtId) {
-          const targetDebtId = concept.defaultTargetDebtId ?? 'debt_cb300f_moto';
+          const targetDebtId = concept.defaultTargetDebtId ?? 'debt_obligation_primary';
           const paymentId = `${resetEntry.id}_${targetDebtId}`;
           const paymentRef = doc(this.db, 'users', uid, 'debtPayments', paymentId);
           batch.set(paymentRef, {

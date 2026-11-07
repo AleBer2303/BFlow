@@ -16,9 +16,9 @@ import {
   useBFlowTheme,
 } from '../../../design-system';
 import {
-  formatCop,
+  formatCurrency,
   getAvailableConcepts,
-  toBogotaIsoDate,
+  toAppIsoDate,
   type Concept,
   type ConceptGroup,
   type ConceptType,
@@ -44,7 +44,8 @@ export interface SummaryAddMovementModalProps {
     name: string;
     type: ConceptType;
     group: ConceptGroup;
-    amountCop: number;
+    amount?: number;
+    amountCop?: number;
     note?: string;
   }) => Promise<void>;
 }
@@ -102,7 +103,7 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
       }
       const parsedAmount = digitsOnly ? Number(digitsOnly) : 0;
       if (!Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
-        setFormError('Ingresa un monto entero mayor a $ 0 en pesos colombianos.');
+        setFormError('Ingresa un monto entero válido mayor a 0.');
         return;
       }
       hapticService.trigger('success');
@@ -111,6 +112,7 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
         name: customName.trim(),
         type: movementType,
         group: customGroup,
+        amount: parsedAmount,
         amountCop: parsedAmount,
         ...(noteInput.trim() ? { note: noteInput.trim() } : {}),
       });
@@ -129,7 +131,7 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
 
     const parsedAmount = digitsOnly ? Number(digitsOnly) : activeConcept.defaultAmount;
     if (!Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
-      setFormError('Ingresa un monto entero mayor a $ 0 en pesos colombianos.');
+      setFormError('Ingresa un monto entero válido mayor a 0.');
       return;
     }
 
@@ -138,7 +140,7 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
       monthKey: activeMonthKey,
       conceptId: activeConcept.id,
       actualAmount: parsedAmount,
-      completedAt: toBogotaIsoDate(),
+      completedAt: toAppIsoDate(),
       ...(noteInput.trim() ? { note: noteInput.trim() } : {}),
     });
 
@@ -249,7 +251,7 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
                   variant="caption"
                   color={isSelected ? colors.semantic.income : colors.text.primary}
                 >
-                  {`${concept.name}${concept.defaultAmount > 0 ? ` (${formatCop(concept.defaultAmount)})` : ' (Múltiple)'}`}
+                  {`${concept.name}${concept.defaultAmount > 0 ? ` (${formatCurrency(concept.defaultAmount)})` : ' (Múltiple)'}`}
                 </AppText>
               </Pressable>
             );
@@ -269,7 +271,7 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
               paddingHorizontal: spacing.md,
               borderRadius: radius.pill,
               backgroundColor: isCustomMode
-                ? colors.semantic.motoSoft
+                ? colors.semantic.reserveSoft
                 : colors.glass.surfaceTint,
               borderWidth: 1,
               borderColor: isCustomMode
@@ -280,7 +282,7 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
           >
             <AppText
               variant="caption"
-              color={isCustomMode ? colors.semantic.moto : colors.text.secondary}
+              color={isCustomMode ? colors.semantic.reserve : colors.text.secondary}
             >
               + Crear nuevo ítem
             </AppText>
@@ -335,7 +337,7 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
           value={amountInput}
           onChangeText={setAmountInput}
           keyboardType="numeric"
-          placeholder="Monto en COP enteros"
+          placeholder="Monto en números enteros"
         />
 
         <AppTextInput

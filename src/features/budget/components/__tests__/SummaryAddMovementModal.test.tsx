@@ -114,7 +114,7 @@ describe('SummaryAddMovementModal (Point 26 Isolation)', () => {
 
     fireEvent.press(screen.getByText('+ Crear nuevo ítem'));
     fireEvent.changeText(screen.getByPlaceholderText('Nombre del nuevo ítem'), 'Café Especial');
-    fireEvent.changeText(screen.getByPlaceholderText('Monto en COP enteros'), '15000');
+    fireEvent.changeText(screen.getByPlaceholderText(/Monto en/i), '15000');
 
     await act(async () => {
       fireEvent.press(screen.getByTestId('summary-submit-movement-button'));

@@ -2,7 +2,7 @@
  * src/data/mappers/firestoreSchemas.ts
  *
  * Strict Zod validation schemas and Firestore document mappers for BFlow.
- * Enforces safe non-negative COP integers, valid America/Bogota monthKeys,
+ * Enforces safe non-negative integers, valid monthKeys,
  * and strips undefined fields before sending payloads to Cloud Firestore.
  */
 
@@ -12,26 +12,31 @@ import type {
   Concept,
   Debt,
   DebtPayment,
-  IdealMotoPlan,
   MonthEntry,
   MonthNumber,
   MonthSnapshot,
   MonthlyBudgetSummary,
   ProvisionItemSpec,
+  ProvisionPlan,
   SavingsBucket,
 } from '../../domain/models/types';
 
-const nonNegativeCopIntSchema = z
+export const nonNegativeIntSchema = z
   .number()
   .refine((val) => Number.isSafeInteger(val) && val >= 0, {
-    message: 'Amount must be a non-negative safe COP integer',
+    message: 'Amount must be a non-negative safe integer',
   });
 
-const signedCopIntSchema = z
+export const signedIntSchema = z
   .number()
   .refine((val) => Number.isSafeInteger(val), {
-    message: 'Amount must be a safe COP integer',
+    message: 'Amount must be a safe integer',
   });
+
+/** @deprecated use nonNegativeIntSchema */
+export const nonNegativeCopIntSchema = nonNegativeIntSchema;
+/** @deprecated use signedIntSchema */
+export const signedCopIntSchema = signedIntSchema;
 
 export const monthKeyStringSchema = z
   .string()
@@ -62,7 +67,7 @@ export const conceptSchema: z.ZodType<Concept, z.ZodTypeDef, unknown> = z.object
   name: z.string().min(1).max(120),
   type: z.enum(['income', 'expense']),
   group: z.enum(['fixed', 'variable']),
-  defaultAmount: nonNegativeCopIntSchema,
+  defaultAmount: nonNegativeIntSchema,
   icon: z.string().min(1).optional(),
   color: z.string().min(1).optional(),
   allowMultiplePerMonth: z.boolean(),
@@ -70,6 +75,7 @@ export const conceptSchema: z.ZodType<Concept, z.ZodTypeDef, unknown> = z.object
   linkedDebtGroup: z.string().min(1).optional(),
   defaultTargetDebtId: z.string().min(1).optional(),
   savingsContribution: savingsContributionRuleSchema.optional(),
+  provisionCategoryKey: z.string().min(1).optional(),
   idealMotoCategoryKey: z.string().min(1).optional(),
   archived: z.boolean(),
   order: z.number().int(),
@@ -82,8 +88,8 @@ export const monthEntrySchema: z.ZodType<MonthEntry> = z.object({
   conceptName: z.string().min(1),
   type: z.enum(['income', 'expense']),
   group: z.enum(['fixed', 'variable']),
-  plannedAmount: nonNegativeCopIntSchema,
-  actualAmount: nonNegativeCopIntSchema,
+  plannedAmount: nonNegativeIntSchema,
+  actualAmount: nonNegativeIntSchema,
   status: z.enum(['pending', 'completed']),
   completedAt: z
     .string()
@@ -97,12 +103,12 @@ export const debtSchema: z.ZodType<Debt> = z.object({
   groupKey: z.string().min(1),
   name: z.string().min(1),
   lender: z.string().min(1),
-  openingBalance: nonNegativeCopIntSchema,
+  openingBalance: nonNegativeIntSchema,
   monthKey: monthKeyStringSchema,
   monthlyInterestRate: z.number().min(0).max(100).optional(),
   annualInterestRate: z.number().min(0).max(1000).optional(),
   interestRateType: z.enum(['monthly', 'annual']).optional(),
-  monthlyInstallment: nonNegativeCopIntSchema.optional(),
+  monthlyInstallment: nonNegativeIntSchema.optional(),
 });
 
 export const debtPaymentSchema: z.ZodType<DebtPayment> = z
@@ -111,9 +117,9 @@ export const debtPaymentSchema: z.ZodType<DebtPayment> = z
     entryId: z.string().min(1),
     monthKey: monthKeyStringSchema,
     debtId: z.string().min(1),
-    principalAmount: nonNegativeCopIntSchema,
-    interestAmount: nonNegativeCopIntSchema,
-    totalApplied: nonNegativeCopIntSchema,
+    principalAmount: nonNegativeIntSchema,
+    interestAmount: nonNegativeIntSchema,
+    totalApplied: nonNegativeIntSchema,
     completedAt: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -127,57 +133,66 @@ export const debtPaymentSchema: z.ZodType<DebtPayment> = z
 export const savingsBucketSchema: z.ZodType<SavingsBucket> = z.object({
   id: z.string().min(1).max(120),
   name: z.string().min(1).max(120),
-  openingBalance: nonNegativeCopIntSchema,
+  openingBalance: nonNegativeIntSchema,
   monthKey: monthKeyStringSchema.optional(),
 });
 
 export const provisionItemSpecSchema: z.ZodType<ProvisionItemSpec> = z.object({
   id: z.string().min(1),
-  excelRawName: z.string().min(1),
+  excelRawName: z.string().min(1).optional(),
   displayName: z.string().min(1),
-  monthlyAmountCop: nonNegativeCopIntSchema,
-  cycleCostCop: nonNegativeCopIntSchema.optional(),
+  monthlyAmountCop: nonNegativeIntSchema,
+  monthlyAmount: nonNegativeIntSchema.optional(),
+  cycleCostCop: nonNegativeIntSchema.optional(),
+  cycleCost: nonNegativeIntSchema.optional(),
   periodMonths: z.number().int().positive().optional(),
-  ceilMonthlyCop: nonNegativeCopIntSchema.optional(),
+  ceilMonthlyCop: nonNegativeIntSchema.optional(),
+  ceilMonthly: nonNegativeIntSchema.optional(),
   linkedConceptId: z.string().min(1).optional(),
-  targetAmountCop: nonNegativeCopIntSchema.optional(),
+  targetAmountCop: nonNegativeIntSchema.optional(),
+  targetAmount: nonNegativeIntSchema.optional(),
   targetMonthKey: monthKeyStringSchema.optional(),
   targetDateIso: z.string().min(1).optional(),
-  includedInExcelTotalB43: z.boolean(),
+  includedInExcelTotalB43: z.boolean().optional(),
   kind: z.enum(['recurring_provision', 'target_goal']),
   notes: z.string().optional(),
 });
 
-export const idealMotoPlanSchema: z.ZodType<IdealMotoPlan> = z.object({
+export const provisionPlanSchema: z.ZodType<ProvisionPlan> = z.object({
   items: z.array(provisionItemSpecSchema),
-  recurringMonthlyTotalCop: nonNegativeCopIntSchema,
-  totalWithTargetGoalCop: nonNegativeCopIntSchema,
+  recurringMonthlyTotalCop: nonNegativeIntSchema,
+  recurringMonthlyTotal: nonNegativeIntSchema.optional(),
+  totalWithTargetGoalCop: nonNegativeIntSchema,
+  totalWithTargetGoal: nonNegativeIntSchema.optional(),
 });
 
+/** @deprecated use provisionPlanSchema */
+export const idealMotoPlanSchema = provisionPlanSchema;
+
 const groupBudgetBreakdownSchema = z.object({
-  planned: nonNegativeCopIntSchema,
-  paid: nonNegativeCopIntSchema,
-  pending: nonNegativeCopIntSchema,
+  planned: nonNegativeIntSchema,
+  paid: nonNegativeIntSchema,
+  pending: nonNegativeIntSchema,
 });
 
 export const monthlyBudgetSummarySchema: z.ZodType<MonthlyBudgetSummary> = z.object({
   monthKey: monthKeyStringSchema,
-  plannedIncome: nonNegativeCopIntSchema,
-  receivedIncome: nonNegativeCopIntSchema,
-  pendingIncome: nonNegativeCopIntSchema,
+  plannedIncome: nonNegativeIntSchema,
+  receivedIncome: nonNegativeIntSchema,
+  pendingIncome: nonNegativeIntSchema,
   incomeByGroup: z.object({
     fixed: groupBudgetBreakdownSchema,
     variable: groupBudgetBreakdownSchema,
   }),
-  plannedExpenses: nonNegativeCopIntSchema,
-  paidExpenses: nonNegativeCopIntSchema,
-  pendingExpenses: nonNegativeCopIntSchema,
+  plannedExpenses: nonNegativeIntSchema,
+  paidExpenses: nonNegativeIntSchema,
+  pendingExpenses: nonNegativeIntSchema,
   expensesByGroup: z.object({
     fixed: groupBudgetBreakdownSchema,
     variable: groupBudgetBreakdownSchema,
   }),
-  netCashFlow: signedCopIntSchema,
-  projectedNetFlow: signedCopIntSchema,
+  netCashFlow: signedIntSchema,
+  projectedNetFlow: signedIntSchema,
 });
 
 export const checklistProgressSchema: z.ZodType<ChecklistProgress> = z.object({
@@ -186,7 +201,7 @@ export const checklistProgressSchema: z.ZodType<ChecklistProgress> = z.object({
   totalTrackableCount: z.number().int().min(0),
   pendingCount: z.number().int().min(0),
   completionRatio: z.number().min(0).max(1),
-  completionPercentage: z.number().int().min(0).max(100),
+  completionPercentage: z.number().min(0).max(100),
   isMonthComplete: z.boolean(),
 });
 
@@ -199,43 +214,38 @@ export const monthSnapshotSchema: z.ZodType<MonthSnapshot> = z.object({
     z.object({
       debtId: z.string().min(1),
       name: z.string().min(1),
-      lender: z.string().min(1).optional(),
-      groupKey: z.string().min(1).optional(),
-      openingBalance: nonNegativeCopIntSchema,
-      paidPrincipal: nonNegativeCopIntSchema,
-      closingBalance: nonNegativeCopIntSchema,
+      lender: z.string().optional(),
+      groupKey: z.string().optional(),
+      openingBalance: nonNegativeIntSchema,
+      paidPrincipal: nonNegativeIntSchema,
+      closingBalance: nonNegativeIntSchema,
       monthlyInterestRate: z.number().min(0).max(100).optional(),
       annualInterestRate: z.number().min(0).max(1000).optional(),
       interestRateType: z.enum(['monthly', 'annual']).optional(),
-      monthlyInstallment: nonNegativeCopIntSchema.optional(),
+      monthlyInstallment: nonNegativeIntSchema.optional(),
     })
   ),
-  totalClosingDebt: nonNegativeCopIntSchema,
+  totalClosingDebt: nonNegativeIntSchema,
   closingSavings: z.object({
-    motoClosingBalance: signedCopIntSchema,
-    savingsClosingBalance: signedCopIntSchema,
-    totalClosingSavings: signedCopIntSchema,
+    reserveClosingBalance: signedIntSchema.optional(),
+    motoClosingBalance: signedIntSchema,
+    savingsClosingBalance: signedIntSchema,
+    totalClosingSavings: signedIntSchema,
   }),
 });
 
-/**
- * Recursively removes `undefined` fields so Firestore `setDoc` / `writeBatch`
- * never throws on optional domain fields.
- */
-export function stripUndefinedFields<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map((item) => stripUndefinedFields(item)) as unknown as T;
-  }
-  if (value !== null && typeof value === 'object') {
-    const cleaned: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      if (v !== undefined) {
-        cleaned[k] = stripUndefinedFields(v);
+export function stripUndefinedFields(obj: Record<string, unknown>): Record<string, unknown> {
+  const clean: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        clean[key] = stripUndefinedFields(value as Record<string, unknown>);
+      } else {
+        clean[key] = value;
       }
     }
-    return cleaned as T;
   }
-  return value;
+  return clean;
 }
 
 export function serializeConceptForFirestore(concept: Concept): Record<string, unknown> {
@@ -283,14 +293,19 @@ export function parseSavingsBucketFromFirestore(raw: unknown): SavingsBucket {
   return savingsBucketSchema.parse(raw);
 }
 
-export function serializeIdealMotoPlanForFirestore(plan: IdealMotoPlan): Record<string, unknown> {
-  const validated = idealMotoPlanSchema.parse(plan);
+export function serializeProvisionPlanForFirestore(plan: ProvisionPlan): Record<string, unknown> {
+  const validated = provisionPlanSchema.parse(plan);
   return stripUndefinedFields({ ...validated }) as Record<string, unknown>;
 }
 
-export function parseIdealMotoPlanFromFirestore(raw: unknown): IdealMotoPlan {
-  return idealMotoPlanSchema.parse(raw);
+export function parseProvisionPlanFromFirestore(raw: unknown): ProvisionPlan {
+  return provisionPlanSchema.parse(raw);
 }
+
+/** @deprecated use serializeProvisionPlanForFirestore */
+export const serializeIdealMotoPlanForFirestore = serializeProvisionPlanForFirestore;
+/** @deprecated use parseProvisionPlanFromFirestore */
+export const parseIdealMotoPlanFromFirestore = parseProvisionPlanFromFirestore;
 
 export function serializeMonthSnapshotForFirestore(snapshot: MonthSnapshot): Record<string, unknown> {
   const validated = monthSnapshotSchema.parse(snapshot);

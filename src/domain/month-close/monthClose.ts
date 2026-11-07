@@ -1,19 +1,17 @@
 /**
  * src/domain/month-close/monthClose.ts
  *
- * Pure month-close and automatic balance carry-over calculator (Resolving Inconsistency #6):
- * - Freezes a `MonthSnapshot` for `closingMonthKey` (`2026-10`).
- * - Automatically carries over closing debt balances (`CB300F - MOTO: 2_600_000`, `ESP. IA: 3_600_000`)
- *   as the `openingBalance` of `nextMonthKey` (`2026-11`).
- * - Automatically carries over closing savings balances (`Moto: 2_300_000`, `Ahorros: 2_080_000`)
- *   as the `openingBalance` of `nextMonthKey` (`2026-11`).
- * - Idempotently generates the `pending` checklist entries for `nextMonthKey` via `ensureMonthPlan`.
+ * Universal month-close and balance rollover calculator:
+ * - Freezes an immutable `MonthSnapshot` for `closingMonthKey`.
+ * - Automatically rolls over closing debt balances as the `openingBalance` of `nextMonthKey`.
+ * - Automatically rolls over closing savings and reserve balances as the `openingBalance` of `nextMonthKey`.
+ * - Idempotently initializes the checklist for `nextMonthKey` via `ensureMonthPlan`.
  */
 
 import { calculateMonthlyBudgetSummary } from '../budget/budgetCalculator';
 import { calculateChecklistProgress, ensureMonthPlan } from '../checklist/checklist';
 import { addMonthsToMonthKey, assertValidMonthKey } from '../date/monthKey';
-import { calculateFunfamiDebtSummary } from '../debts/debtCalculator';
+import { calculateDebtsSummary } from '../debts/debtCalculator';
 import {
   Concept,
   Debt,
@@ -51,7 +49,7 @@ export function closeMonthAndRollover(input: CloseMonthInput): CloseMonthResult 
     input.entries,
     input.closingMonthKey
   );
-  const debtSummary = calculateFunfamiDebtSummary(
+  const debtSummary = calculateDebtsSummary(
     input.debts,
     input.entries,
     input.closingMonthKey,
@@ -102,7 +100,8 @@ export function closeMonthAndRollover(input: CloseMonthInput): CloseMonthResult 
     }),
     totalClosingDebt: debtSummary.totalRemainingDebt,
     closingSavings: {
-      motoClosingBalance: savingsSummary.moto.currentBalance,
+      reserveClosingBalance: savingsSummary.reserve.currentBalance,
+      motoClosingBalance: savingsSummary.reserve.currentBalance,
       savingsClosingBalance: savingsSummary.savings.currentBalance,
       totalClosingSavings: savingsSummary.totalCurrentSavings,
     },
@@ -126,7 +125,7 @@ export function closeMonthAndRollover(input: CloseMonthInput): CloseMonthResult 
 
     return {
       id: d.debtId,
-      groupKey: origDebt?.groupKey ?? 'FUNFAMI',
+      groupKey: origDebt?.groupKey ?? 'General',
       name: d.name,
       lender: d.lender,
       openingBalance: nextOpeningBalance,
@@ -150,13 +149,14 @@ export function closeMonthAndRollover(input: CloseMonthInput): CloseMonthResult 
     };
   });
 
+  const reserveBucket = input.savingsBuckets.find((b) => b.id === 'reserve' || b.id === 'moto');
   const nextMonthSavingsBuckets: SavingsBucket[] = [
-    ...(savingsSummary.hasMotoBucket
+    ...(savingsSummary.hasReserveBucket
       ? [
           {
-            id: 'moto',
-            name: input.savingsBuckets.find((b) => b.id === 'moto')?.name ?? 'Moto',
-            openingBalance: savingsSummary.moto.currentBalance,
+            id: reserveBucket?.id ?? 'reserve',
+            name: reserveBucket?.name ?? 'Fondo de Reserva',
+            openingBalance: savingsSummary.reserve.currentBalance,
           },
         ]
       : []),

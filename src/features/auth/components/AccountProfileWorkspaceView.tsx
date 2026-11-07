@@ -203,7 +203,7 @@ export function AccountProfileWorkspaceView({
                 {authUser.email ?? authUser.uid}
               </AppText>
               {authUser.financialGoal ? (
-                <AppText variant="micro" color={colors.semantic.moto}>
+                <AppText variant="micro" color={colors.semantic.reserve}>
                   {`Meta: ${authUser.financialGoal}`}
                 </AppText>
               ) : null}

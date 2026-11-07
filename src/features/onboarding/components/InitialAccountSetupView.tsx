@@ -21,9 +21,9 @@
       useBFlowTheme,
     } from '../../../design-system';
     import {
-      formatCop,
+      formatCurrency,
       formatMonthKeyLabelEs,
-      toBogotaMonthKey,
+      toAppMonthKey,
       type ConceptGroup,
       type DebtInterestRateType,
     } from '../../../domain';
@@ -81,7 +81,7 @@
     }: InitialAccountSetupViewProps): React.JSX.Element {
       const { colors, spacing, radius } = useBFlowTheme();
 
-      const currentYear = toBogotaMonthKey().slice(0, 4);
+      const currentYear = toAppMonthKey().slice(0, 4);
       const currentYearNum = Number.parseInt(currentYear, 10);
       const minYearNum = currentYearNum - 50;
 
@@ -663,12 +663,12 @@
                     <View style={{ flex: 1, gap: spacing.xxs }}>
                       <AppText variant="body">{`${d.name} (${d.lender})`}</AppText>
                       <AppText variant="caption" color={colors.text.secondary}>
-                        {`Saldo: ${formatCop(d.openingBalanceCop)}${
+                        {`Saldo: ${formatCurrency(d.openingBalanceCop)}${
                           d.interestRate !== undefined
                             ? ` · Interés ${d.interestRateType === 'annual' ? 'anual' : 'mensual'}: ${d.interestRate}%`
                             : ''
                         }${
-                          d.monthlyInstallmentCop ? ` · Cuota: ${formatCop(d.monthlyInstallmentCop)}/mes` : ''
+                          d.monthlyInstallmentCop ? ` · Cuota: ${formatCurrency(d.monthlyInstallmentCop)}/mes` : ''
                         }`}
                       </AppText>
                     </View>
@@ -1499,7 +1499,7 @@
           <GlassSurface elevated testID="onboarding-provisions-section">
             <View style={{ gap: spacing.sm }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                <StatusBadge label="PASO 6" status="moto" />
+                <StatusBadge label="PASO 6" status="provisions" />
                 <AppText variant="headline">Metas y Provisiones</AppText>
               </View>
 
@@ -1534,7 +1534,7 @@
                     <View style={{ flex: 1, gap: spacing.xxs }}>
                       <AppText variant="body">{p.name}</AppText>
                       <AppText variant="caption" color={colors.text.secondary}>
-                        {`${formatCop(p.amountCop)} cada ${p.periodMonths} meses`}
+                        {`${formatCurrency(p.amountCop)} cada ${p.periodMonths} meses`}
                       </AppText>
                     </View>
                     <Pressable
@@ -1569,14 +1569,14 @@
                     paddingHorizontal: spacing.lg,
                     paddingVertical: spacing.xs,
                     borderRadius: radius.md,
-                    backgroundColor: colors.semantic.motoSoft,
+                    backgroundColor: colors.semantic.provisionsSoft,
                     borderWidth: 1,
                     borderColor: colors.glass.specularBorder,
                     justifyContent: 'center',
                     alignItems: 'center',
                   }}
                 >
-                  <AppText variant="caption" color={colors.semantic.moto} style={{ fontWeight: '600' }}>
+                  <AppText variant="caption" color={colors.semantic.provisions} style={{ fontWeight: '600' }}>
                     + Agregar Provisión
                   </AppText>
                 </Pressable>
@@ -1670,7 +1670,7 @@
                         alignItems: 'center',
                       }}
                     >
-                      <AppText variant="caption" color={colors.semantic.moto} style={{ fontWeight: '600' }}>
+                      <AppText variant="caption" color={colors.semantic.provisions} style={{ fontWeight: '600' }}>
                         + Agregar Provisión
                       </AppText>
                     </Pressable>

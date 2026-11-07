@@ -23,9 +23,10 @@ import {
   useBFlowTheme,
 } from '../../../design-system';
 import {
-  formatCop,
+  formatCurrency,
   formatMonthKeyLabelEs,
   type DebtInterestRateType,
+  type DebtSummaryResult,
   type FunfamiDebtSummary,
   type MonthEntry,
 } from '../../../domain';
@@ -51,10 +52,13 @@ export interface UpdateDebtInput {
 }
 
 export interface DebtsFunfamiViewProps {
-  debtSummary: FunfamiDebtSummary;
+  debtSummary: FunfamiDebtSummary | DebtSummaryResult;
   funfamiEntry?: MonthEntry;
+  installmentEntry?: MonthEntry;
   onToggleFunfamiInstallment?: (entry: MonthEntry) => void;
+  onToggleInstallment?: (entry: MonthEntry) => void;
   onUpdateFunfamiInstallmentAmount?: (newAmountCop: number) => void;
+  onUpdateInstallmentAmount?: (newAmount: number) => void;
   onCreateDebt?: (input: CreateDebtInput) => void;
   onUpdateDebt?: (debtId: string, updates: UpdateDebtInput) => void;
   onDeleteDebt?: (debtId: string) => void;
@@ -92,18 +96,21 @@ export function DebtsFunfamiView({
     ? formatMonthKeyLabelEs(debtSummary.projection.estimatedPayoffMonthKey)
     : 'Sin cuota activa';
 
-  const motoDebtItem = debtSummary.debts.find((d) => d.debtId === 'debt_cb300f_moto');
+  const paidOffDebt =
+    debtSummary.debts.find(
+      (d) => d.openingBalance > 0 && d.remainingBalance === 0
+    ) ?? debtSummary.debts.find((d) => d.debtId === 'debt_cb300f_moto');
 
-  // Requirement 1: Only show banner if CB300F - MOTO had a balance > 0 in this month AND reached 0,
+  // Milestone banner: Only show banner if a debt had a balance > 0 in this month AND reached 0,
   // and user has not dismissed it. In subsequent months (where openingBalance is 0), it never appears!
   const isMotoDebtPaidOff = Boolean(
-    motoDebtItem &&
-      motoDebtItem.openingBalance > 0 &&
-      motoDebtItem.remainingBalance === 0 &&
+    paidOffDebt &&
+      paidOffDebt.openingBalance > 0 &&
+      paidOffDebt.remainingBalance === 0 &&
       dismissedBannerMonth !== debtSummary.monthKey
   );
 
-  // When CB300F - MOTO is 100% paid off (remainingBalance === 0), remove it from active obligations
+  // When a debt is 100% paid off (remainingBalance === 0), remove it from active obligations
   const activeObligations = debtSummary.debts.filter((d) => d.remainingBalance > 0);
 
   const openCreateForm = () => {
@@ -153,7 +160,7 @@ export function DebtsFunfamiView({
     const cleanBalance = formOpeningBalance.replace(/[^0-9]/g, '');
     const parsedBalance = cleanBalance ? Number(cleanBalance) : 0;
     if (!Number.isSafeInteger(parsedBalance) || parsedBalance <= 0) {
-      setFormError('Ingresa un saldo inicial válido en pesos colombianos.');
+      setFormError('Ingresa un saldo inicial válido.');
       return;
     }
 
@@ -245,7 +252,7 @@ export function DebtsFunfamiView({
             <StatusBadge
               label={
                 debtSummary.appliedInstallmentThisMonth > 0
-                  ? `Abonado este mes: ${formatCop(debtSummary.appliedInstallmentThisMonth)}`
+                  ? `Abonado este mes: ${formatCurrency(debtSummary.appliedInstallmentThisMonth)}`
                   : 'Sin abonos este mes'
               }
               status={debtSummary.appliedInstallmentThisMonth > 0 ? 'completed' : 'pending'}
@@ -260,7 +267,7 @@ export function DebtsFunfamiView({
           />
 
           <AppText variant="caption" color={colors.text.secondary}>
-            {`Apertura mes: ${formatCop(debtSummary.openingTotalDebt)} · Abono a capital: - ${formatCop(debtSummary.appliedInstallmentThisMonth)}`}
+            {`Apertura mes: ${formatCurrency(debtSummary.openingTotalDebt)} · Abono a capital: - ${formatCurrency(debtSummary.appliedInstallmentThisMonth)}`}
           </AppText>
 
           {/* Progress Bar */}
@@ -353,7 +360,7 @@ export function DebtsFunfamiView({
                 testID="debt-form-name-input"
                 value={formName}
                 onChangeText={setFormName}
-                placeholder="Ej. Tarjeta Bancolombia, Libre Inversión"
+                placeholder="Ej. Tarjeta de crédito, Préstamo personal"
               />
             </View>
 
@@ -365,13 +372,13 @@ export function DebtsFunfamiView({
                 testID="debt-form-lender-input"
                 value={formLender}
                 onChangeText={setFormLender}
-                placeholder="Ej. Bancolombia, Davivienda, Familiar"
+                placeholder="Ej. Banco, Entidad financiera, Familiar"
               />
             </View>
 
             <View style={{ gap: spacing.xxs }}>
               <AppText variant="caption" color={colors.text.secondary}>
-                Saldo inicial (COP enteros)
+                Saldo inicial
               </AppText>
               <AppTextInput
                 testID="debt-form-amount-input"
@@ -441,7 +448,7 @@ export function DebtsFunfamiView({
 
             <View style={{ gap: spacing.xxs }}>
               <AppText variant="caption" color={colors.text.secondary}>
-                Cuota mensual pactada que aportas a esta deuda (COP, opcional)
+                Cuota mensual pactada que aportas a esta deuda (opcional)
               </AppText>
               <AppTextInput
                 testID="debt-form-installment-input"
@@ -501,13 +508,13 @@ export function DebtsFunfamiView({
         </GlassSurface>
       ) : null}
 
-      {/* Banner when CB300F - MOTO is 100% paid off (Dismissible, only in month of completion) */}
+      {/* Banner when a debt is 100% paid off (Dismissible, only in month of completion) */}
       {isMotoDebtPaidOff ? (
         <GlassSurface testID="moto-debt-completed-banner">
           <View style={{ gap: spacing.xs }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <AppText variant="headline" color={colors.semantic.completed}>
-                ✨ Deuda CB300F - MOTO completada y eliminada
+                {`✨ ¡Deuda "${paidOffDebt?.name ?? 'Obligación'}" liquidada al 100%!`}
               </AppText>
               <Pressable
                 testID="moto-debt-banner-dismiss-button"
@@ -533,7 +540,7 @@ export function DebtsFunfamiView({
               </Pressable>
             </View>
             <AppText variant="caption" color={colors.text.secondary}>
-              El saldo de la moto llegó a $ 0. A partir de este momento los pagos se descuentan automáticamente de la deuda ESP. IA.
+              El saldo llegó a $ 0. A partir de este momento los abonos de cuota se aplicarán automáticamente a tus siguientes obligaciones para acelerar tu libertad financiera.
             </AppText>
           </View>
         </GlassSurface>
@@ -559,12 +566,12 @@ export function DebtsFunfamiView({
                 debt.annualInterestRate > 0 ? (
                   <StatusBadge
                     label={`${debt.annualInterestRate}% anual (${debt.monthlyInterestRate ?? 0}% mes)`}
-                    status="moto"
+                    status="reserve"
                   />
                 ) : debt.monthlyInterestRate !== undefined && debt.monthlyInterestRate > 0 ? (
                   <StatusBadge
                     label={`${debt.monthlyInterestRate}% mes`}
-                    status="moto"
+                    status="reserve"
                   />
                 ) : (
                   <StatusBadge label="0% int." status="info" />
@@ -574,7 +581,7 @@ export function DebtsFunfamiView({
               <StatusBadge
                 label={
                   debt.appliedPrincipalThisMonth > 0
-                    ? `Abono - ${formatCop(debt.appliedPrincipalThisMonth)}`
+                    ? `Abono - ${formatCurrency(debt.appliedPrincipalThisMonth)}`
                     : 'Sin abono este mes'
                 }
                 status={debt.appliedPrincipalThisMonth > 0 ? 'completed' : 'info'}
@@ -591,7 +598,7 @@ export function DebtsFunfamiView({
             {/* Interest calculation feedback if rate > 0 */}
             {debt.monthlyInterestRate !== undefined && debt.monthlyInterestRate > 0 ? (
               <AppText variant="micro" color={colors.semantic.debt}>
-                {`Interés generado este mes (${debt.monthlyInterestRate}%): + ${formatCop(debt.accruedInterestThisMonth)}`}
+                {`Interés generado este mes (${debt.monthlyInterestRate}%): + ${formatCurrency(debt.accruedInterestThisMonth)}`}
               </AppText>
             ) : null}
 
@@ -607,10 +614,10 @@ export function DebtsFunfamiView({
             >
               <View>
                 <AppText variant="caption" color={colors.text.secondary}>
-                  {`Saldo apertura (${debtSummary.monthKey}): ${formatCop(debt.openingBalance)}`}
+                  {`Saldo apertura (${debtSummary.monthKey}): ${formatCurrency(debt.openingBalance)}`}
                 </AppText>
                 <AppText variant="caption" color={colors.text.secondary}>
-                  {`Acreedor: ${debt.lender}${debt.monthlyInstallment && debt.monthlyInstallment > 0 ? ` · Cuota: ${formatCop(debt.monthlyInstallment)}/mes` : ''}`}
+                  {`Acreedor: ${debt.lender}${debt.monthlyInstallment && debt.monthlyInstallment > 0 ? ` · Cuota: ${formatCurrency(debt.monthlyInstallment)}/mes` : ''}`}
                 </AppText>
               </View>
 
@@ -670,3 +677,5 @@ export function DebtsFunfamiView({
     </View>
   );
 }
+
+export const DebtsWorkspaceView = DebtsFunfamiView;

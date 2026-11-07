@@ -5,5 +5,6 @@ export * from './checklist/checklist';
 export * from './budget/budgetCalculator';
 export * from './debts/debtCalculator';
 export * from './savings/savingsCalculator';
+export * from './provisions/provisionCalculator';
 export * from './moto-ideal/motoIdealCalculator';
 export * from './month-close/monthClose';

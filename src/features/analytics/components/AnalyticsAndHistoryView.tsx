@@ -24,10 +24,11 @@ import {
   useBFlowTheme,
 } from '../../../design-system';
 import {
-  formatCop,
+  formatCurrency,
   formatMonthKeyLabelEs,
   type ChecklistProgress,
   type Concept,
+  type DebtSummaryResult,
   type FunfamiDebtSummary,
   type MonthEntry,
   type MonthSnapshot,
@@ -42,7 +43,7 @@ export interface AnalyticsAndHistoryViewProps {
   entries: readonly MonthEntry[];
   budget: MonthlyBudgetSummary;
   checklist: ChecklistProgress;
-  debtSummary: FunfamiDebtSummary;
+  debtSummary: DebtSummaryResult | FunfamiDebtSummary;
   savingsSummary: MonthlySavingsSummary;
   closedSnapshots: Readonly<Record<string, MonthSnapshot>>;
   onSelectMonth: (monthKey: string) => void;
@@ -130,10 +131,10 @@ export function AnalyticsAndHistoryView({
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <AppText variant="micro" color={colors.text.secondary}>
-                {`Ejecutado: ${formatCop(budget.paidExpenses)}`}
+                {`Ejecutado: ${formatCurrency(budget.paidExpenses)}`}
               </AppText>
               <AppText variant="micro" color={colors.text.secondary}>
-                {`Por pagar: ${formatCop(budget.pendingExpenses)}`}
+                {`Por pagar: ${formatCurrency(budget.pendingExpenses)}`}
               </AppText>
             </View>
           </View>
@@ -158,7 +159,7 @@ export function AnalyticsAndHistoryView({
               </AppText>
               <CurrencyText amount={budget.receivedIncome} variant="headline" tone="income" />
               <AppText variant="micro" color={colors.text.muted}>
-                {`Previsto: ${formatCop(budget.plannedIncome)}`}
+                {`Previsto: ${formatCurrency(budget.plannedIncome)}`}
               </AppText>
             </View>
 
@@ -180,7 +181,7 @@ export function AnalyticsAndHistoryView({
               </AppText>
               <CurrencyText amount={budget.paidExpenses} variant="headline" tone="expense" />
               <AppText variant="micro" color={colors.text.muted}>
-                {`Total mes: ${formatCop(budget.plannedExpenses)}`}
+                {`Total mes: ${formatCurrency(budget.plannedExpenses)}`}
               </AppText>
             </View>
 
@@ -205,7 +206,7 @@ export function AnalyticsAndHistoryView({
                 tone={budget.netCashFlow >= 0 ? 'income' : 'expense'}
               />
               <AppText variant="micro" color={colors.text.muted}>
-                {`Proyectado: ${formatCop(budget.projectedNetFlow)}`}
+                {`Proyectado: ${formatCurrency(budget.projectedNetFlow)}`}
               </AppText>
             </View>
           </View>
@@ -235,7 +236,7 @@ export function AnalyticsAndHistoryView({
 
           {checklist.pendingCount > 0 ? (
             <AppText variant="caption" color={colors.semantic.pending}>
-              {`Aviso: Tienes ${checklist.pendingCount} movimientos pendientes (${formatCop(budget.pendingExpenses)} en gastos y ${formatCop(budget.pendingIncome)} en ingresos).`}
+              {`Aviso: Tienes ${checklist.pendingCount} movimientos pendientes (${formatCurrency(budget.pendingExpenses)} en gastos y ${formatCurrency(budget.pendingIncome)} en ingresos).`}
             </AppText>
           ) : (
             <AppText variant="caption" color={colors.semantic.completed}>
@@ -255,16 +256,16 @@ export function AnalyticsAndHistoryView({
           >
             <AppText variant="headline">Resumen de Arrastre Automático al Siguiente Mes:</AppText>
             <AppText variant="caption" color={colors.text.secondary}>
-              {`• Deudas apertura: ${formatCop(debtSummary.totalRemainingDebt)}`}
+              {`• Deudas apertura: ${formatCurrency(debtSummary.totalRemainingDebt)}`}
             </AppText>
             <AppText variant="caption" color={colors.text.secondary}>
-              {`• Fondo Moto apertura: ${formatCop(savingsSummary.moto.currentBalance)}`}
+              {`• ${savingsSummary.moto.name || 'Fondo de Reserva'} apertura: ${formatCurrency(savingsSummary.moto.currentBalance)}`}
             </AppText>
             <AppText variant="caption" color={colors.text.secondary}>
-              {`• Fondo Ahorros apertura: ${formatCop(savingsSummary.savings.currentBalance)}`}
+              {`• Fondo Ahorros apertura: ${formatCurrency(savingsSummary.savings.currentBalance)}`}
             </AppText>
             <AppText variant="caption" color={colors.text.secondary}>
-              {`• Total Ahorros apertura: ${formatCop(savingsSummary.totalCurrentSavings)}`}
+              {`• Total Ahorros apertura: ${formatCurrency(savingsSummary.totalCurrentSavings)}`}
             </AppText>
           </View>
 

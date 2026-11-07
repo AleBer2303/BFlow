@@ -24,8 +24,8 @@ import {
   getMonthNumberFromMonthKey,
   registerMovement,
   sumMoneyIntegers,
-  toBogotaIsoDate,
-  toBogotaMonthKey,
+  toAppIsoDate,
+  toAppMonthKey,
   toggleMovementStatus,
   type CloseMonthResult,
   type Concept,
@@ -76,7 +76,8 @@ export interface CreateCustomConceptInput {
   name: string;
   type: ConceptType;
   group: ConceptGroup;
-  amountCop: number;
+  amount?: number;
+  amountCop?: number;
   note?: string;
   targetDebtId?: string | null;
   savingsBucketId?: string | null;
@@ -239,6 +240,7 @@ export interface BudgetStoreState {
   editEntry: (entryId: string, updates: EditEntryUpdates) => Promise<void>;
   deleteEntryById: (entryId: string) => Promise<void>;
   removeOrResetEntry: (entryId: string) => Promise<void>;
+  updateInstallmentAmount: (monthKey: string, newAmount: number) => Promise<void>;
   updateFunfamiInstallmentAmount: (monthKey: string, newAmountCop: number) => Promise<void>;
   closeCurrentMonth: (closedAtIso?: string) => Promise<CloseMonthResult>;
   reopenClosedMonth: (monthKey: string) => Promise<void>;
@@ -284,7 +286,7 @@ function applyConceptLinkageUpdates(
   if (updates.targetDebtId !== undefined) {
     if (updates.targetDebtId) {
       const targetDebt = monthDebts.find((d) => d.id === updates.targetDebtId);
-      next.linkedDebtGroup = targetDebt?.groupKey ?? 'FUNFAMI';
+      next.linkedDebtGroup = targetDebt?.groupKey ?? 'GENERAL';
       next.defaultTargetDebtId = updates.targetDebtId;
     } else {
       delete next.linkedDebtGroup;
@@ -358,7 +360,7 @@ function buildCleanEmptyWorkspaceState(authUser: BFlowAuthUser | null) {
       ? authUser.activeMonthKey
       : isOwnerCanonicalEmail(authUser?.email)
         ? '2026-10'
-        : `${toBogotaMonthKey().slice(0, 4)}-01`;
+        : `${toAppMonthKey().slice(0, 4)}-01`;
 
   return {
     activeTab: 'summary' as BFlowWorkspaceTab,
@@ -549,7 +551,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     triggerWidgetSync(get());
   },
 
-  toggleEntryStatus: async (entryId, completedAtDateIso = toBogotaIsoDate()) => {
+  toggleEntryStatus: async (entryId, completedAtDateIso = toAppIsoDate()) => {
     const state = get();
     const target = state.entries.find((e) => e.id === entryId);
     if (!target) return;
@@ -683,7 +685,8 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
 
   createCustomConceptAndMovement: async (input) => {
     const state = get();
-    const safeAmount = Math.max(0, Math.round(input.amountCop));
+    const rawAmount = input.amount ?? input.amountCop ?? 0;
+    const safeAmount = Math.max(0, Math.round(rawAmount));
     const trimmedName = input.name.trim();
     if (!trimmedName || safeAmount <= 0) return;
 
@@ -731,7 +734,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
       plannedAmount: safeAmount,
       actualAmount: safeAmount,
       status: isCompleted ? 'completed' : 'pending',
-      ...(isCompleted ? { completedAt: toBogotaIsoDate() } : {}),
+      ...(isCompleted ? { completedAt: toAppIsoDate() } : {}),
       ...(input.note?.trim() ? { note: input.note.trim() } : {}),
     };
 
@@ -1433,28 +1436,36 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     }
   },
 
+  updateInstallmentAmount: async (monthKey, newAmount) => {
+    return get().updateFunfamiInstallmentAmount(monthKey, newAmount);
+  },
+
   updateFunfamiInstallmentAmount: async (monthKey, newAmountCop) => {
     const state = get();
     const safeAmount = Math.max(0, Math.round(newAmountCop));
     if (safeAmount <= 0) return;
 
-    const funfamiEntry = state.entries.find(
-      (e) => e.monthKey === monthKey && e.conceptId === 'exp_cuota_funfami'
+    const installmentEntry = state.entries.find(
+      (e) =>
+        e.monthKey === monthKey &&
+        (e.conceptId === 'exp_cuota_funfami' ||
+          e.conceptName.toLowerCase().includes('cuota') ||
+          e.conceptId.includes('cuota'))
     );
-    if (!funfamiEntry) return;
+    if (!installmentEntry) return;
 
     const updatedEntry: MonthEntry = {
-      ...funfamiEntry,
+      ...installmentEntry,
       plannedAmount: safeAmount,
       actualAmount: safeAmount,
     };
 
-    const nextEntries = state.entries.map((e) => (e.id === funfamiEntry.id ? updatedEntry : e));
+    const nextEntries = state.entries.map((e) => (e.id === installmentEntry.id ? updatedEntry : e));
     const monthDebts = state.debtsByMonth[monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
     const cascadedPayments = buildDebtPaymentsForInstallment(updatedEntry, monthDebts);
 
     const nextDebtPayments = [
-      ...state.debtPayments.filter((dp) => dp.entryId !== funfamiEntry.id),
+      ...state.debtPayments.filter((dp) => dp.entryId !== installmentEntry.id),
       ...cascadedPayments,
     ];
 
@@ -1626,7 +1637,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     const state = get();
     const monthKey = /^\d{4}-(0[1-9]|1[0-2])$/.test(input.monthKey)
       ? input.monthKey
-      : `${toBogotaMonthKey().slice(0, 4)}-01`;
+      : `${toAppMonthKey().slice(0, 4)}-01`;
 
     // 1. Build savings buckets (always ensuring 'moto' and 'savings' standard buckets)
     const rawBuckets: SavingsBucket[] = input.savingsBuckets
@@ -1726,7 +1737,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
         plannedAmount: safeAmount,
         actualAmount: safeAmount,
         status: isCompleted ? 'completed' : 'pending',
-        ...(isCompleted ? { completedAt: toBogotaIsoDate() } : {}),
+        ...(isCompleted ? { completedAt: toAppIsoDate() } : {}),
       });
     }
 
@@ -1788,7 +1799,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
         plannedAmount: safeAmount,
         actualAmount: safeAmount,
         status: isCompleted ? 'completed' : 'pending',
-        ...(isCompleted ? { completedAt: toBogotaIsoDate() } : {}),
+        ...(isCompleted ? { completedAt: toAppIsoDate() } : {}),
       };
       entries.push(entry);
 
@@ -1922,7 +1933,7 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     const startMonth =
       newStartMonthKey && /^\d{4}-(0[1-9]|1[0-2])$/.test(newStartMonthKey)
         ? newStartMonthKey
-        : `${toBogotaMonthKey().slice(0, 4)}-01`;
+        : `${toAppMonthKey().slice(0, 4)}-01`;
     const emptyBuckets = ensureStandardSavingsBuckets([], 0, 0);
     const updatedUser = state.authUser
       ? { ...state.authUser, activeMonthKey: startMonth }

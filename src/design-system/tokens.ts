@@ -112,7 +112,13 @@ export interface ColorPalette {
     pendingSoft: string;
     debt: string;
     debtSoft: string;
+    reserve: string;
+    reserveSoft: string;
+    provisions: string;
+    provisionsSoft: string;
+    /** @deprecated use reserve */
     moto: string;
+    /** @deprecated use reserveSoft */
     motoSoft: string;
     savings: string;
     savingsSoft: string;
@@ -151,6 +157,10 @@ export const palettes: Record<ThemeMode, ColorPalette> = {
       pendingSoft: 'rgba(229, 168, 75, 0.10)',
       debt: '#D9824C',
       debtSoft: 'rgba(217, 130, 76, 0.10)',
+      reserve: '#4F8FEA',
+      reserveSoft: 'rgba(79, 143, 234, 0.10)',
+      provisions: '#4F8FEA',
+      provisionsSoft: 'rgba(79, 143, 234, 0.10)',
       moto: '#4F8FEA',
       motoSoft: 'rgba(79, 143, 234, 0.10)',
       savings: '#9D7FE6',
@@ -188,6 +198,10 @@ export const palettes: Record<ThemeMode, ColorPalette> = {
       pendingSoft: 'rgba(180, 105, 14, 0.08)',
       debt: '#A34E17',
       debtSoft: 'rgba(163, 78, 23, 0.08)',
+      reserve: '#2B6CB0',
+      reserveSoft: 'rgba(43, 108, 176, 0.08)',
+      provisions: '#2B6CB0',
+      provisionsSoft: 'rgba(43, 108, 176, 0.08)',
       moto: '#2B6CB0',
       motoSoft: 'rgba(43, 108, 176, 0.08)',
       savings: '#6D49B8',

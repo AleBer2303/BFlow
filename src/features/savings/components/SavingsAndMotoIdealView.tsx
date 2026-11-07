@@ -21,10 +21,12 @@ import {
   useBFlowTheme,
 } from '../../../design-system';
 import {
-  formatCop,
+  formatCurrency,
   type IdealMotoPlan,
   type MonthlySavingsSummary,
   type MotoIdealComparisonSummary,
+  type ProvisionPlan,
+  type ProvisionPlanComparisonSummary,
 } from '../../../domain';
 import type { SaveProvisionItemInput } from '../../budget/store/useBudgetStore';
 
@@ -32,8 +34,8 @@ const MIN_TOUCH_TARGET_PT = 44;
 
 export interface SavingsAndMotoIdealViewProps {
   savingsSummary: MonthlySavingsSummary;
-  motoIdealSummary: MotoIdealComparisonSummary;
-  provisionPlan?: IdealMotoPlan;
+  motoIdealSummary: MotoIdealComparisonSummary | ProvisionPlanComparisonSummary;
+  provisionPlan?: IdealMotoPlan | ProvisionPlan;
   onUpdateOpeningBalance?: (
     bucketId: string,
     newBalanceCop: number,
@@ -58,7 +60,7 @@ export function SavingsAndMotoIdealView({
   const { colors, spacing, radius } = useBFlowTheme();
   const [isEditingBalances, setIsEditingBalances] = useState(false);
   const [motoNameInput, setMotoNameInput] = useState(
-    savingsSummary.moto.name || 'Fondo Moto'
+    savingsSummary.moto.name || 'Fondo de Reserva'
   );
   const [motoBalanceInput, setMotoBalanceInput] = useState(
     String(savingsSummary.moto.openingBalance)
@@ -134,7 +136,7 @@ export function SavingsAndMotoIdealView({
     const savingsNum = savingsDigits ? Number(savingsDigits) : 0;
 
     if (hasMotoBucket && (!Number.isSafeInteger(motoNum) || motoNum < 0)) {
-      setBalanceError('Ingresa un valor entero válido para el Fondo Moto.');
+      setBalanceError('Ingresa un valor entero válido para el fondo principal.');
       return;
     }
     if (hasSavingsBucket && (!Number.isSafeInteger(savingsNum) || savingsNum < 0)) {
@@ -144,7 +146,7 @@ export function SavingsAndMotoIdealView({
 
     if (onUpdateOpeningBalance) {
       if (hasMotoBucket) {
-        onUpdateOpeningBalance('moto', motoNum, motoNameInput.trim() || 'Fondo Moto');
+        onUpdateOpeningBalance('moto', motoNum, motoNameInput.trim() || 'Fondo de Reserva');
       }
       if (hasSavingsBucket) {
         onUpdateOpeningBalance('savings', savingsNum, savingsNameInput.trim() || 'Fondo Ahorros');
@@ -171,7 +173,7 @@ export function SavingsAndMotoIdealView({
     const digits = newBucketBalance.replace(/[^0-9]/g, '');
     const parsed = digits ? Number(digits) : 0;
     if (!Number.isSafeInteger(parsed) || parsed < 0) {
-      setNewBucketError('Ingresa un saldo inicial entero válido en COP.');
+      setNewBucketError('Ingresa un saldo inicial entero válido.');
       return;
     }
     if (onCreateSavingsBucket) {
@@ -220,7 +222,7 @@ export function SavingsAndMotoIdealView({
     const amountDigits = provisionAmount.replace(/[^0-9]/g, '');
     const parsedAmount = amountDigits ? Number(amountDigits) : 0;
     if (!Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
-      setProvisionError('Ingresa un monto entero mayor a $ 0 en COP.');
+      setProvisionError('Ingresa un monto entero válido mayor a 0.');
       return;
     }
     const monthsDigits = provisionMonths.replace(/[^0-9]/g, '');
@@ -273,11 +275,11 @@ export function SavingsAndMotoIdealView({
             testID="savings-hero-total"
             amount={savingsSummary.totalCurrentSavings}
             variant="heroCurrency"
-            tone="moto"
+            tone="reserve"
           />
 
           <AppText variant="caption" color={colors.text.secondary}>
-            {`Total proyectado tras pagar pendientes: ${formatCop(savingsSummary.totalProjectedAfterPendingExpenses)}`}
+            {`Total proyectado tras pagar pendientes: ${formatCurrency(savingsSummary.totalProjectedAfterPendingExpenses)}`}
           </AppText>
         </View>
       </GlassSurface>
@@ -297,13 +299,13 @@ export function SavingsAndMotoIdealView({
                   }}
                 >
                   <AppText variant="headline" style={{ flex: 1 }}>
-                    {savingsSummary.moto.name || 'Fondo Moto'}
+                    {savingsSummary.moto.name || 'Fondo de Reserva'}
                   </AppText>
                   {onDeleteSavingsBucket ? (
                     <Pressable
                       testID="delete-savings-bucket-moto"
                       accessibilityRole="button"
-                      accessibilityLabel="Eliminar Fondo Moto"
+                      accessibilityLabel="Eliminar Fondo de Reserva"
                       onPress={() => onDeleteSavingsBucket('moto')}
                       style={{
                         minHeight: MIN_TOUCH_TARGET_PT,
@@ -325,13 +327,13 @@ export function SavingsAndMotoIdealView({
                   testID="bucket-moto-current"
                   amount={savingsSummary.moto.currentBalance}
                   variant="title2"
-                  tone="moto"
+                  tone="reserve"
                 />
                 <AppText variant="micro" color={colors.text.secondary}>
-                  {`Saldo mes anterior: ${formatCop(savingsSummary.moto.openingBalance)}`}
+                  {`Saldo mes anterior: ${formatCurrency(savingsSummary.moto.openingBalance)}`}
                 </AppText>
                 <AppText variant="micro" color={colors.semantic.income}>
-                  {`+ Aportes pagados: ${formatCop(savingsSummary.moto.paidContributionsThisMonth)}`}
+                  {`+ Aportes pagados: ${formatCurrency(savingsSummary.moto.paidContributionsThisMonth)}`}
                 </AppText>
               </View>
             </GlassSurface>
@@ -380,10 +382,10 @@ export function SavingsAndMotoIdealView({
                   tone="income"
                 />
                 <AppText variant="micro" color={colors.text.secondary}>
-                  {`Saldo mes anterior: ${formatCop(savingsSummary.savings.openingBalance)} + Flujo Neto ${formatCop(savingsSummary.savings.netCashFlowContribution)}`}
+                  {`Saldo mes anterior: ${formatCurrency(savingsSummary.savings.openingBalance)} + Flujo Neto ${formatCurrency(savingsSummary.savings.netCashFlowContribution)}`}
                 </AppText>
                 <AppText variant="micro" color={colors.semantic.pending}>
-                  {`Tras pendientes: ${formatCop(savingsSummary.savings.projectedAfterPendingExpenses)}`}
+                  {`Tras pendientes: ${formatCurrency(savingsSummary.savings.projectedAfterPendingExpenses)}`}
                 </AppText>
               </View>
             </GlassSurface>
@@ -406,7 +408,7 @@ export function SavingsAndMotoIdealView({
               <AppText variant="headline">{cb.name}</AppText>
               <CurrencyText amount={cb.currentBalance} variant="title2" tone="savings" />
               <AppText variant="micro" color={colors.text.secondary}>
-                {`Saldo anterior: ${formatCop(cb.openingBalance)} · + Aportes pagados: ${formatCop(cb.paidContributionsThisMonth)}`}
+                {`Saldo anterior: ${formatCurrency(cb.openingBalance)} · + Aportes pagados: ${formatCurrency(cb.paidContributionsThisMonth)}`}
               </AppText>
             </View>
             {onDeleteSavingsBucket ? (
@@ -536,7 +538,7 @@ export function SavingsAndMotoIdealView({
               value={newBucketBalance}
               onChangeText={setNewBucketBalance}
               keyboardType="numeric"
-              placeholder="Saldo actual o del mes anterior en COP (ej. 500000)"
+              placeholder="Saldo actual o del mes anterior (ej. 500000)"
             />
 
             {newBucketError ? (
@@ -580,7 +582,7 @@ export function SavingsAndMotoIdealView({
 
             {hasMotoBucket ? (
               <View style={{ gap: spacing.xs }}>
-                <AppText variant="caption">Nombre y saldo mes anterior Fondo Moto</AppText>
+                <AppText variant="caption">Nombre y saldo mes anterior Fondo de Reserva</AppText>
                 <AppTextInput
                   testID="moto-bucket-name-input"
                   value={motoNameInput}
@@ -685,13 +687,13 @@ export function SavingsAndMotoIdealView({
               <AppText variant="title2">Provisiones y Metas Programadas</AppText>
             </View>
             <StatusBadge
-              label={`Cuota ideal: ${formatCop(motoIdealSummary.excelRecurringMonthlyTotalCop)}/mes`}
-              status="moto"
+              label={`Cuota ideal: ${formatCurrency(motoIdealSummary.excelRecurringMonthlyTotalCop)}/mes`}
+              status="provisions"
             />
           </View>
 
           <AppText variant="caption" color={colors.text.secondary}>
-            {`Total con metas: ${formatCop(motoIdealSummary.totalWithTargetGoalsCop)} · Aporte real este mes: ${formatCop(motoIdealSummary.actualMotoContributionCop)} (Brecha operativa: ${formatCop(motoIdealSummary.monthlyGapAgainstIdealCop)})`}
+            {`Total con metas: ${formatCurrency(motoIdealSummary.totalWithTargetGoalsCop)} · Aporte real este mes: ${formatCurrency(motoIdealSummary.actualMotoContributionCop)} (Brecha operativa: ${formatCurrency(motoIdealSummary.monthlyGapAgainstIdealCop)})`}
           </AppText>
 
           <Pressable
@@ -751,7 +753,7 @@ export function SavingsAndMotoIdealView({
                         minHeight: 38,
                         borderRadius: radius.md,
                         backgroundColor: active
-                          ? colors.semantic.motoSoft
+                          ? colors.semantic.provisionsSoft
                           : colors.glass.surfaceTint,
                         borderWidth: 1,
                         borderColor: active ? colors.glass.specularBorder : colors.glass.subtleBorder,
@@ -761,7 +763,7 @@ export function SavingsAndMotoIdealView({
                     >
                       <AppText
                         variant="micro"
-                        color={active ? colors.semantic.moto : colors.text.secondary}
+                        color={active ? colors.semantic.provisions : colors.text.secondary}
                       >
                         {opt.label}
                       </AppText>
@@ -774,7 +776,7 @@ export function SavingsAndMotoIdealView({
                 testID="provision-name-input"
                 value={provisionName}
                 onChangeText={setProvisionName}
-                placeholder="Nombre (ej. SOAT, Impuestos, Mantenimiento)"
+                placeholder="Nombre (ej. Seguro, Mantenimiento, Póliza)"
               />
 
               <AppTextInput
@@ -782,7 +784,7 @@ export function SavingsAndMotoIdealView({
                 value={provisionAmount}
                 onChangeText={setProvisionAmount}
                 keyboardType="numeric"
-                placeholder="Costo total del ciclo en COP (ej. 690000)"
+                placeholder="Costo total del ciclo (ej. 690000)"
               />
 
               <AppTextInput
@@ -877,14 +879,14 @@ export function SavingsAndMotoIdealView({
                     <AppText variant="body">{item.displayName}</AppText>
                     <AppText variant="micro" color={colors.text.secondary}>
                       {item.periodMonths > 1
-                        ? `Ciclo: ${formatCop(item.cycleCostCop)} / ${item.periodMonths} meses`
+                        ? `Ciclo: ${formatCurrency(item.cycleCostCop)} / ${item.periodMonths} meses`
                         : item.actualBudgetedAmountCop !== undefined
-                          ? `Vinculado en presupuesto · Real: ${formatCop(item.actualBudgetedAmountCop)}`
+                          ? `Vinculado en presupuesto · Real: ${formatCurrency(item.actualBudgetedAmountCop)}`
                           : 'Provisión mensual directa'}
                     </AppText>
                   </View>
                   <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
-                    <CurrencyText amount={item.excelMonthlyAmountCop} variant="body" tone="moto" />
+                    <CurrencyText amount={item.excelMonthlyAmountCop} variant="body" tone="provisions" />
                   </View>
                   {onSaveProvisionItem || onDeleteProvisionItem ? (
                     <View style={{ flexDirection: 'row', gap: spacing.xxs }}>
@@ -954,7 +956,7 @@ export function SavingsAndMotoIdealView({
                 style={{
                   padding: spacing.md,
                   borderRadius: radius.md,
-                  backgroundColor: colors.semantic.motoSoft,
+                  backgroundColor: colors.semantic.provisionsSoft,
                   borderWidth: 1,
                   borderColor: colors.glass.specularBorder,
                   gap: spacing.xs,
@@ -973,7 +975,7 @@ export function SavingsAndMotoIdealView({
                     <AppText variant="headline">{`🎯 ${goal.displayName}`}</AppText>
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                    <StatusBadge label={`Meta: ${goal.targetMonthKey}`} status="moto" />
+                    <StatusBadge label={`Meta: ${goal.targetMonthKey}`} status="provisions" />
                     {onSaveProvisionItem ? (
                       <Pressable
                         testID={`edit-provision-${goal.id}`}
@@ -1026,7 +1028,7 @@ export function SavingsAndMotoIdealView({
                   </View>
                 </View>
                 <AppText variant="caption" color={colors.text.secondary}>
-                  {`Objetivo total: ${formatCop(goal.targetAmountCop)} · Cuota sugerida (${goal.monthsUntilTarget} meses): ${formatCop(goal.suggestedMonthlySavingCop)}/mes`}
+                  {`Objetivo total: ${formatCurrency(goal.targetAmountCop)} · Cuota sugerida (${goal.monthsUntilTarget} meses): ${formatCurrency(goal.suggestedMonthlySavingCop)}/mes`}
                 </AppText>
               </View>
             );
@@ -1036,3 +1038,5 @@ export function SavingsAndMotoIdealView({
     </View>
   );
 }
+
+export const SavingsAndProvisionsView = SavingsAndMotoIdealView;

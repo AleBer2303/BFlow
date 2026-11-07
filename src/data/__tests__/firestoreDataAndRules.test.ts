@@ -81,7 +81,7 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
         actualAmount: 100000,
         status: 'pending',
       })
-    ).toThrow(/safe COP integer/);
+    ).toThrow(/safe integer/);
 
     expect(() =>
       parseDebtFromFirestore({
@@ -92,7 +92,7 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
         openingBalance: -100,
         monthKey: '2026-10',
       })
-    ).toThrow(/non-negative safe COP integer/);
+    ).toThrow(/non-negative safe integer/);
 
     // Reject invalid monthKey
     expect(() =>

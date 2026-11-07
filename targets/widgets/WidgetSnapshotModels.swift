@@ -84,16 +84,16 @@ public struct WidgetSnapshotV1: Codable, Hashable {
         generalSavingsCop: 2_080_000,
         totalSavingsCop: 4_380_000,
         topPendingItems: [
-            WidgetPendingItemV1(id: "seguro-moto", name: "Seguro Todo Riesgo Moto", amountCop: 250_000, type: "expense"),
-            WidgetPendingItemV1(id: "ahorro-moto", name: "Ahorro Moto", amountCop: 100_000, type: "expense"),
-            WidgetPendingItemV1(id: "gasolina", name: "Gasolina y Peajes", amountCop: 100_000, type: "expense")
+            WidgetPendingItemV1(id: "seguro", name: "Póliza de Seguro", amountCop: 250_000, type: "expense"),
+            WidgetPendingItemV1(id: "reserva", name: "Fondo de Reserva", amountCop: 100_000, type: "expense"),
+            WidgetPendingItemV1(id: "servicios", name: "Servicios Básicos", amountCop: 100_000, type: "expense")
         ]
     )
-    /// Dynamic empty fallback for current Bogota month before first app sync
+    /// Dynamic empty fallback for current month before first app sync
     public static func emptyCurrentMonthFallback() -> WidgetSnapshotV1 {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM"
-        formatter.timeZone = TimeZone(identifier: "America/Bogota") ?? .current
+        formatter.timeZone = .current
         let currentMonthKey = formatter.string(from: Date())
         let isoFormatter = ISO8601DateFormatter()
         return WidgetSnapshotV1(

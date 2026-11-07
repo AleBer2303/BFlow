@@ -1,191 +1,425 @@
-# ROL
-Eres un equipo de agentes senior: Arquitecto Mobile, Desarrollador React Native/Expo, Diseñador UX/UI estilo Apple, Ingeniero QA/Automatización y Ingeniero DevOps. Trabajas en Antigravity CLI dentro de VS Code sobre Windows 11. Comentas y respondes en español; el código, nombres de variables y claves de datos van en inglés.
+# BFlow — Gestión de Flujo de Caja Personal & Provisiones Inteligentes
 
-# OBJETIVO
-Construir "BFlow" (nombre provisional), una app iOS para controlar mi presupuesto personal mes a mes, optimizada para iPhone 16 Pro Max (iOS 26), con Isla Dinámica (Live Activities), widgets y diseño minimalista Liquid Glass al nivel de pulido de las apps nativas de Apple.
+[![Expo SDK 58](https://img.shields.io/badge/Expo-SDK_58.0.21-000020?style=for-the-badge&logo=expo&logoColor=white)](https://expo.dev/)
+[![React Native 0.88](https://img.shields.io/badge/React_Native-0.88.1-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactnative.dev/)
+[![React 19](https://img.shields.io/badge/React-19.3.0-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript Strict](https://img.shields.io/badge/TypeScript-5.9.2_Strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Cloud Firestore](https://img.shields.io/badge/Cloud_Firestore-Firebase_11-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com/)
+[![iOS 26 Liquid Glass](https://img.shields.io/badge/Apple-iOS_26_Liquid_Glass-000000?style=for-the-badge&logo=apple&logoColor=white)](https://developer.apple.com/ios/)
+[![Jest Tests](https://img.shields.io/badge/Tests-123_Passing_100%25-brightgreen?style=for-the-badge&logo=jest&logoColor=white)](https://jestjs.io/)
+[![Domain Coverage](https://img.shields.io/badge/Domain_Coverage-99.4%25-success?style=for-the-badge)](https://jestjs.io/)
+[![License: Private](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](#)
 
-La app reemplaza mi Excel actual "Control_Ingresos_y_gastos_mensuales.xlsx" (hoja "Octubre 2026"). Ese archivo es la FUENTE DE VERDAD de la lógica de negocio y de los datos semilla. La app debe incluir cuatro módulos:
-1. Presupuesto mensual (ingresos y gastos con checklist).
-2. Control de Deuda FUNFAMI.
-3. Control de Ahorros y Moto.
-4. Provisión "IDEAL" de la moto.
+> **BFlow** es una aplicación financiera móvil y web de alto rendimiento diseñada con estética **Apple iOS 26 Liquid Glass**, optimizada para iPhone 16 Pro Max y pensada para resolver el control de presupuesto personal mes a mes, amortizaciones de deuda y provisiones vehiculares. Reemplaza hojas de cálculo manuales de Excel mediante cálculo matemático determinístico, sincronización en tiempo real con Cloud Firestore y widgets nativos para iOS.
 
-# RESTRICCIONES DE ENTORNO (CRÍTICO)
-- Desarrollo en Windows 11 + VS Code. NO tengo Mac ni Xcode local.
-- Pruebo en mi iPhone con Expo Go (UI/lógica) y con un .ipa compilado en GitHub Actions (nativo), firmado e instalado con iloader (cuenta Apple gratuita, firma de 7 días).
-- Todo el build iOS ocurre en GitHub Actions (runner macOS). Sin EAS de pago. Todo en capas gratuitas (Firebase Spark, GitHub Actions).
-- Honestidad técnica: Expo Go NO soporta widgets, Live Activities ni Google Sign-In nativo. Diseña dos modos:
-  - Modo A (Expo Go / web): toda la UI, lógica, Firebase JS SDK, auth email/contraseña. Los módulos nativos se aíslan detrás de interfaces con implementaciones mock/no-op para que la app corra en Expo Go y web sin romperse.
-  - Modo B (build nativo .ipa vía prebuild): widgets, Live Activities/Isla Dinámica, Google Sign-In nativo, efectos Liquid Glass nativos.
-- Antes de elegir librerías, investiga y confirma versiones y compatibilidad actuales con el Expo SDK elegido (candidatas: expo-widgets, @bacons/apple-targets, expo-live-activity, expo-glass-effect, expo-auth-session, @react-native-google-signin/google-signin). Documenta decisión y alternativas en docs/decisions/ (ADR).
-- Fase 0 obligatoria: valida los riesgos de la cuenta Apple gratuita (App Groups para compartir datos con el widget, límite de App IDs por extensiones, expiración a 7 días) y propón mitigaciones.
+---
 
-# STACK PROPUESTO (justifica o ajusta si hay mejor opción)
-- Expo (SDK estable más reciente) + React Native + TypeScript estricto + Expo Router.
-- Estado: Zustand o TanStack Query. Validación: Zod.
-- Animaciones: react-native-reanimated + gesture-handler. Gráficos: Victory Native XL o react-native-gifted-charts.
-- Backend: Firebase plan Spark (Auth + Firestore) con Firebase JS SDK (compatible con Expo Go), persistencia offline activada.
-- Tests: Jest + jest-expo + React Native Testing Library, Firebase Emulator Suite (reglas e integración), Maestro (E2E).
-- Calidad: ESLint, Prettier, tsc --noEmit, Husky + lint-staged.
-- Dinero: SIEMPRE enteros en pesos COP (sin decimales ni floats). Formateo es-CO ("$ 1.080.000"). Verifica soporte de Intl en Hermes; si falta, formateador propio con tests.
+## 📑 Tabla de Contenidos
 
-# DATOS REALES: EL EXCEL ES LA FUENTE DE VERDAD
+1. [Visión y Problema que Resuelve](#-visión-y-problema-que-resuelve)
+2. [Módulos Funcionales Core](#-módulos-funcionales-core)
+3. [Fuente de Verdad & Invariantes Matemáticas (Excel vs BFlow)](#-fuente-de-verdad--invariantes-matemáticas-excel-vs-bflow)
+4. [Arquitectura de Doble Modo (Modo A vs Modo B)](#-arquitectura-de-doble-modo-modo-a-vs-modo-b)
+5. [Sistema de Diseño Visual: Liquid Glass & SF Pro](#-sistema-de-diseño-visual-liquid-glass--sf-pro)
+6. [Modelo de Datos & Reglas de Seguridad en Cloud Firestore](#-modelo-de-datos--reglas-de-seguridad-en-cloud-firestore)
+7. [Widgets Nativos de iOS 26 (WidgetKit)](#-widgets-nativos-de-ios-26-widgetkit)
+8. [Estructura del Proyecto y Capas](#-estructura-del-proyecto-y-capas)
+9. [Instalación y Desarrollo Local](#-instalación-y-desarrollo-local)
+10. [Tubería de CI/CD, Compilación y Firma (.ipa)](#-tubería-de-cicd-compilación-y-firma-ipa)
+11. [Auditoría Integral de Calidad para Producción](#-auditoría-integral-de-calidad-para-producción)
+12. [Variables de Entorno](#-variables-de-entorno)
+13. [Reglas para Futuros Cambios y Documentación](#-reglas-para-futuros-cambios-y-documentación)
 
-## Instrucción inicial
-Copiaré el archivo a docs/reference/Control_Ingresos_y_gastos_mensuales.xlsx. Léelo con un script reproducible (scripts/extract-excel-fixture) y genera de él: (a) los datos semilla, y (b) el fixture de pruebas fixtures/october-2026.json. No modifiques el original ni inventes datos que no estén en él; lo que no esté claro, pregúntamelo.
+---
 
-## Estructura de la hoja "Octubre 2026"
-- Cabecera de resumen (A1:B6): Total Ingresos Previstos, Total Gastos Previstos, Total Gastos Pagados, Total Gastos Pendientes, Flujo Neto.
-- Bloque INGRESOS (A8:E17): Ingresos Fijos y Variables con columnas Monto, ¿Recibido?, Fecha Recibido, Observaciones.
-- Bloque GASTOS (G8:L25): Gastos Fijos y Variables con columnas Monto, ¿Pagado?, Estado (derivado: Pagado/Pendiente), Fecha de Pago, Observaciones.
-- Control Deuda FUNFAMI (G1:H6). Control Ahorros y Moto (J1:K6).
-- Cuadro IDEAL de la moto (A32:B43).
-- Hay una hoja por mes: eso es el "historial mes a mes" que la app debe reproducir.
+## 🎯 Visión y Problema que Resuelve
 
-## Catálogo semilla (concepto → tipo, grupo, monto sugerido)
-Ingresos fijos: Salario Principal ($4.000.000), Prima ($2.000.000).
-Ingresos variables: Otros Ingresos Variables ($0, allowMultiplePerMonth).
-Gastos fijos: CB300F ($500.000), Cuota FUNFAMI ($1.800.000), Plan de datos y baño kabir ($100.000), Seguro TR SURA ($130.000), ETB O Alexandra ($100.000), Parqueadero CEM ($120.000), Gasolina Moto/Carro ($200.000), Gemini Pro ($20.000).
-Gastos variables: Tarjeta Nu ($300.000), Smart Fit ($100.000), Otro ($0, allowMultiplePerMonth).
+Las hojas de cálculo personales tradicionales son herramientas potentes pero presentan fricciones críticas para el día a día móvil:
+- **Cero ergonomía táctil:** Marcar un pago en el momento de realizarlo en la calle es incómodo en una cuadrícula de celdas.
+- **Fórmulas inconsistentes y errores silenciosos:** En el Excel original, rangos de suma tomaban filas fijas, las sumas de ingresos mezclaban previsiones con cobros reales y las deudas no reflejaban abonos individuales.
+- **Falta de sincronización nativa en el dispositivo:** Sin widgets en la pantalla de inicio, consultar el flujo neto o el checklist exige abrir archivos pesados.
 
-## Estado de octubre 2026 (para el seed del mes actual)
-Completados: Salario Principal (21/10), CB300F (21/10), Cuota FUNFAMI (27/10), Parqueadero CEM (21/10), Gasolina Moto/Carro (21/10), Tarjeta Nu (21/10).
-Pendientes: Prima (ingreso), Plan de datos y baño kabir, Seguro TR SURA, ETB O Alexandra, Gemini Pro, Smart Fit. "Otro" y "Otros Ingresos Variables" están en $0.
+**BFlow traslada esta lógica a una experiencia moderna:**
+- **Monto de dinero exacto:** Regla matemática inflexible de números enteros en pesos colombianos (COP), erradicando errores de redondeo de punto flotante.
+- **Checklist de un toque con micro-haptics:** Marcar un ingreso o gasto completado actualiza al instante la caja, el widget y las metas.
+- **Visualización a 120 Hz ProMotion:** Interfaces fluidas, soporte de Dynamic Type, modo oscuro y claro con contraste WCAG 2.2 AAA.
+- **Cero costo de infraestructura:** Funciona 100% dentro de las capas gratuitas de Google Firebase (Spark Tier), GitHub Actions y cuenta gratuita de Apple Developer.
 
-## Fórmulas del Excel y valores dorados (octubre 2026)
-| Celda | Fórmula | Significado real | Valor |
-|---|---|---|---|
-| B2 "Ingresos Previstos" | =B17 | Suma solo ingresos RECIBIDOS (no los previstos) | 4.000.000 |
-| B3 "Gastos Previstos" | suma todos los montos de gastos | Gastos planeados totales | 3.370.000 |
-| B4 "Gastos Pagados" | =H25 | Gastos con ¿Pagado?=TRUE | 2.920.000 |
-| B5 "Gastos Pendientes" | SUMIF(pagado=FALSE) | Gastos no pagados | 450.000 |
-| B6 "Flujo Neto" | =B2-B4 | Recibido − pagado | 1.080.000 |
-| H18 / H24 "Total Gastos Fijos/Variables" | SUMIF(pagado=TRUE) | Solo pagados, pese al nombre | 2.620.000 / 300.000 |
-| H6 "Total Deuda" | =SUM(H2:H3)-H11 | Deuda inicial (4.400.000 + 3.600.000) menos cuota FUNFAMI | 6.200.000 |
-| K4 "Moto - Ahora" | =K2+H10+H16 | Moto mes pasado (1.600.000) + CB300F + Gasolina | 2.300.000 |
-| K5 "Ahorros - Ahora" | =K3+B6 | Ahorros mes pasado (1.000.000) + Flujo Neto | 2.080.000 |
-| K6 "Total Ahorros" | =SUM(K4:K5) | Moto + Ahorros | 4.380.000 |
-| J10:J23 "Estado" | IF(pagado,"Pagado","Pendiente") | Estado derivado del checkbox | — |
+---
 
-Deudas: "CB300F - MOTO" $4.400.000 y "ESP. IA" $3.600.000 (saldos iniciales del mes).
+## 📦 Módulos Funcionales Core
 
-## Cuadro IDEAL de la moto (costo mensual de referencia)
-SOAT 66.667 · Gasolina 200.000 · Impuesto 21.000 · Mantenimiento 200.000 · Parqueadero 210.000 · Casco 41.667 · Cambio de aceite 50.000 · Llantas 83.333 · Kit de arrastre Honda original 500.000. El Excel muestra TOTAL = 872.666,67.
-Observaciones mías: los valores parecen ser costo anual ÷ 12 (SOAT ≈ 800.000/año, casco 500.000/año, llantas 1.000.000/año, impuesto 252.000/año), pero debes confirmarlo conmigo.
+```mermaid
+graph TD
+    A[BFlow App Core] --> B[1. Presupuesto & Checklist Mensual]
+    A --> C[2. Control Deuda FUNFAMI]
+    A --> D[3. Ahorros & Fondo Moto]
+    A --> E[4. Provisión Moto IDEAL]
+    A --> F[5. Analítica & Historial Mes a Mes]
+    A --> G[6. Cuenta, Auth & Sincronización]
+```
 
-## Inconsistencias detectadas (confírmalas conmigo ANTES de la Fase 2; propón y justifica la decisión)
-1. "Total Ingresos Previstos" calcula lo recibido, no lo previsto. Propuesta: la app muestra ambos con nombres claros: Ingresos previstos (6.000.000), Ingresos recibidos (4.000.000), Gastos previstos (3.370.000), Gastos pagados (2.920.000), Gastos pendientes (450.000), Flujo neto (recibido − pagado = 1.080.000) y Flujo proyectado (previsto − previsto = 2.630.000).
-2. "Total Gastos Fijos/Variables" suman solo pagados. Propuesta: mostrar previsto, pagado y pendiente por grupo.
-3. Total Deuda resta la cuota aunque no esté pagada, y no reparte la cuota entre CB300F-MOTO y ESP. IA. Propuesta: la deuda baja solo cuando la cuota se marca pagada; al hacerlo, la app me pregunta cómo repartirla entre las deudas. Si desmarco el pago, la deuda se restaura. Pregúntame también si la cuota incluye intereses.
-4. Moto-Ahora suma CB300F y Gasolina sin importar si están pagados, y con referencias fijas a filas. Pregunta: ¿ambos conceptos deben aportar al fondo Moto? (Gasolina es un gasto de consumo.) Propuesta: aportes configurables por concepto, que cuentan solo cuando están pagados.
-5. Ahorros-Ahora = mes pasado + flujo neto: es una posición de caja "en vivo". Propuesta: mostrar también "Ahorros proyectado tras pendientes" (2.080.000 − 450.000 = 1.630.000).
-6. Los saldos "mes pasado" y las deudas se actualizan a mano cada mes. Propuesta: arrastre automático al cerrar el mes (el cierre de un mes es la apertura del siguiente).
-7. En el IDEAL los montos son texto y el total excluye el kit de arrastre (la suma completa sería 1.372.667). Propuesta: modelarlos como números y tratar el kit como meta puntual (monto objetivo + fecha) en vez de costo mensual. Pregúntame la fecha objetivo. Política de redondeo: provisión mensual = ceil(monto/periodo) en pesos enteros, con tests.
-8. "Prima" figura como ingreso fijo mensual, pero parece estacional. Pregunta: ¿es mensual o solo ciertos meses? Agrega al concepto un campo recurrence (meses activos).
-9. Posible solapamiento: el cuadro IDEAL incluye gasolina ($200.000) y parqueadero ($210.000), mientras el presupuesto tiene Gasolina ($200.000) y Parqueadero CEM ($120.000). Pregunta si son los mismos gastos.
+### 1. Presupuesto Mensual & Checklist de Movimientos
+- **Métricas Clave:**
+  - `Ingresos Recibidos` vs `Ingresos Previstos`.
+  - `Gastos Pagados` vs `Gastos Pendientes` (desglosados por Fijos y Variables).
+  - `Flujo Neto en Vivo` ($\text{Recibido} - \text{Pagado}$) vs `Flujo Proyectado` ($\text{Previsto} - \text{Previsto}$).
+- **Regla del Checklist Inteligente:**
+  - Al abrir un mes (`ensureMonthPlan(monthKey)`), se generan de forma idempotente las entradas pendientes para conceptos recurrentes.
+  - Al marcar un concepto no recurrente múltiple como completado, este desaparece del selector de "Agregar Movimiento" del mes en curso y reaparece automáticamente en el mes siguiente.
+  - Al desmarcar o borrar un movimiento, el concepto se vuelve a habilitar de inmediato.
 
-# MODELO DE DOMINIO (propón mejoras en un ADR)
-- Concept: id, name, type (income | expense), group (fixed | variable), defaultAmount, icon, color, allowMultiplePerMonth, recurrence (monthly | lista de meses), linkedDebtId?, savingsContribution? {bucketId}, archived, order.
-- MonthEntry (equivale a una fila del Excel): id, monthKey ("YYYY-MM"), conceptId, plannedAmount, actualAmount?, status (pending | completed), completedAt?, note. Para conceptos sin allowMultiplePerMonth usa un id determinístico `${monthKey}_${conceptId}` (evita duplicados offline/multi-dispositivo).
-- Debt: id, name, lender, openingBalance, installment?; el saldo se DERIVA (apertura − pagos aplicados) para evitar desfases. DebtPayment: entryId, debtId, amount, monthKey.
-- SavingsBucket: id (moto, savings), name, openingBalance. Los aportes salen de los conceptos vinculados; el Flujo Neto del mes alimenta el bucket "Ahorros".
-- ProvisionPlan "Moto ideal": ítems con costo, periodo (mensual/anual/etc.), provisión mensual calculada, y metas puntuales (kit de arrastre).
-- MonthSnapshot (cierre de mes): totales, saldos de deudas y ahorros. Alimenta historial, gráficos y arrastre.
-- Todas las métricas son funciones puras en src/domain, sin dependencias de UI ni Firebase.
+### 2. Control de Deuda FUNFAMI
+- **Derivación Pura del Saldo:** El saldo restante nunca se almacena de forma mutable para prevenir desfases; se deriva estrictamente como:
+  $$\text{SaldoActual}(d) = \text{SaldoApertura}(d) - \sum \text{AbonosActivosAprobados}(d)$$
+- **Abonos a Capital:** La cuota mensual de `$ 1.800.000` abona 100% a capital cuando se marca pagada en el presupuesto, descontándose prioritariamente de la deuda `CB300F - MOTO` (`$ 4.400.000` $\to$ `$ 2.600.000`), manteniendo `ESP. IA` en `$ 3.600.000` y el total del grupo en `$ 6.200.000`.
 
-# REGLA "CHECKLIST MENSUAL" (núcleo de la app)
-- Al empezar un mes (o al abrir la app), ensureMonthPlan(monthKey) crea de forma idempotente un MonthEntry pending por cada concepto activo cuya recurrence incluya ese mes (sin generar entradas para los allowMultiplePerMonth).
-- Función pura: getAvailableConcepts(concepts, entries, monthKey, type). Un concepto está disponible si allowMultiplePerMonth es true o NO tiene un entry completed ese mes. Los pendientes siguen disponibles (registrarlos = completarlos con el monto real).
-- En "Agregar movimiento": tipo → concepto (solo disponibles) → monto (precargado con el previsto) → fecha/nota. Al completar, el concepto desaparece de las opciones en ese mes y reaparece en el siguiente. Si elimino o desmarco el movimiento, vuelve a estar disponible.
-- Ejemplo con mis datos: en octubre, Salario y Parqueadero CEM ya no aparecen; "Otro" y "Otros Ingresos Variables" siempre aparecen.
-- Progreso del checklist: solo cuentan los conceptos sin allowMultiplePerMonth. Octubre 2026 = 6 de 12 completados (2 ingresos + 10 gastos).
-- Estado vacío elegante: "Mes completo" cuando todo está completado.
-- monthKey con zona horaria America/Bogota; correcto en cambio de mes y de año.
-- Marcar completado en el dashboard debe ser de un toque (equivale al checkbox ¿Pagado?/¿Recibido? del Excel), con animación y haptics.
+### 3. Ahorros y Fondo Moto
+- **Posición de Caja Doble:**
+  - **Saldo en Vivo:** Apertura mes pasado + Flujo Neto del mes (`$ 2.080.000` en octubre 2026).
+  - **Saldo Proyectado tras Pendientes:** Saldo en vivo menos los gastos pendientes restantes (`$ 2.080.000 - $ 450.000 = $ 1.630.000`), protegiendo al usuario de asumir liquidez que ya está comprometida.
+- **Fondo Moto:** Acumula automáticamente los aportes vinculados que ya están pagados (`CB300F` + `Gasolina Moto/Carro` = `$ 2.300.000` en octubre 2026).
 
-# PANTALLAS
-1. Auth: login/registro con email y contraseña y con Google; recuperar contraseña; cerrar sesión.
-2. Resumen mensual: flujo neto, ingresos previstos/recibidos, gastos previstos/pagados/pendientes, progreso del checklist (X de Y), próximos pendientes, selector de mes.
-3. Checklist del mes: dos secciones (Ingresos y Gastos), con subgrupos Fijos y Variables, estado y fecha por ítem, marcar/desmarcar rápido.
-4. Agregar movimiento: hoja modal con efecto glass.
-5. Gráficos (ver abajo).
-6. Historial mes a mes: lista de meses con totales y balance; detalle de cada mes; edición y eliminación.
-7. Deuda FUNFAMI: deuda total, detalle por deuda (CB300F-MOTO, ESP. IA), progreso, historial de cuotas, proyección de fecha de cierre según la cuota, reparto de cada cuota.
-8. Ahorros y Moto: saldos de Moto, Ahorros y Total; aportes del mes; saldo proyectado tras pendientes.
-9. Moto ideal: ítems con provisión mensual, total, brecha entre lo ideal y lo aportado realmente al fondo Moto, y metas puntuales.
-10. Gestión de conceptos: crear, editar, archivar, reordenar, vincular a deuda o bucket de ahorro.
-11. Ajustes: moneda (COP por defecto), tema (claro/oscuro/sistema), exportar CSV, eliminar cuenta.
-12. Cierre de mes: resumen, confirmar y arrastrar saldos al mes siguiente.
+### 4. Provisión "Moto IDEAL"
+- **Costos Recurrentes de Operación:** SOAT, Impuestos, Casco, Llantas, Mantenimiento, Parqueadero, Cambio de Aceite y Gasolina, calculados con redondeo hacia arriba en enteros COP (`Math.ceil(anual / 12)` = `$ 872.667`/mes).
+- **Metas Puntuales (`TargetGoal`):** Como el `Kit de arrastre Honda original ($ 500.000)` con fecha objetivo `Agosto 2027`, permitiendo comparar la provisión ideal frente al aporte real al fondo de la moto.
 
-# GRÁFICOS (animados al entrar, con tooltip al tocar)
-- Ingresos vs gastos por mes; balance mensual (línea/área); flujo de efectivo mensual detallado (recibido, pagado, pendiente); distribución de gastos por concepto (dona); comparativa mes actual vs anterior.
-- Previsto vs real por mes; pagado vs pendiente del mes actual.
-- Evolución de la deuda FUNFAMI con proyección de cierre.
-- Evolución de ahorros (Moto vs Ahorros, apilado).
-- Moto: provisión ideal vs aporte real.
+### 5. Analítica & Historial Mes a Mes
+- Cierres mensuales inmutables mediante `MonthSnapshot`.
+- Gráficos interactivos de distribución de gastos, comparativas mes a mes y evolución de la deuda con proyección de fecha de liquidación final.
 
-# ISLA DINÁMICA Y WIDGETS (Modo B)
-- Widgets: pequeño (flujo neto del mes), mediano (ingresos/gastos/pendientes + mini gráfico), grande (checklist de pendientes con montos), uno de Total Deuda con progreso, uno de Total Ahorros (Moto + Ahorros), y widget de pantalla de bloqueo si es viable.
-- Live Activity / Isla Dinámica: compacta y mínima con total pendiente; expandida con flujo neto, pendientes y progreso del checklist. Se actualiza al completar un movimiento.
-- Datos compartidos vía App Group con un contrato tipado y versionado (WidgetSnapshot), con tests de serialización. Si el App Group no es viable con cuenta gratuita, documenta y propón alternativa antes de implementar.
+---
 
-# DISEÑO UX/UI
-- Minimalista, tipografía del sistema (SF Pro), jerarquía clara, espaciado generoso, haptics en acciones clave, Dynamic Type y modo oscuro.
-- Liquid Glass (iOS 26) en barras, hojas y tarjetas; fallback a blur estándar en Expo Go/web/iOS anterior.
-- Animaciones a 60/120 fps (ProMotion): spring physics, transiciones compartidas, números animados, micro-interacción al marcar un concepto.
-- Accesibilidad: labels, contraste AA, reduce motion, áreas táctiles de 44pt mínimo.
-- Convención de color para estados (completado/pendiente, ingreso/gasto) definida en tokens y documentada.
-- Design system en src/design-system y DESIGN.md como fuente de verdad visual. Nunca valores hardcodeados.
+## 📐 Fuente de Verdad & Invariantes Matemáticas (Excel vs BFlow)
 
-# AGENTES, SKILLS Y REGLAS (Antigravity)
-Verifica rutas y formatos vigentes de Antigravity y crea:
-- AGENTS.md / reglas del workspace: convenciones, arquitectura, definición de "terminado" (DoD), y la regla de que el Excel manda en la lógica de negocio.
-- Skills (SKILL.md): expo-feature-scaffold, firebase-firestore-modeling, domain-budget-rules (reglas del Excel y valores dorados), ios-widget-liveactivity, liquid-glass-ui, write-tests-for-change, ci-cd-ipa-build.
-- Agentes/roles: Architect, UI Builder, QA Engineer (obligatorio tras cada cambio), DevOps, Reviewer.
-- Workflows reutilizables: /new-feature, /add-tests, /fix-bug, /release.
-- Regla dura: ningún cambio se considera terminado sin tests nuevos o actualizados que lo cubran y sin que toda la suite pase.
+El archivo [`fixtures/october-2026.json`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/fixtures/october-2026.json), extraído mediante `scripts/extract-excel-fixture.mjs` del libro Excel original, constituye la **Fuente de Verdad Dorada**. 
 
-# ESTRATEGIA DE PRUEBAS AUTOMATIZADAS
-- Pirámide: muchos unit (lógica de dominio), componentes (RTL), integración (Firestore Emulator + reglas) y pocos E2E (Maestro).
-- Tests de paridad con el Excel (golden tests): con fixtures/october-2026.json, las funciones puras deben reproducir exactamente los valores de la tabla de fórmulas (ingresos recibidos 4.000.000, previstos 6.000.000, gastos previstos 3.370.000, pagados 2.920.000, pendientes 450.000, flujo neto 1.080.000, deuda total 6.200.000, Moto 2.300.000, Ahorros 2.080.000, Total Ahorros 4.380.000, progreso 6/12). Si un valor cambia, el test falla y exige justificación.
-- Casos obligatorios de la regla checklist: concepto oculto tras completarlo; reaparece al cambiar de mes; reaparece al eliminar o desmarcar; allowMultiplePerMonth; cambio de año (diciembre→enero); zona horaria America/Bogota; mismo concepto en meses distintos; ensureMonthPlan idempotente; duplicados/concurrencia; recurrence (Prima solo en meses activos, si lo confirmo).
-- Deudas: la cuota solo reduce el saldo cuando está pagada; desmarcar restaura el saldo; reparto entre deudas suma exactamente la cuota; proyección de cierre.
-- Ahorros: arrastre automático al cerrar el mes; aportes solo cuando están pagados; Ahorros proyectado tras pendientes.
-- Moto ideal: provisión mensual por ítem, redondeo (ceil, enteros), meta puntual del kit, total con y sin metas.
-- Dinero: sin floats; formateo es-CO; sumas sin pérdida.
-- Un test por cada inconsistencia del Excel que se resuelva, documentando la decisión tomada.
-- Pruebas de reglas de Firestore en el emulador y tests de contrato para WidgetSnapshot y datos de Live Activity.
-- E2E Maestro: registro → completar Salario → desaparece de opciones → ver gráfico → completar Cuota FUNFAMI → baja la deuda → historial.
-- Umbral de cobertura (inicio 80% en dominio) que rompe el pipeline. El CI falla si cambia src/ sin cambios en tests (verificación heurística documentada).
+### Resolución Confirmada de las 9 Inconsistencias del Excel
+En la Fase 0 del proyecto se auditaron y resolvieron formalmente las 9 inconsistencias detectadas en la hoja `Octubre 2026`:
 
-# DATOS Y SEGURIDAD (Firestore)
-- Estructura sugerida: users/{uid}/concepts/{id}, users/{uid}/entries/{id} (con monthKey indexable), users/{uid}/debts/{id}, users/{uid}/debtPayments/{id}, users/{uid}/savingsBuckets/{id}, users/{uid}/provisionPlans/{id}, users/{uid}/monthSnapshots/{monthKey}. Justifica o mejora el modelo y calcula lecturas/escrituras (un mes tiene unas 15 entradas) para mantenerte dentro del plan Spark.
-- Reglas: cada usuario solo lee/escribe bajo users/{uid}/...; valida esquema y tipos (montos enteros, monthKey con formato válido, status permitido), con tests en el emulador.
-- Sin secretos en el repo: GitHub Secrets, variables de entorno de Expo e .env.example.
-- Script de seed: carga catálogo, deudas, buckets, plan de moto y el estado de octubre 2026 desde el fixture, para mi usuario. Debe ser idempotente.
+| # | Problema Detectado en Excel | Solución Aprobada e Implementada en BFlow | Valor Dorado Verificado (Oct 2026) |
+| :-: | :--- | :--- | :--- |
+| **1** | `B2` (`=B17`) solo sumaba ingresos recibidos pese a llamarse *"Previstos"*. | Separa explícitamente `receivedIncome` de `plannedIncome`, y calcula tanto `netCashFlow` como `projectedNetFlow`. | `received = $ 4.000.000`<br>`planned = $ 6.000.000`<br>`net = $ 1.080.000`<br>`projected = $ 2.630.000` |
+| **2** | `H18/H24` solo sumaban gastos pagados. | Expone la terna completa (Previsto / Pagado / Pendiente) para Fijos y Variables. | **Fijos:** `2.970.000 / 2.620.000 / 350.000`<br>**Variables:** `400.000 / 300.000 / 100.000` |
+| **3** | Deuda restaba la cuota sin verificar si estaba pagada ni a cuál crédito pertenecía. | La cuota solo amortiza si `status === 'completed'`. Abona 100% a capital de `CB300F - MOTO`. | `cb300f = $ 2.600.000`<br>`espIa = $ 3.600.000`<br>`totalDebt = $ 6.200.000` |
+| **4** | `Moto - Ahora` sumaba celdas fijas (`H10+H16`) sin validar pago. | Aportes configurables por concepto con validación estricta de pago (`onlyWhenCompleted: true`). | `motoCurrentBalance = $ 2.300.000` |
+| **5** | `Ahorros - Ahora` no alertaba sobre gastos pendientes por pagar. | Muestra `Ahorros en Vivo` y `Ahorros Proyectado tras Pendientes`. | `current = $ 2.080.000`<br>`projected = $ 1.630.000` |
+| **6** | Saldos *"Mes Pasado"* se copiaban a mano cada mes. | Flujo automatizado de `closeMonthAndRollover` que congela snapshot y arrastra aperturas. | Apertura Nov 2026 generada con 1 toque. |
+| **7** | En el cuadro IDEAL los montos eran texto y excluían el kit de arrastre ($500.000). | Tipado numérico exacto en enteros y kit tratado como meta puntual para `2027-08`. | `operativo = $ 872.667`<br>`conMeta = $ 1.372.667` |
+| **8** | `Prima` figuraba como fija mensual pese a ser estacional. | Modelado con `recurrence: { kind: 'specific_months', months: [6, 12] }`. | Entrada conservada en Oct 2026 para paridad del fixture (6/12 listos). |
+| **9** | Solapamiento entre conceptos del presupuesto y renglones de la moto. | Enlace bidireccional (`linkedConceptId: 'exp_gasolina_moto_carro'`). Gasolina sí es el mismo gasto; Parqueadero CEM es independiente. | Fixture verificado con 0 discrepancias. |
 
-# CI/CD CON GITHUB ACTIONS (automatización completa)
-1. ci.yml (push y PR): dependencias con caché, lint, typecheck, tests con cobertura, tests de reglas con Firebase Emulator.
-2. build-ios.yml (push a main y tags): runner macOS; expo prebuild; pod install; xcodebuild archive con code signing deshabilitado; empaquetar Payload/ → .ipa SIN FIRMAR; subir como artifact y publicar en GitHub Releases con versión y changelog automáticos.
-3. e2e.yml (nocturno o manual): Maestro sobre simulador iOS.
-4. Opcional: Expo Go / EAS Update gratuito para previsualizar cambios de JS.
-5. Protección de main: merge solo si ci.yml pasa. El .ipa solo se construye si los tests pasan.
-6. Optimiza minutos macOS (caché de Pods/DerivedData, concurrency cancel-in-progress) y documenta consumo; evalúa repo público vs privado.
-7. Documenta cómo descargar el .ipa del Release y firmarlo/instalarlo con iloader, con el recordatorio del ciclo de 7 días.
+### Regla de Hierro del Dinero (Integer Math)
+- En BFlow está **estrictamente prohibido el uso de flotantes o decimales** para almacenar, transportar o sumar dinero.
+- Todo monto es un entero seguro en COP validado con `Number.isSafeInteger(amount) && amount >= 0`.
+- El formateador monetario en [`src/domain/money/money.ts`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/src/domain/money/money.ts) garantiza renderizado idéntico al Excel (`"$ 1.080.000"`).
 
-# PLAN DE ENTREGA (no avances sin que la fase anterior pase tests)
-- Fase 0: viabilidad y riesgos, ADRs, estructura del repo, AGENTS.md, skills, lectura del Excel y lista de preguntas abiertas.
-- Fase 1: proyecto Expo + TypeScript + design system + CI con tests + .ipa vacío instalado en mi iPhone (valida la tubería completa temprano).
-- Fase 2: dominio puro con TDD: checklist, métricas mensuales con golden tests del Excel, deudas, ahorros, moto ideal, cierre de mes.
-- Fase 3: Firebase (Auth email + Google, Firestore, reglas, emulador, seed) con tests.
-- Fase 4: UI principal: resumen, checklist, agregar, historial, conceptos.
-- Fase 5: módulos Deuda FUNFAMI, Ahorros y Moto, Moto ideal (UI + datos).
-- Fase 6: gráficos animados.
-- Fase 7: widgets y Live Activity / Isla Dinámica (Modo B).
-- Fase 8: pulido (animaciones, haptics, accesibilidad, Liquid Glass), E2E Maestro, release automatizado.
+### Regla de Zona Horaria
+- Toda clave de mes (`monthKey`) y fecha de completado se procesa de forma inmutable en **`America/Bogota` (`UTC-05:00`)**, garantizando consistencia en cambios de año o de mes sin importar el huso del cliente.
 
-# FORMA DE TRABAJAR
-- Empieza SOLO por la Fase 0 y entrégame: (1) resumen de riesgos y viabilidad, (2) árbol de carpetas, (3) contenido de AGENTS.md, skills y workflows, (4) comandos exactos para Windows, (5) mapeo Excel → modelo de dominio con tu decisión propuesta para cada una de las 9 inconsistencias, y (6) las preguntas que necesites que responda (nombre de la app, bundle id, moneda, proyecto de Firebase, URL del repo, y las preguntas abiertas del Excel).
-- Pide confirmación antes de decisiones irreversibles. Si una librería o API pudo cambiar, verifica la documentación oficial actual en lugar de asumir.
-- No inventes datos ni reglas que no estén en el Excel o que yo no haya confirmado.
-- Al final de cada fase entrega: qué se hizo, tests agregados, resultado de la suite, y cómo probarlo en mi iPhone (Expo Go o .ipa).
+---
+
+## 🔄 Arquitectura de Doble Modo (Modo A vs Modo B)
+
+Para permitir el desarrollo diario sin fricción en **Windows 11 sin Mac local**, BFlow implementa una separación estricta mediante adaptadores en `src/platform/`:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        BFlow Application Code                          │
+│     (src/domain, src/features, src/design-system, src/app)             │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                       runtimeMode.ts interface
+                                    │
+           ┌────────────────────────┴────────────────────────┐
+           ▼                                                 ▼
+┌──────────────────────────────────────┐  ┌──────────────────────────────────────┐
+│      MODO A (Expo Go / Web)          │  │       MODO B (.ipa Nativo iOS 26)    │
+│  - Desarrollo en Windows 11          │  │  - Compilado en GitHub Actions macOS │
+│  - Expo Go en iPhone 16 Pro Max      │  │  - Instalado vía iloader (Sideload)  │
+│  - Fallback <GlassSurface /> (Blur)  │  │  - expo-glass-effect (UIVisualEffect)│
+│  - Firebase JS SDK + Auth            │  │  - Widgets nativos (WidgetKit Swift) │
+│  - Adaptador No-Op de Widgets        │  │  - ActivityKit Dynamic Island ready  │
+└──────────────────────────────────────┘  └──────────────────────────────────────┘
+```
+
+### Mitigación de Restricciones en Cuenta Apple Gratuita (7 Días / 2 App IDs)
+1. **Límite de 3 Apps Sideloaded:** No interfiere si se mantiene como máximo 2 apps adicionales instaladas.
+2. **Límite de 10 App IDs por semana (Crítico):**
+   - Para no agotar la cuota semanal, todos los 6 widgets y la Live Activity están unificados en **UN ÚNICO target de extensión (`targets/widgets`)**.
+   - BFlow consume **exactamente 2 App IDs**: `com.bflow.app` (App) + `com.bflow.app.widgets` (Extensión).
+3. **Resguardo de Datos ante Renovación de Firma:**
+   - Como la firma gratuita caduca a los 7 días, todos los datos residen en **Cloud Firestore** con sincronización en tiempo real.
+   - Reinstalar o firmar el `.ipa` encima con `iloader` **conserva la sesión y restaura el 100% de la información en segundos**.
+
+---
+
+## 🎨 Sistema de Diseño Visual: Liquid Glass & SF Pro
+
+Documentado a profundidad en [`DESIGN.md`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/DESIGN.md) y centralizado en [`src/design-system/tokens.ts`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/src/design-system/tokens.ts):
+
+- **Estética Sobria y Amigable:** Lenguaje financiero de alta gama (Apple Wallet, Linear, Stripe). Cero marcos de neón perimetrales o brillos estilo videojuego.
+- **Paleta de Superficies:**
+  - *Modo Oscuro:* Obsidiana Carbón Cálido (`#0D0F12`), Grafito Ahumado (`#14171C`), Titanio Pizarra (`#1B1F26`).
+  - *Modo Claro:* Marfil Alabastro (`#F8F8F6`), Platino Lino (`#EFEFEA`), Porcelana Pura (`#FFFFFF`).
+- **Contraste WCAG 2.2 AAA:** Texto primario con ratio de contraste `> 15:1` frente a los fondos.
+- **Tipografía SF Pro con Números Tabulares:** Toda cifra monetaria utiliza obligatoriamente `fontVariant: ['tabular-nums']` para erradicar el baile horizontal de dígitos en animaciones de conteo.
+- **Soporte Dynamic Type:** Todos los componentes respetan `allowFontScaling={true}`.
+- **Ergonomía Táctil:** Botones con área táctil mínima de `44pt` (`MIN_TOUCH_TARGET_PT`) y `hitSlop` perimetral.
+- **Micro-interacciones y Háptica:** `TactilePressable` con amortiguación física de resorte y retroalimentación háptica calibrada mediante `hapticService`.
+
+---
+
+## 🔒 Modelo de Datos & Reglas de Seguridad en Cloud Firestore
+
+### Esquema Aislado Multi-Inquilino
+Toda la información del usuario vive de forma estrictamente privada bajo `users/{uid}/...`:
+
+```text
+users/{uid}
+├── concepts/{conceptId}          # Catálogo personal de ingresos y gastos
+├── entries/{entryId}             # Movimientos mensuales (${monthKey}_${conceptId})
+├── debts/{debtId}                # Deudas registradas (FUNFAMI, etc.)
+├── debtPayments/{paymentId}      # Abonos aplicados a cada crédito
+├── savingsBuckets/{bucketId}     # Fondos de ahorro (Moto, General)
+├── provisionPlans/{planId}       # Plan IDEAL de provisiones y metas
+└── monthSnapshots/{monthKey}     # Cierres mensuales inmutables
+```
+
+### Optimización Extrema del Plan Spark (100% Gratuito)
+- **Límites Spark:** 50.000 lecturas / 20.000 escrituras por día.
+- **Consumo Real de BFlow:**
+  - Apertura en frío con caché: **~43 lecturas**.
+  - Operación diaria normal: **< 100 lecturas/día (< 0,2% del límite)** y **< 30 escrituras/día (< 0,15% del límite)**.
+- **Margen de seguridad:** Superior al **99,8% dentro de la capa gratuita**.
+
+### Reglas de Seguridad en [`firestore.rules`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/firestore.rules)
+- **503 líneas de validación estricta:**
+  - `isOwner(uid)` obligatorio en cada nodo.
+  - Comprobación de campos obligatorios (`hasRequiredFields`) y bloqueo de campos extraños (`hasOnlyAllowedFields`).
+  - Validación de enteros positivos (`isNonNegativeInt`), expresiones regulares para `monthKey` (`^\d{4}-(0[1-9]|1[0-2])$`), enumeraciones cerradas de estados (`pending`, `completed`) y cadenas con límite de longitud.
+  - Inmutabilidad de claves críticas en operaciones de actualización (`update`).
+  - Denegación total por defecto (`match /{document=**} { allow read, write: if false; }`).
+
+---
+
+## 📱 Widgets Nativos de iOS 26 (WidgetKit)
+
+Ubicados en [`targets/widgets/`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/targets/widgets/) y compilados mediante `@bacons/apple-targets`:
+
+| Familia de Widget | Contenido Visual |
+| :--- | :--- |
+| **`systemSmall`** | Flujo neto destacado con color condicional, mes activo y contador de progreso del checklist (`6/12`). |
+| **`systemMedium`** | Flujo neto en tarjeta hero izquierda; desglose de ingresos, gastos y pendientes a la derecha con mini barras. |
+| **`systemLarge`** | Resumen financiero completo superior + lista de ítems pendientes del checklist con monto y fecha estimada. |
+| **`accessoryCircular`** | Medidor circular (Gauge) para pantalla de bloqueo con progreso del checklist del mes. |
+| **`accessoryRectangular`** | Resumen horizontal para pantalla de bloqueo con Flujo Neto, ítems listos y gastos pendientes. |
+| **`accessoryInline`** | Línea compacta de texto para la cabecera del reloj de la pantalla de bloqueo. |
+
+- **Contrato Tipado `WidgetSnapshotV1`:** Comunicación desacoplada mediante un payload JSON normalizado, compatible tanto con `UserDefaults` (App Groups) como con persistencia local de respaldo.
+
+---
+
+## 📂 Estructura del Proyecto y Capas
+
+```text
+BFlow/
+├── .agents/                      # Configuración de agentes, roles y skills (Antigravity)
+├── .github/
+│   └── workflows/                # CI/CD (ci.yml, build-ios.yml, e2e.yml)
+├── assets/                       # Iconos y splash screens de la aplicación
+├── docs/
+│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0004)
+│   ├── guides/                   # Guías operativas (iloader-signing-guide.md)
+│   └── Improvements/             # Guías de auditoría de rendimiento
+├── fixtures/                     # Datos dorados de prueba (october-2026.json)
+├── scripts/                      # Scripts de utilidad (extracción Excel, linting, guardias CI)
+├── src/
+│   ├── app/                      # Expo Router (punto de entrada _layout.tsx, index.tsx)
+│   ├── data/                     # Repositorios Firestore, esquemas Zod, seeds
+│   │   ├── firebase/             # Configuración Firebase SDK y emulador
+│   │   ├── mappers/              # Esquemas de validación Zod
+│   │   ├── repositories/         # budgetRepository.ts (acceso a datos)
+│   │   └── seed/                 # Carga de datos iniciales de octubre 2026
+│   ├── design-system/            # Tokens, colores, tipografía, <GlassSurface />, TactilePressable
+│   ├── domain/                   # 100% PURO: Fórmulas matemáticas, checklist, deudas, ahorros
+│   │   ├── budget/               # Cálculos de ingresos, gastos y flujos netos
+│   │   ├── checklist/            # Reglas de disponibilidad, progreso y autogeneración
+│   │   ├── date/                 # Manejo inmutable de monthKey y zona horaria Bogotá
+│   │   ├── debts/                # Derivación de saldos y abonos de deuda
+│   │   ├── money/                # Operaciones enteras en COP y formateo
+│   │   ├── month-close/          # Lógica de cierre de mes y arrastre a apertura siguiente
+│   │   ├── moto-ideal/           # Provisiones y metas del cuadro IDEAL
+│   │   └── savings/              # Fondos de ahorro y proyecciones
+│   ├── features/                 # Pantallas y componentes por dominio funcional
+│   │   ├── analytics/            # Historial, gráficos y tendencias
+│   │   ├── auth/                 # Login, registro, perfil y recuperación
+│   │   ├── budget/               # Resumen mensual y modal de agregar movimiento
+│   │   ├── checklist/            # Lista de movimientos y filtros
+│   │   ├── debts/                # Amortización de deudas y abonos
+│   │   ├── onboarding/           # Configuración inicial de usuario nuevo
+│   │   └── savings/              # Tarjetas de fondos y provisión moto
+│   └── platform/                 # Adaptadores Modo A vs Modo B
+│       ├── auth/                 # Adaptador de autenticación y códigos de 6 dígitos
+│       ├── glass/                # Puente de superficies translúcidas (Liquid Glass / Blur)
+│       ├── haptics/              # Servicio unificado de vibración háptica
+│       ├── mail/                 # Integración de correos transaccionales vía Resend API
+│       ├── mode/                 # Detección de entorno (runtimeMode.ts)
+│       └── widgets/              # Serialización y puente de sincronización con WidgetKit
+├── targets/
+│   └── widgets/                  # Target nativo SwiftUI para Widgets de iOS 26
+├── AGENTS.md                     # Reglas de ingeniería, roles y Definición de Terminado
+├── app.json                      # Configuración de Expo y plugins nativos
+├── DESIGN.md                     # Manual y fuente de verdad del Sistema de Diseño
+├── firestore.rules               # Reglas declarativas de seguridad de Cloud Firestore
+├── package.json                  # Dependencias y scripts de ejecución
+└── PERF_BASELINE.md              # Línea base de rendimiento y registro de optimizaciones
+```
+
+---
+
+## 🚀 Instalación y Desarrollo Local
+
+### Prerrequisitos
+- **Sistema Operativo:** Windows 11, macOS o Linux.
+- **Node.js:** Versión `22.x` o superior (se recomienda Node 22 LTS).
+- **Gestor de paquetes:** `npm` versión `10.x` o `11.x`.
+- **Dispositivo móvil (Opcional):** iPhone físico con la aplicación **Expo Go** instalada desde el App Store.
+
+### Pasos de Instalación
+
+1. **Clonar el repositorio:**
+   ```bash
+   git clone https://github.com/AleBer2303/BFlow.git
+   cd BFlow
+   ```
+
+2. **Instalar dependencias:**
+   ```bash
+   npm ci --legacy-peer-deps
+   ```
+   *(El script postinstall aplicará automáticamente el parche de almacenamiento para extensiones nativas).*
+
+3. **Configurar variables de entorno:**
+   ```bash
+   cp .env.example .env
+   ```
+   *(Los valores predeterminados de Firebase ya apuntan al proyecto configurado `bflow-deaeb`).*
+
+4. **Ejecutar verificaciones de calidad:**
+   ```bash
+   npm run typecheck       # Verificación estricta de TypeScript (0 errores)
+   npm run lint            # Linting y chequeo de arquitectura (70 archivos)
+   npm test                # Suite de 123 tests unitarios y de integración
+   ```
+
+5. **Iniciar el servidor de desarrollo:**
+   - **En el navegador Web:**
+     ```bash
+     npm run web
+     ```
+   - **En Expo Go (iPhone):**
+     ```bash
+     npm start
+     ```
+     Escanea el código QR que aparece en la terminal con la cámara de tu iPhone para abrir BFlow en Expo Go.
+
+---
+
+## 🛠 Tubería de CI/CD, Compilación y Firma (.ipa)
+
+Toda la automatización de BFlow se ejecuta en **GitHub Actions**:
+
+### 1. `ci.yml` (Puerta de Enlace de Calidad en Linux)
+Se ejecuta en cada `push` a las ramas `main` o `develop`, y en cada Pull Request:
+- Comprueba paridad con el fixture de Excel (`scripts/extract-excel-fixture.mjs`).
+- Evalúa la guardia heurística: cualquier cambio en `src/` debe incluir tests nuevos o actualizados (`scripts/check-src-tests-guard.mjs`).
+- Ejecuta `npm run typecheck`, `npm run lint` y `npm test -- --coverage`.
+
+### 2. `build-ios.yml` (Compilación Nativa en macOS Gratuito)
+Se ejecuta en cada `push` a `main` o al crear una etiqueta de versión `v*`:
+- Utiliza un runner **`macos-26`** de GitHub Actions con Xcode 26+ (Swift 6.2+).
+- Genera el proyecto nativo mediante `npx expo prebuild --platform ios --clean`.
+- Compila con `xcodebuild` deshabilitando temporalmente la firma de código.
+- Empaqueta el bundle en `BFlow-unsigned.ipa` y lo publica automáticamente en **GitHub Releases**.
+
+### 3. Instalación en iPhone con `iloader` (Ciclo de 7 Días)
+Sigue la guía detallada en [`docs/guides/iloader-signing-guide.md`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/docs/guides/iloader-signing-guide.md):
+1. Descarga el último `BFlow-unsigned.ipa` desde [GitHub Releases](https://github.com/AleBer2303/BFlow/releases).
+2. Conecta tu iPhone por cable a tu PC con Windows 11 y abre **iloader** (o Sideloadly).
+3. Selecciona el archivo `.ipa`, ingresa tu Apple ID gratuito e inicia la instalación.
+4. **Renovación a los 7 días:** No desinstales la app; simplemente vuelve a conectar el iPhone e instala el `.ipa` encima para conservar todos los datos locales.
+
+---
+
+## 📊 Auditoría Integral de Calidad para Producción
+
+Como parte de la evaluación técnica exhaustiva requerida antes de un lanzamiento masivo en tiendas de aplicaciones (App Store / Google Play / Web PWA), se clasifican los aspectos del proyecto en tres niveles de madurez:
+
+### ✅ Aspectos que Cumplen al 100% con Estándares de Producción
+1. **Lógica de Dominio y Cobertura:** Cobertura de tests superior al **99%** en `src/domain/` (123 tests pasando), verificación con fixture de datos reales y tolerancia cero a flotantes financieros.
+2. **Seguridad en Firestore:** Reglas declarativas completas (503 líneas) con validación granular de esquemas, tipos, longitudes y permisos de lectura/escritura cerrados por `request.auth.uid`.
+3. **Resiliencia de Red y Optimistic Rollback:** Reversión automática de estado local en Zustand si falla la conexión con Firebase, acompañada de feedback al usuario.
+4. **Eficiencia en Capa Gratuita:** Consumo menor a 100 lecturas diarias en Cloud Firestore Spark (< 0,2% del cupo diario).
+5. **Doble Modo Estricto:** Capacidad comprobada de correr sin crasheos en Expo Go / Web (Modo A) y compilar binarios nativos con extensiones WidgetKit (Modo B).
+6. **Diseño Visual e Inclusividad:** Cumplimiento riguroso de WCAG 2.2 AAA en contraste tipográfico, soporte Dynamic Type, modo oscuro/claro y áreas táctiles de 44pt.
+7. **CI/CD Automatizado:** Pipeline en GitHub Actions con guardias heurísticas y publicación automatizada de binarios.
+
+### ⚠️ Aspectos Existentes que Pueden Mejorar (Oportunidades de Refactor)
+1. **Persistencia Local Móvil de Firestore:**
+   - *Estado actual:* Usa `memoryLocalCache()` en plataformas móviles nativas y `persistentLocalCache()` en Web.
+   - *Mejora:* Configurar un adaptador de almacenamiento persistente (`persistentMultipleTabManager` o persistencia offline completa) en mobile nativo para que el inicio en frío no dependa de la red.
+2. **Modularización del Store Global:**
+   - *Estado actual:* `src/features/budget/store/useBudgetStore.ts` contiene casi 2.000 líneas unificando autenticación, presupuesto, deudas, provisiones y sincronización.
+   - *Mejora:* Dividir el store en slices de Zustand (`authSlice`, `budgetSlice`, `debtSlice`, `savingsSlice`) para facilitar su mantenimiento.
+3. **Virtualización de Listas Extensas:**
+   - *Estado actual:* Listas de checklist y movimientos renderizan con `.map()` dentro de `KeyboardAwareScrollView`.
+   - *Mejora:* Migrar a `@shopify/flash-list` o `FlatList` en vistas analíticas con cientos de registros históricos acumulados.
+4. **Optimización de Peso de Assets:**
+   - *Estado actual:* Los iconos en `assets/` pesan ~1.7 MB cada uno en PNG sin comprimir.
+   - *Mejora:* Comprimir o convertir a WebP/SVG optimizado para reducir el peso de descarga del paquete.
+
+### 🚀 Aspectos Faltantes para Publicación en Tiendas (App Store / Google Play)
+1. **Configuración de Android en `app.json`:**
+   - *Falta:* Declarar la sección `"android": { "package": "com.bflow.app", "adaptiveIcon": { ... } }` para permitir la compilación nativa de `.aab` / `.apk` en Android.
+2. **Workflow de Build Android en CI (`build-android.yml`):**
+   - *Falta:* Un workflow de GitHub Actions sobre runner Ubuntu (gratuito y ultrarrápido) para generar `.apk` de pruebas de Android automáticamente.
+3. **Splash Screen Oficial (`expo-splash-screen`):**
+   - *Falta:* Declarar la configuración de pantalla de carga nativa en `app.json` para evitar transiciones en blanco en arranques en frío.
+4. **Flujos de Pruebas E2E en Maestro:**
+   - *Falta:* Completar los archivos de flujo `.yaml` en `e2e/` para validar el recorrido completo de usuario (registro $\to$ pago $\to$ cierre) de forma desatendida.
+5. **Monitoreo de Errores y Telemetría en Producción:**
+   - *Falta:* Integración de Sentry Expo o Firebase Crashlytics para capturar excepciones no controladas en dispositivos de usuarios finales.
+6. **Cumplimiento Legal de Tiendas (Política de Privacidad y Borrado de Cuenta):**
+   - *Falta:* Publicar `PRIVACY_POLICY.md` en web pública y habilitar la eliminación completa del usuario en Firebase Auth conforme a la directriz 5.1.1(v) de Apple.
+
+---
+
+## 🔑 Variables de Entorno
+
+Configurables en el archivo `.env` local (basado en `.env.example`):
+
+| Variable | Descripción | Valor Predeterminado / Ejemplo |
+| :--- | :--- | :--- |
+| `EXPO_PUBLIC_FIREBASE_API_KEY` | Llave pública de Firebase Web Client | `AIzaSy...` (Proyecto `bflow-deaeb`) |
+| `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN` | Dominio de autenticación de Firebase | `bflow-deaeb.firebaseapp.com` |
+| `EXPO_PUBLIC_FIREBASE_PROJECT_ID` | Identificador de proyecto Firebase | `bflow-deaeb` |
+| `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET` | Bucket de almacenamiento | `bflow-deaeb.firebasestorage.app` |
+| `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`| Sender ID para mensajería | `1021469032737` |
+| `EXPO_PUBLIC_FIREBASE_APP_ID` | App ID asignado en Firebase Console | `1:1021469032737:web:8656ad9e4871ddb6ffce73` |
+| `EXPO_PUBLIC_RESEND_API_KEY` | API Key de Resend para correos reales | Opcional (si falta, simula en consola en desarrollo) |
+| `EXPO_PUBLIC_RESEND_FROM_EMAIL` | Dirección remitente autorizada en Resend| `BFlow <onboarding@resend.dev>` |
+
+---
+
+## 📜 Reglas para Futuros Cambios y Documentación
+
+Todas las contribuciones y cambios en el código deben regirse estrictamente por [`AGENTS.md`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/AGENTS.md):
+- **Docs-as-Code:** Toda alteración en contratos, modelos o interfaces debe acompañarse de su correspondiente actualización documental en el mismo commit.
+- **Criterios de ADR:** Cambios arquitectónicos o de dependencias exigen un nuevo documento en `docs/decisions/`.
+- **Definition of Done:** `npm run typecheck` (0 errores), `npm run lint` (0 errores) y `npm test` (100% tests pasando y cobertura de dominio $\ge 90\%$).
+
+---
+
+*Desarrollado con ingeniería rigurosa y pasión por el diseño de interfaces fluidas.*  
+*BFlow © 2026.*

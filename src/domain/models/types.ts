@@ -2,13 +2,14 @@
  * src/domain/models/types.ts
  *
  * Pure domain entities and value objects for BFlow.
+ * Universal and agnostic of specific vehicles, debts, currencies or regional contexts.
  * Zero dependencies on UI, React Native, Expo, or Firebase.
  */
 
 export type ConceptType = 'income' | 'expense';
 export type ConceptGroup = 'fixed' | 'variable';
 export type EntryStatus = 'pending' | 'completed';
-export type SavingsBucketId = 'moto' | 'savings' | (string & {});
+export type SavingsBucketId = 'reserve' | 'savings' | 'moto' | (string & {});
 export type DebtInterestRateType = 'monthly' | 'annual';
 
 export type MonthNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
@@ -35,6 +36,8 @@ export interface Concept {
   linkedDebtGroup?: string;
   defaultTargetDebtId?: string;
   savingsContribution?: SavingsContributionRule;
+  provisionCategoryKey?: string;
+  /** @deprecated use provisionCategoryKey */
   idealMotoCategoryKey?: string;
   archived: boolean;
   order: number;
@@ -88,26 +91,35 @@ export interface SavingsBucket {
 
 export interface ProvisionItemSpec {
   id: string;
-  excelRawName: string;
+  excelRawName?: string;
   displayName: string;
   monthlyAmountCop: number;
+  monthlyAmount?: number;
   cycleCostCop?: number;
+  cycleCost?: number;
   periodMonths?: number;
   ceilMonthlyCop?: number;
+  ceilMonthly?: number;
   linkedConceptId?: string;
   targetAmountCop?: number;
+  targetAmount?: number;
   targetMonthKey?: string;
   targetDateIso?: string;
-  includedInExcelTotalB43: boolean;
+  includedInExcelTotalB43?: boolean;
   kind: 'recurring_provision' | 'target_goal';
   notes?: string;
 }
 
-export interface IdealMotoPlan {
+export interface ProvisionPlan {
   items: readonly ProvisionItemSpec[];
   recurringMonthlyTotalCop: number;
+  recurringMonthlyTotal?: number;
   totalWithTargetGoalCop: number;
+  totalWithTargetGoal?: number;
 }
+
+/** @deprecated use ProvisionPlan */
+export type IdealMotoPlan = ProvisionPlan;
 
 export interface GroupBudgetBreakdown {
   planned: number;
@@ -165,6 +177,7 @@ export interface MonthSnapshot {
   }>;
   totalClosingDebt: number;
   closingSavings: {
+    reserveClosingBalance?: number;
     motoClosingBalance: number;
     savingsClosingBalance: number;
     totalClosingSavings: number;

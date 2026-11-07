@@ -1,13 +1,13 @@
 /**
  * src/domain/debts/debtCalculator.ts
  *
- * Pure FUNFAMI debt control calculator (Resolving Inconsistency #3):
- * - Debt balance only decreases when `Cuota FUNFAMI` entry is `completed` (`¿Pagado? = TRUE`).
- * - Unchecking the installment immediately restores the debt balance to opening (`$8.000.000`).
- * - Confirmed rule (#6): 100% of the installment goes to principal (`0` interest) and defaults
- *   to reducing `CB300F - MOTO` (`$4.400.000 - $1.800.000 = $2.600.000`), while also supporting
- *   explicit custom allocations across debts as long as their sum equals the installment amount.
- * - Includes payoff projection (`monthsRemaining`, `estimatedPayoffMonthKey`).
+ * Universal pure debt control and payoff projection calculator:
+ * - Debt balance only decreases when an installment entry is `completed`.
+ * - Unchecking the installment restores the debt balance to opening.
+ * - 100% of the installment applies to principal (unless interest is explicitly recorded).
+ * - Cascades installment across debts: targets explicit debt first, then remaining debts in order.
+ * - Computes monthly interest accrual if rates are defined.
+ * - Includes payoff projection (`remainingMonths`, `estimatedPayoffMonthKey`).
  */
 
 import { addMonthsToMonthKey, assertValidMonthKey } from '../date/monthKey';
@@ -40,7 +40,7 @@ export interface DebtPayoffProjection {
   estimatedPayoffMonthKey: string | null;
 }
 
-export interface FunfamiDebtSummary {
+export interface DebtSummaryResult {
   monthKey: string;
   openingTotalDebt: number;
   appliedInstallmentThisMonth: number;
@@ -50,11 +50,14 @@ export interface FunfamiDebtSummary {
   projection: DebtPayoffProjection;
 }
 
+/** @deprecated use DebtSummaryResult */
+export type FunfamiDebtSummary = DebtSummaryResult;
+
 /**
- * Generates or validates DebtPayment records for a `Cuota FUNFAMI` MonthEntry.
+ * Generates or validates DebtPayment records for a debt installment MonthEntry.
  * - If `entry.status !== 'completed'`, returns payments with `active: false` so debt is not reduced.
- * - If no `customAllocations` are provided, applies the confirmed default priority:
- *   reduces `debt_cb300f_moto` first up to its opening balance, and spills any remainder into `debt_esp_ia`.
+ * - If no `customAllocations` are provided, cascades across debts starting with preferredTargetDebtId
+ *   (or first debt with balance), spilling remainders into subsequent debts.
  */
 export function buildDebtPaymentsForInstallment(
   installmentEntry: MonthEntry,
@@ -102,19 +105,24 @@ export function buildDebtPaymentsForInstallment(
 
   // If a specific target debt is linked and exists in `debts`, target that debt first (and cascade within its group if needed)
   const explicitTarget =
-    preferredTargetDebtId && preferredTargetDebtId !== 'ALL_FUNFAMI'
+    preferredTargetDebtId && preferredTargetDebtId !== 'ALL_DEBTS' && preferredTargetDebtId !== 'ALL_FUNFAMI'
       ? debts.find((d) => d.id === preferredTargetDebtId)
       : undefined;
 
-  const candidateDebts = explicitTarget
-    ? debts.filter((d) => (d.groupKey || 'FUNFAMI') === (explicitTarget.groupKey || 'FUNFAMI'))
-    : debts.filter((d) => !d.groupKey || d.groupKey === 'FUNFAMI');
+  const targetGroupKey =
+    explicitTarget?.groupKey ??
+    (installmentEntry.conceptId === 'exp_cuota_funfami' ? 'FUNFAMI' : undefined);
+
+  const candidateDebts = targetGroupKey
+    ? debts.filter((d) => (d.groupKey || targetGroupKey) === targetGroupKey)
+    : debts;
 
   const orderedDebts = [...candidateDebts].sort((a, b) => {
     if (explicitTarget) {
       if (a.id === explicitTarget.id) return -1;
       if (b.id === explicitTarget.id) return 1;
     }
+    // Backward compat priority for fixture
     if (a.id === 'debt_cb300f_moto') return -1;
     if (b.id === 'debt_cb300f_moto') return 1;
     return a.id.localeCompare(b.id);
@@ -176,76 +184,70 @@ export function projectDebtPayoff(
   };
 }
 
-/**
- * Calculates the FUNFAMI debt summary for `monthKey`.
- * Ensures a payment only reduces debt if BOTH `payment.active === true` AND its linked
- * `MonthEntry` in `entries` has `status === 'completed'`.
- */
-export function calculateFunfamiDebtSummary(
+export function calculateDebtsSummary(
   debts: readonly Debt[],
   entries: readonly MonthEntry[],
-  monthKey: string,
+  currentMonthKey: string,
   explicitPayments?: readonly DebtPayment[],
   defaultMonthlyInstallment = 1_800_000
-): FunfamiDebtSummary {
-  assertValidMonthKey(monthKey);
+): DebtSummaryResult {
+  assertValidMonthKey(currentMonthKey);
 
-  const monthEntries = entries.filter((e) => e.monthKey === monthKey);
+  const monthEntries = entries.filter((e) => e.monthKey === currentMonthKey);
   const completedEntryIds = new Set(
     monthEntries.filter((e) => e.status === 'completed').map((e) => e.id)
   );
 
-  const funfamiEntry = monthEntries.find((e) => e.conceptId === 'exp_cuota_funfami');
-  const resolvedPayments =
-    explicitPayments && explicitPayments.length > 0
-      ? explicitPayments
-      : funfamiEntry
-        ? buildDebtPaymentsForInstallment(funfamiEntry, debts)
-        : [];
-
-  const activePayments = resolvedPayments.filter(
-    (p) => p.monthKey === monthKey && p.active && completedEntryIds.has(p.entryId)
+  const installmentEntry = monthEntries.find(
+    (e) =>
+      e.type === 'expense' &&
+      (e.conceptId.includes('cuota') ||
+        e.conceptId.includes('prestamo') ||
+        e.conceptId.includes('deuda') ||
+        e.conceptId === 'exp_cuota_funfami')
   );
 
+  const activePayments: readonly DebtPayment[] = explicitPayments
+    ? explicitPayments.filter(
+        (p) => p.monthKey === currentMonthKey && p.active && completedEntryIds.has(p.entryId)
+      )
+    : installmentEntry && installmentEntry.status === 'completed'
+      ? buildDebtPaymentsForInstallment(installmentEntry, debts)
+      : [];
+
+  const isInstallmentPaid = installmentEntry
+    ? installmentEntry.status === 'completed'
+    : activePayments.length > 0;
+
   const debtItems: DebtItemStatus[] = debts.map((debt) => {
-    const appliedPrincipalThisMonth = sumMoneyIntegers(
+    const appliedPrincipal = sumMoneyIntegers(
       activePayments.filter((p) => p.debtId === debt.id).map((p) => p.principalAmount)
     );
-    const principalAfterPayments = Math.max(0, debt.openingBalance - appliedPrincipalThisMonth);
-    const interestRate =
-      debt.monthlyInterestRate !== undefined
-        ? debt.monthlyInterestRate
-        : debt.annualInterestRate !== undefined
-          ? Math.round((debt.annualInterestRate / 12) * 10000) / 10000
-          : 0;
-    const accruedInterestThisMonth =
-      interestRate > 0 && principalAfterPayments > 0
-        ? Math.round(principalAfterPayments * (interestRate / 100))
-        : 0;
+    const principalAfterPayments = Math.max(0, debt.openingBalance - appliedPrincipal);
+
+    let accruedInterest = 0;
+    if (debt.monthlyInterestRate && debt.monthlyInterestRate > 0) {
+      accruedInterest = Math.round((principalAfterPayments * debt.monthlyInterestRate) / 100);
+    } else if (debt.annualInterestRate && debt.annualInterestRate > 0) {
+      accruedInterest = Math.round((principalAfterPayments * (debt.annualInterestRate / 12)) / 100);
+    }
+
     const remainingBalance = principalAfterPayments;
     const reductionRatio =
-      debt.openingBalance === 0 ? 1 : appliedPrincipalThisMonth / debt.openingBalance;
+      debt.openingBalance === 0 ? 1 : appliedPrincipal / debt.openingBalance;
 
     return {
       debtId: debt.id,
       name: debt.name,
       lender: debt.lender,
-      ...(debt.groupKey ? { groupKey: debt.groupKey } : {}),
+      groupKey: debt.groupKey,
       openingBalance: debt.openingBalance,
-      ...(debt.monthlyInterestRate !== undefined
-        ? { monthlyInterestRate: debt.monthlyInterestRate }
-        : interestRate > 0
-          ? { monthlyInterestRate: interestRate }
-          : {}),
-      ...(debt.annualInterestRate !== undefined
-        ? { annualInterestRate: debt.annualInterestRate }
-        : {}),
-      ...(debt.interestRateType ? { interestRateType: debt.interestRateType } : {}),
-      ...(debt.monthlyInstallment !== undefined
-        ? { monthlyInstallment: debt.monthlyInstallment }
-        : {}),
-      accruedInterestThisMonth,
-      appliedPrincipalThisMonth,
+      monthlyInterestRate: debt.monthlyInterestRate,
+      annualInterestRate: debt.annualInterestRate,
+      interestRateType: debt.interestRateType,
+      monthlyInstallment: debt.monthlyInstallment,
+      accruedInterestThisMonth: accruedInterest,
+      appliedPrincipalThisMonth: appliedPrincipal,
       remainingBalance,
       reductionRatio,
     };
@@ -260,24 +262,27 @@ export function calculateFunfamiDebtSummary(
   const configuredDebtInstallmentsSum = sumMoneyIntegers(
     debtItems.map((d) => d.monthlyInstallment ?? 0)
   );
+
   const installmentForProjection =
-    funfamiEntry?.plannedAmount ??
+    installmentEntry?.plannedAmount ??
     (configuredDebtInstallmentsSum > 0
       ? configuredDebtInstallmentsSum
       : appliedInstallmentThisMonth > 0
         ? appliedInstallmentThisMonth
         : defaultMonthlyInstallment);
-  const projection = projectDebtPayoff(totalRemainingDebt, installmentForProjection, monthKey);
+
+  const projection = projectDebtPayoff(totalRemainingDebt, installmentForProjection, currentMonthKey);
 
   return {
-    monthKey,
+    monthKey: currentMonthKey,
     openingTotalDebt,
     appliedInstallmentThisMonth,
     totalRemainingDebt,
-    isInstallmentPaid: funfamiEntry
-      ? funfamiEntry.status === 'completed'
-      : activePayments.length > 0,
+    isInstallmentPaid,
     debts: debtItems,
     projection,
   };
 }
+
+/** @deprecated use calculateDebtsSummary */
+export const calculateFunfamiDebtSummary = calculateDebtsSummary;

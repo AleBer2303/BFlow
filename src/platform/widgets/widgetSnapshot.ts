@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import {
   calculateChecklistProgress,
-  calculateFunfamiDebtSummary,
+  calculateDebtsSummary,
   calculateMonthlyBudgetSummary,
   calculateMonthlySavingsSummary,
   Concept,
@@ -40,21 +40,21 @@ export interface WidgetSnapshotV1 {
   topPendingItems: WidgetPendingItemV1[];
 }
 
-const copSafeIntegerSchema = z
+const safeIntegerSchema = z
   .number()
   .int()
   .refine((val) => Number.isSafeInteger(val), {
-    message: 'Amount must be a safe integer in COP (no decimals or floats)',
+    message: 'Amount must be a safe integer (no decimals or floats)',
   });
 
-const nonNegativeCopSchema = copSafeIntegerSchema.refine((val) => val >= 0, {
-  message: 'Amount must be a non-negative safe COP integer',
+const nonNegativeIntegerSchema = safeIntegerSchema.refine((val) => val >= 0, {
+  message: 'Amount must be a non-negative safe integer',
 });
 
 export const widgetPendingItemV1Schema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  amountCop: nonNegativeCopSchema,
+  amountCop: nonNegativeIntegerSchema,
   type: z.enum(['income', 'expense']),
 });
 
@@ -64,17 +64,17 @@ export const widgetSnapshotV1Schema = z.object({
   monthKey: z.string().refine((val) => isValidMonthKey(val), {
     message: 'Invalid monthKey format (expected YYYY-MM)',
   }),
-  netCashFlowCop: copSafeIntegerSchema,
-  receivedIncomeCop: nonNegativeCopSchema,
-  paidExpensesCop: nonNegativeCopSchema,
-  pendingExpensesCop: nonNegativeCopSchema,
+  netCashFlowCop: safeIntegerSchema,
+  receivedIncomeCop: nonNegativeIntegerSchema,
+  paidExpensesCop: nonNegativeIntegerSchema,
+  pendingExpensesCop: nonNegativeIntegerSchema,
   checklistCompleted: z.number().int().min(0),
   checklistTotal: z.number().int().min(0),
-  totalDebtCop: nonNegativeCopSchema,
-  openingDebtCop: nonNegativeCopSchema,
-  motoSavingsCop: copSafeIntegerSchema,
-  generalSavingsCop: copSafeIntegerSchema,
-  totalSavingsCop: copSafeIntegerSchema,
+  totalDebtCop: nonNegativeIntegerSchema,
+  openingDebtCop: nonNegativeIntegerSchema,
+  motoSavingsCop: safeIntegerSchema,
+  generalSavingsCop: safeIntegerSchema,
+  totalSavingsCop: safeIntegerSchema,
   topPendingItems: z.array(widgetPendingItemV1Schema).max(6),
 });
 
@@ -101,12 +101,13 @@ export function resolveDynamicAppGroupId(bundleIdentifier = 'com.bflow.app'): st
 }
 
 /**
- * Builds and validates a `WidgetSnapshotV1` payload from domain models for a target month.
+ * Pure builder creating the normalized WidgetSnapshotV1 payload to be serialized
+ * into the App Group container and read by iOS WidgetKit extensions.
  */
 export function buildWidgetSnapshotV1(input: BuildWidgetSnapshotInput): WidgetSnapshotV1 {
   const budget = calculateMonthlyBudgetSummary(input.entries, input.monthKey);
   const checklist = calculateChecklistProgress(input.concepts, input.entries, input.monthKey);
-  const debtSummary = calculateFunfamiDebtSummary(
+  const debtSummary = calculateDebtsSummary(
     input.debts,
     input.entries,
     input.monthKey,
@@ -144,7 +145,7 @@ export function buildWidgetSnapshotV1(input: BuildWidgetSnapshotInput): WidgetSn
     checklistTotal: checklist.totalTrackableCount,
     totalDebtCop: debtSummary.totalRemainingDebt,
     openingDebtCop: debtSummary.openingTotalDebt,
-    motoSavingsCop: savings.moto.currentBalance,
+    motoSavingsCop: savings.reserve.currentBalance,
     generalSavingsCop: savings.savings.currentBalance,
     totalSavingsCop: savings.totalCurrentSavings,
     topPendingItems,
@@ -152,4 +153,3 @@ export function buildWidgetSnapshotV1(input: BuildWidgetSnapshotInput): WidgetSn
 
   return widgetSnapshotV1Schema.parse(snapshot);
 }
-

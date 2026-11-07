@@ -398,7 +398,7 @@ public struct LargeWidgetView: View {
                         .font(.system(size: 9, weight: .semibold, design: .rounded))
                         .foregroundColor(Color(red: 1.0, green: 0.4, blue: 0.4))
                     Spacer()
-                    Text("Meta Moto: \(WidgetFormatters.formatCopCompact(snapshot.motoSavingsCop))")
+                    Text("Fondo Reserva: \(WidgetFormatters.formatCopCompact(snapshot.motoSavingsCop))")
                         .font(.system(size: 9, weight: .semibold, design: .rounded))
                         .foregroundColor(.cyan)
                 }

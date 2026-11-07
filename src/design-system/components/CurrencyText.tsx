@@ -1,10 +1,10 @@
 import React from 'react';
 import { StyleProp, TextStyle } from 'react-native';
-import { formatCop } from '../../domain/money/money';
+import { formatCurrency } from '../../domain/money/money';
 import { useBFlowTheme } from '../theme/ThemeContext';
 import { AppText, TypographyVariant } from './Typography';
 
-export type CurrencyTone = 'neutral' | 'income' | 'expense' | 'debt' | 'moto' | 'savings';
+export type CurrencyTone = 'neutral' | 'income' | 'expense' | 'debt' | 'reserve' | 'provisions' | 'moto' | 'savings';
 
 export interface CurrencyTextProps {
   amount: number;
@@ -28,7 +28,9 @@ export function CurrencyText({
     income: colors.semantic.income,
     expense: colors.semantic.expense,
     debt: colors.semantic.debt,
-    moto: colors.semantic.moto,
+    reserve: colors.semantic.reserve,
+    provisions: colors.semantic.provisions,
+    moto: colors.semantic.reserve,
     savings: colors.semantic.savings,
   };
 
@@ -40,7 +42,7 @@ export function CurrencyText({
       tabularNums
       style={style}
     >
-      {formatCop(amount)}
+      {formatCurrency(amount)}
     </AppText>
   );
 }

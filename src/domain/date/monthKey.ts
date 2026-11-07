@@ -1,12 +1,15 @@
 /**
  * src/domain/date/monthKey.ts
  *
- * Pure date and MonthKey ("YYYY-MM") utilities pinned to the America/Bogota
- * timezone (UTC-05:00 year-round, no Daylight Saving Time).
+ * Pure date and MonthKey ("YYYY-MM") utilities.
+ * Timezone-aware, deterministic across platforms.
  */
 
-export const BOGOTA_TIMEZONE = 'America/Bogota' as const;
-const BOGOTA_UTC_OFFSET_MS = -5 * 60 * 60 * 1000;
+export const DEFAULT_APP_TIMEZONE = 'America/Bogota' as const;
+/** @deprecated use DEFAULT_APP_TIMEZONE */
+export const BOGOTA_TIMEZONE = DEFAULT_APP_TIMEZONE;
+
+const STANDARD_UTC_OFFSET_MS = -5 * 60 * 60 * 1000;
 const MONTH_KEY_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 export function isValidMonthKey(value: string): boolean {
@@ -21,36 +24,40 @@ export function assertValidMonthKey(value: string): string {
 }
 
 /**
- * Resolves a Date (or timestamp/ISO string) into a "YYYY-MM" monthKey
- * in the America/Bogota timezone (UTC-05:00).
+ * Resolves a Date (or timestamp/ISO string) into a "YYYY-MM" monthKey.
  */
-export function toBogotaMonthKey(input: Date | number | string = new Date()): string {
+export function toAppMonthKey(input: Date | number | string = new Date(), offsetMs = STANDARD_UTC_OFFSET_MS): string {
   const date = input instanceof Date ? input : new Date(input);
   if (Number.isNaN(date.getTime())) {
-    throw new RangeError('Invalid Date passed to toBogotaMonthKey');
+    throw new RangeError('Invalid Date passed to toAppMonthKey');
   }
 
-  // Shift UTC timestamp by -05:00 (Colombia has no DST) and read UTC year/month
-  const bogotaShifted = new Date(date.getTime() + BOGOTA_UTC_OFFSET_MS);
-  const year = bogotaShifted.getUTCFullYear();
-  const month = String(bogotaShifted.getUTCMonth() + 1).padStart(2, '0');
+  const shifted = new Date(date.getTime() + offsetMs);
+  const year = shifted.getUTCFullYear();
+  const month = String(shifted.getUTCMonth() + 1).padStart(2, '0');
   return `${year}-${month}`;
 }
 
 /**
- * Resolves a Date into an ISO date string "YYYY-MM-DD" in America/Bogota.
+ * Resolves a Date into an ISO date string "YYYY-MM-DD".
  */
-export function toBogotaIsoDate(input: Date | number | string = new Date()): string {
+export function toAppIsoDate(input: Date | number | string = new Date(), offsetMs = STANDARD_UTC_OFFSET_MS): string {
   const date = input instanceof Date ? input : new Date(input);
   if (Number.isNaN(date.getTime())) {
-    throw new RangeError('Invalid Date passed to toBogotaIsoDate');
+    throw new RangeError('Invalid Date passed to toAppIsoDate');
   }
-  const bogotaShifted = new Date(date.getTime() + BOGOTA_UTC_OFFSET_MS);
-  const year = bogotaShifted.getUTCFullYear();
-  const month = String(bogotaShifted.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(bogotaShifted.getUTCDate()).padStart(2, '0');
+  const shifted = new Date(date.getTime() + offsetMs);
+  const year = shifted.getUTCFullYear();
+  const month = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(shifted.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
+
+/**
+ * Backward-compatible aliases
+ */
+export const toBogotaMonthKey = toAppMonthKey;
+export const toBogotaIsoDate = toAppIsoDate;
 
 /**
  * Returns the next or previous monthKey ("YYYY-MM") handling year boundaries
@@ -72,7 +79,7 @@ export function addMonthsToMonthKey(monthKey: string, deltaMonths: number): stri
   return `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}`;
 }
 
-const SPANISH_MONTH_NAMES = [
+const MONTH_NAMES_ES = [
   'Enero',
   'Febrero',
   'Marzo',
@@ -91,5 +98,5 @@ export function formatMonthKeyLabelEs(monthKey: string): string {
   assertValidMonthKey(monthKey);
   const [yearStr, monthStr] = monthKey.split('-');
   const monthIdx = Number(monthStr) - 1;
-  return `${SPANISH_MONTH_NAMES[monthIdx]} ${yearStr}`;
+  return `${MONTH_NAMES_ES[monthIdx]} ${yearStr}`;
 }

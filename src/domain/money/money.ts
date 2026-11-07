@@ -2,11 +2,14 @@
  * src/domain/money/money.ts
  *
  * Pure integer monetary operations and deterministic formatting for BFlow.
- * Rule of Iron: Money is ALWAYS a safe integer (no floats, no decimals).
- * Visual format for COP / USD uses "$ 1.080.000" (or "-$ 450.000" for negatives).
+ * Universal & agnostic: Money is ALWAYS a safe integer (no floats, no decimals).
+ * Formats integers deterministically into "$ 1.080.000" (or "-$ 450.000" for negatives).
  */
 
-export type SupportedCurrency = 'COP' | 'USD';
+export interface CurrencyFormatOptions {
+  symbol?: string;
+  thousandsSeparator?: string;
+}
 
 /**
  * Validates that a monetary amount is a safe integer (no decimals or NaN/Infinity).
@@ -19,23 +22,50 @@ export function assertSafeMoneyInteger(amount: number, context = 'amount'): numb
 }
 
 /**
- * Formats an integer amount into the exact Excel convention: "$ 1.080.000"
- * Deterministic across Hermes (iOS), Node (Windows), and Web without depending on ICU locale quirks.
+ * Formats an integer amount deterministically: "$ 1.080.000" or "-$ 450.000"
+ * Deterministic across Hermes (iOS), Android, and Web without depending on ICU locale quirks.
  */
-export function formatCop(amount: number): string {
-  assertSafeMoneyInteger(amount, 'formatCop');
+export function formatCurrency(amount: number, options?: CurrencyFormatOptions): string {
+  assertSafeMoneyInteger(amount, 'formatCurrency');
+  const symbol = options?.symbol ?? '$';
+  const sep = options?.thousandsSeparator ?? '.';
   const isNegative = amount < 0;
   const absDigits = Math.abs(amount).toString();
-  const withThousands = absDigits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return isNegative ? `-$ ${withThousands}` : `$ ${withThousands}`;
+  const withThousands = absDigits.replace(/\B(?=(\d{3})+(?!\d))/g, sep);
+  return isNegative ? `-${symbol} ${withThousands}` : `${symbol} ${withThousands}`;
 }
 
 /**
- * Parses a formatted currency string like "$ 1.080.000" or "1080000" into a safe integer.
+ * Compact currency formatter for widgets and tight badges: "$ 1.2M", "$ 450k", etc.
  */
-export function parseCopInteger(input: string | number): number {
+export function formatCurrencyCompact(amount: number, symbol = '$'): string {
+  assertSafeMoneyInteger(amount, 'formatCurrencyCompact');
+  const isNegative = amount < 0;
+  const abs = Math.abs(amount);
+
+  let formatted: string;
+  if (abs >= 1_000_000_000) {
+    const value = (abs / 1_000_000_000).toFixed(1).replace(/\.0$/, '');
+    formatted = `${symbol} ${value}B`;
+  } else if (abs >= 1_000_000) {
+    const value = (abs / 1_000_000).toFixed(1).replace(/\.0$/, '');
+    formatted = `${symbol} ${value}M`;
+  } else if (abs >= 1_000) {
+    const value = (abs / 1_000).toFixed(0);
+    formatted = `${symbol} ${value}k`;
+  } else {
+    formatted = `${symbol} ${abs}`;
+  }
+
+  return isNegative ? `-${formatted}` : formatted;
+}
+
+/**
+ * Parses a formatted currency string like "$ 1.080.000", "$1,080,000", or "1080000" into a safe integer.
+ */
+export function parseCurrencyInteger(input: string | number): number {
   if (typeof input === 'number') {
-    return assertSafeMoneyInteger(input, 'parseCopInteger');
+    return assertSafeMoneyInteger(input, 'parseCurrencyInteger');
   }
   const trimmed = input.trim();
   if (!trimmed) {
@@ -47,8 +77,15 @@ export function parseCopInteger(input: string | number): number {
     throw new TypeError(`Cannot parse monetary string: "${input}"`);
   }
   const parsed = Number(digitsOnly) * (isNegative ? -1 : 1);
-  return assertSafeMoneyInteger(parsed, 'parseCopInteger');
+  return assertSafeMoneyInteger(parsed, 'parseCurrencyInteger');
 }
+
+/**
+ * Backward-compatible aliases
+ */
+export const formatCop = formatCurrency;
+export const formatCopCompact = formatCurrencyCompact;
+export const parseCopInteger = parseCurrencyInteger;
 
 /**
  * Sums an array of safe integer monetary amounts without floating-point drift.

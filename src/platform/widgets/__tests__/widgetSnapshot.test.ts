@@ -63,7 +63,7 @@ describe('platform/widgets — WidgetSnapshotV1 Contract & Dynamic App Group Ada
         ...valid,
         netCashFlowCop: 1080000.5,
       })
-    ).toThrow(/safe integer in COP/);
+    ).toThrow(/safe integer/);
 
     expect(() =>
       widgetSnapshotV1Schema.parse({

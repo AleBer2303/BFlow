@@ -55,7 +55,7 @@ export const DEMO_OWNER_USER: BFlowAuthUser = {
   email: 'abernalg2303@gmail.com',
   displayName: 'Alejandro Bernal',
   phone: '+57 300 000 0000',
-  financialGoal: 'Saldar deuda FUNFAMI y fortalecer fondo CB300F',
+  financialGoal: 'Alcanzar libertad financiera y optimizar flujo de caja',
   authProvider: 'local',
   provider: 'local-demo',
 };

@@ -20,14 +20,16 @@ import {
 } from '../design-system';
 import {
   calculateChecklistProgress,
+  calculateDebtsSummary,
   calculateFunfamiDebtSummary,
   calculateMonthlyBudgetSummary,
   calculateMonthlySavingsSummary,
   calculateMotoIdealSummary,
-  formatCop,
+  calculateProvisionPlanSummary,
+  formatCurrency,
   formatMonthKeyLabelEs,
   getAvailableConcepts,
-  toBogotaIsoDate,
+  toAppIsoDate,
   type ConceptGroup,
   type ConceptType,
   type MonthEntry,
@@ -42,9 +44,9 @@ import {
   type BFlowWorkspaceTab,
 } from '../features/budget/store/useBudgetStore';
 import { ChecklistWorkspaceView } from '../features/checklist/components/ChecklistWorkspaceView';
-import { DebtsFunfamiView } from '../features/debts/components/DebtsFunfamiView';
+import { DebtsWorkspaceView } from '../features/debts/components/DebtsWorkspaceView';
 import { InitialAccountSetupView } from '../features/onboarding/components/InitialAccountSetupView';
-import { SavingsAndMotoIdealView } from '../features/savings/components/SavingsAndMotoIdealView';
+import { SavingsAndProvisionsView } from '../features/savings/components/SavingsAndProvisionsView';
 import {
   registerWithPersonalProfile,
   sendPasswordRecoveryEmail,
@@ -307,7 +309,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     [concepts, entries, activeMonthKey]
   );
   const debtSummary = useMemo(
-    () => calculateFunfamiDebtSummary(activeDebts, entries, activeMonthKey, activeDebtPayments),
+    () => calculateDebtsSummary(activeDebts, entries, activeMonthKey, activeDebtPayments),
     [activeDebts, entries, activeMonthKey, activeDebtPayments]
   );
   const savingsSummary = useMemo(
@@ -323,7 +325,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
   );
   const motoIdealSummary = useMemo(
     () =>
-      calculateMotoIdealSummary(
+      calculateProvisionPlanSummary(
         idealMotoPlan,
         entries,
         savingsSummary.moto.paidContributionsThisMonth,
@@ -360,7 +362,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
   const handleToggleEntry = async (entry: MonthEntry) => {
     const wasCompleted = entry.status === 'completed';
     triggerHaptic(wasCompleted ? 'light' : 'success');
-    await toggleEntryStatus(entry.id, toBogotaIsoDate());
+    await toggleEntryStatus(entry.id, toAppIsoDate());
   };
 
   const handleAddMovement = async (input: RegisterOrCompleteMovementInput) => {
@@ -379,8 +381,12 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     await closeCurrentMonth();
   };
 
-  const funfamiEntry = entries.find(
-    (e) => e.monthKey === activeMonthKey && e.conceptId === 'exp_cuota_funfami'
+  const installmentEntry = entries.find(
+    (e) =>
+      e.monthKey === activeMonthKey &&
+      (e.conceptId === 'exp_cuota_funfami' ||
+        e.conceptName.toLowerCase().includes('cuota') ||
+        e.conceptId.includes('cuota'))
   );
 
   return (
@@ -451,7 +457,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                     tone="income"
                   />
                   <AppText variant="caption" color={colors.text.secondary}>
-                    {`Flujo proyectado del mes: ${formatCop(budget.projectedNetFlow)}`}
+                    {`Flujo proyectado del mes: ${formatCurrency(budget.projectedNetFlow)}`}
                   </AppText>
                 </View>
               </GlassSurface>
@@ -464,7 +470,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                     </AppText>
                     <CurrencyText amount={budget.receivedIncome} variant="title2" tone="income" />
                     <AppText variant="micro" color={colors.text.muted}>
-                      {`Previstos: ${formatCop(budget.plannedIncome)}`}
+                      {`Previstos: ${formatCurrency(budget.plannedIncome)}`}
                     </AppText>
                   </View>
                 </GlassSurface>
@@ -476,7 +482,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                     </AppText>
                     <CurrencyText amount={budget.paidExpenses} variant="title2" tone="expense" />
                     <AppText variant="micro" color={colors.semantic.pending}>
-                      {`Pendientes: ${formatCop(budget.pendingExpenses)}`}
+                      {`Pendientes: ${formatCurrency(budget.pendingExpenses)}`}
                     </AppText>
                   </View>
                 </GlassSurface>
@@ -497,7 +503,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                     <StatusBadge
                       label={
                         debtSummary.appliedInstallmentThisMonth > 0
-                          ? `Abonos: ${formatCop(debtSummary.appliedInstallmentThisMonth)}`
+                          ? `Abonos: ${formatCurrency(debtSummary.appliedInstallmentThisMonth)}`
                           : 'Sin abonos este mes'
                       }
                       status={debtSummary.appliedInstallmentThisMonth > 0 ? 'debt' : 'pending'}
@@ -527,17 +533,17 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                     <StatusBadge
                       label={
                         motoIdealSummary.excelRecurringMonthlyTotalCop > 0
-                          ? `Provisiones: ${formatCop(motoIdealSummary.excelRecurringMonthlyTotalCop)}/mes`
+                          ? `Provisiones: ${formatCurrency(motoIdealSummary.excelRecurringMonthlyTotalCop)}/mes`
                           : `${(savingsSummary.hasMotoBucket ? 1 : 0) + (savingsSummary.hasSavingsBucket ? 1 : 0) + (savingsSummary.customBuckets?.length ?? 0)} Fondos`
                       }
-                      status="moto"
+                      status="reserve"
                     />
                   </View>
                   <CurrencyText
                     testID="total-savings-amount"
                     amount={savingsSummary.totalCurrentSavings}
                     variant="title2"
-                    tone="moto"
+                    tone="reserve"
                   />
                 </View>
               </GlassSurface>
@@ -605,7 +611,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                         testID={`checklist-item-${entry.conceptId}`}
                         accessibilityRole="checkbox"
                         accessibilityState={{ checked: isDone }}
-                        accessibilityLabel={`${entry.conceptName}, ${formatCop(entry.actualAmount)}`}
+                        accessibilityLabel={`${entry.conceptName}, ${formatCurrency(entry.actualAmount)}`}
                         onPressIn={() => triggerHaptic(isDone ? 'light' : 'success')}
                         onPress={() => handleToggleEntry(entry)}
                         style={{
@@ -684,7 +690,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
           ) : null}
 
           {activeTab === 'debts' ? (
-            <DebtsFunfamiView
+            <DebtsWorkspaceView
               debtSummary={debtSummary}
               onCreateDebt={(input) => {
                 triggerHaptic('success');
@@ -702,7 +708,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
           ) : null}
 
           {activeTab === 'savings' ? (
-            <SavingsAndMotoIdealView
+            <SavingsAndProvisionsView
               savingsSummary={savingsSummary}
               motoIdealSummary={motoIdealSummary}
               provisionPlan={idealMotoPlan}

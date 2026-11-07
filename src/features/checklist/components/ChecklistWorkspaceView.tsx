@@ -23,9 +23,9 @@ import {
   useBFlowTheme,
 } from '../../../design-system';
 import {
-  formatCop,
+  formatCurrency,
   getAvailableConcepts,
-  toBogotaIsoDate,
+  toAppIsoDate,
   type Concept,
   type ConceptGroup,
   type ConceptType,
@@ -235,6 +235,7 @@ export function ChecklistWorkspaceView({
           name: customConceptName.trim(),
           type: selectedType,
           group: customConceptGroup,
+          amount: parsedCustomAmount,
           amountCop: parsedCustomAmount,
           targetDebtId: selectedType === 'expense' ? selectedTargetDebtId : null,
           savingsBucketId: selectedType === 'expense' ? selectedSavingsBucketId : null,
@@ -255,7 +256,7 @@ export function ChecklistWorkspaceView({
     const parsedAmount = digitsOnly ? Number(digitsOnly) : activeSelectedConcept.defaultAmount;
 
     if (!Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
-      setFormError('Ingresa un monto entero mayor a $ 0 en pesos colombianos.');
+      setFormError('Ingresa un monto entero válido mayor a 0.');
       return;
     }
 
@@ -263,7 +264,7 @@ export function ChecklistWorkspaceView({
       monthKey,
       conceptId: activeSelectedConcept.id,
       actualAmount: parsedAmount,
-      completedAt: toBogotaIsoDate(),
+      completedAt: toAppIsoDate(),
       targetDebtId: selectedType === 'expense' ? selectedTargetDebtId : null,
       savingsBucketId: selectedType === 'expense' ? selectedSavingsBucketId : null,
       ...(noteInput.trim() ? { note: noteInput.trim() } : {}),
@@ -355,7 +356,7 @@ export function ChecklistWorkspaceView({
           testID={`checklist-workspace-item-${entry.id}`}
           accessibilityRole="checkbox"
           accessibilityState={{ checked: isCompleted }}
-          accessibilityLabel={`${entry.conceptName}, ${formatCop(entry.actualAmount)}`}
+          accessibilityLabel={`${entry.conceptName}, ${formatCurrency(entry.actualAmount)}`}
           onPressIn={() => hapticService.trigger(isCompleted ? 'light' : 'success')}
           onPress={() => onToggleEntry(entry)}
           style={{
@@ -388,25 +389,19 @@ export function ChecklistWorkspaceView({
               }}
             >
               <AppText variant="body">{`${isCompleted ? '✓ ' : ''}${entry.conceptName}`}</AppText>
-              {concept?.savingsContribution?.bucketId === 'moto' ? (
-                <StatusBadge label="→ Fondo Moto" status="moto" />
-              ) : linkedBucket ? (
-                <StatusBadge label={`→ ${linkedBucket.name}`} status="savings" />
+              {linkedBucket ? (
+                <StatusBadge label={`→ ${linkedBucket.name}`} status="reserve" />
               ) : concept?.savingsContribution?.bucketId ? (
                 <StatusBadge
-                  label={`→ ${concept.savingsContribution.bucketId}`}
-                  status="savings"
+                  label={`→ ${concept.savingsContribution.bucketId === 'moto' ? 'Fondo de Reserva' : concept.savingsContribution.bucketId}`}
+                  status="reserve"
                 />
               ) : null}
               {linkedDebt ? (
                 <StatusBadge label={`→ ${linkedDebt.name}`} status="debt" />
               ) : concept?.linkedDebtGroup ? (
                 <StatusBadge
-                  label={
-                    concept.linkedDebtGroup === 'FUNFAMI'
-                      ? '→ Deuda'
-                      : `→ ${concept.linkedDebtGroup}`
-                  }
+                  label={`→ Deuda ${concept.linkedDebtGroup !== 'FUNFAMI' ? `(${concept.linkedDebtGroup})` : ''}`.trim()}
                   status="debt"
                 />
               ) : null}
@@ -418,7 +413,7 @@ export function ChecklistWorkspaceView({
             <AppText variant="micro" color={colors.text.secondary}>
               {isCompleted
                 ? `${entry.type === 'income' ? 'Recibido' : 'Pagado'}${entry.completedAt ? ` · ${entry.completedAt}` : ''}${entry.note ? ` · ${entry.note}` : ''}`
-                : `Pendiente · Previsto ${formatCop(entry.plannedAmount)}`}
+                : `Pendiente · Previsto ${formatCurrency(entry.plannedAmount)}`}
             </AppText>
           </View>
           <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
@@ -629,7 +624,7 @@ export function ChecklistWorkspaceView({
               value={editAmountInput}
               onChangeText={setEditAmountInput}
               keyboardType="numeric"
-              placeholder="Monto en COP enteros"
+              placeholder="Monto en números enteros"
             />
 
             <AppTextInput
@@ -939,7 +934,7 @@ export function ChecklistWorkspaceView({
                       variant="caption"
                       color={isSelected ? colors.semantic.income : colors.text.primary}
                     >
-                      {`${concept.name}${concept.defaultAmount > 0 ? ` (${formatCop(concept.defaultAmount)})` : ' (Múltiple)'}`}
+                      {`${concept.name}${concept.defaultAmount > 0 ? ` (${formatCurrency(concept.defaultAmount)})` : ' (Múltiple)'}`}
                     </AppText>
                   </Pressable>
                 );
@@ -959,7 +954,7 @@ export function ChecklistWorkspaceView({
                   paddingHorizontal: spacing.md,
                   borderRadius: radius.pill,
                   backgroundColor: isCustomConceptMode
-                    ? colors.semantic.motoSoft
+                    ? colors.semantic.reserveSoft
                     : colors.glass.surfaceTint,
                   borderWidth: 1,
                   borderColor: isCustomConceptMode
@@ -970,7 +965,7 @@ export function ChecklistWorkspaceView({
               >
                 <AppText
                   variant="caption"
-                  color={isCustomConceptMode ? colors.semantic.moto : colors.text.secondary}
+                  color={isCustomConceptMode ? colors.semantic.reserve : colors.text.secondary}
                 >
                   + Crear nuevo ítem
                 </AppText>
@@ -1052,7 +1047,7 @@ export function ChecklistWorkspaceView({
                         }}
                       >
                         <AppText variant="micro" color={colors.text.secondary}>
-                          {`Monto base: ${formatCop(activeSelectedConcept.defaultAmount)}`}
+                          {`Monto base: ${formatCurrency(activeSelectedConcept.defaultAmount)}`}
                         </AppText>
                       </View>
                     ) : (
@@ -1197,7 +1192,7 @@ export function ChecklistWorkspaceView({
                       value={conceptEditAmount}
                       onChangeText={setConceptEditAmount}
                       keyboardType="numeric"
-                      placeholder="Monto por defecto en COP (ej. 150000)"
+                      placeholder="Monto por defecto (ej. 150000)"
                       style={{
                         backgroundColor: colors.glass.surfaceElevatedTint,
                       }}
@@ -1266,7 +1261,7 @@ export function ChecklistWorkspaceView({
                   testID="custom-concept-name-input"
                   value={customConceptName}
                   onChangeText={setCustomConceptName}
-                  placeholder="Nombre del nuevo ítem (ej. Bono extra o Parqueadero)"
+                  placeholder="Nombre del nuevo ítem (ej. Bono extra o Suscripción)"
                 />
                 <View style={{ flexDirection: 'row', gap: spacing.xs }}>
                   {(
@@ -1310,7 +1305,7 @@ export function ChecklistWorkspaceView({
               value={amountInput}
               onChangeText={setAmountInput}
               keyboardType="numeric"
-              placeholder="Monto en COP enteros (ej. 130000)"
+              placeholder="Monto en números enteros (ej. 130000)"
             />
 
             <AppTextInput
@@ -1530,18 +1525,18 @@ export function ChecklistWorkspaceView({
           >
             <AppText variant="title2">Ingresos</AppText>
             <AppText variant="caption" color={colors.semantic.income}>
-              {`Recibido ${formatCop(budget.receivedIncome)} / Previsto ${formatCop(budget.plannedIncome)}`}
+              {`Recibido ${formatCurrency(budget.receivedIncome)} / Previsto ${formatCurrency(budget.plannedIncome)}`}
             </AppText>
           </View>
 
           <AppText variant="caption" color={colors.text.secondary}>
-            {`Ingresos Fijos · Pendiente: ${formatCop(budget.incomeByGroup.fixed.pending)}`}
+            {`Ingresos Fijos · Pendiente: ${formatCurrency(budget.incomeByGroup.fixed.pending)}`}
           </AppText>
           {fixedIncomes.map(renderEntryRow)}
 
           <View style={{ paddingTop: spacing.xs, gap: spacing.xs }}>
             <AppText variant="caption" color={colors.text.secondary}>
-              {`Ingresos Variables · Recibido: ${formatCop(budget.incomeByGroup.variable.paid)}`}
+              {`Ingresos Variables · Recibido: ${formatCurrency(budget.incomeByGroup.variable.paid)}`}
             </AppText>
             {variableIncomes.map(renderEntryRow)}
           </View>
@@ -1562,18 +1557,18 @@ export function ChecklistWorkspaceView({
           >
             <AppText variant="title2">Gastos</AppText>
             <AppText variant="caption" color={colors.semantic.expense}>
-              {`Pagado ${formatCop(budget.paidExpenses)} / Previsto ${formatCop(budget.plannedExpenses)}`}
+              {`Pagado ${formatCurrency(budget.paidExpenses)} / Previsto ${formatCurrency(budget.plannedExpenses)}`}
             </AppText>
           </View>
 
           <AppText variant="caption" color={colors.text.secondary}>
-            {`Gastos Fijos (${formatCop(budget.expensesByGroup.fixed.paid)} pagados · ${formatCop(budget.expensesByGroup.fixed.pending)} pendientes)`}
+            {`Gastos Fijos (${formatCurrency(budget.expensesByGroup.fixed.paid)} pagados · ${formatCurrency(budget.expensesByGroup.fixed.pending)} pendientes)`}
           </AppText>
           {fixedExpenses.map(renderEntryRow)}
 
           <View style={{ paddingTop: spacing.xs, gap: spacing.xs }}>
             <AppText variant="caption" color={colors.text.secondary}>
-              {`Gastos Variables (${formatCop(budget.expensesByGroup.variable.paid)} pagados · ${formatCop(budget.expensesByGroup.variable.pending)} pendientes)`}
+              {`Gastos Variables (${formatCurrency(budget.expensesByGroup.variable.paid)} pagados · ${formatCurrency(budget.expensesByGroup.variable.pending)} pendientes)`}
             </AppText>
             {variableExpenses.map(renderEntryRow)}
           </View>

@@ -176,8 +176,8 @@ function main() {
   const excelPath = path.resolve(rootDir, EXCEL_RELATIVE_PATH);
 
   if (!fs.existsSync(excelPath)) {
-    console.error(`ERROR: Excel file not found at ${excelPath}`);
-    process.exit(1);
+    console.info(`ℹ Excel source file not present at ${excelPath}. Keeping existing fixtures in fixtures/.`);
+    return;
   }
 
   const entries = readZipEntries(excelPath);

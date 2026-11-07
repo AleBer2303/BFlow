@@ -1,8 +1,12 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
 import PhaseOneHomeScreen from '../../../app/index';
-import { InMemoryBudgetRepository } from '../../../data/repositories/budgetRepository';
+import {
+  FirestoreBudgetRepository,
+  InMemoryBudgetRepository,
+} from '../../../data/repositories/budgetRepository';
 import { BFlowThemeProvider } from '../../../design-system/theme/ThemeContext';
+import * as authAdapter from '../../../platform/auth/authAdapter';
 import {
   loadPersistedSession,
   savePersistedSession,
@@ -437,5 +441,53 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       /Contraseña actualizada exitosamente/i
     );
     expect(screen.getByTestId('auth-email-input').props.value).toBe('abernalg2303@gmail.com');
+  });
+
+  it('deduplicates concurrent cloud account synchronization calls to prevent duplicate Firestore queries', async () => {
+    useBudgetStore.getState().requireAuthenticationGate();
+
+    const mockUser: BFlowAuthUser = {
+      uid: 'uid_test_dedup_01',
+      email: 'abernalg2303@gmail.com',
+      displayName: 'Alejandro Bernal',
+      authProvider: 'password',
+      provider: 'local-demo',
+    };
+    const signInSpy = jest.spyOn(authAdapter, 'signInWithEmail').mockResolvedValue(mockUser);
+
+    let loadCallCount = 0;
+    const originalLoad = FirestoreBudgetRepository.prototype.loadFullCloudAccount;
+    FirestoreBudgetRepository.prototype.loadFullCloudAccount = jest.fn().mockImplementation(
+      async (...args: Parameters<typeof originalLoad>) => {
+        loadCallCount += 1;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return originalLoad.apply(
+          new InMemoryBudgetRepository() as unknown as typeof FirestoreBudgetRepository.prototype,
+          args
+        );
+      }
+    );
+
+    try {
+      render(
+        <BFlowThemeProvider initialMode="dark">
+          <PhaseOneHomeScreen />
+        </BFlowThemeProvider>
+      );
+
+      fireEvent.changeText(screen.getByTestId('auth-email-input'), 'abernalg2303@gmail.com');
+      fireEvent.changeText(screen.getByTestId('auth-password-input'), 'claveValida123');
+
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('auth-primary-submit-button'));
+        fireEvent.press(screen.getByTestId('auth-primary-submit-button'));
+      });
+
+      // Must have invoked loadFullCloudAccount only once thanks to syncInFlightRef deduplication
+      expect(loadCallCount).toBe(1);
+    } finally {
+      signInSpy.mockRestore();
+      FirestoreBudgetRepository.prototype.loadFullCloudAccount = originalLoad;
+    }
   });
 });

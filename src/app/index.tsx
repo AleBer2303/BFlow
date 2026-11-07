@@ -128,23 +128,37 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     hapticService.trigger(type);
   };
 
+  const syncInFlightRef = React.useRef<Map<string, Promise<void>>>(new Map());
+
   const syncUserCloudAccount = async (
     user: BFlowAuthUser,
     options?: { isRegistration?: boolean }
-  ) => {
-    setSyncStatus('Cargando tu presupuesto e historial...', true);
-    try {
-      const repo = new FirestoreBudgetRepository();
-      const fullAccount = await repo.loadFullCloudAccount(user.uid, user.email, options);
-      const currentUid = useBudgetStore.getState().authUser?.uid;
-      if (currentUid && currentUid !== user.uid) {
-        return;
-      }
-      applyFullCloudAccount(fullAccount);
-      setSyncStatus('Sincronizado', false);
-    } catch {
-      setSyncStatus('', false);
+  ): Promise<void> => {
+    const activePromise = syncInFlightRef.current.get(user.uid);
+    if (activePromise) {
+      return activePromise;
     }
+
+    const runSync = (async () => {
+      setSyncStatus('Cargando tu presupuesto e historial...', true);
+      try {
+        const repo = new FirestoreBudgetRepository();
+        const fullAccount = await repo.loadFullCloudAccount(user.uid, user.email, options);
+        const currentUid = useBudgetStore.getState().authUser?.uid;
+        if (currentUid && currentUid !== user.uid) {
+          return;
+        }
+        applyFullCloudAccount(fullAccount);
+        setSyncStatus('Sincronizado', false);
+      } catch {
+        setSyncStatus('', false);
+      } finally {
+        syncInFlightRef.current.delete(user.uid);
+      }
+    })();
+
+    syncInFlightRef.current.set(user.uid, runSync);
+    return runSync;
   };
 
   // Automatic session restoration listener in live runtime

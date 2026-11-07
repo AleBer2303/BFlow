@@ -16,10 +16,12 @@ import {
   type Auth,
 } from 'firebase/auth';
 import {
+  CACHE_SIZE_UNLIMITED,
   getFirestore,
   initializeFirestore,
   memoryLocalCache,
   persistentLocalCache,
+  persistentMultipleTabManager,
   type Firestore,
 } from 'firebase/firestore';
 import { Platform } from 'react-native';
@@ -95,13 +97,22 @@ export function getFirebaseDb(): Firestore {
   try {
     const localCache =
       Platform.OS === 'web' && typeof indexedDB !== 'undefined'
-        ? persistentLocalCache()
+        ? persistentLocalCache({
+            tabManager: persistentMultipleTabManager(),
+            cacheSizeBytes: CACHE_SIZE_UNLIMITED,
+          })
         : memoryLocalCache();
     cachedDb = initializeFirestore(app, {
       localCache,
     });
   } catch {
-    cachedDb = getFirestore(app);
+    try {
+      cachedDb = initializeFirestore(app, {
+        localCache: memoryLocalCache(),
+      });
+    } catch {
+      cachedDb = getFirestore(app);
+    }
   }
   return cachedDb;
 }

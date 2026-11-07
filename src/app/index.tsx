@@ -60,6 +60,73 @@ import {
   confirmPasswordResetWithCode,
   requestPasswordResetCode,
 } from '../platform/auth/verificationCodeService';
+import {
+  loadPersistedAccount,
+  savePersistedAccount,
+} from '../platform/storage/accountCache';
+
+interface SummaryMovementRowProps {
+  entry: MonthEntry;
+  colors: ReturnType<typeof useBFlowTheme>['colors'];
+  spacing: ReturnType<typeof useBFlowTheme>['spacing'];
+  radius: ReturnType<typeof useBFlowTheme>['radius'];
+  onToggleEntry: (entry: MonthEntry) => void;
+  triggerHaptic: (type: HapticType) => void;
+}
+
+const SummaryMovementRow = React.memo(function SummaryMovementRow({
+  entry,
+  colors,
+  spacing,
+  radius,
+  onToggleEntry,
+  triggerHaptic,
+}: SummaryMovementRowProps) {
+  const isDone = entry.status === 'completed';
+  return (
+    <Pressable
+      testID={`checklist-item-${entry.conceptId}`}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: isDone }}
+      accessibilityLabel={`${entry.conceptName}, ${formatCurrency(entry.actualAmount)}`}
+      onPressIn={() => triggerHaptic(isDone ? 'light' : 'success')}
+      onPress={() => onToggleEntry(entry)}
+      style={{
+        minHeight: MIN_TOUCH_TARGET_PT,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: spacing.sm,
+        paddingVertical: spacing.sm,
+        paddingHorizontal: spacing.md,
+        borderRadius: radius.md,
+        backgroundColor: isDone
+          ? colors.semantic.completedSoft
+          : colors.glass.surfaceTint,
+        borderWidth: 1,
+        borderColor: isDone
+          ? colors.glass.specularBorder
+          : colors.glass.subtleBorder,
+      }}
+    >
+      <View style={{ flex: 1, gap: spacing.xxs }}>
+        <AppText variant="body">{`${isDone ? '✓ ' : ''}${entry.conceptName}`}</AppText>
+        <AppText variant="micro" color={colors.text.secondary}>
+          {isDone
+            ? `${entry.type === 'income' ? 'Recibido' : 'Pagado'}${entry.completedAt ? ` · ${entry.completedAt}` : ''}`
+            : 'Pendiente · Toca para completar'}
+        </AppText>
+      </View>
+      <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+        <CurrencyText
+          amount={entry.actualAmount}
+          variant="body"
+          tone={entry.type === 'income' ? 'income' : 'expense'}
+        />
+      </View>
+    </Pressable>
+  );
+});
 
 export default function PhaseOneHomeScreen(): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
@@ -136,6 +203,12 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     }
 
     const runSync = (async () => {
+      // 1. Instant offline cold-start: rehydrate from local cache if available
+      const cached = loadPersistedAccount(user.uid);
+      if (cached) {
+        applyFullCloudAccount(cached);
+      }
+
       setSyncStatus('Cargando tu presupuesto e historial...', true);
       try {
         const repo = new FirestoreBudgetRepository();
@@ -144,6 +217,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         if (currentUid && currentUid !== user.uid) {
           return;
         }
+        savePersistedAccount(user.uid, fullAccount);
         applyFullCloudAccount(fullAccount);
         setSyncStatus('Sincronizado', false);
       } catch {
@@ -603,53 +677,17 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
                     onSubmitCustomMovement={createCustomConceptAndMovement}
                   />
 
-                  {allMonthEntries.map((entry) => {
-                    const isDone = entry.status === 'completed';
-                    return (
-                      <Pressable
-                        key={entry.id}
-                        testID={`checklist-item-${entry.conceptId}`}
-                        accessibilityRole="checkbox"
-                        accessibilityState={{ checked: isDone }}
-                        accessibilityLabel={`${entry.conceptName}, ${formatCurrency(entry.actualAmount)}`}
-                        onPressIn={() => triggerHaptic(isDone ? 'light' : 'success')}
-                        onPress={() => handleToggleEntry(entry)}
-                        style={{
-                          minHeight: MIN_TOUCH_TARGET_PT,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: spacing.sm,
-                          paddingVertical: spacing.sm,
-                          paddingHorizontal: spacing.md,
-                          borderRadius: radius.md,
-                          backgroundColor: isDone
-                            ? colors.semantic.completedSoft
-                            : colors.glass.surfaceTint,
-                          borderWidth: 1,
-                          borderColor: isDone
-                            ? colors.glass.specularBorder
-                            : colors.glass.subtleBorder,
-                        }}
-                      >
-                        <View style={{ flex: 1, gap: spacing.xxs }}>
-                          <AppText variant="body">{`${isDone ? '✓ ' : ''}${entry.conceptName}`}</AppText>
-                          <AppText variant="micro" color={colors.text.secondary}>
-                            {isDone
-                              ? `${entry.type === 'income' ? 'Recibido' : 'Pagado'}${entry.completedAt ? ` · ${entry.completedAt}` : ''}`
-                              : 'Pendiente · Toca para completar'}
-                          </AppText>
-                        </View>
-                        <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
-                          <CurrencyText
-                            amount={entry.actualAmount}
-                            variant="body"
-                            tone={entry.type === 'income' ? 'income' : 'expense'}
-                          />
-                        </View>
-                      </Pressable>
-                    );
-                  })}
+                  {allMonthEntries.map((entry) => (
+                    <SummaryMovementRow
+                      key={entry.id}
+                      entry={entry}
+                      colors={colors}
+                      spacing={spacing}
+                      radius={radius}
+                      onToggleEntry={handleToggleEntry}
+                      triggerHaptic={triggerHaptic}
+                    />
+                  ))}
                 </View>
               </GlassSurface>
             </>

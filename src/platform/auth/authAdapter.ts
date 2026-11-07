@@ -28,6 +28,7 @@ import { getFirebaseAuth, getFirebaseDb } from '../../data/firebase/firebaseConf
 import { stripUndefinedFields } from '../../data/mappers/firestoreSchemas';
 import { isOwnerCanonicalEmail } from '../../data/repositories/budgetRepository';
 import { toBogotaMonthKey } from '../../domain/date/monthKey';
+import { persistentStorage } from '../storage/persistentStorageAdapter';
 
 export interface BFlowAuthUser {
   uid: string;
@@ -61,37 +62,24 @@ export const DEMO_OWNER_USER: BFlowAuthUser = {
 };
 
 const SESSION_STORAGE_KEY = 'bflow.auth.session.v1';
-let memorySessionCache: BFlowAuthUser | null = null;
 
 export function savePersistedSession(user: BFlowAuthUser | null): void {
-  memorySessionCache = user;
   try {
-    if (typeof globalThis !== 'undefined' && 'localStorage' in globalThis && globalThis.localStorage) {
-      if (user) {
-        globalThis.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user));
-      } else {
-        globalThis.localStorage.removeItem(SESSION_STORAGE_KEY);
-      }
+    if (user) {
+      persistentStorage.setItem(SESSION_STORAGE_KEY, user);
+    } else {
+      persistentStorage.removeItem(SESSION_STORAGE_KEY);
     }
   } catch {
-    // Ignore storage errors in private browsing or restricted environments
+    // Ignore storage errors
   }
 }
 
 export function loadPersistedSession(): BFlowAuthUser | null {
-  if (memorySessionCache) {
-    return memorySessionCache;
-  }
   try {
-    if (typeof globalThis !== 'undefined' && 'localStorage' in globalThis && globalThis.localStorage) {
-      const raw = globalThis.localStorage.getItem(SESSION_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as BFlowAuthUser;
-        if (parsed && typeof parsed.uid === 'string') {
-          memorySessionCache = parsed;
-          return parsed;
-        }
-      }
+    const user = persistentStorage.getItem<BFlowAuthUser>(SESSION_STORAGE_KEY);
+    if (user && typeof user.uid === 'string') {
+      return user;
     }
   } catch {
     // Ignore storage parse errors

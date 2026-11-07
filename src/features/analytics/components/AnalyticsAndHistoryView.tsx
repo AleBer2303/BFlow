@@ -53,6 +53,124 @@ export interface AnalyticsAndHistoryViewProps {
   onResetOctoberSeed?: () => void;
 }
 
+interface HistoryMonthRowItemProps {
+  mk: string;
+  isSelected: boolean;
+  isClosed: boolean;
+  canDelete: boolean;
+  colors: ReturnType<typeof useBFlowTheme>['colors'];
+  spacing: ReturnType<typeof useBFlowTheme>['spacing'];
+  radius: ReturnType<typeof useBFlowTheme>['radius'];
+  onSelectMonth: (mk: string) => void;
+  onReopenClosedMonth?: (mk: string) => void;
+  onDeleteOrRevertMonth?: (mk: string) => void;
+}
+
+const HistoryMonthRowItem = React.memo(function HistoryMonthRowItem({
+  mk,
+  isSelected,
+  isClosed,
+  canDelete,
+  colors,
+  spacing,
+  radius,
+  onSelectMonth,
+  onReopenClosedMonth,
+  onDeleteOrRevertMonth,
+}: HistoryMonthRowItemProps) {
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: spacing.xs,
+        padding: spacing.xs,
+        borderRadius: radius.md,
+        backgroundColor: isSelected
+          ? colors.glass.surfaceElevatedTint
+          : colors.glass.surfaceTint,
+        borderWidth: 1,
+        borderColor: isSelected
+          ? colors.glass.specularBorder
+          : colors.glass.subtleBorder,
+      }}
+    >
+      <Pressable
+        testID={`history-month-pill-${mk}`}
+        accessibilityRole="button"
+        onPress={() => onSelectMonth(mk)}
+        style={{
+          flex: 1,
+          minHeight: MIN_TOUCH_TARGET_PT,
+          paddingHorizontal: spacing.sm,
+          justifyContent: 'center',
+        }}
+      >
+        <AppText variant="body">{formatMonthKeyLabelEs(mk)}</AppText>
+        <AppText variant="micro" color={colors.text.secondary}>
+          {isClosed ? 'Mes Cerrado · Toca para ver' : 'Mes Abierto · Activo'}
+        </AppText>
+      </Pressable>
+
+      <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+        {isClosed && onReopenClosedMonth ? (
+          <Pressable
+            testID={`reopen-month-${mk}`}
+            accessibilityRole="button"
+            accessibilityLabel={`Editar mes cerrado ${formatMonthKeyLabelEs(mk)}`}
+            onPress={() => onReopenClosedMonth(mk)}
+            style={{
+              minHeight: MIN_TOUCH_TARGET_PT,
+              paddingHorizontal: spacing.md,
+              borderRadius: radius.md,
+              borderCurve: 'continuous',
+              backgroundColor: colors.glass.surfaceElevatedTint,
+              borderWidth: 1,
+              borderColor: colors.glass.specularBorder,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: spacing.xxs,
+              justifyContent: 'center',
+            }}
+          >
+            <PencilEditIcon size={14} color={colors.text.secondary} />
+            <AppText variant="caption">Editar mes</AppText>
+          </Pressable>
+        ) : null}
+
+        {canDelete && onDeleteOrRevertMonth ? (
+          <Pressable
+            testID={`delete-month-${mk}`}
+            accessibilityRole="button"
+            accessibilityLabel={`Eliminar mes ${formatMonthKeyLabelEs(mk)}`}
+            onPress={() => onDeleteOrRevertMonth(mk)}
+            style={{
+              minHeight: MIN_TOUCH_TARGET_PT,
+              paddingHorizontal: spacing.md,
+              borderRadius: radius.md,
+              borderCurve: 'continuous',
+              backgroundColor: colors.semantic.expenseSoft,
+              borderWidth: 1,
+              borderColor: colors.glass.subtleBorder,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: spacing.xxs,
+              justifyContent: 'center',
+            }}
+          >
+            <TrashBinIcon size={14} color={colors.semantic.expense} />
+            <AppText variant="caption" color={colors.semantic.expense}>
+              Eliminar
+            </AppText>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+});
+
 export function AnalyticsAndHistoryView({
   activeMonthKey,
   availableMonths,
@@ -295,104 +413,21 @@ export function AnalyticsAndHistoryView({
           {/* Month History Selector, Reopen/Edit & Delete/Revert Controls */}
           <View style={{ gap: spacing.xs, paddingTop: spacing.xs }}>
             <AppText variant="headline">Historial de Meses (Editar o Eliminar)</AppText>
-            {availableMonths.map((mk) => {
-              const isSelected = mk === activeMonthKey;
-              const isClosed = Boolean(closedSnapshots[mk]);
-              const canDelete = availableMonths.length > 1 || isClosed;
-
-              return (
-                <View
-                  key={mk}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: spacing.xs,
-                    padding: spacing.xs,
-                    borderRadius: radius.md,
-                    backgroundColor: isSelected
-                      ? colors.glass.surfaceElevatedTint
-                      : colors.glass.surfaceTint,
-                    borderWidth: 1,
-                    borderColor: isSelected
-                      ? colors.glass.specularBorder
-                      : colors.glass.subtleBorder,
-                  }}
-                >
-                  <Pressable
-                    testID={`history-month-pill-${mk}`}
-                    accessibilityRole="button"
-                    onPress={() => onSelectMonth(mk)}
-                    style={{
-                      flex: 1,
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      paddingHorizontal: spacing.sm,
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <AppText variant="body">{formatMonthKeyLabelEs(mk)}</AppText>
-                    <AppText variant="micro" color={colors.text.secondary}>
-                      {isClosed ? 'Mes Cerrado · Toca para ver' : 'Mes Abierto · Activo'}
-                    </AppText>
-                  </Pressable>
-
-                  <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-                    {isClosed && onReopenClosedMonth ? (
-                      <Pressable
-                        testID={`reopen-month-${mk}`}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Editar mes cerrado ${formatMonthKeyLabelEs(mk)}`}
-                        onPress={() => onReopenClosedMonth(mk)}
-                        style={{
-                          minHeight: MIN_TOUCH_TARGET_PT,
-                          paddingHorizontal: spacing.md,
-                          borderRadius: radius.md,
-                          borderCurve: 'continuous',
-                          backgroundColor: colors.glass.surfaceElevatedTint,
-                          borderWidth: 1,
-                          borderColor: colors.glass.specularBorder,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: spacing.xxs,
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <PencilEditIcon size={14} color={colors.text.secondary} />
-                        <AppText variant="caption">Editar mes</AppText>
-                      </Pressable>
-                    ) : null}
-
-                    {canDelete && onDeleteOrRevertMonth ? (
-                      <Pressable
-                        testID={`delete-month-${mk}`}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Eliminar mes ${formatMonthKeyLabelEs(mk)}`}
-                        onPress={() => onDeleteOrRevertMonth(mk)}
-                        style={{
-                          minHeight: MIN_TOUCH_TARGET_PT,
-                          paddingHorizontal: spacing.md,
-                          borderRadius: radius.md,
-                          borderCurve: 'continuous',
-                          backgroundColor: colors.semantic.expenseSoft,
-                          borderWidth: 1,
-                          borderColor: colors.glass.subtleBorder,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: spacing.xxs,
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <TrashBinIcon size={14} color={colors.semantic.expense} />
-                        <AppText variant="caption" color={colors.semantic.expense}>
-                          Eliminar
-                        </AppText>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                </View>
-              );
-            })}
+            {availableMonths.map((mk) => (
+              <HistoryMonthRowItem
+                key={mk}
+                mk={mk}
+                isSelected={mk === activeMonthKey}
+                isClosed={Boolean(closedSnapshots[mk])}
+                canDelete={availableMonths.length > 1 || Boolean(closedSnapshots[mk])}
+                colors={colors}
+                spacing={spacing}
+                radius={radius}
+                onSelectMonth={onSelectMonth}
+                onReopenClosedMonth={onReopenClosedMonth}
+                onDeleteOrRevertMonth={onDeleteOrRevertMonth}
+              />
+            ))}
           </View>
         </View>
       </GlassSurface>

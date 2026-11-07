@@ -74,6 +74,162 @@ export interface ChecklistWorkspaceViewProps {
   onRemoveRepeatableEntry: (entryId: string) => void;
 }
 
+interface ChecklistRowItemProps {
+  entry: MonthEntry;
+  concept?: Concept;
+  linkedDebt?: Debt;
+  linkedBucket?: SavingsBucket;
+  colors: ReturnType<typeof useBFlowTheme>['colors'];
+  spacing: ReturnType<typeof useBFlowTheme>['spacing'];
+  radius: ReturnType<typeof useBFlowTheme>['radius'];
+  onToggle: (entry: MonthEntry) => void;
+  onEdit: (entry: MonthEntry) => void;
+  onDelete: (entry: MonthEntry) => void;
+}
+
+const ChecklistRowItem = React.memo(function ChecklistRowItem({
+  entry,
+  concept,
+  linkedDebt,
+  linkedBucket,
+  colors,
+  spacing,
+  radius,
+  onToggle,
+  onEdit,
+  onDelete,
+}: ChecklistRowItemProps) {
+  const isCompleted = entry.status === 'completed';
+  const isRepeatable = Boolean(concept?.allowMultiplePerMonth);
+
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+      }}
+    >
+      <Pressable
+        testID={`checklist-workspace-item-${entry.id}`}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: isCompleted }}
+        accessibilityLabel={`${entry.conceptName}, ${formatCurrency(entry.actualAmount)}`}
+        onPressIn={() => hapticService.trigger(isCompleted ? 'light' : 'success')}
+        onPress={() => onToggle(entry)}
+        style={{
+          flex: 1,
+          minHeight: MIN_TOUCH_TARGET_PT,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: spacing.sm,
+          paddingVertical: spacing.sm,
+          paddingHorizontal: spacing.md,
+          borderRadius: radius.md,
+          borderCurve: 'continuous',
+          backgroundColor: isCompleted
+            ? colors.semantic.completedSoft
+            : colors.glass.surfaceTint,
+          borderWidth: 1,
+          borderColor: isCompleted
+            ? colors.glass.specularBorder
+            : colors.glass.subtleBorder,
+        }}
+      >
+        <View style={{ flex: 1, gap: spacing.xxs }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: spacing.xs,
+              flexWrap: 'wrap',
+            }}
+          >
+            <AppText variant="body">{`${isCompleted ? '✓ ' : ''}${entry.conceptName}`}</AppText>
+            {linkedBucket ? (
+              <StatusBadge label={`→ ${linkedBucket.name}`} status="reserve" />
+            ) : concept?.savingsContribution?.bucketId ? (
+              <StatusBadge
+                label={`→ ${concept.savingsContribution.bucketId === 'moto' ? 'Fondo de Reserva' : concept.savingsContribution.bucketId}`}
+                status="reserve"
+              />
+            ) : null}
+            {linkedDebt ? (
+              <StatusBadge label={`→ ${linkedDebt.name}`} status="debt" />
+            ) : concept?.linkedDebtGroup ? (
+              <StatusBadge
+                label={`→ Deuda ${concept.linkedDebtGroup !== 'FUNFAMI' ? `(${concept.linkedDebtGroup})` : ''}`.trim()}
+                status="debt"
+              />
+            ) : null}
+            {concept?.recurrence.kind === 'specific_months' ? (
+              <StatusBadge label="Solo este mes" status="info" />
+            ) : null}
+            {isRepeatable ? <StatusBadge label="Múltiple/mes" status="info" /> : null}
+          </View>
+          <AppText variant="micro" color={colors.text.secondary}>
+            {isCompleted
+              ? `${entry.type === 'income' ? 'Recibido' : 'Pagado'}${entry.completedAt ? ` · ${entry.completedAt}` : ''}${entry.note ? ` · ${entry.note}` : ''}`
+              : `Pendiente · Previsto ${formatCurrency(entry.plannedAmount)}`}
+          </AppText>
+        </View>
+        <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+          <CurrencyText
+            amount={entry.actualAmount}
+            variant="body"
+            tone={entry.type === 'income' ? 'income' : 'expense'}
+          />
+        </View>
+      </Pressable>
+
+      {/* Edit Entry Button */}
+      <Pressable
+        testID={`edit-entry-${entry.id}`}
+        accessibilityRole="button"
+        accessibilityLabel={`Editar ${entry.conceptName}`}
+        onPressIn={() => hapticService.light()}
+        onPress={() => onEdit(entry)}
+        style={{
+          minHeight: MIN_TOUCH_TARGET_PT,
+          minWidth: MIN_TOUCH_TARGET_PT,
+          borderRadius: radius.md,
+          borderCurve: 'continuous',
+          backgroundColor: colors.glass.surfaceElevatedTint,
+          borderWidth: 1,
+          borderColor: colors.glass.specularBorder,
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        <PencilEditIcon size={16} color={colors.text.secondary} />
+      </Pressable>
+
+      {/* Delete Entry Button */}
+      <Pressable
+        testID={`delete-entry-${entry.id}`}
+        accessibilityRole="button"
+        accessibilityLabel={`Eliminar ${entry.conceptName}`}
+        onPressIn={() => hapticService.warning()}
+        onPress={() => onDelete(entry)}
+        style={{
+          minHeight: MIN_TOUCH_TARGET_PT,
+          minWidth: MIN_TOUCH_TARGET_PT,
+          borderRadius: radius.md,
+          borderCurve: 'continuous',
+          backgroundColor: colors.semantic.expenseSoft,
+          borderWidth: 1,
+          borderColor: colors.glass.subtleBorder,
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        <TrashBinIcon size={16} color={colors.semantic.expense} />
+      </Pressable>
+    </View>
+  );
+});
+
 export function ChecklistWorkspaceView({
   monthKey,
   concepts,
@@ -332,8 +488,6 @@ export function ChecklistWorkspaceView({
 
   const renderEntryRow = (entry: MonthEntry) => {
     const concept = concepts.find((c) => c.id === entry.conceptId);
-    const isCompleted = entry.status === 'completed';
-    const isRepeatable = Boolean(concept?.allowMultiplePerMonth);
     const linkedDebt = concept?.defaultTargetDebtId
       ? debts.find((d) => d.id === concept.defaultTargetDebtId)
       : concept?.linkedDebtGroup
@@ -344,131 +498,19 @@ export function ChecklistWorkspaceView({
       : undefined;
 
     return (
-      <View
+      <ChecklistRowItem
         key={entry.id}
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: spacing.xs,
-        }}
-      >
-        <Pressable
-          testID={`checklist-workspace-item-${entry.id}`}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: isCompleted }}
-          accessibilityLabel={`${entry.conceptName}, ${formatCurrency(entry.actualAmount)}`}
-          onPressIn={() => hapticService.trigger(isCompleted ? 'light' : 'success')}
-          onPress={() => onToggleEntry(entry)}
-          style={{
-            flex: 1,
-            minHeight: MIN_TOUCH_TARGET_PT,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: spacing.sm,
-            paddingVertical: spacing.sm,
-            paddingHorizontal: spacing.md,
-            borderRadius: radius.md,
-            borderCurve: 'continuous',
-            backgroundColor: isCompleted
-              ? colors.semantic.completedSoft
-              : colors.glass.surfaceTint,
-            borderWidth: 1,
-            borderColor: isCompleted
-              ? colors.glass.specularBorder
-              : colors.glass.subtleBorder,
-          }}
-        >
-          <View style={{ flex: 1, gap: spacing.xxs }}>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: spacing.xs,
-                flexWrap: 'wrap',
-              }}
-            >
-              <AppText variant="body">{`${isCompleted ? '✓ ' : ''}${entry.conceptName}`}</AppText>
-              {linkedBucket ? (
-                <StatusBadge label={`→ ${linkedBucket.name}`} status="reserve" />
-              ) : concept?.savingsContribution?.bucketId ? (
-                <StatusBadge
-                  label={`→ ${concept.savingsContribution.bucketId === 'moto' ? 'Fondo de Reserva' : concept.savingsContribution.bucketId}`}
-                  status="reserve"
-                />
-              ) : null}
-              {linkedDebt ? (
-                <StatusBadge label={`→ ${linkedDebt.name}`} status="debt" />
-              ) : concept?.linkedDebtGroup ? (
-                <StatusBadge
-                  label={`→ Deuda ${concept.linkedDebtGroup !== 'FUNFAMI' ? `(${concept.linkedDebtGroup})` : ''}`.trim()}
-                  status="debt"
-                />
-              ) : null}
-              {concept?.recurrence.kind === 'specific_months' ? (
-                <StatusBadge label="Solo este mes" status="info" />
-              ) : null}
-              {isRepeatable ? <StatusBadge label="Múltiple/mes" status="info" /> : null}
-            </View>
-            <AppText variant="micro" color={colors.text.secondary}>
-              {isCompleted
-                ? `${entry.type === 'income' ? 'Recibido' : 'Pagado'}${entry.completedAt ? ` · ${entry.completedAt}` : ''}${entry.note ? ` · ${entry.note}` : ''}`
-                : `Pendiente · Previsto ${formatCurrency(entry.plannedAmount)}`}
-            </AppText>
-          </View>
-          <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
-            <CurrencyText
-              amount={entry.actualAmount}
-              variant="body"
-              tone={entry.type === 'income' ? 'income' : 'expense'}
-            />
-          </View>
-        </Pressable>
-
-        {/* Edit Entry Button */}
-        <Pressable
-          testID={`edit-entry-${entry.id}`}
-          accessibilityRole="button"
-          accessibilityLabel={`Editar ${entry.conceptName}`}
-          onPressIn={() => hapticService.light()}
-          onPress={() => handleOpenEditModal(entry)}
-          style={{
-            minHeight: MIN_TOUCH_TARGET_PT,
-            minWidth: MIN_TOUCH_TARGET_PT,
-            borderRadius: radius.md,
-            borderCurve: 'continuous',
-            backgroundColor: colors.glass.surfaceElevatedTint,
-            borderWidth: 1,
-            borderColor: colors.glass.specularBorder,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <PencilEditIcon size={16} color={colors.text.secondary} />
-        </Pressable>
-
-        {/* Delete Entry Button */}
-        <Pressable
-          testID={`delete-entry-${entry.id}`}
-          accessibilityRole="button"
-          accessibilityLabel={`Eliminar ${entry.conceptName}`}
-          onPressIn={() => hapticService.warning()}
-          onPress={() => handleDeleteEntry(entry)}
-          style={{
-            minHeight: MIN_TOUCH_TARGET_PT,
-            minWidth: MIN_TOUCH_TARGET_PT,
-            borderRadius: radius.md,
-            borderCurve: 'continuous',
-            backgroundColor: colors.semantic.expenseSoft,
-            borderWidth: 1,
-            borderColor: colors.glass.subtleBorder,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <TrashBinIcon size={16} color={colors.semantic.expense} />
-        </Pressable>
-      </View>
+        entry={entry}
+        concept={concept}
+        linkedDebt={linkedDebt}
+        linkedBucket={linkedBucket}
+        colors={colors}
+        spacing={spacing}
+        radius={radius}
+        onToggle={onToggleEntry}
+        onEdit={handleOpenEditModal}
+        onDelete={handleDeleteEntry}
+      />
     );
   };
 

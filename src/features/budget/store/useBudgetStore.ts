@@ -341,7 +341,7 @@ function isRealAuthUser(user: BFlowAuthUser | null): user is BFlowAuthUser {
       user.uid &&
       user.uid !== 'local-owner' &&
       user.uid !== 'local-demo' &&
-      process.env.NODE_ENV !== 'test'
+      (process.env.NODE_ENV !== 'test' || user.uid.startsWith('uid_cloud_test'))
   );
 }
 
@@ -554,6 +554,9 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     const target = state.entries.find((e) => e.id === entryId);
     if (!target) return;
 
+    const previousEntries = state.entries;
+    const previousDebtPayments = state.debtPayments;
+
     const nextEntries = toggleMovementStatus(state.entries, entryId, {
       completedAt: completedAtDateIso,
     });
@@ -593,13 +596,23 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
           nextDebtPayments.filter((dp) => dp.entryId === entryId)
         );
       } catch {
-        set({ syncMessage: '' });
+        // Rollback optimistic update if cloud write fails (Point 14)
+        set({
+          entries: previousEntries,
+          debtPayments: previousDebtPayments,
+          syncMessage: 'Error de sincronización. No se pudo guardar el cambio en la nube.',
+        });
+        triggerWidgetSync(get());
       }
     }
   },
 
   addOrCompleteMovement: async (input) => {
     const state = get();
+    const previousConcepts = state.concepts;
+    const previousEntries = state.entries;
+    const previousDebtPayments = state.debtPayments;
+
     const monthDebts =
       state.debtsByMonth[input.monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
     let concept = state.concepts.find((c) => c.id === input.conceptId);
@@ -656,7 +669,14 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
           nextDebtPayments.filter((dp) => dp.entryId === updatedEntry.id)
         );
       } catch {
-        set({ syncMessage: '' });
+        // Rollback optimistic update if cloud write fails (Point 14)
+        set({
+          concepts: previousConcepts,
+          entries: previousEntries,
+          debtPayments: previousDebtPayments,
+          syncMessage: 'Error de conexión. No se pudo registrar el movimiento en la nube.',
+        });
+        triggerWidgetSync(get());
       }
     }
   },
@@ -1340,6 +1360,9 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
     const target = state.entries.find((e) => e.id === entryId);
     if (!target) return;
 
+    const previousEntries = state.entries;
+    const previousDebtPayments = state.debtPayments;
+
     const nextEntries = state.entries.filter((e) => e.id !== entryId);
     const nextDebtPayments = state.debtPayments.filter((dp) => dp.entryId !== entryId);
 
@@ -1354,7 +1377,13 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
         const repo = new FirestoreBudgetRepository();
         await repo.deleteEntryCompletely(state.authUser.uid, entryId);
       } catch {
-        set({ syncMessage: '' });
+        // Rollback optimistic deletion if cloud write fails (Point 14)
+        set({
+          entries: previousEntries,
+          debtPayments: previousDebtPayments,
+          syncMessage: 'Error de conexión. No se pudo eliminar la entrada en la nube.',
+        });
+        triggerWidgetSync(get());
       }
     }
   },
@@ -1362,6 +1391,9 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
   removeOrResetEntry: async (entryId) => {
     const state = get();
     const target = state.entries.find((e) => e.id === entryId);
+    const previousEntries = state.entries;
+    const previousDebtPayments = state.debtPayments;
+
     const nextEntries = deleteMovement(state.entries, state.concepts, entryId);
     const concept = target ? state.concepts.find((c) => c.id === target.conceptId) : undefined;
 
@@ -1390,7 +1422,13 @@ export const useBudgetStore = create<BudgetStoreState>((set, get) => ({
         const repo = new FirestoreBudgetRepository();
         await repo.deleteOrResetEntry(state.authUser.uid, entryId);
       } catch {
-        set({ syncMessage: '' });
+        // Rollback optimistic reset if cloud write fails (Point 14)
+        set({
+          entries: previousEntries,
+          debtPayments: previousDebtPayments,
+          syncMessage: 'Error de conexión. No se pudo restablecer la entrada en la nube.',
+        });
+        triggerWidgetSync(get());
       }
     }
   },

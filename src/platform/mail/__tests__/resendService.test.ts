@@ -127,4 +127,25 @@ describe('resendService', () => {
       )
     ).rejects.toThrow('API key is invalid');
   });
+
+  it('aborts with a friendly retry message when the external API times out (Point 12)', async () => {
+    const timeoutError = new Error('The operation was aborted');
+    timeoutError.name = 'AbortError';
+
+    const mockFetch = jest.fn().mockRejectedValue(timeoutError);
+
+    await expect(
+      sendVerificationCodeViaResend(
+        {
+          to: 'slow@bflow.app',
+          code: '998877',
+        },
+        {
+          apiKey: 're_test_key',
+          fetchFn: mockFetch as unknown as typeof fetch,
+          timeoutMs: 5000,
+        }
+      )
+    ).rejects.toThrow(/El servicio de correo tardó demasiado en responder \(5s\)\. Por favor reintenta\./);
+  });
 });

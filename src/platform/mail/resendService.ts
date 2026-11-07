@@ -16,6 +16,7 @@ export interface ResendOptions {
   apiKey?: string;
   fromEmail?: string;
   fetchFn?: typeof fetch;
+  timeoutMs?: number;
 }
 
 export interface ResendSendResult {
@@ -26,6 +27,7 @@ export interface ResendSendResult {
   message: string;
 }
 
+export const DEFAULT_RESEND_TIMEOUT_MS = 10_000;
 const RESEND_API_URL = 'https://api.resend.com/emails';
 const DEFAULT_FROM = 'BFlow <onboarding@resend.dev>';
 
@@ -114,6 +116,18 @@ export async function sendVerificationCodeViaResend(
     };
   }
 
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_RESEND_TIMEOUT_MS;
+  let signal: AbortSignal | undefined;
+  let timerId: ReturnType<typeof setTimeout> | undefined;
+
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    signal = AbortSignal.timeout(timeoutMs);
+  } else if (typeof AbortController !== 'undefined') {
+    const controller = new AbortController();
+    timerId = setTimeout(() => controller.abort(), timeoutMs);
+    signal = controller.signal;
+  }
+
   try {
     const response = await fetchFn(RESEND_API_URL, {
       method: 'POST',
@@ -127,6 +141,7 @@ export async function sendVerificationCodeViaResend(
         subject,
         html,
       }),
+      ...(signal ? { signal } : {}),
     });
 
     const data = (await response.json().catch(() => ({}))) as {
@@ -168,8 +183,23 @@ export async function sendVerificationCodeViaResend(
       message: `Hemos enviado el código de verificación de 6 dígitos a ${to} vía correo electrónico.`,
     };
   } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.name === 'TimeoutError' ||
+        error.name === 'AbortError' ||
+        error.message.toLowerCase().includes('timeout') ||
+        error.message.toLowerCase().includes('aborted'))
+    ) {
+      throw new Error(
+        `El servicio de correo tardó demasiado en responder (${Math.round(timeoutMs / 1000)}s). Por favor reintenta.`
+      );
+    }
     const errorMsg =
       error instanceof Error ? error.message : 'Error desconocido al contactar Resend';
     throw new Error(`No se pudo enviar el correo de verificación: ${errorMsg}`);
+  } finally {
+    if (timerId) {
+      clearTimeout(timerId);
+    }
   }
 }

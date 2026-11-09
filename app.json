@@ -22,6 +22,14 @@
         ]
       }
     },
+    "android": {
+      "package": "com.bflow.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0D0F12"
+      }
+    },
     "web": {
       "bundler": "metro",
       "output": "single",

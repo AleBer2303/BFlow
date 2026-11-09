@@ -382,10 +382,8 @@ Como parte de la evaluación técnica exhaustiva requerida antes de un lanzamien
    - *Impacto:* Reducción de más de **1.8 MB** (ahorro del **51%** en `icon.png` y `adaptive-icon.png`, 27% en `favicon.png`) manteniendo 100% la paridad de píxeles.
 
 ### 🚀 Aspectos Faltantes para Publicación en Tiendas (App Store / Google Play)
-1. **Configuración de Android en `app.json`:**
-   - *Falta:* Declarar la sección `"android": { "package": "com.bflow.app", "adaptiveIcon": { ... } }` para permitir la compilación nativa de `.aab` / `.apk` en Android.
-2. **Workflow de Build Android en CI (`build-android.yml`):**
-   - *Falta:* Un workflow de GitHub Actions sobre runner Ubuntu (gratuito y ultrarrápido) para generar `.apk` de pruebas de Android automáticamente.
+1. ✅ **Configuración de Android en `app.json`** (ADR 0009): bloque `android` con `package`, `versionCode` y `adaptiveIcon`.
+2. ✅ **Workflow de Build Android en CI (`build-android.yml`)** (ADR 0009): genera `.apk` de prueba y `.aab` en `ubuntu-latest`.
 3. **Splash Screen Oficial (`expo-splash-screen`):**
    - *Falta:* Declarar la configuración de pantalla de carga nativa en `app.json` para evitar transiciones en blanco en arranques en frío.
 4. **Flujos de Pruebas E2E en Maestro:**

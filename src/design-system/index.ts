@@ -10,5 +10,6 @@ export * from './components/IosWheelPickerModal';
 export * from './components/KeyboardAwareScrollView';
 export * from './components/AppTextInput';
 export * from './components/TactilePressable';
+export * from './components/RevealDown';
 export * from '../platform/glass/GlassSurface';
 export * from '../platform/haptics/hapticService';

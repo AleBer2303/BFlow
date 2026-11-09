@@ -1,4 +1,5 @@
 import React from 'react';
+import { Animated } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { BFlowThemeProvider } from '../theme/ThemeContext';
 import {
@@ -7,6 +8,8 @@ import {
   DOCK_PADDING_H,
   LENS_MARGIN_H,
   getDockIndexFromScreenX,
+  getDockLensPositionFromScreenX,
+  buildLensGeometry,
 } from '../components/FloatingLiquidGlassDock';
 import {
   AccountNavIcon,
@@ -137,9 +140,19 @@ describe('FloatingLiquidGlassDock & WorkspaceNavIcons (Apple 60/120Hz Liquid Gla
     // Lens sits neatly inside capsule without protruding or bleeding
     expect(flattenedLensStyle.top).toBe(3);
     expect(flattenedLensStyle.bottom).toBe(3);
-    expect(flattenedLensStyle.borderRadius).toBe(radius.lg);
-    // Lens has no artificial hardcoded horizontal line stripes as children
-    expect(lens.props.children).toBeFalsy();
+    // Liquid glass lens is a capsule
+    expect(flattenedLensStyle.borderRadius).toBe(radius.pill);
+    // Elastic liquid physics: lift (grow) + velocity stretch are applied as scale transforms
+    const transformKeys = (flattenedLensStyle.transform as Array<Record<string, unknown>>).map(
+      (t) => Object.keys(t)[0]
+    );
+    expect(transformKeys).toEqual(['translateX', 'scaleX', 'scaleY']);
+    // Glass layers (glow, specular highlight, inner shade) never intercept touches
+    const layers = React.Children.toArray(lens.props.children) as React.ReactElement<{
+      pointerEvents?: string;
+    }>[];
+    expect(layers).toHaveLength(3);
+    layers.forEach((layer) => expect(layer.props.pointerEvents).toBe('none'));
   });
 
   it('guarantees exact mathematical horizontal symmetry between first and last tabs', () => {
@@ -195,6 +208,133 @@ describe('FloatingLiquidGlassDock & WorkspaceNavIcons (Apple 60/120Hz Liquid Gla
 
     // Edge cases: width <= 0 or tabCount <= 0
     expect(getDockIndexFromScreenX(100, dockScreenLeft, 0)).toBe(0);
+  });
+
+  it('keeps the lens inside the dock at both extremes (no clipping), at rest', () => {
+    const { rerender } = render(
+      <BFlowThemeProvider initialMode="dark">
+        <FloatingLiquidGlassDock activeTab="summary" onSelectTab={jest.fn()} />
+      </BFlowThemeProvider>
+    );
+    const dock = screen.getByTestId('floating-liquid-glass-dock');
+    fireEvent(dock, 'layout', {
+      nativeEvent: { layout: { x: 16, y: 700, width: 360, height: 64 } },
+    });
+
+    const readTransform = () => {
+      const lens = screen.getByTestId('dock-magnifying-lens');
+      const style = Array.isArray(lens.props.style)
+        ? Object.assign({}, ...lens.props.style)
+        : lens.props.style;
+      const get = (key: string): number => {
+        const entry = (style.transform as Array<Record<string, unknown>>).find((t) => key in t);
+        const raw = entry?.[key] as number | { __getValue: () => number };
+        return typeof raw === 'number' ? raw : raw.__getValue();
+      };
+      return { translateX: get("translateX"), scaleX: get("scaleX"), style };
+    };
+
+    const lensLeft = DOCK_PADDING_H + LENS_MARGIN_H;
+
+    const assertInside = () => {
+      const { translateX, scaleX, style } = readTransform();
+      // Derive the measured dock geometry from the rendered lens width
+      const lensWidth = style.width as number;
+      const tabWidth = lensWidth + LENS_MARGIN_H * 2;
+      const dockInnerWidth = tabWidth * DOCK_TABS.length + DOCK_PADDING_H * 2;
+      const center = lensLeft + translateX + lensWidth / 2;
+      const half = (lensWidth * scaleX) / 2;
+      expect(center - half).toBeGreaterThanOrEqual(-0.001);
+      expect(center + half).toBeLessThanOrEqual(dockInnerWidth + 0.001);
+    };
+
+    assertInside(); // first tab
+
+    rerender(
+      <BFlowThemeProvider initialMode="dark">
+        <FloatingLiquidGlassDock activeTab="account" onSelectTab={jest.fn()} />
+      </BFlowThemeProvider>
+    );
+    assertInside(); // last tab
+  });
+
+  it('keeps the bounce but never lets the lens cross the dock edge: it clamps and squashes against the wall', () => {
+    const tabWidth = 58;
+    const lensWidth = tabWidth - LENS_MARGIN_H * 2;
+    const lensLeft = DOCK_PADDING_H + LENS_MARGIN_H;
+    const dockInnerWidth = tabWidth * DOCK_TABS.length + DOCK_PADDING_H * 2;
+    const last = DOCK_TABS.length - 1;
+
+    // Worst case: fully lifted + fully stretched while the spring overshoots far past both ends
+    for (const glider of [-1.5, -0.3, 0, 2.5, last, last + 0.3, last + 1.5]) {
+      for (const [lift, stretch] of [[0, 0], [1, 0], [1, 1]] as const) {
+        const g = new Animated.Value(glider);
+        const l = new Animated.Value(lift);
+        const st = new Animated.Value(stretch);
+        const { lensTranslateX, lensScaleX } = buildLensGeometry({
+          gliderAnim: g,
+          liftAnim: l,
+          stretchAnim: st,
+          tabWidth,
+          lensWidth,
+        });
+        const tx = (lensTranslateX as unknown as { __getValue: () => number }).__getValue();
+        const sx = (lensScaleX as unknown as { __getValue: () => number }).__getValue();
+        const center = lensLeft + tx + lensWidth / 2;
+        const half = (lensWidth * sx) / 2;
+        expect(center - half).toBeGreaterThanOrEqual(0.9999 - 0.001); // keeps the 1px border inset
+        expect(center + half).toBeLessThanOrEqual(dockInnerWidth - 0.9999 + 0.001);
+      }
+    }
+
+    // Inside the dock the geometry is untouched (bounce keeps its natural travel)
+    const g = new Animated.Value(2.5);
+    const { lensTranslateX, lensScaleX } = buildLensGeometry({
+      gliderAnim: g,
+      liftAnim: new Animated.Value(0),
+      stretchAnim: new Animated.Value(0),
+      tabWidth,
+      lensWidth,
+    });
+    expect((lensTranslateX as unknown as { __getValue: () => number }).__getValue()).toBeCloseTo(
+      tabWidth * 2.5,
+      5
+    );
+    expect((lensScaleX as unknown as { __getValue: () => number }).__getValue()).toBeCloseTo(1, 5);
+
+    // Overshooting past the wall compresses the lens horizontally (squash)
+    g.setValue(last + 1.5);
+    const squashed = (lensScaleX as unknown as { __getValue: () => number }).__getValue();
+    expect(squashed).toBeLessThan(1);
+    expect(squashed).toBeGreaterThan(0.8);
+  });
+
+  it('maps finger X to a continuous fractional lens position (no stops per tab) clamped to the dock', () => {
+    // Dock at x=0, width 360 => tabWidth 58, center of tab i at 6 + 58 * (i + 0.5)
+    const pos = (x: number) => getDockLensPositionFromScreenX(x, 0, 360);
+
+    // Exact tab centers map to integer positions
+    expect(pos(35)).toBeCloseTo(0, 5);
+    expect(pos(93)).toBeCloseTo(1, 5);
+    expect(pos(325)).toBeCloseTo(5, 5);
+
+    // Between centers it is fractional and strictly increasing (fluid, not stepped)
+    expect(pos(64)).toBeCloseTo(0.5, 5);
+    const samples = [40, 50, 60, 70, 80, 90].map(pos);
+    for (let i = 1; i < samples.length; i++) {
+      expect(samples[i]!).toBeGreaterThan(samples[i - 1]!);
+    }
+
+    // Clamped outside the dock
+    expect(pos(-100)).toBe(0);
+    expect(pos(999)).toBe(5);
+
+    // Release snaps to the nearest tab
+    expect(Math.round(pos(60))).toBe(0);
+    expect(Math.round(pos(70))).toBe(1);
+
+    // Degenerate width
+    expect(getDockLensPositionFromScreenX(100, 0, 0)).toBe(0);
   });
 
   it('triggers immediate selection on touch-down (onPressIn) on any tab for zero perceptible delay', () => {

@@ -8,3 +8,4 @@ export * from './savings/savingsCalculator';
 export * from './provisions/provisionCalculator';
 export * from './moto-ideal/motoIdealCalculator';
 export * from './month-close/monthClose';
+export * from './overview/monthlyCurve';

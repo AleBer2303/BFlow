@@ -8,7 +8,7 @@
   - SIEMPRE enteros en con simbolo de dinero ($) validados con `Number.isSafeInteger()`.
   - Prohibido usar decimales o `float` para almacenar o sumar saldos monetarios.
   - Divisiones de provisiones usan `Math.ceil(amount / periodMonths)` en enteros.
-  - Formateo visual estricto mediante `formatCop(amount)` determinístico (`"$ 1.080.000"`).
+  - Formateo visual estricto mediante `formatCurrency(amount)` determinístico (`"$ 1.080.000"`).
 - **Zona Horaria:** `monthKey` (`"YYYY-MM"`) y fechas de registro (`"YYYY-MM-DD"`) siempre se resuelven en la zona horaria **`America/Bogota` (`UTC-05:00`)**.
 
 ---

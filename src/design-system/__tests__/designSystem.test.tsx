@@ -26,11 +26,12 @@ describe('design-system & PhaseOneHomeScreen (RNTL)', () => {
     expect(screen.getByText('BFlow · Octubre 2026')).toBeTruthy();
     expect(screen.getByTestId('golden-net-flow')).toHaveTextContent('$ 1.080.000');
     expect(screen.getByText('Checklist 6 de 12')).toBeTruthy();
-    expect(screen.getByText('Control Deudas')).toBeTruthy();
-    expect(screen.getByText('Control Ahorros')).toBeTruthy();
+    expect(screen.getByTestId('monthly-curve-section')).toBeTruthy();
+    expect(screen.queryByText('Control Deudas')).toBeNull();
+    expect(screen.queryByText('Control Ahorros')).toBeNull();
   });
 
-  it('toggles theme mode, completes/uncompletes checklist items live, and updates FUNFAMI debt', () => {
+  it('toggles theme mode and updates the FUNFAMI debt when its checklist item changes', () => {
     render(
       <BFlowThemeProvider initialMode="dark">
         <PhaseOneHomeScreen />
@@ -42,15 +43,23 @@ describe('design-system & PhaseOneHomeScreen (RNTL)', () => {
     fireEvent.press(themeBtn);
     expect(screen.getByTestId('theme-icon-moon')).toBeTruthy();
 
+    const toggleFunfamiFromChecklist = () => {
+      fireEvent.press(screen.getByTestId('workspace-tab-checklist'));
+      fireEvent.press(screen.getByTestId('checklist-workspace-item-2026-10_exp_cuota_funfami'));
+      fireEvent.press(screen.getByTestId('workspace-tab-summary'));
+    };
+
+    const readDebtFromCurve = (): string =>
+      screen.getByTestId('monthly-curve-metric-debt').props.accessibilityLabel;
+
     // Unchecking Cuota FUNFAMI restores total debt to $ 8.000.000 and checklist to 5 de 12
-    const funfamiRow = screen.getByTestId('checklist-item-exp_cuota_funfami');
-    fireEvent.press(funfamiRow);
-    expect(screen.getByTestId('total-debt-amount')).toHaveTextContent('$ 8.000.000');
+    toggleFunfamiFromChecklist();
+    expect(readDebtFromCurve()).toContain('$ 8.000.000');
     expect(screen.getByText('Checklist 5 de 12')).toBeTruthy();
 
     // Re-checking Cuota FUNFAMI brings total debt back to $ 6.200.000 and checklist to 6 de 12
-    fireEvent.press(funfamiRow);
-    expect(screen.getByTestId('total-debt-amount')).toHaveTextContent('$ 6.200.000');
+    toggleFunfamiFromChecklist();
+    expect(readDebtFromCurve()).toContain('$ 6.200.000');
     expect(screen.getByText('Checklist 6 de 12')).toBeTruthy();
   });
 
@@ -110,13 +119,14 @@ describe('design-system & PhaseOneHomeScreen (RNTL)', () => {
     expect(palettes.dark.semantic.income).toBe('#2EBD85');
     expect(palettes.dark.semantic.expense).toBe('#E06A6A');
 
-    // Light mode warm ivory alabaster luxury foundation
-    expect(palettes.light.background.primary).toBe('#F8F8F6');
-    expect(palettes.light.background.secondary).toBe('#EFEFEA');
-    expect(palettes.light.background.elevated).toBe('#FFFFFF');
+    // Light mode: warm stone foundation, never pure white (eye comfort)
+    expect(palettes.light.background.primary).toBe('#E7E6E0');
+    expect(palettes.light.background.secondary).toBe('#DCDBD3');
+    expect(palettes.light.background.elevated).toBe('#EFECE3');
+    expect(palettes.light.background.elevated).not.toBe('#FFFFFF');
     expect(palettes.light.text.primary).toBe('#12151B');
-    expect(palettes.light.semantic.income).toBe('#16825B');
-    expect(palettes.light.semantic.expense).toBe('#B83A3A');
+    expect(palettes.light.semantic.income).toBe('#127551');
+    expect(palettes.light.semantic.expense).toBe('#A83232');
 
     // Typography additions and refinements
     expect(typography.heroCurrency.fontSize).toBe(38);

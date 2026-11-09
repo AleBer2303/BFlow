@@ -16,6 +16,7 @@ import {
   CurrencyText,
   GlassSurface,
   PencilEditIcon,
+  RevealDown,
   StatusBadge,
   TrashBinIcon,
   useBFlowTheme,
@@ -518,7 +519,7 @@ export function SavingsAndMotoIdealView({
       </View>
 
       {/* Add New Custom Savings Fund Sheet */}
-      {isAddingBucket ? (
+      <RevealDown visible={isAddingBucket}>
         <GlassSurface elevated testID="add-savings-bucket-card">
           <View style={{ gap: spacing.sm }}>
             <AppText variant="headline">Crear Nuevo Fondo de Ahorro</AppText>
@@ -568,7 +569,7 @@ export function SavingsAndMotoIdealView({
             </Pressable>
           </View>
         </GlassSurface>
-      ) : null}
+      </RevealDown>
 
       {/* Edit Opening Balances & Fund Names Sheet */}
       {isEditingBalances ? (
@@ -699,7 +700,13 @@ export function SavingsAndMotoIdealView({
           <Pressable
             testID="open-add-provision-button"
             accessibilityRole="button"
-            onPress={handleOpenCreateProvision}
+            onPress={() => {
+              if (isProvisionFormOpen) {
+                setIsProvisionFormOpen(false);
+              } else {
+                handleOpenCreateProvision();
+              }
+            }}
             style={{
               minHeight: MIN_TOUCH_TARGET_PT,
               paddingVertical: spacing.xs,
@@ -714,11 +721,11 @@ export function SavingsAndMotoIdealView({
             }}
           >
             <AppText variant="caption" color={colors.text.primary}>
-              + Agregar Provisión o Meta
+              {isProvisionFormOpen ? 'Cerrar' : '+ Agregar Provisión o Meta'}
             </AppText>
           </Pressable>
 
-          {isProvisionFormOpen ? (
+          <RevealDown visible={isProvisionFormOpen}>
             <View
               testID="provision-form-card"
               style={{
@@ -810,21 +817,6 @@ export function SavingsAndMotoIdealView({
 
               <View style={{ flexDirection: 'row', gap: spacing.xs, justifyContent: 'flex-end' }}>
                 <Pressable
-                  testID="cancel-provision-button"
-                  accessibilityRole="button"
-                  onPress={() => setIsProvisionFormOpen(false)}
-                  style={{
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    paddingHorizontal: spacing.md,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                >
-                  <AppText variant="caption" color={colors.text.secondary}>
-                    Cancelar
-                  </AppText>
-                </Pressable>
-                <Pressable
                   testID="submit-provision-button"
                   accessibilityRole="button"
                   onPress={handleSubmitProvision}
@@ -846,7 +838,7 @@ export function SavingsAndMotoIdealView({
                 </Pressable>
               </View>
             </View>
-          ) : null}
+          </RevealDown>
 
           {motoIdealSummary.recurringItems.length === 0 &&
           motoIdealSummary.targetGoals.length === 0 ? (

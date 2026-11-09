@@ -123,7 +123,7 @@ Medición obtenida mediante exportación de producción con el empaquetador Metr
 ## 6. Las 3 Rutas / Vistas Críticas Analizadas
 
 1. **Flujo Neto / Resumen (`activeTab === 'summary'`):**
-   - Vista principal del usuario. Orquesta las tarjetas hero (`net-flow-hero-card`, `income-summary-card`, `expense-summary-card`, `debt-summary-card`, `savings-summary-card`) y el modal rápido de registro.
+   - Vista principal del usuario. Orquesta las tarjetas hero (`net-flow-hero-card`, `income-summary-card`, `expense-summary-card`) y la curva `monthly-curve-section` (ver sección 9).
 2. **Checklist Mensual (`activeTab === 'checklist'`):**
    - Vista de mayor interacción diaria. Gestiona filtros segmentados (`Todos`, `Pendientes`, `Completados`), marcas de completado, creación rápida de conceptos personalizados y edición de montos.
 3. **Control Deudas / FUNFAMI (`activeTab === 'debts'`):**
@@ -208,3 +208,30 @@ Para reproducir estas mediciones en cualquier momento en la rama `perf/baseline-
 - **Suite de Pruebas:** `[X] Correctas`. 21 test suites y 123 tests pasando al 100% en 10.6 segundos.
 - **Decisión Final:** `[X] Conservar`. Todos los cambios demostraron mejoras medibles, respetaron las invariantes contables y no introdujeron complejidad innecesaria.
 
+
+---
+
+## 9. Curva del Mes en Resumen
+
+Medición de laboratorio del 2026-11-09 con `three@0.187.0` y `expo-gl@~58.0.4`. Decisiones de arquitectura en los ADR [0007](docs/decisions/0007-three-js-monthly-overview-scene.md) y [0008](docs/decisions/0008-monthly-curve-replaces-tubes.md).
+
+### Peso en Web (`npx expo export --platform web`)
+
+| Chunk | Bytes | Gzip | Contiene three.js |
+| :--- | ---: | ---: | :--- |
+| `entry` | 1.113.682 | 293.038 | No |
+| `index` | 1.151.773 | 247.265 | No |
+| `MonthlyCurveStage` (diferido) | 869.611 | 202.400 | Sí |
+
+### Coste de renderizado (Chromium con Playwright, viewport `400 × 760`)
+
+| Métrica | Resultado |
+| :--- | ---: |
+| Llamadas de dibujo por frame | 6 |
+| Llamadas de dibujo durante 3 s en reposo | 0 |
+| Llamadas de dibujo durante 2 s tras asentarse un cambio de métrica | 0 |
+
+### No medido
+
+- **FPS y consumo de batería en dispositivo real:** la medición se hizo en Windows, sin iPhone. Pendiente de registrar en Expo Go y en el `.ipa`.
+- **Peso nativo de three.js:** el bundle Hermes de iOS mide 6.759.907 bytes en total, pero no existe una medición previa comparable para calcular el aumento.

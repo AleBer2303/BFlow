@@ -18,6 +18,7 @@ import {
   GlassSurface,
   MIN_TOUCH_TARGET_PT,
   PencilEditIcon,
+  RevealDown,
   StatusBadge,
   TrashBinIcon,
   useBFlowTheme,
@@ -105,9 +106,9 @@ export function DebtsFunfamiView({
   // and user has not dismissed it. In subsequent months (where openingBalance is 0), it never appears!
   const isMotoDebtPaidOff = Boolean(
     paidOffDebt &&
-      paidOffDebt.openingBalance > 0 &&
-      paidOffDebt.remainingBalance === 0 &&
-      dismissedBannerMonth !== debtSummary.monthKey
+    paidOffDebt.openingBalance > 0 &&
+    paidOffDebt.remainingBalance === 0 &&
+    dismissedBannerMonth !== debtSummary.monthKey
   );
 
   // When a debt is 100% paid off (remainingBalance === 0), remove it from active obligations
@@ -324,7 +325,13 @@ export function DebtsFunfamiView({
         <Pressable
           testID="debts-add-new-debt-button"
           accessibilityRole="button"
-          onPress={openCreateForm}
+          onPress={() => {
+            if (isFormOpen) {
+              setIsFormOpen(false);
+            } else {
+              openCreateForm();
+            }
+          }}
           style={{
             minHeight: MIN_TOUCH_TARGET_PT,
             paddingHorizontal: spacing.md,
@@ -339,13 +346,13 @@ export function DebtsFunfamiView({
           }}
         >
           <AppText variant="callout" color={colors.text.primary}>
-            + Nueva Deuda
+            {isFormOpen ? 'Cerrar' : '+ Nueva Deuda'}
           </AppText>
         </Pressable>
       </View>
 
       {/* Form Drawer / Card for Creating or Editing a Debt */}
-      {isFormOpen ? (
+      <RevealDown visible={isFormOpen}>
         <GlassSurface elevated testID="debt-form-modal">
           <View style={{ gap: spacing.sm }}>
             <AppText variant="title2">
@@ -467,23 +474,6 @@ export function DebtsFunfamiView({
 
             <View style={{ flexDirection: 'row', gap: spacing.xs, justifyContent: 'flex-end', paddingTop: spacing.xs }}>
               <Pressable
-                testID="debt-form-cancel-button"
-                accessibilityRole="button"
-                onPress={() => setIsFormOpen(false)}
-                style={{
-                  minHeight: MIN_TOUCH_TARGET_PT,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.md,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
-              >
-                <AppText variant="caption" color={colors.text.secondary}>
-                  Cancelar
-                </AppText>
-              </Pressable>
-
-              <Pressable
                 testID="debt-form-submit-button"
                 accessibilityRole="button"
                 onPress={handleSaveDebtForm}
@@ -506,7 +496,7 @@ export function DebtsFunfamiView({
             </View>
           </View>
         </GlassSurface>
-      ) : null}
+      </RevealDown>
 
       {/* Banner when a debt is 100% paid off (Dismissible, only in month of completion) */}
       {isMotoDebtPaidOff ? (
@@ -562,8 +552,8 @@ export function DebtsFunfamiView({
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' }}>
                 <AppText variant="title2">{debt.name}</AppText>
                 {debt.interestRateType === 'annual' &&
-                debt.annualInterestRate !== undefined &&
-                debt.annualInterestRate > 0 ? (
+                  debt.annualInterestRate !== undefined &&
+                  debt.annualInterestRate > 0 ? (
                   <StatusBadge
                     label={`${debt.annualInterestRate}% anual (${debt.monthlyInterestRate ?? 0}% mes)`}
                     status="reserve"
@@ -630,6 +620,7 @@ export function DebtsFunfamiView({
                   onPress={() => openEditForm(debt)}
                   style={{
                     minHeight: MIN_TOUCH_TARGET_PT,
+                    minWidth: MIN_TOUCH_TARGET_PT,
                     paddingHorizontal: spacing.sm,
                     paddingVertical: spacing.xxs,
                     borderRadius: radius.md,
@@ -639,13 +630,11 @@ export function DebtsFunfamiView({
                     borderColor: colors.glass.specularBorder,
                     flexDirection: 'row',
                     alignItems: 'center',
+                    justifyContent: 'center',
                     gap: spacing.xxs,
                   }}
                 >
-                  <PencilEditIcon size={14} color={colors.text.secondary} />
-                  <AppText variant="micro" color={colors.text.primary}>
-                    Editar
-                  </AppText>
+                  <PencilEditIcon size={16} color={colors.text.secondary} />
                 </Pressable>
 
                 <Pressable

@@ -21,7 +21,7 @@ export function SummaryNavIcon({
   style,
   testID = 'nav-icon-summary',
 }: WorkspaceNavIconProps): React.JSX.Element {
-  const { colors } = useBFlowTheme();
+  const { colors, mode } = useBFlowTheme();
   const strokeColor = color ?? (focused ? colors.text.primary : colors.text.muted);
   const strokeWidth = focused ? 2 : 1.7;
 
@@ -36,7 +36,7 @@ export function SummaryNavIcon({
           rx={2.5}
           stroke={strokeColor}
           strokeWidth={strokeWidth}
-          fill={focused ? colors.glass.specularBorder : 'none'}
+          fill={focused && mode === 'dark' ? colors.glass.specularBorder : 'none'}
         />
         <Rect
           x={13}
@@ -64,7 +64,7 @@ export function SummaryNavIcon({
           rx={2.5}
           stroke={strokeColor}
           strokeWidth={strokeWidth}
-          fill={focused ? colors.glass.specularBorder : 'none'}
+          fill={focused && mode === 'dark' ? colors.glass.specularBorder : 'none'}
         />
       </Svg>
     </View>
@@ -81,7 +81,7 @@ export function ChecklistNavIcon({
   style,
   testID = 'nav-icon-checklist',
 }: WorkspaceNavIconProps): React.JSX.Element {
-  const { colors } = useBFlowTheme();
+  const { colors, mode } = useBFlowTheme();
   const strokeColor = color ?? (focused ? colors.text.primary : colors.text.muted);
   const strokeWidth = focused ? 2 : 1.7;
 
@@ -130,7 +130,7 @@ export function DebtsNavIcon({
   style,
   testID = 'nav-icon-debts',
 }: WorkspaceNavIconProps): React.JSX.Element {
-  const { colors } = useBFlowTheme();
+  const { colors, mode } = useBFlowTheme();
   const strokeColor = color ?? (focused ? colors.text.primary : colors.text.muted);
   const strokeWidth = focused ? 2 : 1.7;
 
@@ -145,7 +145,7 @@ export function DebtsNavIcon({
           rx={3}
           stroke={strokeColor}
           strokeWidth={strokeWidth}
-          fill={focused ? colors.glass.specularBorder : 'none'}
+          fill={focused && mode === 'dark' ? colors.glass.specularBorder : 'none'}
         />
         <Path
           d="M2 10h20"
@@ -179,7 +179,7 @@ export function SavingsNavIcon({
   style,
   testID = 'nav-icon-savings',
 }: WorkspaceNavIconProps): React.JSX.Element {
-  const { colors } = useBFlowTheme();
+  const { colors, mode } = useBFlowTheme();
   const strokeColor = color ?? (focused ? colors.text.primary : colors.text.muted);
   const strokeWidth = focused ? 2 : 1.7;
 
@@ -192,7 +192,7 @@ export function SavingsNavIcon({
           strokeWidth={strokeWidth}
           strokeLinecap="round"
           strokeLinejoin="round"
-          fill={focused ? colors.glass.specularBorder : 'none'}
+          fill={focused && mode === 'dark' ? colors.glass.specularBorder : 'none'}
         />
         <Path
           d="M10 8h4"
@@ -221,7 +221,7 @@ export function CierreNavIcon({
   style,
   testID = 'nav-icon-cierre',
 }: WorkspaceNavIconProps): React.JSX.Element {
-  const { colors } = useBFlowTheme();
+  const { colors, mode } = useBFlowTheme();
   const strokeColor = color ?? (focused ? colors.text.primary : colors.text.muted);
   const strokeWidth = focused ? 2 : 1.7;
 
@@ -236,7 +236,7 @@ export function CierreNavIcon({
           rx={3}
           stroke={strokeColor}
           strokeWidth={strokeWidth}
-          fill={focused ? colors.glass.specularBorder : 'none'}
+          fill={focused && mode === 'dark' ? colors.glass.specularBorder : 'none'}
         />
         <Path
           d="M8 10V7a4 4 0 1 1 8 0v3"
@@ -266,7 +266,7 @@ export function AccountNavIcon({
   style,
   testID = 'nav-icon-account',
 }: WorkspaceNavIconProps): React.JSX.Element {
-  const { colors } = useBFlowTheme();
+  const { colors, mode } = useBFlowTheme();
   const strokeColor = color ?? (focused ? colors.text.primary : colors.text.muted);
   const strokeWidth = focused ? 2 : 1.7;
 
@@ -279,7 +279,7 @@ export function AccountNavIcon({
           r={4}
           stroke={strokeColor}
           strokeWidth={strokeWidth}
-          fill={focused ? colors.glass.specularBorder : 'none'}
+          fill={focused && mode === 'dark' ? colors.glass.specularBorder : 'none'}
         />
         <Path
           d="M4 20.5c0-4.14 3.58-7.5 8-7.5s8 3.36 8 7.5"

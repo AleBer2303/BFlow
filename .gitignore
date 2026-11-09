@@ -30,3 +30,8 @@ google-services.json
 .DS_Store
 Thumbs.db
 *.log
+
+
+#Junctions de .agents a .claude
+.claude/skills
+.claude/commands

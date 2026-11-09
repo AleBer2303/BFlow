@@ -10,7 +10,7 @@ BFlow fusiona la **precisión tipográfica suiza** (claridad matemática, retíc
 
 ### Principios Rectores:
 1. **Claridad Financiera Instantánea (*Glanceable Finance*):** El usuario debe comprender su posición de caja (Flujo Neto, checklist y deudas) en menos de 1,5 segundos. Menos adornos, más jerarquía y datos tabulares inmutables.
-2. **Minimalismo Neutro y Suave (*Soft Precision*):** Se eliminan gradientes estridentes y saturaciones fluorescentes. Predominan los tonos obsidiana y grafito neutro en modo oscuro, y alabastro perla en modo claro.
+2. **Minimalismo Neutro y Suave (*Soft Precision*):** Se eliminan gradientes estridentes y saturaciones fluorescentes. Predominan los tonos obsidiana y grafito neutro en modo oscuro, y arena piedra cálida en modo claro.
 3. **Respuesta Sensorial Háptica:** Cada pulsación, alternancia de mes o confirmación contable tiene peso físico, amortiguación cinemática (*spring physics*) y retroalimentación táctil microcalibrada.
 4. **Dispositivo de Referencia:** iPhone 16 Pro Max (`440 × 956 pt`, ProMotion `120 Hz`, Isla Dinámica, borde de pantalla de radio continuo).
 
@@ -24,19 +24,19 @@ Diseñado bajo la norma **WCAG 2.2 AA / AAA** con ratios de contraste verificado
 
 | Token | Modo Oscuro (`dark`) | Modo Claro (`light`) | Contraste / Propósito |
 | :--- | :--- | :--- | :--- |
-| `background.primary` | `#0D0F12` (Obsidiana Carbón Cálido) | `#F8F8F6` (Marfil Alabastro Editorial) | Lienzo principal base inmersivo, cálido y amable a la vista. |
-| `background.secondary` | `#14171C` (Grafito Ahumado) | `#EFEFEA` (Platino Lino Cálido) | Contenedores de sección y áreas agrupadas. |
-| `background.elevated` | `#1B1F26` (Titanio Pizarra) | `#FFFFFF` (Porcelana Pura) | Elementos elevados y tarjetas secundarias. |
+| `background.primary` | `#0D0F12` (Obsidiana Carbón Cálido) | `#E7E6E0` (Arena Piedra Cálida) | Lienzo principal base inmersivo, cálido y amable a la vista (sin blanco puro para reducir fatiga visual). |
+| `background.secondary` | `#14171C` (Grafito Ahumado) | `#DCDBD3` (Lino Tostado) | Contenedores de sección y áreas agrupadas. |
+| `background.elevated` | `#1B1F26` (Titanio Pizarra) | `#EFECE3` (Marfil Arena) | Elementos elevados y tarjetas secundarias. |
 
 ### 2.2 Superficies Translúcidas (`<GlassSurface />`)
 
 | Token de Vidrio | Modo Oscuro (`dark`) | Modo Claro (`light`) | Efecto Óptico |
 | :--- | :--- | :--- | :--- |
-| `glass.surfaceTint` | `rgba(24, 28, 35, 0.70)` | `rgba(255, 255, 255, 0.76)` | Vidrio translúcido ahumado satinado primario sin niebla lechosa. |
-| `glass.surfaceElevatedTint`| `rgba(32, 38, 48, 0.82)` | `rgba(255, 255, 255, 0.90)` | Cápsulas flotantes, modales y navbars. |
-| `glass.specularBorder` | `rgba(255, 255, 255, 0.08)` | `rgba(255, 255, 255, 0.85)` | Reflejo perimetral fino continuo (sutil, sin brillos estridentes). |
-| `glass.subtleBorder` | `rgba(255, 255, 255, 0.045)` | `rgba(20, 24, 33, 0.06)` | Delimitador hairline suave sin ruido visual. |
-| `glass.blurIntensity` | `40` | `50` | Difuminado gaussiano sedoso calibrado en `expo-blur`. |
+| `glass.surfaceTint` | `rgba(24, 28, 35, 0.70)` | `rgba(238, 234, 224, 0.94)` | Vidrio translúcido ahumado satinado primario sin niebla lechosa. |
+| `glass.surfaceElevatedTint`| `rgba(32, 38, 48, 0.82)` | `rgba(247, 244, 236, 0.98)` | Cápsulas flotantes, modales y navbars. |
+| `glass.specularBorder` | `rgba(255, 255, 255, 0.08)` | `rgba(90, 75, 45, 0.24)` | Contorno cálido visible (separa botones y tarjetas elevadas del fondo) perimetral fino continuo (sutil, sin brillos estridentes). |
+| `glass.subtleBorder` | `rgba(255, 255, 255, 0.045)` | `rgba(60, 50, 30, 0.14)` | Delimitador hairline suave sin ruido visual. |
+| `glass.blurIntensity` | `40` | `12` | Difuminado gaussiano sedoso calibrado en `expo-blur`. |
 | `glass.blurTint` | `'dark'` | `'light'` | Tinte de difuminado óptico de fondo. |
 
 ### 2.3 Tipografía y Contraste de Texto
@@ -45,7 +45,7 @@ Diseñado bajo la norma **WCAG 2.2 AA / AAA** con ratios de contraste verificado
 | :--- | :--- | :--- | :--- | :--- |
 | `text.primary` | `#F4F5F7` (Blanco Platino Lino) | `#12151B` (Tinta Obsidiana) | **> 15:1 (AAA)** | Montos hero, títulos, valores clave. |
 | `text.secondary` | `#9BA3AF` (Cachemira Grafito) | `#4E5562` (Grafito Fino Cálido) | **> 6.8:1 (AAA)** | Subtítulos, nombres de ítems, etiquetas. |
-| `text.muted` | `#636B79` (Titanio Metadatos) | `#737B8B` (Pizarra Suave) | **> 4.5:1 (AA)** | Metadatos secundarios, placeholders, fechas. |
+| `text.muted` | `#636B79` (Titanio Metadatos) | `#5A6272` (Pizarra Suave) | **> 4.5:1 (AA)** | Metadatos secundarios, placeholders, fechas. |
 | `text.inverse` | `#0D0F12` | `#FFFFFF` | **> 15:1 (AAA)** | Texto sobre botones o pastillas de alto contraste. |
 
 ### 2.4 Paleta Semántica Financiera (Mineral Noble & Acordes Cálidos)
@@ -54,13 +54,13 @@ Tonalidades minerales calibradas para erradicar cualquier sensación de interfaz
 
 | Token Semántico | Modo Oscuro | Modo Claro | Fondo Suave (`Soft`) Oscuro | Fondo Suave (`Soft`) Claro | Significado en BFlow |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `semantic.income` | `#2EBD85` (Salvia Esmeralda Noble) | `#16825B` (Bosque Salvia Profundo) | `rgba(46, 189, 133, 0.10)` | `rgba(22, 130, 91, 0.08)` | Ingresos recibidos y variaciones positivas. |
-| `semantic.expense` | `#E06A6A` (Terracota Carmesí Suave) | `#B83A3A` (Arcilla Carmesí) | `rgba(224, 106, 106, 0.10)` | `rgba(184, 58, 58, 0.08)` | Gastos pagados y salidas de caja. |
-| `semantic.completed` | `#2EBD85` (Salvia Esmeralda Noble) | `#16825B` (Bosque Salvia Profundo) | `rgba(46, 189, 133, 0.08)` | `rgba(22, 130, 91, 0.08)` | Ítems completados en el Checklist. |
-| `semantic.pending` | `#E5A84B` (Ámbar Dorado Miel) | `#B4690E` (Ocre Miel Dorado) | `rgba(229, 168, 75, 0.10)` | `rgba(180, 105, 14, 0.08)` | Ítems pendientes por pagar o recibir. |
-| `semantic.debt` | `#D9824C` (Canela Siena Tostada) | `#A34E17` (Cuero Canela Profundo) | `rgba(217, 130, 76, 0.10)` | `rgba(163, 78, 23, 0.08)` | Obligaciones financieras y amortizaciones. |
-| `semantic.moto` | `#4F8FEA` (Zafiro Clásico Suave) | `#2B6CB0` (Zafiro Clásico Azul) | `rgba(79, 143, 234, 0.10)` | `rgba(43, 108, 176, 0.08)` | Fondo Moto Ideal y provisiones recurrentes. |
-| `semantic.savings` | `#9D7FE6` (Lavanda Amatista Noble) | `#6D49B8` (Amatista Terciopelo) | `rgba(157, 127, 230, 0.10)` | `rgba(109, 73, 184, 0.08)` | Fondos de ahorro general y reserva líquida. |
+| `semantic.income` | `#2EBD85` (Salvia Esmeralda Noble) | `#127551` (Bosque Salvia Profundo) | `rgba(46, 189, 133, 0.10)` | `rgba(18, 117, 81, 0.10)` | Ingresos recibidos y variaciones positivas. |
+| `semantic.expense` | `#E06A6A` (Terracota Carmesí Suave) | `#A83232` (Arcilla Carmesí) | `rgba(224, 106, 106, 0.10)` | `rgba(168, 50, 50, 0.10)` | Gastos pagados y salidas de caja. |
+| `semantic.completed` | `#2EBD85` (Salvia Esmeralda Noble) | `#127551` (Bosque Salvia Profundo) | `rgba(46, 189, 133, 0.08)` | `rgba(18, 117, 81, 0.10)` | Ítems completados en el Checklist. |
+| `semantic.pending` | `#E5A84B` (Ámbar Dorado Miel) | `#8F5206` (Ocre Miel Dorado) | `rgba(229, 168, 75, 0.10)` | `rgba(143, 82, 6, 0.10)` | Ítems pendientes por pagar o recibir. |
+| `semantic.debt` | `#D9824C` (Canela Siena Tostada) | `#92440F` (Cuero Canela Profundo) | `rgba(217, 130, 76, 0.10)` | `rgba(146, 68, 15, 0.10)` | Obligaciones financieras y amortizaciones. |
+| `semantic.moto` | `#4F8FEA` (Zafiro Clásico Suave) | `#245F9F` (Zafiro Clásico Azul) | `rgba(79, 143, 234, 0.10)` | `rgba(36, 95, 159, 0.10)` | Fondo Moto Ideal y provisiones recurrentes. |
+| `semantic.savings` | `#9D7FE6` (Lavanda Amatista Noble) | `#5F3DA6` (Amatista Terciopelo) | `rgba(157, 127, 230, 0.10)` | `rgba(95, 61, 166, 0.10)` | Fondos de ahorro general y reserva líquida. |
 
 ---
 
@@ -152,8 +152,14 @@ export const springConfigs = {
     stiffness: 160,
     mass: 1.1,
   },
+  // Lente líquido del dock: asentamiento suave con sobrepaso casi imperceptible
+  liquidSettle: { damping: 16, stiffness: 170, mass: 1 },
+  // "Lift" (crece ×1.12 / ×1.06) y estiramiento elástico por velocidad (×1.2 / ×0.92)
+  liquidLift: { damping: 14, stiffness: 190, mass: 0.9 },
 } as const;
 ```
+
+**Lente del dock (Liquid Glass):** cápsula translúcida con borde superior especular, brillo curvo superior, sombra interior inferior y resplandor de refracción que aparece al levantarse bajo el dedo. Sigue la posición continua del dedo mediante suavizado exponencial por frame (sin reiniciar resortes en cada evento táctil) y solo hace *snap* al tab más cercano al soltar. En los extremos del dock el rebote se conserva, pero el recorrido se limita para que el lente (incluido su crecimiento por *lift*/estiramiento) nunca cruce el borde interior; el sobrepaso se convierte en una compresión horizontal (*squash* hasta ×0.84) como una gota contra la pared.
 
 ### 6.2 Soporte de Reducción de Movimiento (`prefers-reduced-motion`):
 Si el usuario tiene activado *Reducir Movimiento* en iOS (`useReducedMotion()`):
@@ -167,6 +173,7 @@ Si el usuario tiene activado *Reducir Movimiento* en iOS (`useReducedMotion()`):
 | **Scroll en selector de rueda** (`IosWheelPickerModal`) | `Haptics.selectionAsync()` | Tic táctil ultraligero y mecánico en cada paso. |
 | **Desmarcar ítem del checklist** | `Haptics.impactAsync(Light)` | Golpe suave de liberación. |
 | **Alternar tema claro/oscuro** | `Haptics.impactAsync(Light)` | Feedback sutil de cambio de modo. |
+| **Recorrer la curva del mes o cambiar de métrica** | `Haptics.selectionAsync()` | Tic ligero por cada día nuevo bajo el dedo y al confirmar una métrica; soltar no vibra. |
 | **Marcar ítem como completado** | `Haptics.notificationAsync(Success)` | Doble pulso de confirmación y recompensa. |
 | **Cierre de mes contable exitoso** | `Haptics.notificationAsync(Success)` | Confirmación solemne de consolidación. |
 | **Eliminar ítem o revertir cierre** | `Haptics.notificationAsync(Warning)` | Pulso de advertencia para evitar errores. |
@@ -195,10 +202,12 @@ Fallback arquitectural idéntico visualmente mediante `expo-blur`:
    - Monto en `heroCurrency` con espaciado respirable superior e inferior.
    - Badge de progreso del checklist integrado en la esquina superior derecha.
    - Tinte de flujo proyectado en `caption` con contraste secundario garantizado.
-2. **`Checklist Interactive Row`:**
-   - Checkbox táctil de radio continuo `sm: 10` con animación de escala *snappy*.
-   - Nombre del concepto con jerarquía `headline`.
-   - Monto tabular a la derecha con color semántico según estado.
+2. **`Checklist Interactive Row` & Acciones Centralizadas:**
+   - Filas limpias y de ancho completo sin botones redundantes por ítem, eliminando la sobrecarga visual.
+   - Fila táctil ergonómica con radio continuo `md: 16` y respuesta háptica calibrada al confirmar toques (`hapticService.trigger`).
+   - Nombre del concepto, badges contextuales y monto tabular a la derecha con color semántico según estado.
+   - Botones tipo pill de **Editar** y **Eliminar** centralizados en las cabeceras de sección (Ingresos y Gastos), que activan un modo contextual *in-situ* sobre las mismas listas sin duplicar ítems: el botón Eliminar conserva su identidad roja distintiva (`semantic.expenseSoft` con icono y texto `semantic.expense`, que al activarse se llena de color sólido). En modo eliminar los ítems existentes se tiñen en rojo suave (`semantic.expenseSoft` con borde `semantic.expense`) y revelan el icono de papelera a la derecha, y en modo editar revelan el icono de lápiz a la derecha para abrir el formulario modal de edición. Un segundo toque en el botón desactiva el modo de forma inmediata y limpia.
+   - Formularios modales unificados de **Nuevo Movimiento** y **Editar Movimiento** (`add-movement-modal-card`, `edit-entry-modal-card`) con estética iOS 26 Liquid Glass: Hero Amount Card con previsualización en vivo, glifo monetario tabular destacado, agrupación Gestalt de campos, selectores en cápsula continua (`MIN_TOUCH_TARGET_PT`), micro-interacciones hápticas y chips de vinculación ergonómicos, sin listas de ítems repetidas para un registro directo y limpio.
 3. **`IosWheelPickerModal`:**
    - Cápsula flotante translúcida de radio `xl: 28` centrada con padding inferior de 36pt.
    - Lente especular central delimitado con bordes `hairlineWidth`.
@@ -206,6 +215,13 @@ Fallback arquitectural idéntico visualmente mediante `expo-blur`:
 4. **`AppTextInput` + `KeyboardAwareScrollView`:**
    - Auto-scroll inteligente: los inputs ubicados en la mitad superior de la pantalla no sufren saltos innecesarios.
    - Los inputs ocultos por el teclado se desplazan con una holgura limpia de 24pt sin generar vacíos gigantes.
+5. **Curva del mes (`MonthlyCurveSection`):**
+   - Sustituye en Resumen a la lista del checklist y a las tarjetas `Control Deudas` y `Control Ahorros`. Una cifra en `heroCurrency`, una línea luminosa sobre una cuadrícula de puntos y un selector de cinco métricas: **Flujo, Ingresos, Gastos, Ahorros y Deudas**. Ver [ADR 0008](docs/decisions/0008-monthly-curve-replaces-tubes.md).
+   - Se dibuja una serie a la vez, con su propia escala desde cero. La línea sólida llega hasta hoy y la punteada proyecta el cierre si se completa lo pendiente. Deudas solo baja con abonos reales.
+   - Colores exclusivamente de tokens: `semantic.income` (Flujo e Ingresos), `semantic.expense`, `semantic.reserve` y `semantic.debt`. El lienzo es opaco y se limpia con `background.primary` para integrarse con la página.
+   - **Interacción:** deslizar en horizontal recorre el mes día a día, atenúa lo posterior e inclina levemente la curva; más allá de hoy solo existe el cierre previsto. Al soltar, regresa a hoy. Deslizar en vertical desplaza la página.
+   - **Accesibilidad:** cada botón del selector mide mínimo `52 pt` y anuncia monto y cierre previsto en `accessibilityLabel`, de modo que la identidad no depende del color. Con *Reducir Movimiento* no hay trazado de entrada, transformación, inclinación ni latido.
+   - **Respaldo:** sin WebGL se muestra una barra 2D por día con la misma escala y una barra atenuada para el cierre previsto.
 
 ---
 
@@ -213,7 +229,7 @@ Fallback arquitectural idéntico visualmente mediante `expo-blur`:
 
 | Práctica / Elemento | Lo que HACE BFlow (Aprobado) | Lo que NUNCA hace BFlow (Anti-patrón) |
 | :--- | :--- | :--- |
-| **Colores de fondo** | Obsidiana cálida `#0D0F12` / Marfil alabastro `#F8F8F6`. | Fondos azulados o negros puros `#000000` sin profundidad de vidrio. |
+| **Colores de fondo** | Obsidiana cálida `#0D0F12` / Arena piedra `#E7E6E0`. | Fondos azulados o negros puros `#000000` sin profundidad de vidrio. |
 | **Bordes y Estados Activos** | Bordes silenciosos (`specularBorder` / `subtleBorder`) con fondos suaves. | Bordes saturados al 100% que crean halos neón tipo HUD gamer/cyberpunk. |
 | **Alineación de cifras** | Alineación tabular a la derecha (`fontVariant: ['tabular-nums']`). | Números flotantes proporcionales que saltan al cambiar dígitos. |
 | **Iconografía** | SVG puros monocromáticos adaptables al tema. | Emojis utilizados como sustitutos de iconos de sistema. |

@@ -246,9 +246,9 @@ export function AuthScreen({
 
         {/* Grounded Ledger Preview Strip */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-          <StatusBadge label="Presupuesto en enteros" status="completed" />
-          <StatusBadge label="Control Deudas" status="debt" />
-          <StatusBadge label="Control Ahorros" status="reserve" />
+          <StatusBadge label="Presupuesto" status="completed" />
+          <StatusBadge label="Deudas" status="debt" />
+          <StatusBadge label="Metas Financieras" status="reserve" />
         </View>
 
         {/* Main Liquid Glass Authentication Card */}

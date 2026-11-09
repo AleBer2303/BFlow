@@ -161,7 +161,7 @@ Documentado a profundidad en [`DESIGN.md`](file:///c:/Users/ALEJO%20BERNAL/Docum
 - **Estética Sobria y Amigable:** Lenguaje financiero de alta gama (Apple Wallet, Linear, Stripe). Cero marcos de neón perimetrales o brillos estilo videojuego.
 - **Paleta de Superficies:**
   - *Modo Oscuro:* Obsidiana Carbón Cálido (`#0D0F12`), Grafito Ahumado (`#14171C`), Titanio Pizarra (`#1B1F26`).
-  - *Modo Claro:* Marfil Alabastro (`#F8F8F6`), Platino Lino (`#EFEFEA`), Porcelana Pura (`#FFFFFF`).
+  - *Modo Claro:* Arena Piedra (`#E7E6E0`), Lino Tostado (`#DCDBD3`), Marfil Arena (`#EFECE3`).
 - **Contraste WCAG 2.2 AAA:** Texto primario con ratio de contraste `> 15:1` frente a los fondos.
 - **Tipografía SF Pro con Números Tabulares:** Toda cifra monetaria utiliza obligatoriamente `fontVariant: ['tabular-nums']` para erradicar el baile horizontal de dígitos en animaciones de conteo.
 - **Soporte Dynamic Type:** Todos los componentes respetan `allowFontScaling={true}`.
@@ -250,6 +250,7 @@ BFlow/
 │   │   ├── money/                # Operaciones enteras en COP y formateo
 │   │   ├── month-close/          # Lógica de cierre de mes y arrastre a apertura siguiente
 │   │   ├── moto-ideal/           # Provisiones y metas del cuadro IDEAL
+│   │   ├── overview/             # Reconstrucción diaria de la curva del mes
 │   │   └── savings/              # Fondos de ahorro y proyecciones
 │   ├── features/                 # Pantallas y componentes por dominio funcional
 │   │   ├── analytics/            # Historial, gráficos y tendencias
@@ -258,7 +259,8 @@ BFlow/
 │   │   ├── checklist/            # Lista de movimientos y filtros
 │   │   ├── debts/                # Amortización de deudas y abonos
 │   │   ├── onboarding/           # Configuración inicial de usuario nuevo
-│   │   └── savings/              # Tarjetas de fondos y provisión moto
+│   │   ├── savings/              # Tarjetas de fondos y provisión moto
+│   │   └── summary/              # Curva del mes: escena three.js + expo-gl y respaldo 2D
 │   └── platform/                 # Adaptadores Modo A vs Modo B
 │       ├── auth/                 # Adaptador de autenticación y códigos de 6 dígitos
 │       ├── glass/                # Puente de superficies translúcidas (Liquid Glass / Blur)
@@ -298,7 +300,7 @@ BFlow/
    ```bash
    npm ci --legacy-peer-deps
    ```
-   *(El script postinstall aplicará automáticamente el parche de almacenamiento para extensiones nativas).*
+   *(El script postinstall aplicará automáticamente el parche de almacenamiento para extensiones nativas. Este paso también instala `three` y `expo-gl`, usados por la escena 3D de Resumen; `expo-gl` viene incluido en Expo Go y no requiere configuración adicional).*
 
 3. **Configurar variables de entorno:**
    ```bash

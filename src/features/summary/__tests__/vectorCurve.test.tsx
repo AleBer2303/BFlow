@@ -1,15 +1,17 @@
 /**
- * The vector (SVG) stage that replaces the three.js scene on the web skin: its geometry,
- * pointer and keyboard scrubbing, and how the Summary composes it.
+ * The animated vector (SVG) stage: the stage of the web skin and the phone fallback when the
+ * three.js scene cannot draw. Its geometry, motion, pointer, keyboard and touch scrubbing,
+ * and how the Summary composes it.
  */
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { GLView } from 'expo-gl';
 import React from 'react';
 import { BFlowThemeProvider } from '../../../design-system/theme/ThemeContext';
 import { palettesBySkin, type PlatformSkinId } from '../../../design-system/tokens';
 import type { MonthlyCurve } from '../../../domain/overview/monthlyCurve';
 import { MonthlyCurveSection } from '../components/MonthlyCurveSection';
+import { GL_CONTEXT_TIMEOUT_MS } from '../components/MonthlyCurveStage';
 import MonthlyCurveVectorStage from '../components/MonthlyCurveVectorStage';
 import {
   CURVE_MARGIN_PT,
@@ -122,27 +124,53 @@ describe('stepCurveStop (keyboard scrubbing)', () => {
   });
 });
 
-function renderStage(
+function stageElement(
   onScrub: (stop: CurveStop | null) => void,
   curve: MonthlyCurve = CURVE,
-  metricId: 'flow' | 'debt' = 'flow'
+  metricId: 'flow' | 'debt' = 'flow',
+  options: { reducedMotion?: boolean; interaction?: 'pointer' | 'touch' } = {}
 ) {
-  const view = render(
+  return (
     <BFlowThemeProvider skin="web" initialMode="light">
       <MonthlyCurveVectorStage
         curve={curve}
         metricId={metricId}
-        reducedMotion={false}
+        reducedMotion={options.reducedMotion ?? false}
+        interaction={options.interaction}
         onScrub={onScrub}
         onUnavailable={jest.fn()}
       />
     </BFlowThemeProvider>
   );
-  fireEvent(screen.getByTestId('monthly-curve-vector-stage'), 'layout', {
-    nativeEvent: { layout: { x: 0, y: 0, width: WIDTH, height: HEIGHT } },
+}
+
+/** Called directly: fireEvent skips views whose responder declines touches (touch mode). */
+function layoutStage() {
+  const stage = screen.getByTestId('monthly-curve-vector-stage', { includeHiddenElements: true });
+  act(() => {
+    stage.props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: WIDTH, height: HEIGHT } } });
   });
+}
+
+function renderStage(
+  onScrub: (stop: CurveStop | null) => void,
+  curve: MonthlyCurve = CURVE,
+  metricId: 'flow' | 'debt' = 'flow',
+  options: { reducedMotion?: boolean; interaction?: 'pointer' | 'touch' } = {}
+) {
+  const view = render(stageElement(onScrub, curve, metricId, options));
+  layoutStage();
   return view;
 }
+
+/** Fake timers drive requestAnimationFrame, one frame every 16 ms. */
+function elapse(milliseconds: number) {
+  act(() => {
+    jest.advanceTimersByTime(milliseconds);
+  });
+}
+
+const SETTLE_MS = 10_000;
 
 function pointerAt(day: number) {
   fireEvent(screen.getByTestId('monthly-curve-vector-stage'), 'pointerMove', {
@@ -158,32 +186,82 @@ function pressKey(key: string) {
 }
 
 describe('MonthlyCurveVectorStage', () => {
-  it('draws nothing before layout and the full chart after it', () => {
-    render(
-      <BFlowThemeProvider skin="web">
-        <MonthlyCurveVectorStage
-          curve={CURVE}
-          metricId="flow"
-          reducedMotion={false}
-          onScrub={jest.fn()}
-          onUnavailable={jest.fn()}
-        />
-      </BFlowThemeProvider>
-    );
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('draws nothing before layout, then draws the line in up to today and the projection', () => {
+    render(stageElement(jest.fn()));
     expect(screen.queryByTestId('monthly-curve-vector-svg')).toBeNull();
 
-    fireEvent(screen.getByTestId('monthly-curve-vector-stage'), 'layout', {
-      nativeEvent: { layout: { x: 0, y: 0, width: WIDTH, height: HEIGHT } },
-    });
-    expect(screen.getByTestId('monthly-curve-vector-line')).toBeTruthy();
+    layoutStage();
+    expect(screen.getByTestId('monthly-curve-vector-svg')).toBeTruthy();
+    expect(screen.queryByTestId('monthly-curve-vector-line')).toBeNull();
+
+    elapse(400);
+    const partialLine = screen.getByTestId('monthly-curve-vector-line').props.d as string;
+    expect(screen.queryByTestId('monthly-curve-vector-projection')).toBeNull();
+    expect(screen.queryByTestId('monthly-curve-vector-marker')).toBeNull();
+
+    elapse(SETTLE_MS);
+    const fullLine = screen.getByTestId('monthly-curve-vector-line').props.d as string;
+    expect(fullLine.length).toBeGreaterThan(partialLine.length);
+    expect(fullLine).toBe(buildVectorCurveGeometry(CURVE, 'flow', WIDTH, HEIGHT)?.linePath);
     expect(screen.getByTestId('monthly-curve-vector-area')).toBeTruthy();
     expect(screen.getByTestId('monthly-curve-vector-projection')).toBeTruthy();
     expect(screen.getByTestId('monthly-curve-vector-marker')).toBeTruthy();
     expect(screen.queryByTestId('monthly-curve-vector-dim')).toBeNull();
   });
 
+  it('pulses the marker a few times after the entrance and then schedules no frames', () => {
+    renderStage(jest.fn());
+
+    elapse(1_700);
+    expect(screen.getByTestId('monthly-curve-vector-pulse')).toBeTruthy();
+
+    elapse(SETTLE_MS);
+    expect(screen.queryByTestId('monthly-curve-vector-pulse')).toBeNull();
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('shows the finished chart at once and never pulses with Reduce Motion', () => {
+    renderStage(jest.fn(), CURVE, 'flow', { reducedMotion: true });
+
+    expect(screen.getByTestId('monthly-curve-vector-line').props.d).toBe(
+      buildVectorCurveGeometry(CURVE, 'flow', WIDTH, HEIGHT)?.linePath
+    );
+    expect(screen.getByTestId('monthly-curve-vector-projection')).toBeTruthy();
+    expect(screen.getByTestId('monthly-curve-vector-marker')).toBeTruthy();
+
+    elapse(32);
+    expect(screen.queryByTestId('monthly-curve-vector-pulse')).toBeNull();
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('morphs to another metric and lands on its exact shape and color', () => {
+    const view = renderStage(jest.fn());
+    elapse(SETTLE_MS);
+
+    view.rerender(stageElement(jest.fn(), CURVE, 'debt'));
+    elapse(200);
+    const debtLine = buildVectorCurveGeometry(CURVE, 'debt', WIDTH, HEIGHT)?.linePath;
+    expect(screen.getByTestId('monthly-curve-vector-line').props.d).not.toBe(debtLine);
+
+    elapse(SETTLE_MS);
+    expect(screen.getByTestId('monthly-curve-vector-line').props.d).toBe(debtLine);
+    const debtColor = palettesBySkin.web.light.semantic.debt;
+    expect(screen.getByTestId('monthly-curve-vector-line').props.stroke).toEqual(
+      expect.objectContaining({ payload: 0xff000000 + parseInt(debtColor.slice(1), 16) })
+    );
+  });
+
   it('uses the metric color of the web palette and omits the projection on a closed month', () => {
     renderStage(jest.fn(), CLOSED_CURVE, 'debt');
+    elapse(SETTLE_MS);
 
     // react-native-svg stores colors as ARGB integers.
     const debtColor = palettesBySkin.web.light.semantic.debt;
@@ -196,6 +274,7 @@ describe('MonthlyCurveVectorStage', () => {
   it('walks the month with the pointer, dims what follows and returns to today on leave', () => {
     const onScrub = jest.fn();
     renderStage(onScrub);
+    elapse(SETTLE_MS);
 
     pointerAt(21);
     expect(onScrub).toHaveBeenLastCalledWith(21);
@@ -204,6 +283,13 @@ describe('MonthlyCurveVectorStage', () => {
     // Moving within the same day does not spam the listener.
     pointerAt(21);
     expect(onScrub).toHaveBeenCalledTimes(1);
+
+    // The marker glides to the chosen day.
+    elapse(SETTLE_MS);
+    const day21 = resolveVectorStopPoint(CURVE, 'flow', 21, WIDTH, HEIGHT);
+    const marker = screen.getByTestId('monthly-curve-vector-marker');
+    expect(marker.props.cx).toBeCloseTo(day21.x, 0);
+    expect(marker.props.cy).toBeCloseTo(day21.y, 0);
 
     pointerAt(31);
     expect(onScrub).toHaveBeenLastCalledWith('close');
@@ -256,30 +342,70 @@ describe('MonthlyCurveVectorStage', () => {
     expect(onScrub).toHaveBeenCalledTimes(5);
   });
 
-  it('forgets its stop when the month changes', () => {
+  it('forgets its stop and replays the entrance when the month changes', () => {
     const onScrub = jest.fn();
     const view = renderStage(onScrub);
+    elapse(SETTLE_MS);
     pointerAt(21);
 
-    view.rerender(
-      <BFlowThemeProvider skin="web" initialMode="light">
-        <MonthlyCurveVectorStage
-          curve={buildTestCurve({ monthKey: '2026-11', cutoffDay: 9 })}
-          metricId="flow"
-          reducedMotion={false}
-          onScrub={onScrub}
-          onUnavailable={jest.fn()}
-        />
-      </BFlowThemeProvider>
-    );
+    view.rerender(stageElement(onScrub, buildTestCurve({ monthKey: '2026-11', cutoffDay: 9 })));
 
     expect(onScrub).toHaveBeenLastCalledWith(null);
     expect(screen.queryByTestId('monthly-curve-vector-dim')).toBeNull();
+    expect(screen.queryByTestId('monthly-curve-vector-line')).toBeNull();
     expect(screen.getByTestId('monthly-curve-vector-stage').props.accessibilityValue).toEqual({
       text: 'Flujo neto · Hoy, 9 nov: $ 0',
     });
+
+    elapse(SETTLE_MS);
+    expect(screen.getByTestId('monthly-curve-vector-line')).toBeTruthy();
+  });
+
+  it('scrubs by touch from the first contact and stays hidden from screen readers on phones', () => {
+    const onScrub = jest.fn();
+    renderStage(onScrub, CURVE, 'flow', { interaction: 'touch' });
+    elapse(SETTLE_MS);
+
+    expect(screen.queryByTestId('monthly-curve-vector-stage')).toBeNull();
+    const stage = screen.getByTestId('monthly-curve-vector-stage', { includeHiddenElements: true });
+    expect(stage.props.tabIndex).toBeUndefined();
+    expect(screen.getByTestId('monthly-curve-vector-line', { includeHiddenElements: true })).toBeTruthy();
+
+    expect(stage.props.onStartShouldSetResponder(touchAt(0, 0, 1))).toBe(true);
+
+    const start = curveXForDay(10, 31, WIDTH);
+
+    act(() => stage.props.onResponderGrant(touchAt(start, 0, 5)));
+    expect(onScrub).toHaveBeenLastCalledWith(10);
+    act(() => stage.props.onResponderRelease(touchAt(start, 0, 6)));
+    expect(onScrub).toHaveBeenLastCalledWith(null);
   });
 });
+
+function touchAt(pageX: number, pageY: number, timestamp: number) {
+  return {
+    nativeEvent: { touches: [{}], locationX: pageX },
+    touchHistory: {
+      indexOfSingleActiveTouch: 0,
+      mostRecentTimeStamp: timestamp,
+      numberActiveTouches: 1,
+      touchBank: [
+        {
+          touchActive: true,
+          startPageX: 0,
+          startPageY: 0,
+          startTimeStamp: 0,
+          currentPageX: pageX,
+          currentPageY: pageY,
+          currentTimeStamp: timestamp,
+          previousPageX: 0,
+          previousPageY: 0,
+          previousTimeStamp: timestamp,
+        },
+      ],
+    },
+  };
+}
 
 describe('clampCurveStop', () => {
   it('keeps valid stops and drops the ones the curve no longer has', () => {
@@ -295,6 +421,14 @@ describe('clampCurveStop', () => {
 });
 
 describe('MonthlyCurveSection stage per skin', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   function renderSection(skin: PlatformSkinId, layout: 'stacked' | 'split' = 'stacked') {
     return render(
       <BFlowThemeProvider skin={skin}>
@@ -309,9 +443,21 @@ describe('MonthlyCurveSection stage per skin', () => {
     expect(screen.queryByTestId('monthly-curve-vector-stage')).toBeNull();
   });
 
+  it('replaces the three.js stage on Android with the animated vectors when GL fails', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    renderSection('android');
+
+    act(() => jest.advanceTimersByTime(GL_CONTEXT_TIMEOUT_MS));
+
+    expect(screen.UNSAFE_queryAllByType(GLView)).toHaveLength(0);
+    expect(screen.UNSAFE_getByType(MonthlyCurveVectorStage).props.interaction).toBe('touch');
+    warn.mockRestore();
+  });
+
   it('uses the vector stage on web and keeps the readout in step with it', () => {
     renderSection('web');
     expect(screen.UNSAFE_queryAllByType(GLView)).toHaveLength(0);
+    expect(screen.UNSAFE_getByType(MonthlyCurveVectorStage).props.interaction).toBe('pointer');
 
     fireEvent(screen.getByTestId('monthly-curve-vector-stage'), 'layout', {
       nativeEvent: { layout: { x: 0, y: 0, width: WIDTH, height: HEIGHT } },
@@ -323,7 +469,7 @@ describe('MonthlyCurveSection stage per skin', () => {
     expect(screen.getByText('+$ 2.880.000 ese día')).toBeTruthy();
   });
 
-  it('turns the selector into a metric table in the split layout', async () => {
+  it('turns the selector into a metric table in the split layout', () => {
     renderSection('web', 'split');
 
     expect(screen.getByTestId('monthly-curve-metric-list')).toBeTruthy();
@@ -335,8 +481,7 @@ describe('MonthlyCurveSection stage per skin', () => {
     expect(screen.getByTestId('monthly-curve-metric-debt').props.accessibilityState).toEqual(
       expect.objectContaining({ selected: true })
     );
-    await waitFor(() =>
-      expect(screen.getByTestId('monthly-curve-amount')).toHaveTextContent('$ 6.200.000')
-    );
+    elapse(1_000);
+    expect(screen.getByTestId('monthly-curve-amount')).toHaveTextContent('$ 6.200.000');
   });
 });

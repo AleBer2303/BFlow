@@ -1,9 +1,13 @@
 import { act, render, screen } from '@testing-library/react-native';
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
 import React from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, View, type AppStateStatus } from 'react-native';
+import { KeyboardAwareScrollView } from '../../../design-system/components/KeyboardAwareScrollView';
 import { BFlowThemeProvider } from '../../../design-system/theme/ThemeContext';
-import MonthlyCurveStage, { type MonthlyCurveStageProps } from '../components/MonthlyCurveStage';
+import MonthlyCurveStage, {
+  GL_CONTEXT_TIMEOUT_MS,
+  type MonthlyCurveStageProps,
+} from '../components/MonthlyCurveStage';
 import { curveXForDay } from '../scene/curveGeometry';
 import { MonthlyCurveScene } from '../scene/monthlyCurveScene';
 import { buildTestCurve } from './curveFixture';
@@ -152,6 +156,28 @@ describe('MonthlyCurveStage', () => {
     warn.mockRestore();
   });
 
+  it('gives up when the GL surface never arrives, but not once the scene runs', () => {
+    jest.useFakeTimers();
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const waiting = jest.fn();
+      const view = renderStage(buildProps({ onUnavailable: waiting }));
+      act(() => jest.advanceTimersByTime(GL_CONTEXT_TIMEOUT_MS));
+      expect(waiting).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(expect.any(String), expect.any(Error));
+      view.unmount();
+
+      const running = jest.fn();
+      renderStage(buildProps({ onUnavailable: running }));
+      startScene();
+      act(() => jest.advanceTimersByTime(GL_CONTEXT_TIMEOUT_MS * 2));
+      expect(running).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      jest.useRealTimers();
+    }
+  });
+
   it('forwards data, metric and motion changes to the running scene', () => {
     const props = buildProps();
     const view = renderStage(props);
@@ -182,15 +208,49 @@ describe('MonthlyCurveStage', () => {
     expect(width).toBeGreaterThanOrEqual(300);
   });
 
-  it('claims horizontal drags only and leaves vertical ones to the scroll view', () => {
+  it('owns every touch that lands on the chart, whatever its direction', () => {
     renderStage(buildProps());
     const stage = hidden('monthly-curve-stage');
 
-    stage.props.onStartShouldSetResponderCapture(touch(0, 0, 1));
-    expect(stage.props.onMoveShouldSetResponderCapture(touch(2, 30, 2))).toBe(false);
+    expect(stage.props.onStartShouldSetResponder(touch(0, 0, 1))).toBe(true);
+    stage.props.onStartShouldSetResponderCapture(touch(0, 0, 2));
+    expect(stage.props.onMoveShouldSetResponderCapture(touch(2, 30, 3))).toBe(true);
+    expect(stage.props.onResponderTerminationRequest(touch(2, 30, 4))).toBe(false);
+  });
 
-    stage.props.onStartShouldSetResponderCapture(touch(0, 0, 3));
-    expect(stage.props.onMoveShouldSetResponderCapture(touch(40, 2, 4))).toBe(true);
+  it('locks the page scroll while the finger is on the chart', () => {
+    const onScrub = jest.fn();
+    render(
+      <BFlowThemeProvider initialMode="dark">
+        <KeyboardAwareScrollView testID="page">
+          <View style={{ height: 200 }}>
+            <MonthlyCurveStage {...buildProps({ onScrub })} />
+          </View>
+        </KeyboardAwareScrollView>
+      </BFlowThemeProvider>
+    );
+    startScene();
+    layoutStage(WIDTH, 200);
+    const page = () => screen.getByTestId('page');
+    const stage = hidden('monthly-curve-stage');
+    expect(page().props.scrollEnabled).toBe(true);
+
+    // A slightly vertical drag still walks the month instead of scrolling the page.
+    act(() => stage.props.onResponderGrant(touch(xForDay(10), 0, 1, xForDay(10))));
+    expect(page().props.scrollEnabled).toBe(false);
+    expect(onScrub).toHaveBeenLastCalledWith(10);
+    act(() => stage.props.onResponderMove(touch(xForDay(12), 40, 2, xForDay(10))));
+    expect(onScrub).toHaveBeenLastCalledWith(12);
+    expect(page().props.scrollEnabled).toBe(false);
+
+    act(() => stage.props.onResponderRelease(touch(xForDay(12), 40, 3, xForDay(12))));
+    expect(page().props.scrollEnabled).toBe(true);
+    expect(onScrub).toHaveBeenLastCalledWith(null);
+
+    // Losing the gesture to the system, or unmounting mid-gesture, also frees the page.
+    act(() => stage.props.onResponderGrant(touch(xForDay(5), 0, 4, xForDay(5))));
+    act(() => stage.props.onResponderTerminate(touch(xForDay(5), 0, 5, xForDay(5))));
+    expect(page().props.scrollEnabled).toBe(true);
   });
 
   it('walks through the days under the finger and rests on release', () => {

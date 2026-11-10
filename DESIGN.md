@@ -221,10 +221,10 @@ Fallback arquitectural idéntico visualmente mediante `expo-blur`:
    - Sustituye en Resumen a la lista del checklist y a las tarjetas `Control Deudas` y `Control Ahorros`. Una cifra en `heroCurrency`, una línea luminosa sobre una cuadrícula de puntos y un selector de cinco métricas: **Flujo, Ingresos, Gastos, Ahorros y Deudas**. Ver [ADR 0008](docs/decisions/0008-monthly-curve-replaces-tubes.md).
    - Se dibuja una serie a la vez, con su propia escala desde cero. La línea sólida llega hasta hoy y la punteada proyecta el cierre si se completa lo pendiente. Deudas solo baja con abonos reales.
    - Colores exclusivamente de tokens: `semantic.income` (Flujo e Ingresos), `semantic.expense`, `semantic.reserve` y `semantic.debt`. El lienzo es opaco y se limpia con `background.primary` para integrarse con la página.
-   - **Interacción:** deslizar en horizontal recorre el mes día a día, atenúa lo posterior e inclina levemente la curva; más allá de hoy solo existe el cierre previsto. Al soltar, regresa a hoy. Deslizar en vertical desplaza la página.
+   - **Interacción:** al tocar la gráfica se muestra el día bajo el dedo y se bloquea el scroll de la página hasta soltar (`useScrollLock`). Arrastrar recorre el mes día a día según la posición horizontal, atenúa lo posterior e inclina levemente la curva; más allá de hoy solo existe el cierre previsto. Al soltar, regresa a hoy. La página se desplaza tocando fuera de la gráfica.
    - **Accesibilidad:** cada botón del selector mide mínimo `52 pt` y anuncia monto y cierre previsto en `accessibilityLabel`, de modo que la identidad no depende del color. Con *Reducir Movimiento* no hay trazado de entrada, transformación, inclinación ni latido.
-   - **Respaldo:** sin WebGL se muestra una barra 2D por día con la misma escala y una barra atenuada para el cierre previsto.
-   - **Por piel:** lo anterior describe la escena three.js de iOS y Android. La piel Web dibuja la misma curva como vector plano y estático (§10.4) y, en escritorio, convierte el selector en una tabla de métricas con su cifra actual.
+   - **Respaldo:** si la escena 3D no puede dibujar (sin WebGL, shader que no enlaza, superficie GL que no llega en 6 s o error en un cuadro), se muestra la curva vectorial animada con el mismo gesto horizontal. Ver [ADR 0012](docs/decisions/0012-animated-vector-curve.md).
+   - **Por piel:** lo anterior describe la escena three.js de iOS y Android. La piel Web dibuja la misma curva como vector plano y animado (§10.4): mismo trazado de entrada, transformación y latido, sin brillo ni inclinación. En escritorio convierte el selector en una tabla de métricas con su cifra actual.
 
 ---
 
@@ -255,7 +255,7 @@ Decisiones en los ADR [0010](docs/decisions/0010-platform-skins-and-responsive-l
 | Botón principal | Cápsula de vidrio | Relleno con el acento, totalmente redondeado | El único botón relleno con el acento, radio 4 |
 | Radios `xs / sm / md / lg / xl / pill` | 6 / 10 / 16 / 22 / 28 / 999 | 4 / 8 / 12 / 16 / 28 / 999 | 2 / 4 / 6 / 8 / 8 / 4 |
 | Objetivo táctil | 44 pt | 48 dp | 44 px |
-| Curva del mes | Escena three.js | Escena three.js | Curva vectorial (SVG) |
+| Curva del mes | Escena three.js (respaldo: curva vectorial) | Escena three.js (respaldo: curva vectorial) | Curva vectorial (SVG) animada |
 
 **No cambia entre pieles:** los datos, los flujos, el significado de los colores semánticos, el espaciado (§4.1), los números tabulares y los `testID`.
 
@@ -337,9 +337,9 @@ Reglas propias de la Web:
 2. Texto de lectura a 16 px; nada por debajo de 13 px; pesos 400 y 500.
 3. Un único botón relleno por vista (`usePrimaryActionLook`); el resto, superficie con línea.
 4. Cabecera opaca de 72 px (56 px por debajo de 640 px) con línea inferior; sin blur, sombra ni píldora flotante.
-5. Movimiento (`webMotion`): 140 / 200 / 90 ms con `cubic-bezier(0.2, 0.8, 0.2, 1)`. Nada rebota, se inclina ni se anima con el scroll. La gráfica es estática.
+5. Movimiento (`webMotion`): 140 / 200 / 90 ms con `cubic-bezier(0.2, 0.8, 0.2, 1)`. Nada rebota, se inclina ni se anima con el scroll. Única excepción: la curva del mes se dibuja al entrar, se transforma al cambiar de métrica y su marcador late 3 veces (ADR 0012); con `prefers-reduced-motion` aparece quieta.
 6. Foco de teclado: anillo de 2 px con el acento (`:focus-visible`).
-7. Curva del mes vectorial: línea de 2 px, área al 10 %, proyección punteada en `text.muted`. Se recorre con el puntero o con las flechas.
+7. Curva del mes vectorial: línea de 2 px, área al 10 %, proyección punteada en `text.muted`, marcador con anillo de latido. Se recorre con el puntero o con las flechas.
 
 ---
 

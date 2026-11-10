@@ -1,6 +1,6 @@
 # 0011. Rediseño de la piel Web y curva vectorial en lugar de three.js
 
-- **Estado:** Aceptado
+- **Estado:** Aceptado. La curva vectorial de §2.4 dejó de ser estática: se anima según el [ADR 0012](0012-animated-vector-curve.md).
 - **Fecha:** Noviembre 2026
 - **Contexto:** Aplica a la piel Web el marco del [ADR 0010](0010-platform-skins-and-responsive-layout.md). Acota a iOS y Android la escena del [ADR 0007](0007-three-js-monthly-overview-scene.md) y del [ADR 0008](0008-monthly-curve-replaces-tubes.md), que siguen vigentes en esas dos plataformas.
 - **Autores:** Architect, UI Builder, QA Engineer y Documentation Expert

@@ -47,7 +47,11 @@ const unsupportedParameters = new Set(
   [...unsupportedBlock.matchAll(/case GL_(\w+):/g)].map((match) => match[1])
 );
 
-function createNativeLikeContext(extensionResult: object | null, supportsWebGL2 = true) {
+function createNativeLikeContext(
+  extensionResult: object | null,
+  supportsWebGL2 = true,
+  linkFails = false
+) {
   const calledMethods = new Set<string>();
   const missingConstants = new Set<string>();
 
@@ -74,6 +78,9 @@ function createNativeLikeContext(extensionResult: object | null, supportsWebGL2 
 
   const getProgramParameter = (_program: unknown, parameter: number): unknown => {
     const name = constantNames.get(parameter);
+    if (name === 'LINK_STATUS' && linkFails) {
+      return false;
+    }
     return name === 'ACTIVE_UNIFORMS' || name === 'ACTIVE_ATTRIBUTES' ? 0 : true;
   };
 
@@ -93,7 +100,7 @@ function createNativeLikeContext(extensionResult: object | null, supportsWebGL2 
     getProgramParameter: getProgramParameter as (...args: never[]) => unknown,
     getShaderParameter: () => true,
     getShaderPrecisionFormat: () => ({ rangeMin: 127, rangeMax: 127, precision: 23 }),
-    getShaderInfoLog: () => '',
+    getShaderInfoLog: () => (linkFails ? 'ERROR: 0:12: syntax error' : ''),
     getProgramInfoLog: () => '',
     getShaderSource: () => '',
     getAttribLocation: () => 0,
@@ -244,5 +251,43 @@ describe('three.js against the native expo-gl surface', () => {
     expect(calledMethods.has('drawElements')).toBe(true);
     expect(calledMethods.has('endFrameEXP')).toBe(true);
     expect([...missingConstants]).toEqual([]);
+  });
+});
+
+describe('a shader that does not link on the device', () => {
+  it('fails the frame instead of leaving an empty canvas, so the stage can fall back', () => {
+    const error = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { gl } = createNativeLikeContext(null, true, true);
+    const frames: ((timestamp: number) => void)[] = [];
+    const onRenderError = jest.fn();
+
+    const scene = new MonthlyCurveScene({
+      gl,
+      bufferWidth: 600,
+      bufferHeight: 400,
+      pixelRatio: 2,
+      palette: toScenePalette(palettes.dark, 'dark'),
+      curve: buildTestCurve(),
+      metricId: 'flow',
+      reducedMotion: false,
+      onRenderError,
+      requestFrame: (callback) => {
+        frames.push(callback);
+        return frames.length;
+      },
+      cancelFrame: () => undefined,
+    });
+    frames.shift()?.(16);
+
+    expect(onRenderError).toHaveBeenCalledTimes(1);
+    expect(onRenderError.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        message: expect.stringMatching(/^Curve shaders failed to compile\.\n.*syntax error/s),
+      })
+    );
+    expect(scene.isIdle()).toBe(true);
+    // three.js no longer logs it on its own: the stage reports it once, with the details.
+    expect(error).not.toHaveBeenCalled();
+    error.mockRestore();
   });
 });

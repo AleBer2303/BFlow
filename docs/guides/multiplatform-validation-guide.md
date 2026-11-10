@@ -102,4 +102,4 @@ npm test
 
 - **Dispositivo real.** La vista previa en el navegador dibuja la piel, no el sistema: el ripple de Android, los insets de borde a borde, la háptica y el blur nativo de iOS solo se ven en un dispositivo o emulador (`npm run android`, `npm start` con Expo Go).
 - **Datos reales.** El modo vitrina usa el seed. Para probar la sincronización con Firestore usa `npm run web` con tu cuenta.
-- **La escena 3D en la vista previa.** Con `?skin=ios` o `?skin=android` el navegador carga three.js bajo demanda; la piel Web nunca lo hace.
+- **La escena 3D en la vista previa.** Con `?skin=ios` o `?skin=android` el navegador carga three.js bajo demanda; la piel Web nunca lo hace. Si el navegador no tiene WebGL, esas pieles muestran la curva vectorial animada (ADR 0012).

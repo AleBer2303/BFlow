@@ -156,7 +156,7 @@ Para permitir el desarrollo diario sin fricción en **Windows 11 sin Mac local**
 
 ## 🎨 Sistema de Diseño Visual: Liquid Glass & SF Pro
 
-> **Multiplataforma con tres pieles (ADR 0010 y 0011).** Lo que sigue describe la piel **iOS**. **Android** usa Material 3 (superficies tonales opacas, barra de navegación anclada, ripple; sin Liquid Glass) y **Web** un sistema plano (paleta arena y negro con acento petróleo, tipografía Geist, cabecera fija, composición de escritorio a dos columnas y curva del mes vectorial). Los tokens de cada piel y el contrato responsive están en `DESIGN.md` §10 y §11.
+> **Multiplataforma con tres pieles (ADR 0010 y 0011).** Lo que sigue describe la piel **iOS**. **Android** usa Material 3 (superficies tonales opacas, barra de navegación anclada, ripple; sin Liquid Glass) y **Web** un sistema plano (paleta arena y negro con acento petróleo, tipografía Geist, cabecera fija, composición de escritorio a dos columnas y curva del mes vectorial animada, ADR 0012). Los tokens de cada piel y el contrato responsive están en `DESIGN.md` §10 y §11.
 
 Documentado a profundidad en [`DESIGN.md`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/DESIGN.md) y centralizado en [`src/design-system/tokens.ts`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/src/design-system/tokens.ts):
 
@@ -231,7 +231,7 @@ BFlow/
 │   └── workflows/                # CI/CD (ci.yml, build-ios.yml, build-android.yml, e2e.yml)
 ├── assets/                       # Iconos y splash screens de la aplicación
 ├── docs/
-│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0011)
+│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0012)
 │   ├── guides/                   # Guías operativas (firma con iloader, validación multiplataforma)
 │   └── Improvements/             # Guías de auditoría de rendimiento
 ├── fixtures/                     # Datos dorados de prueba (october-2026.json)
@@ -268,7 +268,7 @@ BFlow/
 │   │   ├── onboarding/           # Configuración inicial de usuario nuevo
 │   │   ├── savings/              # Tarjetas de fondos y provisión moto
 │   │   ├── shell/                # WorkspaceShell: cabecera, columna y navegación de cada piel
-│   │   └── summary/              # Resumen y curva del mes: three.js (iOS, Android), SVG (Web)
+│   │   └── summary/              # Resumen y curva del mes: three.js (iOS, Android), SVG animado (Web y respaldo)
 │   └── platform/                 # Adaptadores Modo A vs Modo B
 │       ├── auth/                 # Adaptador de autenticación y códigos de 6 dígitos
 │       ├── glass/                # GlassSurface: vidrio (iOS), tonal (Android), plano (Web)

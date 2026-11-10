@@ -10,6 +10,10 @@
  * 3. Keeps a clean, compact clearance (~24pt) above the keyboard, preventing excessive empty space.
  * 4. Animates fluidly and imperceptibly, matching iOS native touch physics.
  * 5. Works universally for any existing or future field (via AppTextInput or native TextInput fallback).
+ *
+ * It also lets a child lock the page scroll while it owns a gesture (`useScrollLock`): the
+ * Summary curve does it while a finger is on the chart, so a slightly diagonal drag walks
+ * the month instead of scrolling the page (iOS gives the gesture to UIScrollView otherwise).
  */
 
 import React, {
@@ -18,6 +22,7 @@ import React, {
   useContext,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -57,6 +62,22 @@ export function useKeyboardAware(): KeyboardAwareContextValue {
   return useContext(KeyboardAwareContext);
 }
 
+export interface ScrollLockContextValue {
+  /**
+   * Stops the page from scrolling until the returned release function is called. Locks
+   * stack: the page scrolls again once every holder has released. Releasing twice is safe.
+   */
+  lockScroll: () => () => void;
+}
+
+const NO_SCROLL_LOCK: ScrollLockContextValue = { lockScroll: () => () => undefined };
+const ScrollLockContext = createContext<ScrollLockContextValue>(NO_SCROLL_LOCK);
+
+/** Outside a KeyboardAwareScrollView it does nothing, so components work anywhere. */
+export function useScrollLock(): ScrollLockContextValue {
+  return useContext(ScrollLockContext);
+}
+
 export type KeyboardAwareScrollViewElement = React.ElementRef<typeof ScrollView>;
 
 export interface KeyboardAwareScrollViewProps extends ScrollViewProps {
@@ -81,6 +102,7 @@ export const KeyboardAwareScrollView = React.forwardRef<
     contentContainerStyle,
     onScroll,
     scrollEventThrottle = 16,
+    scrollEnabled = true,
     ...rest
   },
   forwardedRef
@@ -92,6 +114,40 @@ export const KeyboardAwareScrollView = React.forwardRef<
 
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const scrollLockCountRef = useRef(0);
+  const [isScrollLocked, setIsScrollLocked] = useState(false);
+
+  const scrollLockValue = useMemo<ScrollLockContextValue>(() => {
+    const apply = (locked: boolean) => {
+      // Native first: the scroll view must stop before it recognizes the drag, which can
+      // happen before React commits the new prop. The state keeps the prop in sync.
+      const node = innerScrollRef.current as unknown as {
+        setNativeProps?: (props: { scrollEnabled: boolean }) => void;
+      } | null;
+      node?.setNativeProps?.({ scrollEnabled: !locked && scrollEnabled });
+      setIsScrollLocked(locked);
+    };
+
+    return {
+      lockScroll: () => {
+        scrollLockCountRef.current += 1;
+        if (scrollLockCountRef.current === 1) {
+          apply(true);
+        }
+        let isReleased = false;
+        return () => {
+          if (isReleased) {
+            return;
+          }
+          isReleased = true;
+          scrollLockCountRef.current -= 1;
+          if (scrollLockCountRef.current === 0) {
+            apply(false);
+          }
+        };
+      },
+    };
+  }, [scrollEnabled]);
 
   useImperativeHandle(forwardedRef, () => innerScrollRef.current as KeyboardAwareScrollViewElement);
 
@@ -263,33 +319,36 @@ export const KeyboardAwareScrollView = React.forwardRef<
 
   return (
     <KeyboardAwareContext.Provider value={contextValue}>
-      <ScrollView
-        ref={innerScrollRef}
-        onScroll={handleScroll}
-        scrollEventThrottle={scrollEventThrottle}
-        keyboardShouldPersistTaps={keyboardShouldPersistTaps}
-        keyboardDismissMode={keyboardDismissMode}
-        automaticallyAdjustKeyboardInsets={automaticallyAdjustKeyboardInsets}
-        contentInsetAdjustmentBehavior={contentInsetAdjustmentBehavior}
-        contentContainerStyle={[
-          contentContainerStyle,
-          Platform.OS !== 'ios' && isKeyboardVisible && keyboardHeight > 0
-            ? {
-                paddingBottom:
-                  (typeof contentContainerStyle === 'object' &&
-                  contentContainerStyle !== null &&
-                  'paddingBottom' in contentContainerStyle
-                    ? Number((contentContainerStyle as any).paddingBottom || 0)
-                    : 0) +
-                  keyboardHeight +
-                  24,
-              }
-            : null,
-        ]}
-        {...rest}
-      >
-        {children}
-      </ScrollView>
+      <ScrollLockContext.Provider value={scrollLockValue}>
+        <ScrollView
+          ref={innerScrollRef}
+          scrollEnabled={scrollEnabled && !isScrollLocked}
+          onScroll={handleScroll}
+          scrollEventThrottle={scrollEventThrottle}
+          keyboardShouldPersistTaps={keyboardShouldPersistTaps}
+          keyboardDismissMode={keyboardDismissMode}
+          automaticallyAdjustKeyboardInsets={automaticallyAdjustKeyboardInsets}
+          contentInsetAdjustmentBehavior={contentInsetAdjustmentBehavior}
+          contentContainerStyle={[
+            contentContainerStyle,
+            Platform.OS !== 'ios' && isKeyboardVisible && keyboardHeight > 0
+              ? {
+                  paddingBottom:
+                    (typeof contentContainerStyle === 'object' &&
+                    contentContainerStyle !== null &&
+                    'paddingBottom' in contentContainerStyle
+                      ? Number((contentContainerStyle as any).paddingBottom || 0)
+                      : 0) +
+                    keyboardHeight +
+                    24,
+                }
+              : null,
+          ]}
+          {...rest}
+        >
+          {children}
+        </ScrollView>
+      </ScrollLockContext.Provider>
     </KeyboardAwareContext.Provider>
   );
 });

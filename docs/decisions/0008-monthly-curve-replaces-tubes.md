@@ -1,6 +1,6 @@
 # 0008. La curva del mes sustituye a los tubos en Resumen
 
-- **Estado:** Aceptado
+- **Estado:** Aceptado. El respaldo sin WebGL de §2.4 fue sustituido por la curva vectorial animada ([ADR 0012](0012-animated-vector-curve.md)).
 - **Fecha:** Noviembre 2026
 - **Contexto:** Sustituye la forma de la visualización del [ADR 0007](0007-three-js-monthly-overview-scene.md) (§2.2 y §2.5). Se mantienen su pila técnica, su compatibilidad con Expo Go y su estrategia de optimización.
 - **Autores:** Architect, UI Builder y QA Engineer

@@ -6,9 +6,9 @@ import { BFlowThemeProvider } from '../../../design-system/theme/ThemeContext';
 import { palettes } from '../../../design-system/tokens';
 import type { MonthlyCurve } from '../../../domain/overview/monthlyCurve';
 import { hapticService } from '../../../platform/haptics/hapticService';
-import { MonthlyCurveFallback } from '../components/MonthlyCurveFallback';
 import { MonthlyCurveSection } from '../components/MonthlyCurveSection';
-import MonthlyCurveStage from '../components/MonthlyCurveStage';
+import MonthlyCurveStage, { GL_CONTEXT_TIMEOUT_MS } from '../components/MonthlyCurveStage';
+import MonthlyCurveVectorStage from '../components/MonthlyCurveVectorStage';
 import {
   buildCurveTicks,
   describeCurveReadout,
@@ -126,7 +126,18 @@ describe('MonthlyCurveSection', () => {
     ).toHaveTextContent('Hoy', { exact: true });
   });
 
-  it('falls back to the 2D view when the GL context cannot start', () => {
+  function expectTouchVectorFallback(): void {
+    expect(screen.UNSAFE_queryAllByType(GLView)).toHaveLength(0);
+    expect(screen.UNSAFE_getByType(MonthlyCurveVectorStage).props.interaction).toBe('touch');
+    // Like the canvas it replaces, it stays hidden from VoiceOver and TalkBack.
+    expect(screen.queryByTestId('monthly-curve-vector-stage')).toBeNull();
+    expect(
+      screen.getByTestId('monthly-curve-vector-stage', { includeHiddenElements: true })
+    ).toBeTruthy();
+    expect(screen.getByTestId('monthly-curve-metric-income')).toBeTruthy();
+  }
+
+  it('swaps in the animated vector curve when the GL context cannot start', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     renderSection();
 
@@ -134,12 +145,11 @@ describe('MonthlyCurveSection', () => {
       getGlView().props.onContextCreate({} as ExpoWebGLRenderingContext);
     });
 
-    expect(screen.getByTestId('monthly-curve-fallback')).toBeTruthy();
-    expect(screen.getByTestId('monthly-curve-metric-income')).toBeTruthy();
+    expectTouchVectorFallback();
     warn.mockRestore();
   });
 
-  it('falls back to the 2D view when GLView throws while mounting', () => {
+  it('swaps in the animated vector curve when GLView throws while mounting', () => {
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     const glRender = jest.spyOn(GLView.prototype, 'render').mockImplementation(() => {
       throw new Error('Browser does not support WebGL');
@@ -147,41 +157,28 @@ describe('MonthlyCurveSection', () => {
 
     renderSection();
 
-    expect(screen.getByTestId('monthly-curve-fallback')).toBeTruthy();
+    expectTouchVectorFallback();
 
     glRender.mockRestore();
     consoleError.mockRestore();
   });
-});
 
-describe('MonthlyCurveFallback', () => {
-  function renderFallback(curve: MonthlyCurve) {
-    return render(
-      <BFlowThemeProvider initialMode="dark">
-        <MonthlyCurveFallback curve={curve} metricId="debt" />
-      </BFlowThemeProvider>
-    );
-  }
+  it('swaps in the animated vector curve when the GL surface never arrives', () => {
+    jest.useFakeTimers();
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      renderSection();
 
-  it('draws known days at scale, nothing for the unknown ones and a muted projected close', () => {
-    renderFallback(CURVE);
+      act(() => jest.advanceTimersByTime(GL_CONTEXT_TIMEOUT_MS - 1));
+      expect(screen.UNSAFE_queryAllByType(GLView)).toHaveLength(1);
 
-    expect(screen.getByTestId('monthly-curve-fallback-day-1')).toHaveStyle({ height: '100%' });
-    expect(screen.getByTestId('monthly-curve-fallback-day-27')).toHaveStyle({
-      height: `${(6_200_000 / 8_000_000) * 100}%`,
-    });
-    expect(screen.getByTestId('monthly-curve-fallback-day-29')).toHaveStyle({ height: 0 });
-    expect(screen.getByTestId('monthly-curve-fallback-day-31')).toHaveStyle({
-      backgroundColor: palettes.dark.text.muted,
-    });
-  });
-
-  it('uses the metric color through the last day of a finished month', () => {
-    renderFallback(CLOSED_CURVE);
-
-    expect(screen.getByTestId('monthly-curve-fallback-day-31')).toHaveStyle({
-      backgroundColor: palettes.dark.semantic.debt,
-    });
+      act(() => jest.advanceTimersByTime(1));
+      expectTouchVectorFallback();
+      expect(warn).toHaveBeenCalledWith(expect.any(String), expect.any(Error));
+    } finally {
+      warn.mockRestore();
+      jest.useRealTimers();
+    }
   });
 });
 

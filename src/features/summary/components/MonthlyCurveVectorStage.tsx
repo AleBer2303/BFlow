@@ -1,18 +1,22 @@
 /**
  * src/features/summary/components/MonthlyCurveVectorStage.tsx
  *
- * The month's curve as a flat vector drawing (react-native-svg). It is the stage of the WEB
- * skin and replaces the three.js scene there (ADR 0011): crisp at any width, no WebGL
- * context, no three.js download, and it follows the web system (no glow, no tilt, the chart
- * stays still).
+ * The month's curve as an animated vector drawing (react-native-svg). Two jobs:
+ * - Stage of the WEB skin (ADR 0011 and 0012): crisp at any width, no WebGL context and no
+ *   three.js download. It moves like the 3D scene (the line draws in, the projection
+ *   extends, the marker pops in and pulses, metrics morph) without glow or tilt.
+ * - Fallback on iOS and Android when the 3D stage cannot draw, so a phone never loses the
+ *   animation (ADR 0012).
  *
  * Interaction:
- * - Pointer: moving over the chart walks the month day by day; leaving returns to today.
- *   Touch works the same; vertical drags keep scrolling the page.
- * - Keyboard: the chart is focusable; Left / Right step one day, Home / End jump to the
- *   first day and the last stop, Escape returns to today.
+ * - 'pointer' (web skin): moving over the chart walks the month day by day; leaving
+ *   returns to today. The chart is focusable: Left / Right step one day, Home / End jump to
+ *   the first day and the last stop, Escape returns to today.
+ * - 'touch' (phone fallback): the horizontal drag of the 3D stage; vertical drags keep
+ *   scrolling. Hidden from VoiceOver and TalkBack like the 3D canvas, because the metric
+ *   buttons already state every figure.
  *
- * Shares `CurveStop`, the sampling and the horizontal margin with the 3D stage, so the
+ * Shares `CurveStop`, the sampling, the margin and the timeline with the 3D stage, so the
  * readout and the day labels line up identically on both.
  */
 
@@ -20,24 +24,42 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View, type LayoutChangeEvent, type ViewProps } from 'react-native';
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { useBFlowTheme } from '../../../design-system';
+import { MONTHLY_CURVE_METRIC_IDS } from '../../../domain/overview/monthlyCurve';
 import { formatCurrency } from '../../../domain/money/money';
-import { clampCurveStop, resolveCurveStop, type CurveStop } from '../scene/curveGeometry';
+import {
+  clampCurveStop,
+  resolveCurveStop,
+  type CurveStop,
+} from '../scene/curveGeometry';
+import { resolveFrameSeconds } from '../scene/curveMotion';
 import { getMetricColor } from '../scene/scenePalette';
 import {
-  VECTOR_PLOT_PADDING_TOP_PT,
-  buildVectorCurveGeometry,
-  resolveVectorStopPoint,
-  stepCurveStop,
-} from '../scene/vectorCurveGeometry';
+  VectorCurveAnimator,
+  type MetricColors,
+  type VectorCurveFrame,
+} from '../scene/vectorCurveAnimator';
+import { VECTOR_PLOT_PADDING_TOP_PT, stepCurveStop } from '../scene/vectorCurveGeometry';
 import type { MonthlyCurveStageProps } from './MonthlyCurveStage';
 import { describeCurveReadout } from './monthlyCurveCopy';
+import { useCurveScrubResponder } from './useCurveScrubResponder';
+
+export type VectorStageInteraction = 'pointer' | 'touch';
+
+export interface MonthlyCurveVectorStageProps extends MonthlyCurveStageProps {
+  interaction?: VectorStageInteraction;
+}
 
 const LINE_WIDTH_PT = 2;
 const AREA_OPACITY = 0.1;
 const DOT_RADIUS_PT = 4.5;
 const DOT_RING_WIDTH_PT = 2;
+const PULSE_START_RADIUS_PT = DOT_RADIUS_PT + 2;
+const PULSE_END_RADIUS_PT = 22;
+const PULSE_STROKE_PT = 1.5;
+const PULSE_MAX_OPACITY = 0.55;
 const DIM_OPACITY = 0.62;
 const PROJECTION_DASH = '2 6';
+const MIN_VISIBLE_SCALE = 0.01;
 
 interface StagePointerEvent {
   nativeEvent: { offsetX?: number; locationX?: number };
@@ -74,22 +96,74 @@ function readPointerX(event: StagePointerEvent): number | null {
   return typeof x === 'number' && Number.isFinite(x) ? x : null;
 }
 
+/** Drives the animator: one frame per display refresh while it moves, none at rest. */
+function useAnimatedFrame(animator: VectorCurveAnimator) {
+  const [frame, setFrame] = useState<VectorCurveFrame | null>(() => animator.getFrame());
+  const handleRef = useRef<number | null>(null);
+  const lastTimestampRef = useRef<number | null>(null);
+
+  const step = useCallback(
+    (timestamp: number) => {
+      handleRef.current = null;
+      const seconds = resolveFrameSeconds(timestamp, lastTimestampRef.current);
+      lastTimestampRef.current = timestamp;
+      const isMoving = animator.advance(seconds);
+      setFrame(animator.getFrame());
+      if (isMoving) {
+        handleRef.current = requestAnimationFrame(step);
+      } else {
+        lastTimestampRef.current = null;
+      }
+    },
+    [animator]
+  );
+
+  /** Shows the new state right away and keeps animating from there (once there is a size). */
+  const invalidate = useCallback(() => {
+    const next = animator.getFrame();
+    setFrame(next);
+    if (next !== null && handleRef.current === null) {
+      handleRef.current = requestAnimationFrame(step);
+    }
+  }, [animator, step]);
+
+  useEffect(
+    () => () => {
+      if (handleRef.current !== null) {
+        cancelAnimationFrame(handleRef.current);
+        handleRef.current = null;
+      }
+    },
+    []
+  );
+
+  return { frame, invalidate };
+}
+
 export default function MonthlyCurveVectorStage({
   curve,
   metricId,
+  reducedMotion,
   onScrub,
-}: MonthlyCurveStageProps): React.JSX.Element {
+  interaction = 'pointer',
+}: MonthlyCurveVectorStageProps): React.JSX.Element {
   const { colors } = useBFlowTheme();
-  const [size, setSize] = useState({ width: 0, height: 0 });
+  const metricColors = useMemo(
+    () =>
+      Object.fromEntries(
+        MONTHLY_CURVE_METRIC_IDS.map((id) => [id, getMetricColor(colors, id)])
+      ) as MetricColors,
+    [colors]
+  );
+
+  const [animator] = useState(
+    () => new VectorCurveAnimator({ curve, metricId, colors: metricColors, reducedMotion })
+  );
+  const { frame, invalidate } = useAnimatedFrame(animator);
+
   const [rawStop, setStop] = useState<CurveStop | null>(null);
   // Guards the render between a month change and the effect that clears the stop.
   const stop = clampCurveStop(curve, rawStop);
-
-  const color = getMetricColor(colors, metricId);
-  const geometry = useMemo(
-    () => buildVectorCurveGeometry(curve, metricId, size.width, size.height),
-    [curve, metricId, size.width, size.height]
-  );
 
   const stopRef = useRef<CurveStop | null>(null);
   const applyStop = useCallback(
@@ -99,31 +173,66 @@ export default function MonthlyCurveVectorStage({
       }
       stopRef.current = next;
       setStop(next);
+      animator.setStop(next);
+      invalidate();
       onScrub(next);
     },
-    [onScrub]
+    [animator, invalidate, onScrub]
   );
+
+  useEffect(() => {
+    animator.setCurve(curve);
+    invalidate();
+  }, [animator, curve, invalidate]);
+
+  useEffect(() => {
+    animator.setMetric(metricId);
+    invalidate();
+  }, [animator, metricId, invalidate]);
+
+  useEffect(() => {
+    animator.setColors(metricColors);
+    invalidate();
+  }, [animator, metricColors, invalidate]);
+
+  useEffect(() => {
+    animator.setReducedMotion(reducedMotion);
+    invalidate();
+  }, [animator, reducedMotion, invalidate]);
 
   // A stop kept from another month would point at a day that no longer exists.
   useEffect(() => {
     applyStop(null);
   }, [curve.monthKey, curve.cutoffDay, applyStop]);
 
-  const handleLayout = useCallback((event: LayoutChangeEvent) => {
-    const { width, height } = event.nativeEvent.layout;
-    setSize((previous) =>
-      previous.width === width && previous.height === height ? previous : { width, height }
-    );
-  }, []);
+  const widthRef = useRef(0);
+  const handleLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const { width, height } = event.nativeEvent.layout;
+      widthRef.current = width;
+      if (animator.setSize(width, height)) {
+        invalidate();
+      }
+    },
+    [animator, invalidate]
+  );
+
+  const resolveStopAt = useCallback(
+    (x: number) => (widthRef.current > 0 ? resolveCurveStop(curve, x, widthRef.current) : null),
+    [curve]
+  );
+
+  const panResponder = useCurveScrubResponder({ resolveStop: resolveStopAt, onStop: applyStop });
 
   const handlePointer = useCallback(
     (event: StagePointerEvent) => {
       const x = readPointerX(event);
-      if (x !== null && size.width > 0) {
-        applyStop(resolveCurveStop(curve, x, size.width));
+      const next = x === null ? null : resolveStopAt(x);
+      if (next !== null) {
+        applyStop(next);
       }
     },
-    [applyStop, curve, size.width]
+    [applyStop, resolveStopAt]
   );
 
   const handleRelease = useCallback(() => applyStop(null), [applyStop]);
@@ -154,12 +263,23 @@ export default function MonthlyCurveVectorStage({
     [applyStop, curve, stop]
   );
 
-  const marker =
-    geometry === null
-      ? null
-      : stop === null
-        ? geometry.cutoffPoint
-        : resolveVectorStopPoint(curve, metricId, stop, size.width, size.height);
+  const drawing = frame === null ? null : <CurveDrawing frame={frame} stop={stop} />;
+
+  if (interaction === 'touch') {
+    return (
+      <View
+        testID="monthly-curve-vector-stage"
+        style={StyleSheet.absoluteFill}
+        onLayout={handleLayout}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        {...panResponder.panHandlers}
+      >
+        {drawing}
+      </View>
+    );
+  }
+
   const readout = describeCurveReadout(curve, metricId, stop);
 
   return (
@@ -179,85 +299,110 @@ export default function MonthlyCurveVectorStage({
       onPointerCancel={handleRelease}
       onBlur={handleRelease}
     >
-      {geometry !== null && marker !== null ? (
-        <Svg
-          testID="monthly-curve-vector-svg"
-          width={size.width}
-          height={size.height}
-          pointerEvents="none"
-        >
-          {geometry.gridLineYs.map((y, index) => (
-            <Line
-              key={y}
-              x1={0}
-              x2={size.width}
-              y1={y}
-              y2={y}
-              stroke={
-                index === geometry.gridLineYs.length - 1
-                  ? colors.glass.specularBorder
-                  : colors.glass.subtleBorder
-              }
-              strokeWidth={1}
-            />
-          ))}
-
-          <Path testID="monthly-curve-vector-area" d={geometry.areaPath} fill={color} opacity={AREA_OPACITY} />
-          <Path
-            testID="monthly-curve-vector-line"
-            d={geometry.linePath}
-            stroke={color}
-            strokeWidth={LINE_WIDTH_PT}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-            fill="none"
-          />
-          {geometry.projectionPath !== null ? (
-            <Path
-              testID="monthly-curve-vector-projection"
-              d={geometry.projectionPath}
-              stroke={colors.text.muted}
-              strokeWidth={LINE_WIDTH_PT}
-              strokeDasharray={PROJECTION_DASH}
-              strokeLinecap="round"
-              fill="none"
-            />
-          ) : null}
-
-          {stop !== null ? (
-            <>
-              {/* Everything after the stop steps back, so the eye stays on the chosen day. */}
-              <Rect
-                testID="monthly-curve-vector-dim"
-                x={marker.x}
-                y={0}
-                width={Math.max(0, size.width - marker.x)}
-                height={geometry.baselineY}
-                fill={colors.background.primary}
-                opacity={DIM_OPACITY}
-              />
-              <Line
-                x1={marker.x}
-                x2={marker.x}
-                y1={VECTOR_PLOT_PADDING_TOP_PT / 2}
-                y2={geometry.baselineY}
-                stroke={colors.text.muted}
-                strokeWidth={1}
-              />
-            </>
-          ) : null}
-
-          <Circle
-            testID="monthly-curve-vector-marker"
-            cx={marker.x}
-            cy={marker.y}
-            r={DOT_RADIUS_PT}
-            fill={stop === 'close' ? colors.text.muted : color}
-            stroke={colors.background.primary}
-            strokeWidth={DOT_RING_WIDTH_PT}
-          />
-        </Svg>
-      ) : null}
+      {drawing}
     </WebStageView>
+  );
+}
+
+interface CurveDrawingProps {
+  frame: VectorCurveFrame;
+  stop: CurveStop | null;
+}
+
+function CurveDrawing({ frame, stop }: CurveDrawingProps): React.JSX.Element {
+  const { colors } = useBFlowTheme();
+  const { width, height, marker, color } = frame;
+  const lastGridIndex = frame.gridLineYs.length - 1;
+
+  return (
+    <Svg testID="monthly-curve-vector-svg" width={width} height={height} pointerEvents="none">
+      {frame.gridLineYs.map((y, index) => (
+        <Line
+          key={y}
+          x1={0}
+          x2={width}
+          y1={y}
+          y2={y}
+          stroke={index === lastGridIndex ? colors.glass.specularBorder : colors.glass.subtleBorder}
+          strokeWidth={1}
+        />
+      ))}
+
+      {frame.areaPath !== '' ? (
+        <Path testID="monthly-curve-vector-area" d={frame.areaPath} fill={color} opacity={AREA_OPACITY} />
+      ) : null}
+      {frame.linePath !== '' ? (
+        <Path
+          testID="monthly-curve-vector-line"
+          d={frame.linePath}
+          stroke={color}
+          strokeWidth={LINE_WIDTH_PT}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          fill="none"
+        />
+      ) : null}
+      {frame.projectionPath ? (
+        <Path
+          testID="monthly-curve-vector-projection"
+          d={frame.projectionPath}
+          stroke={colors.text.muted}
+          strokeWidth={LINE_WIDTH_PT}
+          strokeDasharray={PROJECTION_DASH}
+          strokeLinecap="round"
+          fill="none"
+        />
+      ) : null}
+
+      {stop !== null ? (
+        <>
+          {/* Everything after the stop steps back, so the eye stays on the chosen day. */}
+          <Rect
+            testID="monthly-curve-vector-dim"
+            x={marker.x}
+            y={0}
+            width={Math.max(0, width - marker.x)}
+            height={frame.baselineY}
+            fill={colors.background.primary}
+            opacity={DIM_OPACITY * frame.focus}
+          />
+          <Line
+            x1={marker.x}
+            x2={marker.x}
+            y1={VECTOR_PLOT_PADDING_TOP_PT / 2}
+            y2={frame.baselineY}
+            stroke={colors.text.muted}
+            strokeWidth={1}
+            opacity={frame.focus}
+          />
+        </>
+      ) : null}
+
+      {frame.pulse !== null ? (
+        <Circle
+          testID="monthly-curve-vector-pulse"
+          cx={marker.x}
+          cy={marker.y}
+          r={PULSE_START_RADIUS_PT + (PULSE_END_RADIUS_PT - PULSE_START_RADIUS_PT) * frame.pulse}
+          fill="none"
+          stroke={color}
+          strokeWidth={PULSE_STROKE_PT}
+          opacity={PULSE_MAX_OPACITY * (1 - frame.pulse) ** 2}
+        />
+      ) : null}
+
+      {frame.markerScale > MIN_VISIBLE_SCALE ? (
+        <Circle
+          testID="monthly-curve-vector-marker"
+          cx={marker.x}
+          cy={marker.y}
+          r={DOT_RADIUS_PT * frame.markerScale}
+          fill={stop === 'close' ? colors.text.muted : color}
+          stroke={colors.background.primary}
+          strokeWidth={DOT_RING_WIDTH_PT}
+          opacity={Math.min(1, frame.markerScale)}
+        />
+      ) : null}
+    </Svg>
   );
 }

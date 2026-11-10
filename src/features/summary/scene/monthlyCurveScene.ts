@@ -41,6 +41,15 @@ import {
   type CurveStop,
 } from './curveGeometry';
 import {
+  CURVE_MORPH_SECONDS as MORPH_SECONDS,
+  CURVE_PULSE_COUNT as PULSE_COUNT,
+  CURVE_PULSE_SECONDS as PULSE_SECONDS,
+  CURVE_REVEAL_SECONDS as REVEAL_SECONDS,
+  easeInOutCubic,
+  resolveCurveRevealShares,
+  resolveFrameSeconds,
+} from './curveMotion';
+import {
   AREA_FRAGMENT_SHADER,
   AREA_VERTEX_SHADER,
   POINT_FRAGMENT_SHADER,
@@ -78,17 +87,10 @@ const CAMERA_FOV_DEGREES = 28;
 const SCRUB_TILT_Y = 0.2;
 const SCRUB_TILT_X = -0.045;
 
-const REVEAL_SECONDS = 1.5;
-const REVEAL_SOLID_SHARE = 0.76;
 const REVEAL_EDGE_PT = 7;
 const REVEAL_CLEARANCE_PT = 40;
 const DASH_REVEAL_INSET_PT = 8;
-const MORPH_SECONDS = 0.56;
-const PULSE_SECONDS = 1.9;
-const PULSE_COUNT = 3;
 
-const FALLBACK_FRAME_SECONDS = 1 / 60;
-const MAX_FRAME_SECONDS = 1 / 20;
 /** Native surfaces can drop the very first presented frames right after creation. */
 const MIN_PRESENTED_FRAMES = 3;
 
@@ -195,15 +197,34 @@ function buildRendererForContext(gl: ExpoWebGLRenderingContext): WebGLRenderer {
   }
 }
 
+/**
+ * A program that fails to link draws nothing and three.js only logs it, which on a device
+ * would leave an empty canvas. Throwing makes the frame fail, so the stage hands over to
+ * the vector curve instead.
+ */
+function reportShaderError(
+  gl: WebGLRenderingContext,
+  program: WebGLProgram,
+  vertexShader: WebGLShader,
+  fragmentShader: WebGLShader
+): never {
+  const details = [
+    gl.getProgramInfoLog(program),
+    gl.getShaderInfoLog(vertexShader),
+    gl.getShaderInfoLog(fragmentShader),
+  ]
+    .map((log) => (log ?? '').trim())
+    .filter((log) => log !== '')
+    .join('\n');
+  throw new Error(`Curve shaders failed to compile.${details === '' ? '' : `\n${details}`}`);
+}
+
 export function createCurveRenderer(gl: ExpoWebGLRenderingContext): CurveSceneRenderer {
   const renderer = buildRendererForContext(gl);
   renderer.outputColorSpace = LinearSRGBColorSpace;
   renderer.setPixelRatio(1);
+  renderer.debug.onShaderError = reportShaderError;
   return renderer;
-}
-
-function easeInOutCubic(value: number): number {
-  return value < 0.5 ? 4 * value * value * value : 1 - (-2 * value + 2) ** 3 / 2;
 }
 
 function createTriangleStripIndices(columnCount: number): BufferAttribute {
@@ -775,10 +796,7 @@ export class MonthlyCurveScene {
       return;
     }
 
-    const deltaSeconds =
-      this.lastTimestamp === null
-        ? FALLBACK_FRAME_SECONDS
-        : MathUtils.clamp((timestamp - this.lastTimestamp) / 1000, 0, MAX_FRAME_SECONDS);
+    const deltaSeconds = resolveFrameSeconds(timestamp, this.lastTimestamp);
     this.lastTimestamp = timestamp;
 
     const isMoving = this.advance(deltaSeconds);
@@ -842,12 +860,10 @@ export class MonthlyCurveScene {
 
   /** Draws the line up to today first, then extends the projection. Returns the line's share. */
   private applyReveal(): number {
-    const eased = easeInOutCubic(this.getRevealProgress());
-    const { hasProjection } = this.curve;
-    const solidShare = hasProjection ? Math.min(1, eased / REVEAL_SOLID_SHARE) : eased;
-    const dashShare = hasProjection
-      ? Math.max(0, (eased - REVEAL_SOLID_SHARE) / (1 - REVEAL_SOLID_SHARE))
-      : 0;
+    const { solid: solidShare, projection: dashShare } = resolveCurveRevealShares(
+      this.getRevealProgress(),
+      this.curve.hasProjection
+    );
 
     const startX = this.curveXs[0] as number;
     const latestX = this.curveXs[CURVE_SAMPLES - 1] as number;

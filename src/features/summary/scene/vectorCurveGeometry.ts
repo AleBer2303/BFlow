@@ -31,6 +31,8 @@ export interface VectorPoint {
 }
 
 export interface VectorCurveGeometry {
+  /** Evenly spaced samples of the solid line, opening first and the cutoff day last. */
+  points: VectorPoint[];
   /** Solid line from the opening to the cutoff day (today, or the month's last day). */
   linePath: string;
   /** Closed shape between that line and the baseline. */
@@ -89,12 +91,9 @@ export function buildVectorCurveGeometry(
     });
   }
 
-  const first = points[0] as VectorPoint;
   const cutoffPoint = points[points.length - 1] as VectorPoint;
-  const linePath = points
-    .map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x} ${point.y}`)
-    .join(' ');
-  const areaPath = `${linePath} L${cutoffPoint.x} ${round(baselineY)} L${first.x} ${round(baselineY)} Z`;
+  const linePath = buildVectorLinePath(points);
+  const areaPath = buildVectorAreaPath(points, baselineY);
 
   const projectedPoint: VectorPoint | null = curve.hasProjection
     ? {
@@ -109,6 +108,7 @@ export function buildVectorCurveGeometry(
   );
 
   return {
+    points,
     linePath,
     areaPath,
     projectionPath: projectedPoint
@@ -119,6 +119,50 @@ export function buildVectorCurveGeometry(
     gridLineYs,
     baselineY: round(baselineY),
   };
+}
+
+/** `M x y L x y …`, or an empty string when there is no segment to draw yet. */
+export function buildVectorLinePath(points: readonly VectorPoint[]): string {
+  if (points.length < 2) {
+    return '';
+  }
+  return points
+    .map((point, index) => `${index === 0 ? 'M' : 'L'}${round(point.x)} ${round(point.y)}`)
+    .join(' ');
+}
+
+/** The line closed down to the baseline, or an empty string when there is no segment yet. */
+export function buildVectorAreaPath(points: readonly VectorPoint[], baselineY: number): string {
+  const linePath = buildVectorLinePath(points);
+  if (linePath === '') {
+    return '';
+  }
+  const first = points[0] as VectorPoint;
+  const last = points[points.length - 1] as VectorPoint;
+  const baseline = round(baselineY);
+  return `${linePath} L${round(last.x)} ${baseline} L${round(first.x)} ${baseline} Z`;
+}
+
+/**
+ * The part of a line left of `revealX`, ending exactly on it. Used to draw the line in from
+ * the left during the entrance.
+ */
+export function clipVectorPoints(points: readonly VectorPoint[], revealX: number): VectorPoint[] {
+  const visible: VectorPoint[] = [];
+  for (let index = 0; index < points.length; index += 1) {
+    const point = points[index] as VectorPoint;
+    if (point.x <= revealX) {
+      visible.push(point);
+      continue;
+    }
+    const previous = points[index - 1];
+    if (previous !== undefined && previous.x < revealX) {
+      const share = (revealX - previous.x) / (point.x - previous.x);
+      visible.push({ x: revealX, y: previous.y + (point.y - previous.y) * share });
+    }
+    break;
+  }
+  return visible;
 }
 
 /** Where a stop sits on the line: a day's close, or the projected month end. */

@@ -24,7 +24,6 @@ import {
 import { useReducedMotionPreference } from '../hooks/useReducedMotionPreference';
 import { CURVE_MARGIN_PT, clampCurveStop, type CurveStop } from '../scene/curveGeometry';
 import { getMetricColor } from '../scene/scenePalette';
-import { MonthlyCurveFallback } from './MonthlyCurveFallback';
 import {
   METRIC_PRESENTATION,
   buildCurveTicks,
@@ -326,8 +325,10 @@ export function MonthlyCurveSection({
   const [metricId, setMetricId] = useState<MonthlyCurveMetricId>('flow');
   const [stop, setStop] = useState<CurveStop | null>(null);
   const [isStageUnavailable, setIsStageUnavailable] = useState(false);
-  // The flat web skin draws the curve as vectors; iOS and Android keep the three.js scene.
-  const usesVectorStage = skinSpec.surfaceMaterial === 'flat';
+  // The flat web skin draws the curve as vectors; iOS and Android keep the three.js scene and
+  // fall back to the same animated vectors, driven by touch, when it cannot draw.
+  const isWebSkin = skinSpec.surfaceMaterial === 'flat';
+  const usesVectorStage = isWebSkin || isStageUnavailable;
 
   const handleSelectMetric = useCallback((id: MonthlyCurveMetricId) => {
     hapticService.trigger('selection');
@@ -363,11 +364,10 @@ export function MonthlyCurveSection({
             curve={curve}
             metricId={metricId}
             reducedMotion={reducedMotion}
+            interaction={isWebSkin ? 'pointer' : 'touch'}
             onScrub={handleScrub}
             onUnavailable={handleStageUnavailable}
           />
-        ) : isStageUnavailable ? (
-          <MonthlyCurveFallback curve={curve} metricId={metricId} />
         ) : (
           <StageErrorBoundary onError={handleStageUnavailable}>
             <MonthlyCurveStageLoader

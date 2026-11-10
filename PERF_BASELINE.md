@@ -271,3 +271,22 @@ Medición de laboratorio del 2026-11-09 (Windows 11, Node.js `v24.14.0`) con `np
 - **Tiempo de carga y de primer render en red real:** solo se midió el peso de los archivos exportados.
 - **Peso de la tipografía Geist** (Google Fonts, `display=swap`): se descarga fuera del bundle y no se midió.
 - **iOS y Android:** sin cambios en la escena three.js; siguen vigentes los pendientes de la sección 9.
+
+## 11. Curva vectorial animada
+
+Medición de laboratorio del 2026-11-10 (Windows 11) con `npx expo export -p web`; tamaños gzip con `gzip -6`, el mismo método que la sección 10. Decisión en el [ADR 0012](docs/decisions/0012-animated-vector-curve.md).
+
+| Chunk | Bytes (sección 10 → ahora) | Gzip (sección 10 → ahora) | Contiene three.js |
+| :--- | ---: | ---: | :--- |
+| `index` | 1.166.660 → 1.175.413 | 251.424 → 254.059 | No |
+| `__common` | 131.674 → 134.414 | 35.767 → 36.568 | No |
+| `MonthlyCurveStage` (diferido) | 869.611 → 869.360 | 202.404 → 202.293 | Sí |
+
+- **La piel Web descarga 593.567 bytes gzip al abrir Resumen**, 3.437 más que en la sección 10 (+0,6 %). Corresponden al animador, los tiempos compartidos y el gesto. three.js sigue fuera: `grep -c WebGLRenderer` es 0 en todos los chunks salvo el diferido.
+- **Trabajo en el navegador:** la curva renderiza el SVG en cada cuadro solo mientras algo se mueve. En la prueba en Chromium a 390 px, el trazado terminó en unos 1,4 s, el marcador latió 3 veces y la animación se detuvo hacia los 7,5 s. En reposo no se programan cuadros; los tests lo comprueban con `jest.getTimerCount() === 0`.
+
+### No medido
+
+- Cuadros por segundo y uso de CPU durante la animación en un teléfono.
+- Cuál de los respaldos usa realmente Expo Go Android (escena 3D o curva vectorial).
+

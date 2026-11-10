@@ -83,6 +83,12 @@ export function buildWebInteractionStyle(
   return hovered ? { ...transition, filter: WEB_HOVER_FILTER[mode] } : transition;
 }
 
+/**
+ * The resting interaction state. React Native versions disagree on whether the callback state
+ * carries `hovered`, so it is asserted instead of spelled out (compiles against both).
+ */
+const RESTING_STATE = { pressed: false } as PressableStateCallbackType;
+
 export interface TouchTargetFix {
   /** Style that grows an undersized control to the minimum (web). Null when it already fits. */
   grow: ViewStyle | null;
@@ -154,7 +160,7 @@ export const AppPressable = React.forwardRef<AppPressableElement, AppPressablePr
     );
 
     const restingStyle = StyleSheet.flatten(
-      typeof style === 'function' ? style({ pressed: false, hovered: false }) : style
+      typeof style === 'function' ? style(RESTING_STATE) : style
     ) as ViewStyle | undefined;
     const targetFix = resolveTouchTargetFix(restingStyle, minTarget);
     // Material asks for 48dp where the app's base control is 44: 2dp of slop bridges it.

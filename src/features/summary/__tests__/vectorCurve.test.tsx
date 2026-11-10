@@ -1,7 +1,7 @@
 /**
- * The animated vector (SVG) stage: the stage of the web skin and the phone fallback when the
- * three.js scene cannot draw. Its geometry, motion, pointer, keyboard and touch scrubbing,
- * and how the Summary composes it.
+ * The animated vector (SVG) stage: the stage of the Android and web skins and the iOS fallback
+ * when the three.js scene cannot draw. Its geometry, motion, pointer, keyboard and touch
+ * scrubbing, and how the Summary composes it.
  */
 
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
@@ -437,21 +437,76 @@ describe('MonthlyCurveSection stage per skin', () => {
     );
   }
 
-  it.each(['ios', 'android'] as const)('keeps the three.js stage on %s', (skin) => {
-    renderSection(skin);
+  const hidden = { includeHiddenElements: true } as const;
+
+  it('keeps the three.js stage on ios', () => {
+    renderSection('ios');
     expect(screen.UNSAFE_queryAllByType(GLView)).toHaveLength(1);
-    expect(screen.queryByTestId('monthly-curve-vector-stage')).toBeNull();
+    expect(screen.queryByTestId('monthly-curve-vector-stage', hidden)).toBeNull();
   });
 
-  it('replaces the three.js stage on Android with the animated vectors when GL fails', () => {
+  // ADR 0014: on Android the expo-gl surface did not refresh on screen, so the curve looked
+  // frozen. The Android skin draws it with the animated vectors and never opens a GL context.
+  it('draws the curve on Android with touch-driven vectors and never mounts a GL surface', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
     renderSection('android');
 
-    act(() => jest.advanceTimersByTime(GL_CONTEXT_TIMEOUT_MS));
-
     expect(screen.UNSAFE_queryAllByType(GLView)).toHaveLength(0);
     expect(screen.UNSAFE_getByType(MonthlyCurveVectorStage).props.interaction).toBe('touch');
+    // Like the canvas on iOS, it stays hidden from TalkBack: the metric buttons state the figures.
+    expect(screen.queryByTestId('monthly-curve-vector-stage')).toBeNull();
+    expect(screen.getByTestId('monthly-curve-vector-stage', hidden)).toBeTruthy();
+
+    // It is the stage, not a fallback: nothing waits for a GL surface or reports a failure.
+    act(() => jest.advanceTimersByTime(GL_CONTEXT_TIMEOUT_MS));
+    expect(warn).not.toHaveBeenCalled();
+    expect(screen.UNSAFE_getByType(MonthlyCurveVectorStage)).toBeTruthy();
     warn.mockRestore();
+  });
+
+  it('animates on Android: the line draws in, the marker pulses and metrics morph', () => {
+    renderSection('android');
+    layoutStage();
+    const line = () => screen.getByTestId('monthly-curve-vector-line', hidden).props.d as string;
+
+    elapse(400);
+    const partialLine = line();
+    elapse(1_300);
+    expect(line().length).toBeGreaterThan(partialLine.length);
+    expect(screen.getByTestId('monthly-curve-vector-pulse', hidden)).toBeTruthy();
+
+    elapse(SETTLE_MS);
+    const flowLine = buildVectorCurveGeometry(CURVE, 'flow', WIDTH, HEIGHT)?.linePath;
+    expect(line()).toBe(flowLine);
+    expect(screen.queryByTestId('monthly-curve-vector-pulse', hidden)).toBeNull();
+
+    fireEvent.press(screen.getByTestId('monthly-curve-metric-debt'));
+    elapse(200);
+    const debtLine = buildVectorCurveGeometry(CURVE, 'debt', WIDTH, HEIGHT)?.linePath;
+    // Halfway through the morph the shape is neither the old metric nor the new one.
+    expect(line()).not.toBe(flowLine);
+    expect(line()).not.toBe(debtLine);
+    expect(screen.getByTestId('monthly-curve-vector-pulse', hidden)).toBeTruthy();
+
+    elapse(SETTLE_MS);
+    expect(line()).toBe(debtLine);
+    expect(screen.getByTestId('monthly-curve-amount')).toHaveTextContent('$ 6.200.000');
+  });
+
+  it('walks the month by touch on Android and keeps the readout in step', () => {
+    renderSection('android');
+    layoutStage();
+    elapse(SETTLE_MS);
+
+    const stage = screen.getByTestId('monthly-curve-vector-stage', hidden);
+    const x = curveXForDay(21, 31, WIDTH);
+
+    act(() => stage.props.onResponderGrant(touchAt(x, 0, 5)));
+    expect(screen.getByText('Flujo neto · 21 oct')).toBeTruthy();
+    expect(screen.getByTestId('monthly-curve-amount')).toHaveTextContent('$ 2.880.000');
+
+    act(() => stage.props.onResponderRelease(touchAt(x, 0, 6)));
+    expect(screen.getByText('Flujo neto · Hoy, 27 oct')).toBeTruthy();
   });
 
   it('uses the vector stage on web and keeps the readout in step with it', () => {

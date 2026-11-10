@@ -1,8 +1,11 @@
 /**
  * src/features/summary/components/MonthlyCurveSection.tsx
  *
- * The Summary curve: a large readout, the 3D stage and a native metric selector. The
+ * The Summary curve: a large readout, the stage and a native metric selector. The
  * selector is the accessible equivalent of the canvas and states every figure in words.
+ *
+ * El escenario lo decide la piel (`skinSpec.curveStage`): escena three.js en iOS y curva
+ * vectorial animada en Android y Web (ADR 0012 y 0014).
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -325,10 +328,11 @@ export function MonthlyCurveSection({
   const [metricId, setMetricId] = useState<MonthlyCurveMetricId>('flow');
   const [stop, setStop] = useState<CurveStop | null>(null);
   const [isStageUnavailable, setIsStageUnavailable] = useState(false);
-  // The flat web skin draws the curve as vectors; iOS and Android keep the three.js scene and
-  // fall back to the same animated vectors, driven by touch, when it cannot draw.
-  const isWebSkin = skinSpec.surfaceMaterial === 'flat';
-  const usesVectorStage = isWebSkin || isStageUnavailable;
+  // Android y Web dibujan la curva con vectores animados. iOS usa la escena three.js y pasa a
+  // esos mismos vectores si la escena no puede dibujar. En teléfonos se recorre con el dedo;
+  // en la piel Web, con el puntero y el teclado.
+  const usesVectorStage = skinSpec.curveStage === 'vector' || isStageUnavailable;
+  const stageInteraction = skinSpec.surfaceMaterial === 'flat' ? 'pointer' : 'touch';
 
   const handleSelectMetric = useCallback((id: MonthlyCurveMetricId) => {
     hapticService.trigger('selection');
@@ -364,7 +368,7 @@ export function MonthlyCurveSection({
             curve={curve}
             metricId={metricId}
             reducedMotion={reducedMotion}
-            interaction={isWebSkin ? 'pointer' : 'touch'}
+            interaction={stageInteraction}
             onScrub={handleScrub}
             onUnavailable={handleStageUnavailable}
           />

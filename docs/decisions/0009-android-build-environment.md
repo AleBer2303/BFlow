@@ -21,6 +21,6 @@
 ## 3. Consecuencias
 
 - Los binarios salen firmados con la **keystore de depuración** que genera el prebuild: el `.apk` se instala en dispositivos de prueba, pero el `.aab` **no sirve para subir a Google Play**. Para publicar hará falta una keystore de subida guardada como secreto de GitHub y su configuración en Gradle (ADR futuro).
-- El directorio `android/` sigue ignorado en git: se regenera en cada build (flujo CNG).
+- El directorio `android/` sigue ignorado en git: se regenera en cada build (flujo CNG). Lo que deba sobrevivir al prebuild se escribe con un config plugin; las reglas keep de R8 están en `plugins/withAndroidKeepRules.js` ([ADR 0013](0013-android-release-keep-rules.md)).
 - La workflow no se ha ejecutado aún en GitHub; solo se validó localmente `expo prebuild --platform android`.
 - Pendientes del numeral 2.3 (splash, E2E, telemetría, política de privacidad) quedan para cambios posteriores.

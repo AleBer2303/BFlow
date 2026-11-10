@@ -101,6 +101,8 @@ Se descartó que cada cuadro haga llamadas GL que bloqueen el hilo de JavaScript
 
 Para decidirlo con datos, `components/curveFrameProbe.ts` escribe en la terminal de Metro una línea `[Curva] …` por cada animación. Solo funciona en desarrollo y fuera de Web. Compara las marcas de tiempo con `Date.now()` y cuenta cuadros, fps y el hueco máximo. Se retirará cuando se corrija la causa.
 
+**Resultado:** el medidor descartó las tres causas. JavaScript envía los cuadros a tiempo y es la superficie de `expo-gl` la que no se refresca en pantalla. Desde el [ADR 0014](0014-android-vector-curve.md) la piel Android usa la curva vectorial como escenario y la escena three.js queda solo en iOS.
+
 ## 6. Tocar la gráfica bloquea el scroll
 
 En iOS, arrastrar la gráfica en horizontal también desplazaba la página. Antes, la gráfica solo tomaba el gesto tras 8 pt claramente horizontales. Un arrastre algo diagonal llegaba antes al `UIScrollView` nativo, y la página se movía mientras el usuario leía la curva.

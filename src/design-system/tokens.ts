@@ -24,6 +24,8 @@ export const PLATFORM_SKIN_IDS: readonly PlatformSkinId[] = ['ios', 'android', '
 export type SurfaceMaterial = 'liquid-glass' | 'tonal' | 'flat';
 export type NavigationPattern = 'floating-dock' | 'navigation-bar' | 'adaptive-header';
 export type PressFeedback = 'spring' | 'ripple' | 'step';
+/** Cómo se dibuja la curva del mes: escena three.js sobre `expo-gl` o vectores animados (SVG). */
+export type CurveStage = 'scene-3d' | 'vector';
 
 export interface PlatformSkinSpec {
   id: PlatformSkinId;
@@ -33,6 +35,11 @@ export interface PlatformSkinSpec {
   pressFeedback: PressFeedback;
   /** Minimum interactive size: 44pt (Apple HIG / WCAG 2.2), 48dp (Material 3). */
   minTouchTarget: number;
+  /**
+   * Escenario de la curva del mes. La escena 3D es solo de iOS: en Android la superficie de
+   * `expo-gl` no refresca los cuadros en pantalla y la curva se veía quieta (ADR 0014).
+   */
+  curveStage: CurveStage;
 }
 
 export const MIN_TOUCH_TARGET_PT = 44 as const;
@@ -45,6 +52,7 @@ export const platformSkins: Record<PlatformSkinId, PlatformSkinSpec> = {
     navigation: 'floating-dock',
     pressFeedback: 'spring',
     minTouchTarget: MIN_TOUCH_TARGET_PT,
+    curveStage: 'scene-3d',
   },
   android: {
     id: 'android',
@@ -53,6 +61,7 @@ export const platformSkins: Record<PlatformSkinId, PlatformSkinSpec> = {
     navigation: 'navigation-bar',
     pressFeedback: 'ripple',
     minTouchTarget: 48,
+    curveStage: 'vector',
   },
   web: {
     id: 'web',
@@ -61,6 +70,7 @@ export const platformSkins: Record<PlatformSkinId, PlatformSkinSpec> = {
     navigation: 'adaptive-header',
     pressFeedback: 'step',
     minTouchTarget: MIN_TOUCH_TARGET_PT,
+    curveStage: 'vector',
   },
 };
 

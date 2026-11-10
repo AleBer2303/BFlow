@@ -220,8 +220,16 @@ describe('Android skin · Material 3 frame', () => {
     renderApp('android');
 
     expect(styleOf('liquid-glass-tab-bar').position).toBeUndefined();
-    // The 3D curve stays on Android: the platform differs in material, not in features.
-    expect(screen.UNSAFE_queryAllByType(GLView)).toHaveLength(1);
+  });
+
+  it('draws the month curve with animated vectors and never mounts a GL surface', () => {
+    renderApp('android');
+
+    // ADR 0014: the expo-gl surface did not refresh on Android, so the curve looked frozen.
+    expect(screen.UNSAFE_queryAllByType(GLView)).toHaveLength(0);
+    expect(
+      screen.getByTestId('monthly-curve-vector-stage', { includeHiddenElements: true })
+    ).toBeTruthy();
   });
 
   it('centers a capped column on foldables and tablets', () => {

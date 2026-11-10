@@ -223,8 +223,8 @@ Fallback arquitectural idéntico visualmente mediante `expo-blur`:
    - Colores exclusivamente de tokens: `semantic.income` (Flujo e Ingresos), `semantic.expense`, `semantic.reserve` y `semantic.debt`. El lienzo es opaco y se limpia con `background.primary` para integrarse con la página.
    - **Interacción:** al tocar la gráfica se muestra el día bajo el dedo y se bloquea el scroll de la página hasta soltar (`useScrollLock`). Arrastrar recorre el mes día a día según la posición horizontal, atenúa lo posterior e inclina levemente la curva; más allá de hoy solo existe el cierre previsto. Al soltar, regresa a hoy. La página se desplaza tocando fuera de la gráfica.
    - **Accesibilidad:** cada botón del selector mide mínimo `52 pt` y anuncia monto y cierre previsto en `accessibilityLabel`, de modo que la identidad no depende del color. Con *Reducir Movimiento* no hay trazado de entrada, transformación, inclinación ni latido.
-   - **Respaldo:** si la escena 3D no puede dibujar (sin WebGL, shader que no enlaza, superficie GL que no llega en 6 s o error en un cuadro), se muestra la curva vectorial animada con el mismo gesto horizontal. Ver [ADR 0012](docs/decisions/0012-animated-vector-curve.md).
-   - **Por piel:** lo anterior describe la escena three.js de iOS y Android. La piel Web dibuja la misma curva como vector plano y animado (§10.4): mismo trazado de entrada, transformación y latido, sin brillo ni inclinación. En escritorio convierte el selector en una tabla de métricas con su cifra actual.
+   - **Respaldo (iOS):** si la escena 3D no puede dibujar (sin WebGL, shader que no enlaza, superficie GL que no llega en 6 s o error en un cuadro), se muestra la curva vectorial animada con el mismo gesto horizontal. Ver [ADR 0012](docs/decisions/0012-animated-vector-curve.md).
+   - **Por piel (`platformSkins[piel].curveStage`):** lo anterior describe la escena three.js, que es solo de iOS (`scene-3d`). Android y Web (`vector`) dibujan la misma curva como vector plano y animado (§10.4): mismo trazado de entrada, transformación y latido, sin brillo ni inclinación. Android la recorre con el dedo, con el mismo gesto y bloqueo de scroll que iOS ([ADR 0014](docs/decisions/0014-android-vector-curve.md)); Web, con el puntero y el teclado, y en escritorio convierte el selector en una tabla de métricas con su cifra actual.
 
 ---
 
@@ -255,7 +255,7 @@ Decisiones en los ADR [0010](docs/decisions/0010-platform-skins-and-responsive-l
 | Botón principal | Cápsula de vidrio | Relleno con el acento, totalmente redondeado | El único botón relleno con el acento, radio 4 |
 | Radios `xs / sm / md / lg / xl / pill` | 6 / 10 / 16 / 22 / 28 / 999 | 4 / 8 / 12 / 16 / 28 / 999 | 2 / 4 / 6 / 8 / 8 / 4 |
 | Objetivo táctil | 44 pt | 48 dp | 44 px |
-| Curva del mes | Escena three.js (respaldo: curva vectorial) | Escena three.js (respaldo: curva vectorial) | Curva vectorial (SVG) animada |
+| Curva del mes (`curveStage`) | `scene-3d`: escena three.js (respaldo: curva vectorial) | `vector`: curva vectorial (SVG) animada, gesto táctil | `vector`: curva vectorial (SVG) animada, puntero y teclado |
 
 **No cambia entre pieles:** los datos, los flujos, el significado de los colores semánticos, el espaciado (§4.1), los números tabulares y los `testID`.
 

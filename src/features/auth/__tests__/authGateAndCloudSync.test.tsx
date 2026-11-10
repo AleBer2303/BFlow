@@ -490,4 +490,20 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       FirestoreBudgetRepository.prototype.loadFullCloudAccount = originalLoad;
     }
   });
+
+  it('translates common Firebase authentication errors into clear Spanish messages', () => {
+    expect(authAdapter.formatAuthError(new Error('Firebase: Error (auth/invalid-credential).'), 'Fallback')).toBe(
+      'Correo o contraseña incorrectos. Verifica tus datos e intenta de nuevo.'
+    );
+    expect(authAdapter.formatAuthError(new Error('Firebase: Error (auth/email-already-in-use).'), 'Fallback')).toBe(
+      'Ya existe una cuenta con este correo. Inicia sesión en su lugar.'
+    );
+    expect(authAdapter.formatAuthError(new Error('Firebase: Error (auth/invalid-email).'), 'Fallback')).toBe(
+      'El formato del correo electrónico no es válido.'
+    );
+    expect(authAdapter.formatAuthError(new Error('Firebase: Error (auth/network-request-failed).'), 'Fallback')).toBe(
+      'Error de conexión. Revisa tu internet e intenta nuevamente.'
+    );
+    expect(authAdapter.formatAuthError('unknown error', 'Mensaje por defecto')).toBe('Mensaje por defecto');
+  });
 });

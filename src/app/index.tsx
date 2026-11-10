@@ -35,6 +35,7 @@ import { SavingsAndProvisionsView } from '../features/savings/components/Savings
 import { WorkspaceShell } from '../features/shell/components/WorkspaceShell';
 import { SummaryOverview } from '../features/summary/components/SummaryOverview';
 import {
+  formatAuthError,
   registerWithPersonalProfile,
   sendPasswordRecoveryEmail,
   signInWithEmail,
@@ -197,7 +198,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
       triggerHaptic('success');
       await syncUserCloudAccount(user, { isRegistration: false });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'No fue posible iniciar sesión.';
+      const msg = formatAuthError(err, 'No fue posible iniciar sesión.');
       setAuthErrorMessage(msg);
       setSyncStatus(msg, false);
     }
@@ -213,7 +214,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
       triggerHaptic('success');
       await syncUserCloudAccount(user, { isRegistration: true });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'No fue posible crear tu cuenta.';
+      const msg = formatAuthError(err, 'No fue posible crear tu cuenta.');
       setAuthErrorMessage(msg);
       setSyncStatus(msg, false);
     }

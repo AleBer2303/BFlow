@@ -196,7 +196,7 @@ export const AppPressable = React.forwardRef<AppPressableElement, AppPressablePr
         android_ripple={
           android_ripple ??
           (feedback === 'ripple'
-            ? { color: ANDROID_RIPPLE_ALPHA[mode], foreground: true }
+            ? { color: ANDROID_RIPPLE_ALPHA[mode], foreground: false }
             : undefined)
         }
         hitSlop={hitSlop ?? defaultHitSlop}

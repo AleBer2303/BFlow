@@ -197,6 +197,32 @@ async function syncUserProfileDocument(
   return authUser;
 }
 
+export function formatAuthError(err: unknown, fallbackMessage: string): string {
+  if (!(err instanceof Error)) {
+    return fallbackMessage;
+  }
+  const msg = err.message || '';
+  if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password') || msg.includes('auth/user-not-found')) {
+    return 'Correo o contraseña incorrectos. Verifica tus datos e intenta de nuevo.';
+  }
+  if (msg.includes('auth/email-already-in-use')) {
+    return 'Ya existe una cuenta con este correo. Inicia sesión en su lugar.';
+  }
+  if (msg.includes('auth/invalid-email')) {
+    return 'El formato del correo electrónico no es válido.';
+  }
+  if (msg.includes('auth/weak-password')) {
+    return 'La contraseña es muy débil. Debe tener al menos 6 caracteres.';
+  }
+  if (msg.includes('auth/network-request-failed')) {
+    return 'Error de conexión. Revisa tu internet e intenta nuevamente.';
+  }
+  if (msg.includes('auth/too-many-requests')) {
+    return 'Demasiados intentos fallidos. Por seguridad, espera un momento antes de reintentar.';
+  }
+  return msg || fallbackMessage;
+}
+
 export async function signInWithEmail(email: string, password: string): Promise<BFlowAuthUser> {
   const trimmedEmail = email.trim().toLowerCase();
   if (!trimmedEmail || !password) {

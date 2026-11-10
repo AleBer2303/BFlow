@@ -36,6 +36,7 @@ import {
   loadPersistedSession,
   type BFlowAuthUser,
 } from '../../../../platform/auth/authAdapter';
+import { isDemoModeEnabled } from '../../../../platform/mode/demoMode';
 import {
   buildWidgetSnapshotV1,
   syncWidgetSnapshotNative,
@@ -366,7 +367,7 @@ export function isRealAuthUser(user: BFlowAuthUser | null): user is BFlowAuthUse
 }
 
 export function resolveDefaultInitialAuthUser(): BFlowAuthUser | null {
-  if (process.env.NODE_ENV === 'test') {
+  if (process.env.NODE_ENV === 'test' || isDemoModeEnabled()) {
     return DEMO_OWNER_USER;
   }
   return loadPersistedSession();

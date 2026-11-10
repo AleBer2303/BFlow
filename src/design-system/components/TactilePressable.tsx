@@ -1,25 +1,27 @@
 /**
  * src/design-system/components/TactilePressable.tsx
  *
- * Apple Liquid Glass physical tactile pressable.
- * Features:
- * - Instantaneous haptic feedback on touch contact (onPressIn) with zero lag.
- * - Hardware-accelerated 60/120Hz ProMotion spring physics (useNativeDriver: true).
- * - Tactile micro-depression on press (scale: 0.96) and snappy release bounce.
- * - Minimum touch target standard (MIN_TOUCH_TARGET_PT: 44pt).
+ * Physical "tactile" pressable. The feel belongs to the platform skin:
+ * - ios (spring):   haptic on touch-down, micro-depression (scale 0.96) and a snappy spring
+ *                   release, hardware-accelerated for 60/120Hz ProMotion.
+ * - android (ripple) and web (step): no scale spring; AppPressable supplies the Material
+ *                   ripple or the hover/press step. Haptics still fire on touch-down
+ *                   (a no-op on web).
+ * Minimum touch target comes from the skin (44pt, 48dp on Android).
  */
 
 import React, { useRef } from 'react';
 import {
   Animated,
-  Pressable,
   type GestureResponderEvent,
   type PressableProps,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
 import { hapticService, type HapticType } from '../../platform/haptics/hapticService';
-import { MIN_TOUCH_TARGET_PT, springConfigs } from '../tokens';
+import { useBFlowTheme } from '../theme/ThemeContext';
+import { springConfigs } from '../tokens';
+import { AppPressable } from './AppPressable';
 
 export interface TactilePressableProps extends Omit<PressableProps, 'style'> {
   haptic?: HapticType | 'none';
@@ -40,7 +42,19 @@ export function TactilePressable({
   accessibilityRole = 'button',
   ...rest
 }: TactilePressableProps): React.JSX.Element {
+  const { skinSpec, minTouchTarget } = useBFlowTheme();
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const usesSpring = skinSpec.pressFeedback === 'spring' && process.env.NODE_ENV !== 'test';
+
+  const springTo = (toValue: number) => {
+    Animated.spring(scaleAnim, {
+      toValue,
+      damping: springConfigs.snappy.damping,
+      stiffness: springConfigs.snappy.stiffness,
+      mass: springConfigs.snappy.mass,
+      useNativeDriver: true,
+    }).start();
+  };
 
   const handlePressIn = (event: GestureResponderEvent) => {
     if (disabled) return;
@@ -48,15 +62,8 @@ export function TactilePressable({
     if (haptic !== 'none') {
       hapticService.trigger(haptic);
     }
-
-    if (process.env.NODE_ENV !== 'test') {
-      Animated.spring(scaleAnim, {
-        toValue: scaleActive,
-        damping: springConfigs.snappy.damping,
-        stiffness: springConfigs.snappy.stiffness,
-        mass: springConfigs.snappy.mass,
-        useNativeDriver: true,
-      }).start();
+    if (usesSpring) {
+      springTo(scaleActive);
     }
 
     onPressIn?.(event);
@@ -65,21 +72,15 @@ export function TactilePressable({
   const handlePressOut = (event: GestureResponderEvent) => {
     if (disabled) return;
 
-    if (process.env.NODE_ENV !== 'test') {
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        damping: springConfigs.snappy.damping,
-        stiffness: springConfigs.snappy.stiffness,
-        mass: springConfigs.snappy.mass,
-        useNativeDriver: true,
-      }).start();
+    if (usesSpring) {
+      springTo(1);
     }
 
     onPressOut?.(event);
   };
 
   return (
-    <Pressable
+    <AppPressable
       testID={testID}
       accessibilityRole={accessibilityRole}
       disabled={disabled}
@@ -87,10 +88,7 @@ export function TactilePressable({
       onPressOut={handlePressOut}
       style={(state) => {
         const resolvedStyle = typeof style === 'function' ? style(state) : style;
-        return [
-          { minHeight: MIN_TOUCH_TARGET_PT, minWidth: MIN_TOUCH_TARGET_PT },
-          resolvedStyle,
-        ];
+        return [{ minHeight: minTouchTarget, minWidth: minTouchTarget }, resolvedStyle];
       }}
       {...rest}
     >
@@ -109,6 +107,6 @@ export function TactilePressable({
           </Animated.View>
         );
       }}
-    </Pressable>
+    </AppPressable>
   );
 }

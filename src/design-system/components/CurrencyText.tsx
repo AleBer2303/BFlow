@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleProp, TextStyle } from 'react-native';
+import { Platform, StyleProp, TextStyle } from 'react-native';
 import { formatCurrency } from '../../domain/money/money';
 import { useBFlowTheme } from '../theme/ThemeContext';
 import { AppText, TypographyVariant } from './Typography';
@@ -11,14 +11,22 @@ export interface CurrencyTextProps {
   variant?: TypographyVariant;
   tone?: CurrencyTone;
   style?: StyleProp<TextStyle>;
+  /**
+   * Keeps the amount on ONE line by shrinking the type on iOS and Android (never truncating).
+   * Browsers cannot shrink text to fit, so on web the amount keeps its size and may wrap.
+   */
+  fitOneLine?: boolean;
   testID?: string;
 }
+
+const FIT_MINIMUM_FONT_SCALE = 0.6;
 
 export function CurrencyText({
   amount,
   variant = 'headline',
   tone = 'neutral',
   style,
+  fitOneLine = false,
   testID,
 }: CurrencyTextProps): React.JSX.Element {
   const { colors } = useBFlowTheme();
@@ -41,6 +49,9 @@ export function CurrencyText({
       color={toneColorMap[tone]}
       tabularNums
       style={style}
+      {...(fitOneLine && Platform.OS !== 'web'
+        ? { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: FIT_MINIMUM_FONT_SCALE }
+        : null)}
     >
       {formatCurrency(amount)}
     </AppText>

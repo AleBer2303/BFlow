@@ -1,9 +1,9 @@
 import React from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { hapticService } from '../../platform/haptics/hapticService';
 import { useBFlowTheme } from '../theme/ThemeContext';
-import { MIN_TOUCH_TARGET_PT } from '../tokens';
+import { AppPressable } from './AppPressable';
 
 export interface ThemeToggleIconButtonProps {
   testID?: string;
@@ -15,21 +15,22 @@ export interface ThemeToggleIconButtonProps {
 export function ThemeToggleIconButton({
   testID = 'theme-toggle-button',
 }: ThemeToggleIconButtonProps): React.JSX.Element {
-  const { colors, radius, mode, toggleTheme } = useBFlowTheme();
+  const { colors, radius, mode, toggleTheme, minTouchTarget, skin } = useBFlowTheme();
   const isDark = mode === 'dark';
   const strokeColor = colors.text.primary;
 
   return (
-    <Pressable
+    <AppPressable
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
       onPressIn={() => hapticService.light()}
       onPress={toggleTheme}
       style={{
-        width: MIN_TOUCH_TARGET_PT,
-        height: MIN_TOUCH_TARGET_PT,
-        borderRadius: radius.pill,
+        width: minTouchTarget,
+        height: minTouchTarget,
+        // Round on iOS and Android; the web skin keeps its one sharp radius family.
+        borderRadius: skin === 'web' ? radius.sm : radius.pill,
         backgroundColor: colors.glass.surfaceElevatedTint,
         borderWidth: 1,
         borderColor: colors.glass.specularBorder,
@@ -70,7 +71,7 @@ export function ThemeToggleIconButton({
           </Svg>
         </View>
       )}
-    </Pressable>
+    </AppPressable>
   );
 }
 

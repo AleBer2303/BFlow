@@ -22,10 +22,21 @@
         ]
       }
     },
+    "android": {
+      "package": "com.bflow.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0D0F12"
+      }
+    },
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "lang": "es",
+      "description": "Presupuesto mensual para tus finanzas personales: ingresos, gastos, deudas y ahorros.",
+      "themeColor": "#0A0A0A"
     },
     "plugins": [
       "expo-router",

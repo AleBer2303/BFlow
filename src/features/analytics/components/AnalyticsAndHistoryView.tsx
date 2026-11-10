@@ -11,17 +11,20 @@
  */
 
 import React, { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import {
+  AppPressable,
   AppText,
   CurrencyText,
   GlassSurface,
+  hapticService,
   MIN_TOUCH_TARGET_PT,
   PencilEditIcon,
+  ResponsiveColumns,
   StatusBadge,
   TrashBinIcon,
-  hapticService,
   useBFlowTheme,
+  usePrimaryActionLook,
 } from '../../../design-system';
 import {
   formatCurrency,
@@ -109,7 +112,7 @@ const HistoryMonthRowItem = React.memo(function HistoryMonthRowItem({
           : colors.glass.subtleBorder,
       }}
     >
-      <Pressable
+      <AppPressable
         testID={`history-month-pill-${mk}`}
         accessibilityRole="button"
         accessibilityLabel={`${formatMonthKeyLabelEs(mk)}, ${isClosed ? 'Mes Cerrado' : 'Mes Abierto'}${isSelected ? ', Seleccionado' : ''}`}
@@ -151,12 +154,12 @@ const HistoryMonthRowItem = React.memo(function HistoryMonthRowItem({
               ? 'Mes en curso · Toca para ver movimientos'
               : 'Mes Abierto · Toca para cambiar a este mes'}
         </AppText>
-      </Pressable>
+      </AppPressable>
 
       {/* Direct Action Options in the Existing List */}
       <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
         {showEditAction ? (
-          <Pressable
+          <AppPressable
             testID={`reopen-month-${mk}`}
             accessibilityRole="button"
             accessibilityLabel={`Editar y reabrir mes cerrado ${formatMonthKeyLabelEs(mk)}`}
@@ -180,11 +183,11 @@ const HistoryMonthRowItem = React.memo(function HistoryMonthRowItem({
             <AppText variant="caption" color={colors.semantic.income}>
               Editar
             </AppText>
-          </Pressable>
+          </AppPressable>
         ) : null}
 
         {showDeleteAction ? (
-          <Pressable
+          <AppPressable
             testID={`delete-month-${mk}`}
             accessibilityRole="button"
             accessibilityLabel={`Eliminar mes ${formatMonthKeyLabelEs(mk)}`}
@@ -208,7 +211,7 @@ const HistoryMonthRowItem = React.memo(function HistoryMonthRowItem({
             <AppText variant="caption" color={colors.semantic.expense}>
               Eliminar
             </AppText>
-          </Pressable>
+          </AppPressable>
         ) : null}
       </View>
     </View>
@@ -232,6 +235,7 @@ export function AnalyticsAndHistoryView({
   onResetOctoberSeed: _onResetOctoberSeed,
 }: AnalyticsAndHistoryViewProps): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
+  const primaryAction = usePrimaryActionLook();
   const [historyActionMode, setHistoryActionMode] = useState<HistoryActionMode>(null);
 
   const isCurrentMonthClosed = Boolean(closedSnapshots[activeMonthKey]);
@@ -249,307 +253,307 @@ export function AnalyticsAndHistoryView({
 
   return (
     <View style={{ gap: spacing.md }} testID="analytics-and-history-view">
-      {/* 1. Main Month Close Card */}
-      <GlassSurface elevated testID="month-close-and-history-card">
-        <View style={{ gap: spacing.md }}>
-          {/* Header with Title and Month Status Badge */}
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: spacing.xs,
-            }}
-          >
-            <View style={{ gap: spacing.xxs }}>
-              <AppText variant="title2">Cierre de Mes</AppText>
+      <ResponsiveColumns testID="analytics-panels">
+        {/* 1. Main Month Close Card */}
+        <GlassSurface elevated testID="month-close-and-history-card">
+          <View style={{ gap: spacing.md }}>
+            {/* Header with Title and Month Status Badge */}
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: spacing.xs,
+              }}
+            >
+              <View style={{ gap: spacing.xxs }}>
+                <AppText variant="title2">Cierre de Mes</AppText>
+              </View>
+
+              <StatusBadge
+                label={
+                  isCurrentMonthClosed
+                    ? 'Mes Cerrado · Snapshot'
+                    : 'Mes Abierto'
+                }
+                status={isCurrentMonthClosed ? 'completed' : 'pending'}
+              />
             </View>
 
-            <StatusBadge
-              label={
-                isCurrentMonthClosed
-                  ? 'Mes Cerrado · Snapshot'
-                  : 'Mes Abierto'
-              }
-              status={isCurrentMonthClosed ? 'completed' : 'pending'}
-            />
-          </View>
-
-          {/* Checklist Health Indicator */}
-          <View
-            style={{
-              paddingVertical: spacing.sm,
-              paddingHorizontal: spacing.md,
-              borderRadius: radius.md,
-              borderCurve: 'continuous',
-              backgroundColor: hasPendingChecklist
-                ? colors.semantic.pendingSoft
-                : colors.semantic.completedSoft,
-              borderWidth: 1,
-              borderColor: hasPendingChecklist
-                ? colors.semantic.pending
-                : colors.semantic.completed,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: spacing.xs,
-            }}
-          >
-            <AppText
-              variant="caption"
-              color={
-                hasPendingChecklist
+            {/* Checklist Health Indicator */}
+            <View
+              style={{
+                paddingVertical: spacing.sm,
+                paddingHorizontal: spacing.md,
+                borderRadius: radius.md,
+                borderCurve: 'continuous',
+                backgroundColor: hasPendingChecklist
+                  ? colors.semantic.pendingSoft
+                  : colors.semantic.completedSoft,
+                borderWidth: 1,
+                borderColor: hasPendingChecklist
                   ? colors.semantic.pending
-                  : colors.semantic.completed
-              }
-            >
-              {hasPendingChecklist
-                ? `Aviso: Tienes ${checklist.pendingCount} ${checklist.pendingCount === 1 ? 'movimiento pendiente' : 'movimientos pendientes'} por completar.`
-                : '✨ Todos los movimientos del checklist están completados y al día.'}
-            </AppText>
-          </View>
-
-          {/* Bento Financial Tiles */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-            {/* Tile 1: Flujo Neto */}
-            <View
-              style={{
-                flex: 1,
-                minWidth: 140,
-                padding: spacing.sm,
-                borderRadius: radius.md,
-                borderCurve: 'continuous',
-                backgroundColor: colors.glass.surfaceTint,
-                borderWidth: 1,
-                borderColor: colors.glass.subtleBorder,
-                gap: spacing.xxs,
-              }}
-            >
-              <AppText variant="micro" color={colors.text.secondary}>
-                FLUJO NETO HOY
-              </AppText>
-              <CurrencyText
-                amount={budget?.netCashFlow ?? 0}
-                variant="headline"
-                tone={(budget?.netCashFlow ?? 0) >= 0 ? 'income' : 'expense'}
-              />
-              <AppText variant="micro" color={colors.text.muted}>
-                {`Proyectado: ${formatCurrency(budget?.projectedNetFlow ?? 0)}`}
-              </AppText>
-            </View>
-
-            {/* Tile 2: Deudas Pendientes */}
-            <View
-              style={{
-                flex: 1,
-                minWidth: 140,
-                padding: spacing.sm,
-                borderRadius: radius.md,
-                borderCurve: 'continuous',
-                backgroundColor: colors.glass.surfaceTint,
-                borderWidth: 1,
-                borderColor: colors.glass.subtleBorder,
-                gap: spacing.xxs,
-              }}
-            >
-              <AppText variant="micro" color={colors.text.secondary}>
-                DEUDAS TOTALES
-              </AppText>
-              <CurrencyText
-                amount={debtSummary.totalRemainingDebt}
-                variant="headline"
-                tone="debt"
-              />
-              <AppText variant="micro" color={colors.text.muted}>
-                Saldo al corte del mes
-              </AppText>
-            </View>
-
-            {/* Tile 3: Total Ahorros */}
-            <View
-              style={{
-                flex: 1,
-                minWidth: 140,
-                padding: spacing.sm,
-                borderRadius: radius.md,
-                borderCurve: 'continuous',
-                backgroundColor: colors.glass.surfaceTint,
-                borderWidth: 1,
-                borderColor: colors.glass.subtleBorder,
-                gap: spacing.xxs,
-              }}
-            >
-              <AppText variant="micro" color={colors.text.secondary}>
-                TOTAL AHORROS
-              </AppText>
-              <CurrencyText
-                amount={savingsSummary.totalCurrentSavings}
-                variant="headline"
-                tone="reserve"
-              />
-              <AppText variant="micro" color={colors.text.muted}>
-                {`${savingsSummary.moto.name || 'Reserva'}: ${formatCurrency(savingsSummary.moto.currentBalance)} · Ahorro: ${formatCurrency(savingsSummary.savings.currentBalance)}`}
-              </AppText>
-            </View>
-          </View>
-
-          {/* Primary Month Close CTA */}
-          <Pressable
-            testID="confirm-month-close-button"
-            accessibilityRole="button"
-            accessibilityLabel={`Confirmar cierre de ${formatMonthKeyLabelEs(activeMonthKey)} y avanzar al siguiente mes`}
-            onPressIn={() => hapticService.success()}
-            onPress={onCloseCurrentMonth}
-            style={{
-              width: '100%',
-              minHeight: MIN_TOUCH_TARGET_PT,
-              paddingVertical: spacing.md,
-              paddingHorizontal: spacing.lg,
-              borderRadius: radius.md,
-              borderCurve: 'continuous',
-              backgroundColor: colors.glass.surfaceElevatedTint,
-              borderWidth: 1,
-              borderColor: colors.glass.specularBorder,
-              justifyContent: 'center',
-              alignItems: 'center',
-              gap: spacing.xxs,
-            }}
-          >
-            <AppText variant="headline" color={colors.semantic.income}>
-              {`Confirmar ${formatMonthKeyLabelEs(activeMonthKey)} → Siguiente Mes`}
-            </AppText>
-          </Pressable>
-        </View>
-      </GlassSurface>
-
-      {/* 2. Month History Card */}
-      <GlassSurface elevated testID="history-months-section">
-        <View style={{ gap: spacing.md }}>
-          {/* Section Header */}
-          <View style={{ gap: spacing.xxs }}>
-            <AppText variant="title2">Historial de Meses</AppText>
-          </View>
-
-          {/* Action Buttons: Editar y Eliminar (Directly under Historial de Meses) */}
-          <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
-            <Pressable
-              testID="history-action-edit-button"
-              accessibilityRole="button"
-              accessibilityLabel={
-                historyActionMode === 'edit' ? 'Cancelar edición de meses' : 'Editar mes en historial'
-              }
-              onPress={toggleEditMode}
-              style={{
-                flex: 1,
-                minHeight: MIN_TOUCH_TARGET_PT,
-                paddingHorizontal: spacing.md,
-                borderRadius: radius.pill,
-                borderCurve: 'continuous',
-                backgroundColor:
-                  historyActionMode === 'edit'
-                    ? colors.glass.surfaceElevatedTint
-                    : colors.glass.surfaceTint,
-                borderWidth: 1.5,
-                borderColor:
-                  historyActionMode === 'edit'
-                    ? colors.semantic.income
-                    : colors.glass.subtleBorder,
+                  : colors.semantic.completed,
                 flexDirection: 'row',
-                gap: spacing.xs,
                 alignItems: 'center',
-                justifyContent: 'center',
+                gap: spacing.xs,
               }}
             >
-              <PencilEditIcon
-                size={16}
-                color={
-                  historyActionMode === 'edit'
-                    ? colors.semantic.income
-                    : colors.text.secondary
-                }
-              />
               <AppText
                 variant="caption"
                 color={
-                  historyActionMode === 'edit'
-                    ? colors.semantic.income
-                    : colors.text.secondary
+                  hasPendingChecklist
+                    ? colors.semantic.pending
+                    : colors.semantic.completed
                 }
               >
-                {historyActionMode === 'edit' ? 'Cancelar Edición' : 'Editar Mes'}
+                {hasPendingChecklist
+                  ? `Aviso: Tienes ${checklist.pendingCount} ${checklist.pendingCount === 1 ? 'movimiento pendiente' : 'movimientos pendientes'} por completar.`
+                  : '✨ Todos los movimientos del checklist están completados y al día.'}
               </AppText>
-            </Pressable>
+            </View>
 
-            <Pressable
-              testID="history-action-delete-button"
+            {/* Bento Financial Tiles */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+              {/* Tile 1: Flujo Neto */}
+              <View
+                style={{
+                  flex: 1,
+                  minWidth: 140,
+                  padding: spacing.sm,
+                  borderRadius: radius.md,
+                  borderCurve: 'continuous',
+                  backgroundColor: colors.glass.surfaceTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.subtleBorder,
+                  gap: spacing.xxs,
+                }}
+              >
+                <AppText variant="micro" color={colors.text.secondary}>
+                  FLUJO NETO HOY
+                </AppText>
+                <CurrencyText
+                  amount={budget?.netCashFlow ?? 0}
+                  variant="headline"
+                  tone={(budget?.netCashFlow ?? 0) >= 0 ? 'income' : 'expense'}
+                />
+                <AppText variant="micro" color={colors.text.muted}>
+                  {`Proyectado: ${formatCurrency(budget?.projectedNetFlow ?? 0)}`}
+                </AppText>
+              </View>
+
+              {/* Tile 2: Deudas Pendientes */}
+              <View
+                style={{
+                  flex: 1,
+                  minWidth: 140,
+                  padding: spacing.sm,
+                  borderRadius: radius.md,
+                  borderCurve: 'continuous',
+                  backgroundColor: colors.glass.surfaceTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.subtleBorder,
+                  gap: spacing.xxs,
+                }}
+              >
+                <AppText variant="micro" color={colors.text.secondary}>
+                  DEUDAS TOTALES
+                </AppText>
+                <CurrencyText
+                  amount={debtSummary.totalRemainingDebt}
+                  variant="headline"
+                  tone="debt"
+                />
+                <AppText variant="micro" color={colors.text.muted}>
+                  Saldo al corte del mes
+                </AppText>
+              </View>
+
+              {/* Tile 3: Total Ahorros */}
+              <View
+                style={{
+                  flex: 1,
+                  minWidth: 140,
+                  padding: spacing.sm,
+                  borderRadius: radius.md,
+                  borderCurve: 'continuous',
+                  backgroundColor: colors.glass.surfaceTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.subtleBorder,
+                  gap: spacing.xxs,
+                }}
+              >
+                <AppText variant="micro" color={colors.text.secondary}>
+                  TOTAL AHORROS
+                </AppText>
+                <CurrencyText
+                  amount={savingsSummary.totalCurrentSavings}
+                  variant="headline"
+                  tone="reserve"
+                />
+                <AppText variant="micro" color={colors.text.muted}>
+                  {`${savingsSummary.moto.name || 'Reserva'}: ${formatCurrency(savingsSummary.moto.currentBalance)} · Ahorro: ${formatCurrency(savingsSummary.savings.currentBalance)}`}
+                </AppText>
+              </View>
+            </View>
+
+            {/* Primary Month Close CTA */}
+            <AppPressable
+              testID="confirm-month-close-button"
               accessibilityRole="button"
-              accessibilityLabel={
-                historyActionMode === 'delete' ? 'Cancelar eliminación de meses' : 'Eliminar mes en historial'
-              }
-              onPress={toggleDeleteMode}
+              accessibilityLabel={`Confirmar cierre de ${formatMonthKeyLabelEs(activeMonthKey)} y avanzar al siguiente mes`}
+              onPressIn={() => hapticService.success()}
+              onPress={onCloseCurrentMonth}
               style={{
-                flex: 1,
+                width: '100%',
                 minHeight: MIN_TOUCH_TARGET_PT,
-                paddingHorizontal: spacing.md,
-                borderRadius: radius.pill,
+                paddingVertical: spacing.md,
+                paddingHorizontal: spacing.lg,
+                borderRadius: radius.md,
                 borderCurve: 'continuous',
-                backgroundColor:
-                  historyActionMode === 'delete'
-                    ? colors.semantic.expenseSoft
-                    : colors.glass.surfaceTint,
-                borderWidth: 1.5,
-                borderColor:
-                  historyActionMode === 'delete'
-                    ? colors.semantic.expense
-                    : colors.glass.subtleBorder,
-                flexDirection: 'row',
-                gap: spacing.xs,
-                alignItems: 'center',
+                ...primaryAction.container,
                 justifyContent: 'center',
+                alignItems: 'center',
+                gap: spacing.xxs,
               }}
             >
-              <TrashBinIcon
-                size={16}
-                color={
-                  historyActionMode === 'delete'
-                    ? colors.semantic.expense
-                    : colors.text.secondary
-                }
-              />
-              <AppText
-                variant="caption"
-                color={
-                  historyActionMode === 'delete'
-                    ? colors.semantic.expense
-                    : colors.text.secondary
-                }
-              >
-                {historyActionMode === 'delete' ? 'Cancelar Eliminación' : 'Eliminar Mes'}
+              <AppText variant="headline" color={primaryAction.labelColor ?? colors.semantic.income}>
+                {`Confirmar ${formatMonthKeyLabelEs(activeMonthKey)} → Siguiente Mes`}
               </AppText>
-            </Pressable>
+            </AppPressable>
           </View>
+        </GlassSurface>
 
-          {/* Complete History List (Directly under the two action buttons) */}
-          <View style={{ gap: spacing.xs }} testID="history-months-list">
-            {availableMonths.map((mk) => (
-              <HistoryMonthRowItem
-                key={mk}
-                mk={mk}
-                isSelected={mk === activeMonthKey}
-                isClosed={Boolean(closedSnapshots[mk])}
-                canDelete={availableMonths.length > 1 || Boolean(closedSnapshots[mk])}
-                actionMode={historyActionMode}
-                colors={colors}
-                spacing={spacing}
-                radius={radius}
-                onSelectMonth={onSelectMonth}
-                onReopenClosedMonth={onReopenClosedMonth}
-                onDeleteOrRevertMonth={onDeleteOrRevertMonth}
-              />
-            ))}
+        {/* 2. Month History Card */}
+        <GlassSurface elevated testID="history-months-section">
+          <View style={{ gap: spacing.md }}>
+            {/* Section Header */}
+            <View style={{ gap: spacing.xxs }}>
+              <AppText variant="title2">Historial de Meses</AppText>
+            </View>
+
+            {/* Action Buttons: Editar y Eliminar (Directly under Historial de Meses) */}
+            <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+              <AppPressable
+                testID="history-action-edit-button"
+                accessibilityRole="button"
+                accessibilityLabel={
+                  historyActionMode === 'edit' ? 'Cancelar edición de meses' : 'Editar mes en historial'
+                }
+                onPress={toggleEditMode}
+                style={{
+                  flex: 1,
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.pill,
+                  borderCurve: 'continuous',
+                  backgroundColor:
+                    historyActionMode === 'edit'
+                      ? colors.glass.surfaceElevatedTint
+                      : colors.glass.surfaceTint,
+                  borderWidth: 1.5,
+                  borderColor:
+                    historyActionMode === 'edit'
+                      ? colors.semantic.income
+                      : colors.glass.subtleBorder,
+                  flexDirection: 'row',
+                  gap: spacing.xs,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <PencilEditIcon
+                  size={16}
+                  color={
+                    historyActionMode === 'edit'
+                      ? colors.semantic.income
+                      : colors.text.secondary
+                  }
+                />
+                <AppText
+                  variant="caption"
+                  color={
+                    historyActionMode === 'edit'
+                      ? colors.semantic.income
+                      : colors.text.secondary
+                  }
+                >
+                  {historyActionMode === 'edit' ? 'Cancelar Edición' : 'Editar Mes'}
+                </AppText>
+              </AppPressable>
+
+              <AppPressable
+                testID="history-action-delete-button"
+                accessibilityRole="button"
+                accessibilityLabel={
+                  historyActionMode === 'delete' ? 'Cancelar eliminación de meses' : 'Eliminar mes en historial'
+                }
+                onPress={toggleDeleteMode}
+                style={{
+                  flex: 1,
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.pill,
+                  borderCurve: 'continuous',
+                  backgroundColor:
+                    historyActionMode === 'delete'
+                      ? colors.semantic.expenseSoft
+                      : colors.glass.surfaceTint,
+                  borderWidth: 1.5,
+                  borderColor:
+                    historyActionMode === 'delete'
+                      ? colors.semantic.expense
+                      : colors.glass.subtleBorder,
+                  flexDirection: 'row',
+                  gap: spacing.xs,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <TrashBinIcon
+                  size={16}
+                  color={
+                    historyActionMode === 'delete'
+                      ? colors.semantic.expense
+                      : colors.text.secondary
+                  }
+                />
+                <AppText
+                  variant="caption"
+                  color={
+                    historyActionMode === 'delete'
+                      ? colors.semantic.expense
+                      : colors.text.secondary
+                  }
+                >
+                  {historyActionMode === 'delete' ? 'Cancelar Eliminación' : 'Eliminar Mes'}
+                </AppText>
+              </AppPressable>
+            </View>
+
+            {/* Complete History List (Directly under the two action buttons) */}
+            <View style={{ gap: spacing.xs }} testID="history-months-list">
+              {availableMonths.map((mk) => (
+                <HistoryMonthRowItem
+                  key={mk}
+                  mk={mk}
+                  isSelected={mk === activeMonthKey}
+                  isClosed={Boolean(closedSnapshots[mk])}
+                  canDelete={availableMonths.length > 1 || Boolean(closedSnapshots[mk])}
+                  actionMode={historyActionMode}
+                  colors={colors}
+                  spacing={spacing}
+                  radius={radius}
+                  onSelectMonth={onSelectMonth}
+                  onReopenClosedMonth={onReopenClosedMonth}
+                  onDeleteOrRevertMonth={onDeleteOrRevertMonth}
+                />
+              ))}
+            </View>
           </View>
-        </View>
-      </GlassSurface>
+        </GlassSurface>
+      </ResponsiveColumns>
     </View>
   );
 }

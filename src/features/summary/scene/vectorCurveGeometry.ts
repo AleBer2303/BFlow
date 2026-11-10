@@ -1,0 +1,166 @@
+/**
+ * src/features/summary/scene/vectorCurveGeometry.ts
+ *
+ * Pure 2D geometry of the monthly curve for the vector (SVG) stage used by the web skin.
+ * It samples the very same curve as the three.js scene (`curveGeometry.ts`), so both stages
+ * draw one shape and agree with the readout to the peso.
+ */
+
+import type {
+  MonthlyCurve,
+  MonthlyCurveMetricId,
+  MonthlyCurveSeries,
+} from '../../../domain/overview/monthlyCurve';
+import {
+  CURVE_MARGIN_PT,
+  curveXForDay,
+  normalizeCurveValue,
+  sampleCurveValue,
+  type CurveStop,
+} from './curveGeometry';
+
+/** Room above the highest value and under the baseline, so strokes and dots are never cut. */
+export const VECTOR_PLOT_PADDING_TOP_PT = 12;
+export const VECTOR_PLOT_PADDING_BOTTOM_PT = 10;
+export const VECTOR_GRID_LINE_COUNT = 4;
+const DEFAULT_SAMPLES_PER_DAY = 8;
+
+export interface VectorPoint {
+  x: number;
+  y: number;
+}
+
+export interface VectorCurveGeometry {
+  /** Solid line from the opening to the cutoff day (today, or the month's last day). */
+  linePath: string;
+  /** Closed shape between that line and the baseline. */
+  areaPath: string;
+  /** Dashed line from the cutoff to the projected month end; null without a projection. */
+  projectionPath: string | null;
+  cutoffPoint: VectorPoint;
+  projectedPoint: VectorPoint | null;
+  /** Y of each horizontal grid line, top first; the last one is the baseline. */
+  gridLineYs: number[];
+  baselineY: number;
+}
+
+function clampUnit(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
+function round(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+export function vectorYForValue(
+  series: MonthlyCurveSeries,
+  value: number,
+  heightPt: number
+): number {
+  const plotHeight = Math.max(
+    0,
+    heightPt - VECTOR_PLOT_PADDING_TOP_PT - VECTOR_PLOT_PADDING_BOTTOM_PT
+  );
+  const normalized = clampUnit(normalizeCurveValue(series, value));
+  return VECTOR_PLOT_PADDING_TOP_PT + (1 - normalized) * plotHeight;
+}
+
+export function buildVectorCurveGeometry(
+  curve: MonthlyCurve,
+  metricId: MonthlyCurveMetricId,
+  widthPt: number,
+  heightPt: number,
+  samplesPerDay: number = DEFAULT_SAMPLES_PER_DAY
+): VectorCurveGeometry | null {
+  if (widthPt <= CURVE_MARGIN_PT * 2 || heightPt <= 0) {
+    return null;
+  }
+
+  const series = curve.series[metricId];
+  const baselineY = heightPt - VECTOR_PLOT_PADDING_BOTTOM_PT;
+  const sampleCount = Math.max(2, Math.round(curve.cutoffDay * samplesPerDay) + 1);
+
+  const points: VectorPoint[] = [];
+  for (let index = 0; index < sampleCount; index += 1) {
+    const t = (index / (sampleCount - 1)) * curve.cutoffDay;
+    points.push({
+      x: round(curveXForDay(t, curve.daysInMonth, widthPt)),
+      y: round(vectorYForValue(series, sampleCurveValue(series.values, t), heightPt)),
+    });
+  }
+
+  const first = points[0] as VectorPoint;
+  const cutoffPoint = points[points.length - 1] as VectorPoint;
+  const linePath = points
+    .map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x} ${point.y}`)
+    .join(' ');
+  const areaPath = `${linePath} L${cutoffPoint.x} ${round(baselineY)} L${first.x} ${round(baselineY)} Z`;
+
+  const projectedPoint: VectorPoint | null = curve.hasProjection
+    ? {
+        x: round(curveXForDay(curve.daysInMonth, curve.daysInMonth, widthPt)),
+        y: round(vectorYForValue(series, series.projectedClose, heightPt)),
+      }
+    : null;
+
+  const plotTop = VECTOR_PLOT_PADDING_TOP_PT;
+  const gridLineYs = Array.from({ length: VECTOR_GRID_LINE_COUNT }, (_, index) =>
+    round(plotTop + (index / (VECTOR_GRID_LINE_COUNT - 1)) * (baselineY - plotTop))
+  );
+
+  return {
+    linePath,
+    areaPath,
+    projectionPath: projectedPoint
+      ? `M${cutoffPoint.x} ${cutoffPoint.y} L${projectedPoint.x} ${projectedPoint.y}`
+      : null,
+    cutoffPoint,
+    projectedPoint,
+    gridLineYs,
+    baselineY: round(baselineY),
+  };
+}
+
+/** Where a stop sits on the line: a day's close, or the projected month end. */
+export function resolveVectorStopPoint(
+  curve: MonthlyCurve,
+  metricId: MonthlyCurveMetricId,
+  stop: CurveStop,
+  widthPt: number,
+  heightPt: number
+): VectorPoint {
+  const series = curve.series[metricId];
+  if (stop === 'close') {
+    return {
+      x: round(curveXForDay(curve.daysInMonth, curve.daysInMonth, widthPt)),
+      y: round(vectorYForValue(series, series.projectedClose, heightPt)),
+    };
+  }
+  return {
+    x: round(curveXForDay(stop, curve.daysInMonth, widthPt)),
+    y: round(vectorYForValue(series, series.values[stop] as number, heightPt)),
+  };
+}
+
+/**
+ * Keyboard scrubbing: the next stop one step left (-1) or right (+1) of the current one.
+ * With no stop yet, the walk starts at the cutoff day. Past the cutoff only the projected
+ * close exists.
+ */
+export function stepCurveStop(
+  curve: MonthlyCurve,
+  current: CurveStop | null,
+  direction: -1 | 1
+): CurveStop {
+  if (current === null) {
+    return curve.cutoffDay;
+  }
+  if (current === 'close') {
+    return direction === -1 ? curve.cutoffDay : 'close';
+  }
+  const next = current + direction;
+  if (next > curve.cutoffDay) {
+    return curve.hasProjection ? 'close' : curve.cutoffDay;
+  }
+  return Math.max(1, next);
+}

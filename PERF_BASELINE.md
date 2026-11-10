@@ -235,3 +235,39 @@ Medición de laboratorio del 2026-11-09 con `three@0.187.0` y `expo-gl@~58.0.4`.
 
 - **FPS y consumo de batería en dispositivo real:** la medición se hizo en Windows, sin iPhone. Pendiente de registrar en Expo Go y en el `.ipa`.
 - **Peso nativo de three.js:** el bundle Hermes de iOS mide 6.759.907 bytes en total, pero no existe una medición previa comparable para calcular el aumento.
+
+---
+
+## 10. Piel Web: curva vectorial en lugar de three.js
+
+Medición de laboratorio del 2026-11-09 (Windows 11, Node.js `v24.14.0`) con `npx expo export -p web`, tras el rediseño de la piel Web. Decisión en el [ADR 0011](docs/decisions/0011-web-redesign-and-vector-curve.md).
+
+### Peso en Web
+
+| Chunk | Bytes | Gzip | Contiene three.js | Lo descarga la piel Web |
+| :--- | ---: | ---: | :--- | :--- |
+| `entry` | 1.113.682 | 293.040 | No | Sí |
+| `index` | 1.166.660 | 251.424 | No | Sí |
+| `__common` | 131.674 | 35.767 | No | Sí |
+| `_layout` | 20.533 | 5.952 | No | Sí |
+| `__expo-metro-runtime` | 10.098 | 3.947 | No | Sí |
+| `MonthlyCurveStage` (diferido) | 869.611 | 202.404 | Sí | **No** |
+
+### Antes y después al abrir Resumen en Web
+
+| Métrica | Antes (escena three.js) | Después (curva SVG) |
+| :--- | ---: | ---: |
+| JavaScript descargado (gzip) | 792.534 | 590.130 |
+| Chunk de three.js descargado (gzip) | 202.404 | 0 |
+| Contextos WebGL creados | 1 | 0 |
+
+- El ahorro es el chunk de three.js completo: **202.404 bytes gzip, el 25,5 %** del JavaScript total.
+- El chunk `index` creció 14.887 bytes sin comprimir (4.159 gzip) respecto a la sección 9: incluye el marco por plataforma, la navegación de Android y Web, el layout responsive y la curva vectorial.
+- `react-native-svg` no añade peso: ya estaba en el bundle por los iconos.
+- El chunk `MonthlyCurveStage` sigue generándose porque la vista previa de las pieles iOS y Android en modo vitrina (`?skin=`) lo carga bajo demanda.
+
+### No medido
+
+- **Tiempo de carga y de primer render en red real:** solo se midió el peso de los archivos exportados.
+- **Peso de la tipografía Geist** (Google Fonts, `display=swap`): se descarga fuera del bundle y no se midió.
+- **iOS y Android:** sin cambios en la escena three.js; siguen vigentes los pendientes de la sección 9.

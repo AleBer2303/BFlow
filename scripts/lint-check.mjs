@@ -6,6 +6,9 @@
  * 1. `src/domain/` must remain 100% pure (zero imports of react, react-native, expo-*, firebase/*).
  * 2. `src/app/` and `src/features/` must NEVER contain hardcoded hex colors (`#RRGGBB`); all colors come from `src/design-system/tokens.ts`.
  * 3. `src/` must not contain stray `console.log` statements.
+ * 4. Mode B native-only modules are imported only from `.native.ts(x)` adapters under `src/platform/`.
+ * 5. `expo-blur` (Liquid Glass) is imported only by the two components that gate it to the iOS skin.
+ * 6. `src/app/` and `src/features/` use `AppPressable`, never React Native's `Pressable`.
  */
 
 import fs from 'node:fs';
@@ -68,6 +71,38 @@ for (const filePath of files) {
       errors.push(
         `${relPath}: Mode B native module imported outside src/platform/**/*.native.{ts,tsx} (breaks Mode A Expo Go/Web).`
       );
+    }
+  }
+}
+
+for (const filePath of files) {
+  const relPath = path.relative(rootDir, filePath).replace(/\\/g, '/');
+  const content = fs.readFileSync(filePath, 'utf8');
+  const isTest = relPath.includes('__tests__/') || /\.test\.tsx?$/.test(relPath);
+  if (isTest) continue;
+
+  // Rule 5: Liquid Glass blur stays behind the skin gate (Android and Web never blur).
+  const blurAllowList = [
+    'src/platform/glass/GlassSurface.tsx',
+    'src/design-system/components/IosWheelPickerModal.tsx',
+  ];
+  if (/from\s+['"]expo-blur['"]/.test(content) && !blurAllowList.includes(relPath)) {
+    errors.push(
+      `${relPath}: expo-blur imported outside the skin-gated surfaces. Use <GlassSurface /> so Android and Web stay free of Liquid Glass.`
+    );
+  }
+
+  // Rule 6: features and screens press through AppPressable (ripple, hover, touch target).
+  if (relPath.startsWith('src/app/') || relPath.startsWith('src/features/')) {
+    const reactNativeImport = /import\s*\{([^}]*)\}\s*from\s+['"]react-native['"]/g;
+    let match;
+    while ((match = reactNativeImport.exec(content)) !== null) {
+      const names = match[1].split(',').map((name) => name.trim().replace(/^type\s+/, ''));
+      if (names.includes('Pressable')) {
+        errors.push(
+          `${relPath}: React Native's Pressable imported in a feature or screen. Use AppPressable from src/design-system (platform feedback and minimum touch target).`
+        );
+      }
     }
   }
 }

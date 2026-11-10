@@ -7,7 +7,8 @@
  * Calibrated for all modern iPhones including iPhone 16 Pro Max (440pt width):
  * - Generous breathing room (maxWidth 416pt, ample padding and touch clearance)
  * - Razor-sharp Retina hairline specular borders (StyleSheet.hairlineWidth)
- * - True translucent blur backdrop (BlurView from expo-blur)
+ * - True translucent blur backdrop (BlurView from expo-blur) on the iOS skin; an opaque sheet
+ *   in the tokens of the skin on Android and Web
  * - Ultra-subtle backdrop attenuation (rgba(0, 0, 0, 0.28)) and tap-to-dismiss
  * - Floating glass capsule with radius.xl (28pt)
  * - Continuous glass optical refraction (zero opaque inner view blocks)
@@ -22,13 +23,13 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
 import { hapticService } from '../../platform/haptics/hapticService';
 import { useBFlowTheme } from '../theme/ThemeContext';
+import { AppPressable } from './AppPressable';
 import { MIN_TOUCH_TARGET_PT } from '../tokens';
 import { AppText } from './Typography';
 
@@ -61,7 +62,7 @@ export function IosWheelPickerModal<T extends string = string>({
   onCancel,
   testID = 'ios-wheel-picker-modal',
 }: IosWheelPickerModalProps<T>): React.JSX.Element {
-  const { colors, spacing, radius } = useBFlowTheme();
+  const { colors, spacing, radius, skinSpec } = useBFlowTheme();
   const scrollViewRef = useRef<React.ElementRef<typeof ScrollView>>(null);
 
   const initialIndex = useMemo(() => {
@@ -151,7 +152,7 @@ export function IosWheelPickerModal<T extends string = string>({
         testID={`${testID}-container`}
       >
         {/* Backdrop Tap to Dismiss */}
-        <Pressable
+        <AppPressable
           style={StyleSheet.absoluteFill}
           onPress={onCancel}
           accessibilityRole="button"
@@ -172,7 +173,8 @@ export function IosWheelPickerModal<T extends string = string>({
           }}
           testID={`${testID}-sheet`}
         >
-          {Platform.OS !== 'web' ? (
+          {/* Blur is Liquid Glass: iOS skin only. Android and Web get the opaque sheet. */}
+          {skinSpec.surfaceMaterial === 'liquid-glass' && Platform.OS !== 'web' ? (
             <BlurView
               intensity={colors.glass.blurIntensity}
               tint={colors.glass.blurTint}
@@ -193,7 +195,7 @@ export function IosWheelPickerModal<T extends string = string>({
               borderBottomColor: colors.glass.subtleBorder,
             }}
           >
-            <Pressable
+            <AppPressable
               onPressIn={() => hapticService.light()}
               onPress={onCancel}
               accessibilityRole="button"
@@ -209,13 +211,13 @@ export function IosWheelPickerModal<T extends string = string>({
               <AppText variant="body" color={colors.text.secondary}>
                 Cancelar
               </AppText>
-            </Pressable>
+            </AppPressable>
 
             <AppText variant="headline" style={{ fontWeight: '600', letterSpacing: -0.2 }}>
               {title}
             </AppText>
 
-            <Pressable
+            <AppPressable
               onPress={handleConfirm}
               accessibilityRole="button"
               accessibilityLabel="Confirmar selección"
@@ -234,7 +236,7 @@ export function IosWheelPickerModal<T extends string = string>({
               >
                 Listo
               </AppText>
-            </Pressable>
+            </AppPressable>
           </View>
 
           {/* Continuous Glass Vertical Carousel Area */}
@@ -287,7 +289,7 @@ export function IosWheelPickerModal<T extends string = string>({
                 const scale = isSelected ? 1.02 : distance === 1 ? 0.94 : 0.86;
 
                 return (
-                  <Pressable
+                  <AppPressable
                     key={option.value}
                     testID={`${testID}-option-${option.value}`}
                     accessibilityRole="button"
@@ -316,7 +318,7 @@ export function IosWheelPickerModal<T extends string = string>({
                     >
                       {option.label}
                     </AppText>
-                  </Pressable>
+                  </AppPressable>
                 );
               })}
             </ScrollView>

@@ -1,8 +1,9 @@
 /**
  * src/features/auth/components/AuthScreen.tsx
  *
- * Full-screen Authentication & Personal Registration Gate (`01-auth`),
- * crafted following `.claude/skills/frontend-design/SKILL.md` and `DESIGN.md`:
+ * Full-screen Authentication & Personal Registration Gate (`01-auth`), following `DESIGN.md`.
+ * iOS and Android show the centered card; the web skin shows a header and a split hero
+ * (copy beside the form) built to `.agents/skills/design-taste-frontend`:
  * - Supports Sign-In (`email` + `password`), Personal Account Registration (`displayName`, `phone`,
  *   `financialGoal`, `email`, `password`), and Password Recovery with Firebase
  * - Includes password visibility toggle while typing
@@ -10,8 +11,9 @@
  */
 
 import React, { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import {
+  AppPressable,
   AppText,
   AppTextInput,
   EyeIcon,
@@ -21,7 +23,10 @@ import {
   MIN_TOUCH_TARGET_PT,
   StatusBadge,
   ThemeToggleIconButton,
+  WebAppHeader,
   useBFlowTheme,
+  usePrimaryActionLook,
+  useResponsiveLayout,
 } from '../../../design-system';
 import type { RegisterPersonalAccountInput } from '../../../platform/auth/authAdapter';
 import {
@@ -30,6 +35,19 @@ import {
 } from '../../../platform/auth/verificationCodeService';
 
 export type AuthFormMode = 'login' | 'register' | 'recover';
+
+const AUTH_CARD_MAX_WIDTH_PT = 460;
+const WEB_HERO_FLEX = 7;
+const WEB_FORM_FLEX = 5;
+const WEB_HERO_MEASURE_PT = 560;
+
+/** First-screen copy of the web skin: the category and who it is for, how it works, one fact. */
+export const WEB_HERO_COPY = {
+  headline: 'Presupuesto mensual para tus finanzas personales',
+  subline:
+    'Registra ingresos y gastos, marca cada pago del mes y sigue tus deudas y ahorros en un solo lugar, sincronizado entre tu teléfono y el navegador.',
+  fact: 'Una cuenta, tres plataformas: iOS, Android y Web.',
+} as const;
 
 export interface AuthScreenProps {
   initialMode?: AuthFormMode;
@@ -58,7 +76,9 @@ export function AuthScreen({
   onRequestPasswordResetCode,
   onConfirmPasswordResetWithCode,
 }: AuthScreenProps): React.JSX.Element {
-  const { colors, spacing, radius } = useBFlowTheme();
+  const { colors, spacing, radius, skin } = useBFlowTheme();
+  const layout = useResponsiveLayout();
+  const primaryAction = usePrimaryActionLook();
 
   const [formMode, setFormMode] = useState<AuthFormMode>(initialMode);
   const [recoverStep, setRecoverStep] = useState<'request' | 'verify'>('request');
@@ -213,6 +233,472 @@ export function AuthScreen({
   const activeError = localValidationError ?? errorMessage;
   const activeStatusMessage = internalRecoverySuccess ?? statusMessage;
 
+  const authCard = (
+    <GlassSurface elevated testID="auth-glass-card">
+      <View style={{ gap: spacing.md }}>
+        {/* Mode Switcher: Iniciar sesión / Crear cuenta */}
+        <View
+          style={{
+            flexDirection: 'row',
+            gap: spacing.xs,
+            padding: spacing.xxs,
+            borderRadius: radius.md,
+            backgroundColor: colors.glass.surfaceTint,
+            borderWidth: 1,
+            borderColor: colors.glass.subtleBorder,
+          }}
+        >
+          {(
+            [
+              { id: 'login', label: 'Iniciar sesión' },
+              { id: 'register', label: 'Crear cuenta' },
+            ] as const
+          ).map((tab) => {
+            const isSelected = formMode === tab.id;
+            return (
+              <AppPressable
+                key={tab.id}
+                testID={`auth-mode-${tab.id}`}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isSelected }}
+                onPress={() => switchMode(tab.id)}
+                style={{
+                  flex: 1,
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  borderRadius: radius.sm,
+                  backgroundColor: isSelected
+                    ? colors.glass.surfaceElevatedTint
+                    : 'transparent',
+                  borderWidth: isSelected ? 1 : 0,
+                  borderColor: isSelected ? colors.glass.specularBorder : 'transparent',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <AppText
+                  variant="caption"
+                  color={isSelected ? colors.text.primary : colors.text.secondary}
+                >
+                  {tab.label}
+                </AppText>
+              </AppPressable>
+            );
+          })}
+        </View>
+
+        {/* Form Title & Context */}
+        <View style={{ gap: spacing.xxs }}>
+          <AppText variant="title2">
+            {formMode === 'login'
+              ? 'Entra a tu cuenta personal'
+              : formMode === 'register'
+                ? 'Registra tus datos personales'
+                : recoverStep === 'request'
+                  ? 'Recupera el acceso a tu cuenta'
+                  : 'Restablecer contraseña'}
+          </AppText>
+          {formMode === 'recover' ? (
+            <AppText variant="caption" color={colors.text.secondary}>
+              {recoverStep === 'request'
+                ? 'Escribe tu correo electrónico para enviarte un código de verificación de 6 dígitos.'
+                : 'Ingresa el código de 6 dígitos enviado a tu correo y define tu nueva contraseña para cambiarla en la app.'}
+            </AppText>
+          ) : null}
+        </View>
+
+        {/* Personal Profile Fields (Registration Only) */}
+        {formMode === 'register' ? (
+          <View style={{ gap: spacing.sm }}>
+            <View style={{ gap: spacing.xxs }}>
+              <AppText variant="caption" color={colors.text.secondary}>
+                Nombre completo
+              </AppText>
+              <AppTextInput
+                testID="auth-name-input"
+                value={displayName}
+                onChangeText={setDisplayName}
+                placeholder="Ej. Alejandro Bernal Garnica"
+                autoCapitalize="words"
+              />
+            </View>
+
+            <View style={{ gap: spacing.xxs }}>
+              <AppText variant="caption" color={colors.text.secondary}>
+                Celular (opcional)
+              </AppText>
+              <AppTextInput
+                testID="auth-phone-input"
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="Ej. +57 300 123 4567"
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <View style={{ gap: spacing.xxs }}>
+              <AppText variant="caption" color={colors.text.secondary}>
+                Meta financiera principal (opcional)
+              </AppText>
+              <AppTextInput
+                testID="auth-goal-input"
+                value={financialGoal}
+                onChangeText={setFinancialGoal}
+                placeholder="Ej. Ahorro para un proyecto personal"
+              />
+            </View>
+          </View>
+        ) : null}
+
+        {/* Email Field */}
+        <View style={{ gap: spacing.xxs }}>
+          <AppText variant="caption" color={colors.text.secondary}>
+            Correo electrónico
+          </AppText>
+          <AppTextInput
+            testID="auth-email-input"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="tu-correo@ejemplo.com"
+            autoCapitalize="none"
+            keyboardType="email-address"
+            autoComplete="email"
+          />
+        </View>
+
+        {/* Verification Code or Email Link Field (Recovery Step: Verify) */}
+        {formMode === 'recover' && recoverStep === 'verify' ? (
+          <View style={{ gap: spacing.xxs }}>
+            <AppText variant="caption" color={colors.text.secondary}>
+              Código de verificación o enlace del correo
+            </AppText>
+            <AppTextInput
+              testID="auth-recovery-code-input"
+              value={recoveryCode}
+              onChangeText={setRecoveryCode}
+              placeholder="Ej: 123456 o pega el código/enlace"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <AppText variant="micro" color={colors.text.muted}>
+              Ingresa el código de 6 dígitos enviado por correo para actualizar tu contraseña inmediatamente en Firebase.
+            </AppText>
+          </View>
+        ) : null}
+
+        {/* Password Fields with Visibility Toggle */}
+        {formMode !== 'recover' || recoverStep === 'verify' ? (
+          <View style={{ gap: spacing.sm }}>
+            <View style={{ gap: spacing.xxs }}>
+              <AppText variant="caption" color={colors.text.secondary}>
+                {formMode === 'recover' ? 'Nueva contraseña' : 'Contraseña'}
+              </AppText>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  borderRadius: radius.md,
+                  borderCurve: 'continuous',
+                  backgroundColor: colors.glass.surfaceTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.subtleBorder,
+                }}
+              >
+                <AppTextInput
+                  testID="auth-password-input"
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Mínimo 6 caracteres"
+                  secureTextEntry={!showPassword}
+                  autoComplete={
+                    formMode === 'register' || formMode === 'recover'
+                      ? 'new-password'
+                      : 'current-password'
+                  }
+                  style={{
+                    flex: 1,
+                    backgroundColor: 'transparent',
+                    borderWidth: 0,
+                  }}
+                />
+                <AppPressable
+                  testID="auth-password-visibility-toggle"
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    showPassword ? 'Ocultar contraseña' : 'Ver contraseña'
+                  }
+                  onPress={() => setShowPassword((prev) => !prev)}
+                  style={{
+                    minHeight: MIN_TOUCH_TARGET_PT,
+                    minWidth: MIN_TOUCH_TARGET_PT,
+                    paddingHorizontal: spacing.sm,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  {showPassword ? (
+                    <EyeIcon size={20} color={colors.text.secondary} testID="icon-eye-open" />
+                  ) : (
+                    <EyeOffIcon size={20} color={colors.text.secondary} testID="icon-eye-closed" />
+                  )}
+                </AppPressable>
+              </View>
+            </View>
+
+            {formMode === 'register' || (formMode === 'recover' && recoverStep === 'verify') ? (
+              <View style={{ gap: spacing.xxs }}>
+                <AppText variant="caption" color={colors.text.secondary}>
+                  {formMode === 'recover'
+                    ? 'Confirmar nueva contraseña'
+                    : 'Confirmar contraseña'}
+                </AppText>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    borderRadius: radius.md,
+                    borderCurve: 'continuous',
+                    backgroundColor: colors.glass.surfaceTint,
+                    borderWidth: 1,
+                    borderColor: colors.glass.subtleBorder,
+                  }}
+                >
+                  <AppTextInput
+                    testID="auth-confirm-password-input"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    placeholder={
+                      formMode === 'recover'
+                        ? 'Repite tu nueva contraseña'
+                        : 'Repite tu contraseña'
+                    }
+                    secureTextEntry={!showConfirmPassword}
+                    style={{
+                      flex: 1,
+                      backgroundColor: 'transparent',
+                      borderWidth: 0,
+                    }}
+                  />
+                  <AppPressable
+                    testID="auth-confirm-password-visibility-toggle"
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      showConfirmPassword
+                        ? 'Ocultar confirmación de contraseña'
+                        : 'Ver confirmación de contraseña'
+                    }
+                    onPress={() => setShowConfirmPassword((prev) => !prev)}
+                    style={{
+                      minHeight: MIN_TOUCH_TARGET_PT,
+                      minWidth: MIN_TOUCH_TARGET_PT,
+                      paddingHorizontal: spacing.sm,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeIcon size={20} color={colors.text.secondary} testID="icon-confirm-eye-open" />
+                    ) : (
+                      <EyeOffIcon size={20} color={colors.text.secondary} testID="icon-confirm-eye-closed" />
+                    )}
+                  </AppPressable>
+                </View>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* Error or Status Feedback */}
+        {activeError ? (
+          <View
+            testID="auth-error-banner"
+            style={{
+              padding: spacing.sm,
+              borderRadius: radius.md,
+              backgroundColor: colors.semantic.expenseSoft,
+              borderWidth: 1,
+              borderColor: colors.glass.subtleBorder,
+            }}
+          >
+            <AppText variant="caption" color={colors.semantic.expense}>
+              {activeError}
+            </AppText>
+          </View>
+        ) : null}
+
+        {activeStatusMessage ? (
+          <View
+            testID="auth-status-banner"
+            style={{
+              padding: spacing.sm,
+              borderRadius: radius.md,
+              backgroundColor: colors.semantic.incomeSoft,
+              borderWidth: 1,
+              borderColor: colors.glass.subtleBorder,
+            }}
+          >
+            <AppText variant="caption" color={colors.semantic.income}>
+              {activeStatusMessage}
+            </AppText>
+          </View>
+        ) : null}
+
+        {/* Primary CTA */}
+        <AppPressable
+          testID="auth-primary-submit-button"
+          accessibilityRole="button"
+          disabled={isSubmitting}
+          onPress={handlePrimarySubmit}
+          style={{
+            minHeight: MIN_TOUCH_TARGET_PT,
+            borderRadius: radius.md,
+            borderCurve: 'continuous',
+            ...primaryAction.container,
+            justifyContent: 'center',
+            alignItems: 'center',
+            paddingVertical: spacing.sm,
+          }}
+        >
+          <AppText variant="headline" color={primaryAction.labelColor ?? colors.text.primary}>
+            {isSubmitting
+              ? 'Sincronizando tu cuenta...'
+              : formMode === 'login'
+                ? 'Entrar a mi presupuesto'
+                : formMode === 'register'
+                  ? 'Crear mi cuenta y sincronizar'
+                  : recoverStep === 'request'
+                    ? 'Enviar código de verificación'
+                    : 'Restablecer y cambiar contraseña'}
+          </AppText>
+        </AppPressable>
+
+        {/* Password Recovery Link or Back To Login */}
+        {formMode !== 'recover' ? (
+          <View style={{ gap: spacing.xs, marginTop: spacing.xs }}>
+            <AppPressable
+              testID="auth-mode-recover"
+              accessibilityRole="button"
+              accessibilityLabel="Recuperar clave"
+              onPress={() => switchMode('recover')}
+              style={{
+                minHeight: MIN_TOUCH_TARGET_PT,
+                justifyContent: 'center',
+                alignItems: 'center',
+                paddingVertical: spacing.xs,
+              }}
+            >
+              <AppText variant="caption" color={colors.text.secondary}>
+                ¿Olvidaste tu contraseña? Recuperar clave
+              </AppText>
+            </AppPressable>
+          </View>
+        ) : (
+          <View style={{ gap: spacing.xs, marginTop: spacing.xs }}>
+            {recoverStep === 'verify' ? (
+              <AppPressable
+                testID="auth-recovery-resend-button"
+                accessibilityRole="button"
+                accessibilityLabel="Reenviar código de verificación"
+                onPress={handleResendRecoveryCode}
+                style={{
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  paddingVertical: spacing.xs,
+                }}
+              >
+                <AppText variant="caption" color={colors.text.secondary}>
+                  Reenviar código de verificación
+                </AppText>
+              </AppPressable>
+            ) : null}
+
+            <AppPressable
+              testID="auth-back-to-login-button"
+              accessibilityRole="button"
+              accessibilityLabel="Volver a iniciar sesión"
+              onPress={() => switchMode('login')}
+              style={{
+                minHeight: MIN_TOUCH_TARGET_PT,
+                justifyContent: 'center',
+                alignItems: 'center',
+                paddingVertical: spacing.xs,
+              }}
+            >
+              <AppText variant="caption" color={colors.text.secondary}>
+                ← Volver a iniciar sesión
+              </AppText>
+            </AppPressable>
+          </View>
+        )}
+      </View>
+    </GlassSurface>
+  );
+
+  // Web: the product's first screen. A fixed, opaque header and a hero that says what BFlow is
+  // beside the sign-in form (design-taste-frontend: category in the h1, one hard fact, one
+  // filled action). The form stacks under the copy below 1024px.
+  if (skin === 'web') {
+    const isSplit = layout.isWide;
+
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background.primary }}>
+        <WebAppHeader layout={layout} themeToggleTestID="auth-theme-toggle-button" />
+        <KeyboardAwareScrollView
+          testID="auth-gate-screen"
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: 'center',
+            paddingHorizontal: layout.gutter,
+            paddingVertical: isSplit ? spacing.huge : spacing.xxl,
+          }}
+        >
+          <View
+            style={{
+              width: '100%',
+              maxWidth: layout.contentMaxWidth,
+              alignSelf: 'center',
+              flexDirection: isSplit ? 'row' : 'column',
+              alignItems: isSplit ? 'center' : 'stretch',
+              gap: isSplit ? spacing.huge : spacing.xxl,
+            }}
+          >
+            <View
+              testID="auth-web-hero"
+              style={{ flex: isSplit ? WEB_HERO_FLEX : undefined, minWidth: 0, gap: spacing.lg }}
+            >
+              <AppText variant={isSplit ? 'display' : 'heroCurrency'} accessibilityRole="header">
+                {WEB_HERO_COPY.headline}
+              </AppText>
+              <AppText
+                variant="headline"
+                color={colors.text.secondary}
+                style={{ maxWidth: WEB_HERO_MEASURE_PT, fontWeight: '400' }}
+              >
+                {WEB_HERO_COPY.subline}
+              </AppText>
+              <AppText variant="caption" color={colors.text.muted}>
+                {WEB_HERO_COPY.fact}
+              </AppText>
+            </View>
+
+            <View
+              style={{
+                flex: isSplit ? WEB_FORM_FLEX : undefined,
+                width: '100%',
+                maxWidth: isSplit ? undefined : AUTH_CARD_MAX_WIDTH_PT,
+                alignSelf: isSplit ? undefined : 'center',
+                minWidth: 0,
+              }}
+            >
+              {authCard}
+            </View>
+          </View>
+        </KeyboardAwareScrollView>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAwareScrollView
       testID="auth-gate-screen"
@@ -220,14 +706,14 @@ export function AuthScreen({
       contentContainerStyle={{
         flexGrow: 1,
         justifyContent: 'center',
-        paddingHorizontal: spacing.lg,
+        paddingHorizontal: layout.gutter,
         paddingVertical: spacing.xxxl,
       }}
     >
       <View
         style={{
           width: '100%',
-          maxWidth: 460,
+          maxWidth: AUTH_CARD_MAX_WIDTH_PT,
           alignSelf: 'center',
           gap: spacing.lg,
         }}
@@ -251,407 +737,7 @@ export function AuthScreen({
           <StatusBadge label="Metas Financieras" status="reserve" />
         </View>
 
-        {/* Main Liquid Glass Authentication Card */}
-        <GlassSurface elevated testID="auth-glass-card">
-          <View style={{ gap: spacing.md }}>
-            {/* Mode Switcher: Iniciar sesión / Crear cuenta */}
-            <View
-              style={{
-                flexDirection: 'row',
-                gap: spacing.xs,
-                padding: spacing.xxs,
-                borderRadius: radius.md,
-                backgroundColor: colors.glass.surfaceTint,
-                borderWidth: 1,
-                borderColor: colors.glass.subtleBorder,
-              }}
-            >
-              {(
-                [
-                  { id: 'login', label: 'Iniciar sesión' },
-                  { id: 'register', label: 'Crear cuenta' },
-                ] as const
-              ).map((tab) => {
-                const isSelected = formMode === tab.id;
-                return (
-                  <Pressable
-                    key={tab.id}
-                    testID={`auth-mode-${tab.id}`}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: isSelected }}
-                    onPress={() => switchMode(tab.id)}
-                    style={{
-                      flex: 1,
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      borderRadius: radius.sm,
-                      backgroundColor: isSelected
-                        ? colors.glass.surfaceElevatedTint
-                        : 'transparent',
-                      borderWidth: isSelected ? 1 : 0,
-                      borderColor: isSelected ? colors.glass.specularBorder : 'transparent',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <AppText
-                      variant="caption"
-                      color={isSelected ? colors.text.primary : colors.text.secondary}
-                    >
-                      {tab.label}
-                    </AppText>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            {/* Form Title & Context */}
-            <View style={{ gap: spacing.xxs }}>
-              <AppText variant="title2">
-                {formMode === 'login'
-                  ? 'Entra a tu cuenta personal'
-                  : formMode === 'register'
-                    ? 'Registra tus datos personales'
-                    : recoverStep === 'request'
-                      ? 'Recupera el acceso a tu cuenta'
-                      : 'Restablecer contraseña'}
-              </AppText>
-              {formMode === 'recover' ? (
-                <AppText variant="caption" color={colors.text.secondary}>
-                  {recoverStep === 'request'
-                    ? 'Escribe tu correo electrónico para enviarte un código de verificación de 6 dígitos.'
-                    : 'Ingresa el código de 6 dígitos enviado a tu correo y define tu nueva contraseña para cambiarla en la app.'}
-                </AppText>
-              ) : null}
-            </View>
-
-            {/* Personal Profile Fields (Registration Only) */}
-            {formMode === 'register' ? (
-              <View style={{ gap: spacing.sm }}>
-                <View style={{ gap: spacing.xxs }}>
-                  <AppText variant="caption" color={colors.text.secondary}>
-                    Nombre completo
-                  </AppText>
-                  <AppTextInput
-                    testID="auth-name-input"
-                    value={displayName}
-                    onChangeText={setDisplayName}
-                    placeholder="Ej. Alejandro Bernal Garnica"
-                    autoCapitalize="words"
-                  />
-                </View>
-
-                <View style={{ gap: spacing.xxs }}>
-                  <AppText variant="caption" color={colors.text.secondary}>
-                    Celular (opcional)
-                  </AppText>
-                  <AppTextInput
-                    testID="auth-phone-input"
-                    value={phone}
-                    onChangeText={setPhone}
-                    placeholder="Ej. +57 300 123 4567"
-                    keyboardType="phone-pad"
-                  />
-                </View>
-
-                <View style={{ gap: spacing.xxs }}>
-                  <AppText variant="caption" color={colors.text.secondary}>
-                    Meta financiera principal (opcional)
-                  </AppText>
-                  <AppTextInput
-                    testID="auth-goal-input"
-                    value={financialGoal}
-                    onChangeText={setFinancialGoal}
-                    placeholder="Ej. Ahorro para un proyecto personal"
-                  />
-                </View>
-              </View>
-            ) : null}
-
-            {/* Email Field */}
-            <View style={{ gap: spacing.xxs }}>
-              <AppText variant="caption" color={colors.text.secondary}>
-                Correo electrónico
-              </AppText>
-              <AppTextInput
-                testID="auth-email-input"
-                value={email}
-                onChangeText={setEmail}
-                placeholder="tu-correo@ejemplo.com"
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-              />
-            </View>
-
-            {/* Verification Code or Email Link Field (Recovery Step: Verify) */}
-            {formMode === 'recover' && recoverStep === 'verify' ? (
-              <View style={{ gap: spacing.xxs }}>
-                <AppText variant="caption" color={colors.text.secondary}>
-                  Código de verificación o enlace del correo
-                </AppText>
-                <AppTextInput
-                  testID="auth-recovery-code-input"
-                  value={recoveryCode}
-                  onChangeText={setRecoveryCode}
-                  placeholder="Ej: 123456 o pega el código/enlace"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <AppText variant="micro" color={colors.text.muted}>
-                  Ingresa el código de 6 dígitos enviado por correo para actualizar tu contraseña inmediatamente en Firebase.
-                </AppText>
-              </View>
-            ) : null}
-
-            {/* Password Fields with Visibility Toggle */}
-            {formMode !== 'recover' || recoverStep === 'verify' ? (
-              <View style={{ gap: spacing.sm }}>
-                <View style={{ gap: spacing.xxs }}>
-                  <AppText variant="caption" color={colors.text.secondary}>
-                    {formMode === 'recover' ? 'Nueva contraseña' : 'Contraseña'}
-                  </AppText>
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      borderRadius: radius.md,
-                      borderCurve: 'continuous',
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                    }}
-                  >
-                    <AppTextInput
-                      testID="auth-password-input"
-                      value={password}
-                      onChangeText={setPassword}
-                      placeholder="Mínimo 6 caracteres"
-                      secureTextEntry={!showPassword}
-                      autoComplete={
-                        formMode === 'register' || formMode === 'recover'
-                          ? 'new-password'
-                          : 'current-password'
-                      }
-                      style={{
-                        flex: 1,
-                        backgroundColor: 'transparent',
-                        borderWidth: 0,
-                      }}
-                    />
-                    <Pressable
-                      testID="auth-password-visibility-toggle"
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        showPassword ? 'Ocultar contraseña' : 'Ver contraseña'
-                      }
-                      onPress={() => setShowPassword((prev) => !prev)}
-                      style={{
-                        minHeight: MIN_TOUCH_TARGET_PT,
-                        minWidth: MIN_TOUCH_TARGET_PT,
-                        paddingHorizontal: spacing.sm,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                      }}
-                    >
-                      {showPassword ? (
-                        <EyeIcon size={20} color={colors.text.secondary} testID="icon-eye-open" />
-                      ) : (
-                        <EyeOffIcon size={20} color={colors.text.secondary} testID="icon-eye-closed" />
-                      )}
-                    </Pressable>
-                  </View>
-                </View>
-
-                {formMode === 'register' || (formMode === 'recover' && recoverStep === 'verify') ? (
-                  <View style={{ gap: spacing.xxs }}>
-                    <AppText variant="caption" color={colors.text.secondary}>
-                      {formMode === 'recover'
-                        ? 'Confirmar nueva contraseña'
-                        : 'Confirmar contraseña'}
-                    </AppText>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        borderRadius: radius.md,
-                        borderCurve: 'continuous',
-                        backgroundColor: colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                      }}
-                    >
-                      <AppTextInput
-                        testID="auth-confirm-password-input"
-                        value={confirmPassword}
-                        onChangeText={setConfirmPassword}
-                        placeholder={
-                          formMode === 'recover'
-                            ? 'Repite tu nueva contraseña'
-                            : 'Repite tu contraseña'
-                        }
-                        secureTextEntry={!showConfirmPassword}
-                        style={{
-                          flex: 1,
-                          backgroundColor: 'transparent',
-                          borderWidth: 0,
-                        }}
-                      />
-                      <Pressable
-                        testID="auth-confirm-password-visibility-toggle"
-                        accessibilityRole="button"
-                        accessibilityLabel={
-                          showConfirmPassword
-                            ? 'Ocultar confirmación de contraseña'
-                            : 'Ver confirmación de contraseña'
-                        }
-                        onPress={() => setShowConfirmPassword((prev) => !prev)}
-                        style={{
-                          minHeight: MIN_TOUCH_TARGET_PT,
-                          minWidth: MIN_TOUCH_TARGET_PT,
-                          paddingHorizontal: spacing.sm,
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                        }}
-                      >
-                        {showConfirmPassword ? (
-                          <EyeIcon size={20} color={colors.text.secondary} testID="icon-confirm-eye-open" />
-                        ) : (
-                          <EyeOffIcon size={20} color={colors.text.secondary} testID="icon-confirm-eye-closed" />
-                        )}
-                      </Pressable>
-                    </View>
-                  </View>
-                ) : null}
-              </View>
-            ) : null}
-
-            {/* Error or Status Feedback */}
-            {activeError ? (
-              <View
-                testID="auth-error-banner"
-                style={{
-                  padding: spacing.sm,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.semantic.expenseSoft,
-                  borderWidth: 1,
-                  borderColor: colors.glass.subtleBorder,
-                }}
-              >
-                <AppText variant="caption" color={colors.semantic.expense}>
-                  {activeError}
-                </AppText>
-              </View>
-            ) : null}
-
-            {activeStatusMessage ? (
-              <View
-                testID="auth-status-banner"
-                style={{
-                  padding: spacing.sm,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.semantic.incomeSoft,
-                  borderWidth: 1,
-                  borderColor: colors.glass.subtleBorder,
-                }}
-              >
-                <AppText variant="caption" color={colors.semantic.income}>
-                  {activeStatusMessage}
-                </AppText>
-              </View>
-            ) : null}
-
-            {/* Primary CTA */}
-            <Pressable
-              testID="auth-primary-submit-button"
-              accessibilityRole="button"
-              disabled={isSubmitting}
-              onPress={handlePrimarySubmit}
-              style={{
-                minHeight: MIN_TOUCH_TARGET_PT,
-                borderRadius: radius.md,
-                borderCurve: 'continuous',
-                backgroundColor: colors.glass.surfaceElevatedTint,
-                borderWidth: 1,
-                borderColor: colors.glass.specularBorder,
-                justifyContent: 'center',
-                alignItems: 'center',
-                paddingVertical: spacing.sm,
-              }}
-            >
-              <AppText variant="headline" color={colors.text.primary}>
-                {isSubmitting
-                  ? 'Sincronizando tu cuenta...'
-                  : formMode === 'login'
-                    ? 'Entrar a mi presupuesto'
-                    : formMode === 'register'
-                      ? 'Crear mi cuenta y sincronizar'
-                      : recoverStep === 'request'
-                        ? 'Enviar código de verificación'
-                        : 'Restablecer y cambiar contraseña'}
-              </AppText>
-            </Pressable>
-
-            {/* Password Recovery Link or Back To Login */}
-            {formMode !== 'recover' ? (
-              <View style={{ gap: spacing.xs, marginTop: spacing.xs }}>
-                <Pressable
-                  testID="auth-mode-recover"
-                  accessibilityRole="button"
-                  accessibilityLabel="Recuperar clave"
-                  onPress={() => switchMode('recover')}
-                  style={{
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    paddingVertical: spacing.xs,
-                  }}
-                >
-                  <AppText variant="caption" color={colors.text.secondary}>
-                    ¿Olvidaste tu contraseña? Recuperar clave
-                  </AppText>
-                </Pressable>
-              </View>
-            ) : (
-              <View style={{ gap: spacing.xs, marginTop: spacing.xs }}>
-                {recoverStep === 'verify' ? (
-                  <Pressable
-                    testID="auth-recovery-resend-button"
-                    accessibilityRole="button"
-                    accessibilityLabel="Reenviar código de verificación"
-                    onPress={handleResendRecoveryCode}
-                    style={{
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      paddingVertical: spacing.xs,
-                    }}
-                  >
-                    <AppText variant="caption" color={colors.text.secondary}>
-                      Reenviar código de verificación
-                    </AppText>
-                  </Pressable>
-                ) : null}
-
-                <Pressable
-                  testID="auth-back-to-login-button"
-                  accessibilityRole="button"
-                  accessibilityLabel="Volver a iniciar sesión"
-                  onPress={() => switchMode('login')}
-                  style={{
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    paddingVertical: spacing.xs,
-                  }}
-                >
-                  <AppText variant="caption" color={colors.text.secondary}>
-                    ← Volver a iniciar sesión
-                  </AppText>
-                </Pressable>
-              </View>
-            )}
-          </View>
-        </GlassSurface>
+        {authCard}
       </View>
     </KeyboardAwareScrollView>
   );

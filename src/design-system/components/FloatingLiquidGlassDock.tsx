@@ -15,6 +15,7 @@ import { GlassSurface } from '../../platform/glass/GlassSurface';
 import { hapticService } from '../../platform/haptics/hapticService';
 import { useBFlowTheme } from '../theme/ThemeContext';
 import { MIN_TOUCH_TARGET_PT, springConfigs } from '../tokens';
+import { WORKSPACE_TABS } from './navigation/workspaceTabs';
 import { AppText } from './Typography';
 import {
   AccountNavIcon,
@@ -36,16 +37,11 @@ export interface DockTabConfig {
   label: string;
 }
 
-export const DOCK_TABS: ReadonlyArray<DockTabConfig> = [
-  { id: 'summary', label: 'Resumen' },
-  { id: 'checklist', label: 'Checklist' },
-  { id: 'debts', label: 'Deudas' },
-  { id: 'savings', label: 'Ahorros' },
-  { id: 'analytics', label: 'Cierre' },
-  { id: 'account', label: 'Cuenta' },
-];
+/** The dock shows the shared workspace destinations (see navigation/workspaceTabs). */
+export const DOCK_TABS: ReadonlyArray<DockTabConfig> = WORKSPACE_TABS;
 
 export const DOCK_PADDING_H = 6;
+export const DOCK_MAX_WIDTH = 580;
 export const LENS_MARGIN_H = 2;
 
 /**
@@ -229,12 +225,12 @@ export function FloatingLiquidGlassDock({
 }: FloatingLiquidGlassDockProps): React.JSX.Element {
   const { colors, mode, radius, spacing } = useBFlowTheme();
   // Light mode: bone-white dock with a defined outline + deeper accent so it reads against the sand page.
-  const accentColor = mode === 'dark' ? '#388AF6' : colors.semantic.reserve;
+  const accentColor = colors.accent.primary;
   const dockBackground =
     mode === 'dark' ? colors.glass.surfaceElevatedTint : 'rgba(247, 244, 236, 0.97)';
   const dockBorder = mode === 'dark' ? colors.glass.specularBorder : 'rgba(90, 75, 45, 0.26)';
   const screenWidth = Dimensions.get('window').width;
-  const defaultWidth = Math.min(580, Math.max(320, screenWidth - spacing.sm * 2));
+  const defaultWidth = Math.min(DOCK_MAX_WIDTH, Math.max(304, screenWidth - spacing.sm * 2));
   const [dockWidth, setDockWidth] = useState<number>(defaultWidth);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
@@ -607,18 +603,26 @@ export function FloatingLiquidGlassDock({
         };
 
   return (
+    // Full-width anchor: an absolutely positioned view with left/right AND maxWidth pins to the
+    // left edge, so the dock is centered by its parent instead (tablets, landscape, browsers).
     <View
-      ref={dockRef}
-      testID={testID}
-      accessibilityRole="tablist"
+      pointerEvents="box-none"
       style={{
         position: 'absolute',
         bottom: Platform.OS === 'ios' ? 24 : 16,
         left: spacing.sm,
         right: spacing.sm,
-        maxWidth: 580,
-        alignSelf: 'center',
+        alignItems: 'center',
         zIndex: 999,
+      }}
+    >
+    <View
+      ref={dockRef}
+      testID={testID}
+      accessibilityRole="tablist"
+      style={{
+        width: '100%',
+        maxWidth: DOCK_MAX_WIDTH,
         elevation: 8,
         borderRadius: radius.pill,
         shadowColor: '#000000',
@@ -780,6 +784,7 @@ export function FloatingLiquidGlassDock({
           })}
         </View>
       </GlassSurface>
+    </View>
     </View>
   );
 }

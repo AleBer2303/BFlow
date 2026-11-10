@@ -156,6 +156,8 @@ Para permitir el desarrollo diario sin fricción en **Windows 11 sin Mac local**
 
 ## 🎨 Sistema de Diseño Visual: Liquid Glass & SF Pro
 
+> **Multiplataforma con tres pieles (ADR 0010 y 0011).** Lo que sigue describe la piel **iOS**. **Android** usa Material 3 (superficies tonales opacas, barra de navegación anclada, ripple; sin Liquid Glass) y **Web** un sistema plano (paleta arena y negro con acento petróleo, tipografía Geist, cabecera fija, composición de escritorio a dos columnas y curva del mes vectorial). Los tokens de cada piel y el contrato responsive están en `DESIGN.md` §10 y §11.
+
 Documentado a profundidad en [`DESIGN.md`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/DESIGN.md) y centralizado en [`src/design-system/tokens.ts`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/src/design-system/tokens.ts):
 
 - **Estética Sobria y Amigable:** Lenguaje financiero de alta gama (Apple Wallet, Linear, Stripe). Cero marcos de neón perimetrales o brillos estilo videojuego.
@@ -226,14 +228,14 @@ Ubicados en [`targets/widgets/`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYE
 BFlow/
 ├── .agents/                      # Configuración de agentes, roles y skills (Antigravity)
 ├── .github/
-│   └── workflows/                # CI/CD (ci.yml, build-ios.yml, e2e.yml)
+│   └── workflows/                # CI/CD (ci.yml, build-ios.yml, build-android.yml, e2e.yml)
 ├── assets/                       # Iconos y splash screens de la aplicación
 ├── docs/
-│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0004)
-│   ├── guides/                   # Guías operativas (iloader-signing-guide.md)
+│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0011)
+│   ├── guides/                   # Guías operativas (firma con iloader, validación multiplataforma)
 │   └── Improvements/             # Guías de auditoría de rendimiento
 ├── fixtures/                     # Datos dorados de prueba (october-2026.json)
-├── scripts/                      # Scripts de utilidad (extracción Excel, linting, guardias CI)
+├── scripts/                      # Scripts de utilidad (linting, guardias CI, start-demo.mjs del modo vitrina)
 ├── src/
 │   ├── app/                      # Expo Router (punto de entrada _layout.tsx, index.tsx)
 │   ├── data/                     # Repositorios Firestore, esquemas Zod, seeds
@@ -241,7 +243,12 @@ BFlow/
 │   │   ├── mappers/              # Esquemas de validación Zod
 │   │   ├── repositories/         # budgetRepository.ts (acceso a datos)
 │   │   └── seed/                 # Carga de datos iniciales de octubre 2026
-│   ├── design-system/            # Tokens, colores, tipografía, <GlassSurface />, TactilePressable
+│   ├── design-system/            # Tokens por piel (iOS / Android / Web), tema y componentes base
+│   │   ├── components/           # AppPressable, AppText, CurrencyText, ResponsiveColumns…
+│   │   │   └── navigation/       # Dock iOS, barra Material (Android), cabecera y barra Web
+│   │   ├── layout/               # Contrato responsive (useResponsiveLayout) y ancho de cifras
+│   │   ├── platform/             # Resolución de la piel de la plataforma
+│   │   └── theme/                # BFlowThemeProvider / useBFlowTheme
 │   ├── domain/                   # 100% PURO: Fórmulas matemáticas, checklist, deudas, ahorros
 │   │   ├── budget/               # Cálculos de ingresos, gastos y flujos netos
 │   │   ├── checklist/            # Reglas de disponibilidad, progreso y autogeneración
@@ -260,13 +267,16 @@ BFlow/
 │   │   ├── debts/                # Amortización de deudas y abonos
 │   │   ├── onboarding/           # Configuración inicial de usuario nuevo
 │   │   ├── savings/              # Tarjetas de fondos y provisión moto
-│   │   └── summary/              # Curva del mes: escena three.js + expo-gl y respaldo 2D
+│   │   ├── shell/                # WorkspaceShell: cabecera, columna y navegación de cada piel
+│   │   └── summary/              # Resumen y curva del mes: three.js (iOS, Android), SVG (Web)
 │   └── platform/                 # Adaptadores Modo A vs Modo B
 │       ├── auth/                 # Adaptador de autenticación y códigos de 6 dígitos
-│       ├── glass/                # Puente de superficies translúcidas (Liquid Glass / Blur)
+│       ├── glass/                # GlassSurface: vidrio (iOS), tonal (Android), plano (Web)
 │       ├── haptics/              # Servicio unificado de vibración háptica
+│       ├── insets/               # Áreas seguras (borde a borde en Android)
 │       ├── mail/                 # Integración de correos transaccionales vía Resend API
-│       ├── mode/                 # Detección de entorno (runtimeMode.ts)
+│       ├── mode/                 # Detección de entorno (runtimeMode.ts) y modo vitrina (demoMode.ts)
+│       ├── system/               # Fondo de la ventana nativa / documento HTML según el tema
 │       └── widgets/              # Serialización y puente de sincronización con WidgetKit
 ├── targets/
 │   └── widgets/                  # Target nativo SwiftUI para Widgets de iOS 26
@@ -311,8 +321,8 @@ BFlow/
 4. **Ejecutar verificaciones de calidad:**
    ```bash
    npm run typecheck       # Verificación estricta de TypeScript (0 errores)
-   npm run lint            # Linting y chequeo de arquitectura (70 archivos)
-   npm test                # Suite de 123 tests unitarios y de integración
+   npm run lint            # Linting y chequeo de arquitectura
+   npm test                # Suite de tests unitarios, de integración y funcionales por plataforma
    ```
 
 5. **Iniciar el servidor de desarrollo:**
@@ -325,6 +335,15 @@ BFlow/
      npm start
      ```
      Escanea el código QR que aparece en la terminal con la cámara de tu iPhone para abrir BFlow en Expo Go.
+   - **En Android (emulador o dispositivo con Expo Go):**
+     ```bash
+     npm run android
+     ```
+   - **Modo vitrina, para revisar las tres pieles sin credenciales:**
+     ```bash
+     npm run web:demo
+     ```
+     Abre `http://localhost:8081/?skin=android`, `?skin=ios` o `?theme=light`. Pasos completos en [`docs/guides/multiplatform-validation-guide.md`](docs/guides/multiplatform-validation-guide.md).
 
 ---
 
@@ -382,10 +401,8 @@ Como parte de la evaluación técnica exhaustiva requerida antes de un lanzamien
    - *Impacto:* Reducción de más de **1.8 MB** (ahorro del **51%** en `icon.png` y `adaptive-icon.png`, 27% en `favicon.png`) manteniendo 100% la paridad de píxeles.
 
 ### 🚀 Aspectos Faltantes para Publicación en Tiendas (App Store / Google Play)
-1. **Configuración de Android en `app.json`:**
-   - *Falta:* Declarar la sección `"android": { "package": "com.bflow.app", "adaptiveIcon": { ... } }` para permitir la compilación nativa de `.aab` / `.apk` en Android.
-2. **Workflow de Build Android en CI (`build-android.yml`):**
-   - *Falta:* Un workflow de GitHub Actions sobre runner Ubuntu (gratuito y ultrarrápido) para generar `.apk` de pruebas de Android automáticamente.
+1. ✅ **Configuración de Android en `app.json`** (ADR 0009): bloque `android` con `package`, `versionCode` y `adaptiveIcon`.
+2. ✅ **Workflow de Build Android en CI (`build-android.yml`)** (ADR 0009): genera `.apk` de prueba y `.aab` en `ubuntu-latest`.
 3. **Splash Screen Oficial (`expo-splash-screen`):**
    - *Falta:* Declarar la configuración de pantalla de carga nativa en `app.json` para evitar transiciones en blanco en arranques en frío.
 4. **Flujos de Pruebas E2E en Maestro:**
@@ -411,6 +428,7 @@ Configurables en el archivo `.env` local (basado en `.env.example`):
 | `EXPO_PUBLIC_FIREBASE_APP_ID` | App ID asignado en Firebase Console | `1:1021469032737:web:8656ad9e4871ddb6ffce73` |
 | `EXPO_PUBLIC_RESEND_API_KEY` | API Key de Resend para correos reales | Opcional (si falta, simula en consola en desarrollo) |
 | `EXPO_PUBLIC_RESEND_FROM_EMAIL` | Dirección remitente autorizada en Resend| `BFlow <onboarding@resend.dev>` |
+| `EXPO_PUBLIC_BFLOW_DEMO` | Modo vitrina local: sesión demo con el seed, sin Firebase, y `?skin=` / `?theme=` en la URL | Vacío (lo activa `npm run web:demo`). **Nunca** definirlo en builds reales |
 
 ---
 

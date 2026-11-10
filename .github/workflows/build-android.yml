@@ -1,0 +1,110 @@
+name: Build Android .apk / .aab
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: build-android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  quality-gate:
+    name: Pre-build Quality Gate (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test -- --coverage --ci
+
+  build-android:
+    name: Compile .apk and .aab on Ubuntu
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install JS dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Generate native Android project (Expo Prebuild)
+        env:
+          EXPO_NO_GIT_STATUS: 1
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Build test .apk (Release, debug keystore)
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Build .aab (Release, debug keystore)
+        working-directory: android
+        run: ./gradlew bundleRelease --no-daemon
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p build
+          cp android/app/build/outputs/apk/release/app-release.apk build/BFlow-test.apk
+          cp android/app/build/outputs/bundle/release/app-release.aab build/BFlow.aab
+          ls -lh build
+
+      - name: Upload BFlow-test.apk Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BFlow-test-apk
+          path: build/BFlow-test.apk
+          retention-days: 30
+
+      - name: Upload BFlow.aab Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BFlow-aab
+          path: build/BFlow.aab
+          retention-days: 30
+
+      - name: Compute Release Tag and Title
+        id: release_meta
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="android-build-${GITHUB_RUN_NUMBER}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "title=BFlow Android .apk (${TAG})" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release (on main or version tag)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_meta.outputs.tag }}
+          name: ${{ steps.release_meta.outputs.title }}
+          generate_release_notes: true
+          files: |
+            build/BFlow-test.apk
+            build/BFlow.aab

@@ -290,3 +290,19 @@ Medición de laboratorio del 2026-11-10 (Windows 11) con `npx expo export -p web
 - Cuadros por segundo y uso de CPU durante la animación en un teléfono.
 - Cuál de los respaldos usa realmente Expo Go Android (escena 3D o curva vectorial).
 
+---
+
+## 12. Fase 1: Persistencia nativa con `expo-sqlite/kv-store` y sobre versionado (R-01, R-02, R-03)
+
+Implementado el 2026-11-10 en la rama `perf/phase-1-native-persistence`. Decisión en el [ADR 0015](docs/decisions/0015-native-persistence-sqlite-kv-store.md).
+
+| Hallazgo | Antes | Después |
+| :--- | :--- | :--- |
+| **R-01 (`persistentStorageAdapter`)** | Solo leía/escribía `globalThis.localStorage`; en Hermes (iOS y Android) los datos solo vivían en el `Map` en RAM y se perdían al cerrar la app | Separado por extensión de Metro: `storageBackend.ts` (`localStorage` en Web y tests) y `storageBackend.native.ts` (`expo-sqlite/kv-store` síncrono en iOS y Android). Cero carga de `expo-sqlite` en Web |
+| **R-02 (`getFirebaseAuth`)** | `inMemoryPersistence` en iOS y Android | `authPersistence.native.ts` envuelve `expo-sqlite/kv-store` con `getReactNativePersistence`; `authPersistence.ts` conserva `browserLocalPersistence` en Web |
+| **R-03 (`accountCache` y cierre de sesión)** | Sin versión de esquema, sin verificación de `uid` y sin llamadas a `clearPersistedAccount` | Sobre versionado `v2` (`{ schemaVersion: 2, uid, savedAt, data }`); descarta formato `v1`, versión o `uid` distintos; limpia la caché en `signOutCurrentUser`, `handleSignOut`, `clearWorkspaceSession` y `resetFullAccount` |
+
+### No medido
+- Tiempo de lectura/escritura de `expo-sqlite/kv-store` en iPhone y teléfono Android reales (pendiente de validar en dispositivo).
+
+

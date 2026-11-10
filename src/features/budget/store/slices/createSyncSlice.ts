@@ -24,7 +24,8 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
     activeMonthKey: initial.activeMonthKey,
     availableMonths: initial.availableMonths,
     syncMessage: '',
-    isSyncing: false,
+    isSyncing: initial.isSyncing,
+    isAccountHydrated: initial.isAccountHydrated,
 
   setActiveTab: (tab) => set({ activeTab: tab }),
 
@@ -84,6 +85,7 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
       closedSnapshots: payload.closedSnapshot
         ? { ...state.closedSnapshots, [payload.monthKey]: payload.closedSnapshot }
         : state.closedSnapshots,
+      isAccountHydrated: true,
     }));
     triggerWidgetSync(get());
   },
@@ -104,6 +106,7 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
       savingsBucketsByMonth: payload.savingsBucketsByMonth,
       idealMotoPlan: payload.provisionPlan,
       closedSnapshots: payload.closedSnapshots,
+      isAccountHydrated: true,
       needsOnboarding: payload.needsOnboarding ?? false,
       ...(updatedUser ? { authUser: updatedUser } : {}),
     });

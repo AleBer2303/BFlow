@@ -9,9 +9,7 @@
 
 import { getApp, getApps, initializeApp, type FirebaseApp, type FirebaseOptions } from 'firebase/app';
 import {
-  browserLocalPersistence,
   getAuth,
-  inMemoryPersistence,
   initializeAuth,
   type Auth,
 } from 'firebase/auth';
@@ -25,6 +23,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import { Platform } from 'react-native';
+import { resolveFirebaseAuthPersistence } from './authPersistence';
 
 export interface BFlowFirebaseEnvironment {
   options: FirebaseOptions;
@@ -124,7 +123,7 @@ export function getFirebaseAuth(): Auth {
   const app = getFirebaseApp();
   try {
     cachedAuth = initializeAuth(app, {
-      persistence: Platform.OS === 'web' ? browserLocalPersistence : inMemoryPersistence,
+      persistence: resolveFirebaseAuthPersistence(),
     });
   } catch {
     cachedAuth = getAuth(app);

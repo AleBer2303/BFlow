@@ -28,7 +28,11 @@ import { getFirebaseAuth, getFirebaseDb } from '../../data/firebase/firebaseConf
 import { stripUndefinedFields } from '../../data/mappers/firestoreSchemas';
 import { isOwnerCanonicalEmail } from '../../data/repositories/budgetRepository';
 import { toBogotaMonthKey } from '../../domain/date/monthKey';
-import { persistentStorage } from '../storage/persistentStorageAdapter';
+import { clearPersistedAccount } from '../storage/accountCache';
+import {
+  persistentStorage,
+  rotateDeviceSecretToken,
+} from '../storage/persistentStorageAdapter';
 
 export interface BFlowAuthUser {
   uid: string;
@@ -310,13 +314,21 @@ export async function sendPasswordRecoveryEmail(email: string): Promise<void> {
 }
 
 export async function signOutCurrentUser(): Promise<void> {
+  const persistedUser = loadPersistedSession();
   savePersistedSession(null);
+  if (persistedUser?.uid) {
+    clearPersistedAccount(persistedUser.uid);
+  }
   try {
     const auth = getFirebaseAuth();
+    if (auth.currentUser?.uid && auth.currentUser.uid !== persistedUser?.uid) {
+      clearPersistedAccount(auth.currentUser.uid);
+    }
     await signOut(auth);
   } catch {
     // Ignore if already signed out
   }
+  rotateDeviceSecretToken();
 }
 
 export function subscribeToAuthUser(
@@ -329,6 +341,10 @@ export function subscribeToAuthUser(
         savePersistedSession(null);
         listener(null);
         return;
+      }
+      const persisted = loadPersistedSession();
+      if (persisted && persisted.uid === firebaseUser.uid) {
+        listener(persisted);
       }
       const syncedUser = await syncUserProfileDocument(firebaseUser);
       listener(syncedUser);

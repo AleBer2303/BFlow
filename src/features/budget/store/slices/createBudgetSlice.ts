@@ -21,10 +21,13 @@ import {
   type MonthEntry,
 } from '../../../../domain';
 import { savePersistedSession } from '../../../../platform/auth/authAdapter';
+import { clearPersistedAccount } from '../../../../platform/storage/accountCache';
 import {
   applyConceptLinkageUpdates,
   buildInitialState,
+  buildOctober2026SeedWorkspaceState,
   isRealAuthUser,
+  resolveDefaultInitialAuthUser,
   triggerWidgetSync,
   type BudgetSlice,
   type SliceCreator,
@@ -688,7 +691,10 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
 
   resetToOctober2026GoldenState: () => {
     const currentUser = get().authUser;
-    set(buildInitialState(currentUser));
+    if (currentUser?.uid) {
+      clearPersistedAccount(currentUser.uid);
+    }
+    set(buildOctober2026SeedWorkspaceState(currentUser ?? resolveDefaultInitialAuthUser()));
     triggerWidgetSync(get());
   },
 };

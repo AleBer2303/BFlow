@@ -13,10 +13,24 @@ import {
   type BFlowAuthUser,
 } from '../../../platform/auth/authAdapter';
 import { peekVerificationCode } from '../../../platform/auth/verificationCodeService';
-import { useBudgetStore } from '../../budget/store/useBudgetStore';
+import {
+  loadPersistedAccount,
+  savePersistedAccount,
+} from '../../../platform/storage/accountCache';
+import {
+  __resetMemoryCacheForTests,
+  __setStorageBackendForTests,
+  persistentStorage,
+  type RawStorageBackend,
+} from '../../../platform/storage/persistentStorageAdapter';
+import {
+  buildInitialState,
+  useBudgetStore,
+} from '../../budget/store/useBudgetStore';
 
 describe('Authentication Gate, Personal Registration & Multi-Device Session Persistence', () => {
   beforeEach(() => {
+    persistentStorage.clear();
     savePersistedSession(null);
     useBudgetStore.getState().resetToOctober2026GoldenState();
   });
@@ -505,5 +519,173 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       'Error de conexión. Revisa tu internet e intenta nuevamente.'
     );
     expect(authAdapter.formatAuthError('unknown error', 'Mensaje por defecto')).toBe('Mensaje por defecto');
+  });
+
+  it('clears persisted account cache from storage on sign-out and on resetFullAccount (R-03)', async () => {
+    const disk = new Map<string, string>();
+    const diskBackend: RawStorageBackend = {
+      getItem: (key) => disk.get(key) ?? null,
+      setItem: (key, value) => {
+        disk.set(key, value);
+      },
+      removeItem: (key) => {
+        disk.delete(key);
+      },
+      clear: () => {
+        disk.clear();
+      },
+    };
+    __setStorageBackendForTests(diskBackend);
+    persistentStorage.clear();
+
+    try {
+      const repo = new InMemoryBudgetRepository();
+      const cloudAccount = await repo.loadFullCloudAccount(
+        'uid_signout_cleanup_01',
+        'abernalg2303@gmail.com'
+      );
+      const user: BFlowAuthUser = {
+        uid: 'uid_signout_cleanup_01',
+        email: 'abernalg2303@gmail.com',
+        displayName: 'Alejandro Bernal Garnica',
+        authProvider: 'password',
+        provider: 'local-demo',
+      };
+
+      savePersistedSession(user);
+      savePersistedAccount(user.uid, cloudAccount);
+      __resetMemoryCacheForTests();
+      expect(loadPersistedAccount(user.uid)).not.toBeNull();
+
+      useBudgetStore.getState().setAuthUser(user);
+
+      // 1. resetFullAccount must clear the persisted account cache
+      await act(async () => {
+        await useBudgetStore.getState().resetFullAccount('2026-11');
+      });
+      __resetMemoryCacheForTests();
+      expect(loadPersistedAccount(user.uid)).toBeNull();
+
+      // Re-save account cache and verify UI sign-out also wipes it
+      savePersistedAccount(user.uid, cloudAccount);
+      __resetMemoryCacheForTests();
+      expect(loadPersistedAccount(user.uid)).not.toBeNull();
+
+      act(() => {
+        useBudgetStore.getState().setNeedsOnboarding(false);
+      });
+
+      render(
+        <BFlowThemeProvider initialMode="dark">
+          <PhaseOneHomeScreen />
+        </BFlowThemeProvider>
+      );
+
+      fireEvent.press(screen.getByTestId('workspace-tab-account'));
+      fireEvent.press(screen.getByTestId('sign-out-button'));
+
+      expect(await screen.findByTestId('auth-gate-screen')).toBeTruthy();
+      __resetMemoryCacheForTests();
+      expect(loadPersistedSession()).toBeNull();
+      expect(loadPersistedAccount(user.uid)).toBeNull();
+    } finally {
+      __setStorageBackendForTests(null);
+      persistentStorage.clear();
+    }
+  });
+
+  it('hydrates user account data synchronously on cold boot and never flashes the October 2026 template or $ 0 values', async () => {
+    const disk = new Map<string, string>();
+    const diskBackend: RawStorageBackend = {
+      getItem: (key) => disk.get(key) ?? null,
+      setItem: (key, value) => {
+        disk.set(key, value);
+      },
+      removeItem: (key) => {
+        disk.delete(key);
+      },
+      clear: () => {
+        disk.clear();
+      },
+    };
+    __setStorageBackendForTests(diskBackend);
+    persistentStorage.clear();
+
+    try {
+      const ownerUser: BFlowAuthUser = {
+        uid: 'uid_real_owner_iphone',
+        email: 'abernalg2303@gmail.com',
+        displayName: 'Alejandro Bernal Garnica',
+        authProvider: 'password',
+        activeMonthKey: '2026-11',
+        provider: 'firebase',
+      };
+
+      savePersistedSession(ownerUser);
+      act(() => {
+        useBudgetStore.getState().setAuthUser(ownerUser);
+      });
+
+      // Configure custom real user data in November 2026 ($ 7.500.000 income, $ 1.200.000 expense -> $ 6.300.000 Net Flow)
+      await act(async () => {
+        await useBudgetStore.getState().completeInitialAccountSetup({
+          monthKey: '2026-11',
+          incomes: [
+            {
+              name: 'Salario Real Noviembre',
+              amountCop: 7_500_000,
+              group: 'fixed',
+              persistMonthly: true,
+              completed: true,
+            },
+          ],
+          expenses: [
+            {
+              name: 'Arriendo Real Noviembre',
+              amountCop: 1_200_000,
+              group: 'fixed',
+              persistMonthly: true,
+              completed: true,
+            },
+          ],
+          debts: [],
+          savingsBuckets: [
+            { id: 'savings', name: 'Fondo Ahorros', openingBalanceCop: 3_000_000 },
+            { id: 'moto', name: 'Fondo Moto', openingBalanceCop: 500_000 },
+          ],
+        });
+      });
+
+      // Simulate killing the app on iPhone (wiping in-memory cache while SQLite kv-store disk survives)
+      __resetMemoryCacheForTests();
+
+      // Cold-start initial state for the owner must immediately contain their real November 2026 data,
+      // NOT the October 2026 template ($ 1.080.000) and NOT empty $ 0 arrays
+      const coldBootState = buildInitialState(loadPersistedSession());
+      expect(coldBootState.activeMonthKey).toBe('2026-11');
+      expect(coldBootState.isAccountHydrated).toBe(true);
+      expect(coldBootState.concepts.map((c) => c.name)).toEqual([
+        'Salario Real Noviembre',
+        'Arriendo Real Noviembre',
+      ]);
+
+      // Simulate store cold boot and first frame render
+      act(() => {
+        useBudgetStore.setState(coldBootState);
+      });
+
+      render(
+        <BFlowThemeProvider initialMode="dark">
+          <PhaseOneHomeScreen />
+        </BFlowThemeProvider>
+      );
+
+      // Frame 1 must show $ 6.300.000 (real user data), never $ 1.080.000 (template) nor $ 0
+      expect(screen.getByTestId('golden-net-flow')).toHaveTextContent('$ 6.300.000');
+      expect(screen.getByTestId('golden-net-flow')).not.toHaveTextContent('$ 1.080.000');
+    } finally {
+      __setStorageBackendForTests(null);
+      persistentStorage.clear();
+    }
   });
 });

@@ -50,6 +50,7 @@ import {
 } from '../platform/auth/verificationCodeService';
 import { isDemoModeEnabled } from '../platform/mode/demoMode';
 import {
+  clearPersistedAccount,
   loadPersistedAccount,
   savePersistedAccount,
 } from '../platform/storage/accountCache';
@@ -70,6 +71,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     authUser,
     syncMessage,
     isSyncing,
+    isAccountHydrated,
     setActiveTab,
     setActiveMonthKey,
     setAuthUser,
@@ -157,6 +159,10 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
   useEffect(() => {
     if (process.env.NODE_ENV === 'test' || isDemoModeEnabled()) {
       return;
+    }
+    const initialUser = useBudgetStore.getState().authUser;
+    if (initialUser) {
+      void syncUserCloudAccount(initialUser);
     }
     const unsubscribe = subscribeToAuthUser((restoredUser) => {
       if (restoredUser) {
@@ -276,7 +282,11 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
   };
 
   const handleSignOut = async () => {
+    const outgoingUid = authUser?.uid;
     await signOutCurrentUser();
+    if (outgoingUid) {
+      clearPersistedAccount(outgoingUid);
+    }
     clearWorkspaceSession();
     setAuthErrorMessage(null);
     setAuthStatusMessage(null);
@@ -344,13 +354,20 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     [activeMonthKey, entries, concepts, activeDebtPayments, budget, savingsSummary, debtSummary]
   );
 
-  // AUTHENTICATION GATE: If no authenticated user session is active, render AuthScreen first
-  if (!authUser) {
+  const isAwaitingInitialHydration =
+    Boolean(authUser) && !isAccountHydrated && !needsOnboarding;
+
+  // AUTHENTICATION GATE: If no authenticated user session is active (or initial cloud hydration is in flight without local cache), render AuthScreen first
+  if (!authUser || isAwaitingInitialHydration) {
     return (
       <AuthScreen
-        isSubmitting={isSyncing}
+        isSubmitting={isSyncing || isAwaitingInitialHydration}
         errorMessage={authErrorMessage}
-        statusMessage={authStatusMessage}
+        statusMessage={
+          isAwaitingInitialHydration
+            ? syncMessage || 'Cargando tu presupuesto e historial...'
+            : authStatusMessage
+        }
         onSignInWithEmail={handleSignInWithEmail}
         onRegisterPersonalAccount={handleRegisterPersonalAccount}
         onSendPasswordRecovery={handleSendPasswordRecovery}

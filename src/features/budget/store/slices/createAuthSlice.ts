@@ -28,8 +28,14 @@ import {
   savePersistedSession,
   type BFlowAuthUser,
 } from '../../../../platform/auth/authAdapter';
+import { isDemoModeEnabled } from '../../../../platform/mode/demoMode';
+import {
+  clearPersistedAccount,
+  loadPersistedAccount,
+} from '../../../../platform/storage/accountCache';
 import {
   buildCleanEmptyWorkspaceState,
+  buildHydratedWorkspaceState,
   buildInitialState,
   isRealAuthUser,
   recalculateProvisionPlan,
@@ -38,9 +44,11 @@ import {
   type SliceCreator,
 } from './sliceTypes';
 
-export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => ({
-  authUser: buildInitialState().authUser,
-  needsOnboarding: false,
+export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
+  const initial = buildInitialState();
+  return {
+    authUser: initial.authUser,
+    needsOnboarding: initial.needsOnboarding,
 
   setAuthUser: (user) => {
     const prevUser = get().authUser;
@@ -53,14 +61,35 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => ({
       prevUser.uid !== user.uid ||
       (prevUser.email ?? '').trim().toLowerCase() !== (user.email ?? '').trim().toLowerCase();
 
+    const cachedAccount =
+      user.uid && user.uid !== 'local-owner' && user.uid !== 'local-demo'
+        ? loadPersistedAccount(user.uid)
+        : null;
+
     if (isSwitchingAccount) {
-      if (process.env.NODE_ENV === 'test' && isOwnerCanonicalEmail(user.email)) {
+      if (cachedAccount) {
+        set(buildHydratedWorkspaceState(user, cachedAccount));
+      } else if (
+        (process.env.NODE_ENV === 'test' || isDemoModeEnabled()) &&
+        isOwnerCanonicalEmail(user.email)
+      ) {
         set(buildInitialState(user));
       } else {
-        set(buildCleanEmptyWorkspaceState(user));
+        const isLiveRuntime = process.env.NODE_ENV !== 'test' && !isDemoModeEnabled();
+        set({
+          ...buildCleanEmptyWorkspaceState(user),
+          isAccountHydrated: !isLiveRuntime,
+          isSyncing: isLiveRuntime,
+        });
       }
       return;
     }
+
+    if (!get().isAccountHydrated && cachedAccount) {
+      set(buildHydratedWorkspaceState(user, cachedAccount));
+      return;
+    }
+
     set({ authUser: user });
   },
 
@@ -80,6 +109,10 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => ({
   },
 
   clearWorkspaceSession: () => {
+    const prevUid = get().authUser?.uid;
+    if (prevUid) {
+      clearPersistedAccount(prevUid);
+    }
     set(buildCleanEmptyWorkspaceState(null));
   },
 
@@ -363,6 +396,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => ({
       },
       idealMotoPlan: provisionPlan,
       closedSnapshots: {},
+      isAccountHydrated: true,
       needsOnboarding: false,
       ...(updatedUser ? { authUser: updatedUser } : {}),
     });
@@ -392,6 +426,10 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => ({
       ? { ...state.authUser, activeMonthKey: startMonth }
       : null;
 
+    if (state.authUser?.uid) {
+      clearPersistedAccount(state.authUser.uid);
+    }
+
     set({
       activeTab: 'summary',
       activeMonthKey: startMonth,
@@ -407,6 +445,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => ({
       },
       idealMotoPlan: { ...EMPTY_PROVISION_PLAN, items: [] },
       closedSnapshots: {},
+      isAccountHydrated: true,
       needsOnboarding: true,
       ...(updatedUser ? { authUser: updatedUser } : {}),
     });
@@ -414,6 +453,9 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => ({
       savePersistedSession(updatedUser);
     }
     triggerWidgetSync(get());
+    if (state.authUser?.uid) {
+      clearPersistedAccount(state.authUser.uid);
+    }
 
     if (isRealAuthUser(state.authUser)) {
       try {
@@ -424,4 +466,5 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => ({
       }
     }
   },
-});
+  };
+};

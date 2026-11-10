@@ -12,6 +12,7 @@ import { type ProvisionItemSpec } from '../../../../domain';
 import {
   buildInitialState,
   isRealAuthUser,
+  persistHydratedAccountSnapshot,
   recalculateProvisionPlan,
   type ProvisionsSlice,
   type SliceCreator,
@@ -59,6 +60,7 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
 
     const nextPlan = recalculateProvisionPlan(nextItems);
     set({ idealMotoPlan: nextPlan });
+    persistHydratedAccountSnapshot(get());
 
     if (isRealAuthUser(state.authUser)) {
       try {
@@ -75,6 +77,7 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
     const nextItems = state.idealMotoPlan.items.filter((i) => i.id !== itemId);
     const nextPlan = recalculateProvisionPlan(nextItems);
     set({ idealMotoPlan: nextPlan });
+    persistHydratedAccountSnapshot(get());
 
     if (isRealAuthUser(state.authUser)) {
       try {

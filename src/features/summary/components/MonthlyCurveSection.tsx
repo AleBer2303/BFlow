@@ -14,6 +14,7 @@ import {
   TactilePressable,
   hapticService,
   useBFlowTheme,
+  useResponsiveLayout,
 } from '../../../design-system';
 import {
   MONTHLY_CURVE_METRIC_IDS,
@@ -21,7 +22,7 @@ import {
   type MonthlyCurveMetricId,
 } from '../../../domain/overview/monthlyCurve';
 import { useReducedMotionPreference } from '../hooks/useReducedMotionPreference';
-import { CURVE_MARGIN_PT, type CurveStop } from '../scene/curveGeometry';
+import { CURVE_MARGIN_PT, clampCurveStop, type CurveStop } from '../scene/curveGeometry';
 import { getMetricColor } from '../scene/scenePalette';
 import { MonthlyCurveFallback } from './MonthlyCurveFallback';
 import {
@@ -31,12 +32,20 @@ import {
   describeMetricAccessibility,
 } from './monthlyCurveCopy';
 import { MonthlyCurveStageLoader } from './MonthlyCurveStageLoader';
+import MonthlyCurveVectorStage from './MonthlyCurveVectorStage';
 
 export interface MonthlyCurveSectionProps {
   curve: MonthlyCurve;
+  /** Widest the stage and its selector grow. Wider layouts (desktop split) raise it. */
+  stageMaxWidth?: number;
+  /**
+   * 'stacked' (phones): readout, stage, selector. 'split' (desktop): readout and a metric
+   * table on the left, the stage on the right.
+   */
+  layout?: MonthlyCurveLayout;
 }
 
-const STAGE_MAX_WIDTH_PT = 480;
+export const DEFAULT_STAGE_MAX_WIDTH_PT = 480;
 const STAGE_ASPECT_RATIO = 1.55;
 const METRIC_BUTTON_MIN_HEIGHT_PT = Math.max(MIN_TOUCH_TARGET_PT, 52);
 const IDENTITY_DOT_SIZE_PT = 6;
@@ -226,12 +235,99 @@ const MetricButton = React.memo(function MetricButton({
   );
 });
 
-export function MonthlyCurveSection({ curve }: MonthlyCurveSectionProps): React.JSX.Element {
-  const { spacing } = useBFlowTheme();
+interface MetricRowProps extends MetricButtonProps {
+  isLast: boolean;
+}
+
+/** Split layout: the selector reads as a table, one metric a row with its current figure. */
+const MetricRow = React.memo(function MetricRow({
+  curve,
+  metricId,
+  isSelected,
+  isLast,
+  onSelect,
+}: MetricRowProps) {
+  const { colors, spacing, radius } = useBFlowTheme();
+  const series = curve.series[metricId];
+
+  return (
+    <TactilePressable
+      testID={`monthly-curve-metric-${metricId}`}
+      haptic="none"
+      accessibilityState={{ selected: isSelected }}
+      accessibilityLabel={describeMetricAccessibility(curve, metricId)}
+      onPress={() => onSelect(metricId)}
+      style={{
+        minHeight: METRIC_BUTTON_MIN_HEIGHT_PT,
+        justifyContent: 'center',
+        paddingHorizontal: spacing.md,
+        borderRadius: radius.sm,
+        borderBottomWidth: isLast || isSelected ? 0 : 1,
+        borderBottomColor: colors.glass.subtleBorder,
+        backgroundColor: isSelected ? colors.glass.surfaceTint : 'transparent',
+      }}
+    >
+      <View
+        style={{
+          width: '100%',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: spacing.md,
+        }}
+      >
+        <View
+          style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 }}
+        >
+          <View
+            style={{
+              width: IDENTITY_DOT_SIZE_PT + 2,
+              height: IDENTITY_DOT_SIZE_PT + 2,
+              borderRadius: radius.pill,
+              backgroundColor: getMetricColor(colors, metricId),
+              opacity: isSelected ? 1 : UNSELECTED_DOT_OPACITY,
+            }}
+          />
+          <AppText
+            variant="callout"
+            numberOfLines={1}
+            color={isSelected ? colors.text.primary : colors.text.secondary}
+          >
+            {METRIC_PRESENTATION[metricId].title}
+          </AppText>
+        </View>
+        <CurrencyText
+          amount={series.values[curve.cutoffDay] as number}
+          variant="callout"
+          style={{ color: isSelected ? colors.text.primary : colors.text.secondary }}
+        />
+      </View>
+    </TactilePressable>
+  );
+});
+
+export type MonthlyCurveLayout = 'stacked' | 'split';
+
+const STAGE_ASPECT_RATIO_BY_LAYOUT: Record<MonthlyCurveLayout, number> = {
+  stacked: STAGE_ASPECT_RATIO,
+  split: 2.3,
+};
+const SPLIT_LEGEND_FLEX = 4;
+const SPLIT_STAGE_FLEX = 8;
+
+export function MonthlyCurveSection({
+  curve,
+  stageMaxWidth = DEFAULT_STAGE_MAX_WIDTH_PT,
+  layout = 'stacked',
+}: MonthlyCurveSectionProps): React.JSX.Element {
+  const { spacing, skinSpec } = useBFlowTheme();
+  const { columnGap } = useResponsiveLayout();
   const reducedMotion = useReducedMotionPreference();
   const [metricId, setMetricId] = useState<MonthlyCurveMetricId>('flow');
   const [stop, setStop] = useState<CurveStop | null>(null);
   const [isStageUnavailable, setIsStageUnavailable] = useState(false);
+  // The flat web skin draws the curve as vectors; iOS and Android keep the three.js scene.
+  const usesVectorStage = skinSpec.surfaceMaterial === 'flat';
 
   const handleSelectMetric = useCallback((id: MonthlyCurveMetricId) => {
     hapticService.trigger('selection');
@@ -247,42 +343,84 @@ export function MonthlyCurveSection({ curve }: MonthlyCurveSectionProps): React.
 
   const handleStageUnavailable = useCallback(() => setIsStageUnavailable(true), []);
 
+  const readout = (
+    <CurveReadoutView
+      curve={curve}
+      metricId={metricId}
+      stop={clampCurveStop(curve, stop)}
+      reducedMotion={reducedMotion}
+    />
+  );
+
+  const stage = (
+    <View
+      testID="monthly-curve-stage-frame"
+      style={{ width: '100%', maxWidth: stageMaxWidth, alignSelf: 'center', gap: spacing.xs }}
+    >
+      <View style={{ width: '100%', aspectRatio: STAGE_ASPECT_RATIO_BY_LAYOUT[layout] }}>
+        {usesVectorStage ? (
+          <MonthlyCurveVectorStage
+            curve={curve}
+            metricId={metricId}
+            reducedMotion={reducedMotion}
+            onScrub={handleScrub}
+            onUnavailable={handleStageUnavailable}
+          />
+        ) : isStageUnavailable ? (
+          <MonthlyCurveFallback curve={curve} metricId={metricId} />
+        ) : (
+          <StageErrorBoundary onError={handleStageUnavailable}>
+            <MonthlyCurveStageLoader
+              curve={curve}
+              metricId={metricId}
+              reducedMotion={reducedMotion}
+              onScrub={handleScrub}
+              onUnavailable={handleStageUnavailable}
+            />
+          </StageErrorBoundary>
+        )}
+      </View>
+      <CurveTicks curve={curve} />
+    </View>
+  );
+
+  if (layout === 'split') {
+    return (
+      <View
+        testID="monthly-curve-section"
+        style={{ flexDirection: 'row', alignItems: 'flex-start', gap: columnGap }}
+      >
+        <View style={{ flex: SPLIT_LEGEND_FLEX, minWidth: 0, gap: spacing.xl }}>
+          {readout}
+          <View testID="monthly-curve-metric-list" accessibilityRole="tablist">
+            {MONTHLY_CURVE_METRIC_IDS.map((id, index) => (
+              <MetricRow
+                key={id}
+                curve={curve}
+                metricId={id}
+                isSelected={metricId === id}
+                isLast={index === MONTHLY_CURVE_METRIC_IDS.length - 1}
+                onSelect={handleSelectMetric}
+              />
+            ))}
+          </View>
+        </View>
+        <View style={{ flex: SPLIT_STAGE_FLEX, minWidth: 0 }}>{stage}</View>
+      </View>
+    );
+  }
+
   return (
     <View testID="monthly-curve-section" style={{ gap: spacing.lg }}>
-      <CurveReadoutView
-        curve={curve}
-        metricId={metricId}
-        stop={stop}
-        reducedMotion={reducedMotion}
-      />
-
-      <View
-        style={{ width: '100%', maxWidth: STAGE_MAX_WIDTH_PT, alignSelf: 'center', gap: spacing.xs }}
-      >
-        <View style={{ width: '100%', aspectRatio: STAGE_ASPECT_RATIO }}>
-          {isStageUnavailable ? (
-            <MonthlyCurveFallback curve={curve} metricId={metricId} />
-          ) : (
-            <StageErrorBoundary onError={handleStageUnavailable}>
-              <MonthlyCurveStageLoader
-                curve={curve}
-                metricId={metricId}
-                reducedMotion={reducedMotion}
-                onScrub={handleScrub}
-                onUnavailable={handleStageUnavailable}
-              />
-            </StageErrorBoundary>
-          )}
-        </View>
-        <CurveTicks curve={curve} />
-      </View>
+      {readout}
+      {stage}
 
       <View
         style={{
           flexDirection: 'row',
           gap: spacing.xs,
           width: '100%',
-          maxWidth: STAGE_MAX_WIDTH_PT,
+          maxWidth: stageMaxWidth,
           alignSelf: 'center',
         }}
       >

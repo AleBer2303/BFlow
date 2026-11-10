@@ -6,14 +6,16 @@
  */
 
 import React, { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import {
+  AppPressable,
   AppText,
   AppTextInput,
   GlassSurface,
-  MIN_TOUCH_TARGET_PT,
   hapticService,
+  MIN_TOUCH_TARGET_PT,
   useBFlowTheme,
+  usePrimaryActionLook,
 } from '../../../design-system';
 import {
   formatCurrency,
@@ -61,6 +63,7 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
   onSubmitCustomMovement,
 }: SummaryAddMovementModalProps): React.JSX.Element | null {
   const { colors, spacing, radius } = useBFlowTheme();
+  const primaryAction = usePrimaryActionLook();
 
   const [movementType, setMovementType] = useState<ConceptType>(initialType);
   const [selectedConceptId, setSelectedConceptId] = useState<string>(() => {
@@ -161,7 +164,7 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
           }}
         >
           <AppText variant="title2">Registrar Movimiento</AppText>
-          <Pressable
+          <AppPressable
             accessibilityRole="button"
             onPressIn={() => hapticService.trigger('light')}
             onPress={onClose}
@@ -177,7 +180,7 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
             <AppText variant="caption" color={colors.text.secondary}>
               Cerrar
             </AppText>
-          </Pressable>
+          </AppPressable>
         </View>
 
         <View style={{ flexDirection: 'row', gap: spacing.xs }}>
@@ -189,7 +192,7 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
           ).map((tab) => {
             const isSelected = movementType === tab.type;
             return (
-              <Pressable
+              <AppPressable
                 key={tab.type}
                 accessibilityRole="button"
                 onPressIn={() => hapticService.trigger('light')}
@@ -210,7 +213,7 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
                 }}
               >
                 <AppText variant="caption">{tab.label}</AppText>
-              </Pressable>
+              </AppPressable>
             );
           })}
         </View>
@@ -219,7 +222,7 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
           {availableConcepts.map((concept) => {
             const isSelected = !isCustomMode && selectedConceptId === concept.id;
             return (
-              <Pressable
+              <AppPressable
                 key={concept.id}
                 testID={`summary-concept-chip-${concept.id}`}
                 accessibilityRole="button"
@@ -253,11 +256,11 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
                 >
                   {`${concept.name}${concept.defaultAmount > 0 ? ` (${formatCurrency(concept.defaultAmount)})` : ' (Múltiple)'}`}
                 </AppText>
-              </Pressable>
+              </AppPressable>
             );
           })}
 
-          <Pressable
+          <AppPressable
             accessibilityRole="button"
             onPressIn={() => hapticService.trigger('light')}
             onPress={() => {
@@ -286,7 +289,7 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
             >
               + Crear nuevo ítem
             </AppText>
-          </Pressable>
+          </AppPressable>
         </View>
 
         {isCustomMode ? (
@@ -305,7 +308,7 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
               ).map((g) => {
                 const active = customGroup === g.id;
                 return (
-                  <Pressable
+                  <AppPressable
                     key={g.id}
                     accessibilityRole="button"
                     onPressIn={() => hapticService.trigger('selection')}
@@ -326,7 +329,7 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
                     }}
                   >
                     <AppText variant="caption">{g.label}</AppText>
-                  </Pressable>
+                  </AppPressable>
                 );
               })}
             </View>
@@ -352,7 +355,7 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
           </AppText>
         ) : null}
 
-        <Pressable
+        <AppPressable
           testID="summary-submit-movement-button"
           accessibilityRole="button"
           onPressIn={() => hapticService.trigger('medium')}
@@ -361,17 +364,15 @@ export const SummaryAddMovementModal = React.memo(function SummaryAddMovementMod
             minHeight: MIN_TOUCH_TARGET_PT,
             borderRadius: radius.md,
             borderCurve: 'continuous',
-            backgroundColor: colors.glass.surfaceElevatedTint,
-            borderWidth: 1,
-            borderColor: colors.glass.specularBorder,
+            ...primaryAction.container,
             justifyContent: 'center',
             alignItems: 'center',
           }}
         >
-          <AppText variant="headline" color={colors.semantic.income}>
+          <AppText variant="headline" color={primaryAction.labelColor ?? colors.semantic.income}>
             Guardar Movimiento
           </AppText>
-        </Pressable>
+        </AppPressable>
       </View>
     </GlassSurface>
   );

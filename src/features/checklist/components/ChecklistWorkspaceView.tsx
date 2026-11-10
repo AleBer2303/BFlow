@@ -14,19 +14,23 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, View } from 'react-native';
+import { Animated, Easing, View } from 'react-native';
 import {
+  AppPressable,
   AppText,
   AppTextInput,
   CurrencyText,
+  estimateTextWidth,
   GlassSurface,
+  hapticService,
   MIN_TOUCH_TARGET_PT,
   PencilEditIcon,
+  ResponsiveColumns,
   RevealDown,
   StatusBadge,
   TrashBinIcon,
-  hapticService,
   useBFlowTheme,
+  usePrimaryActionLook,
 } from '../../../design-system';
 import {
   formatCurrency,
@@ -214,7 +218,7 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
         gap: spacing.xs,
       }}
     >
-      <Pressable
+      <AppPressable
         testID={`checklist-workspace-item-${entry.id}`}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: isCompleted }}
@@ -297,11 +301,11 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
             tone={isDeleteMode ? 'expense' : entry.type === 'income' ? 'income' : 'expense'}
           />
         </View>
-      </Pressable>
+      </AppPressable>
 
       {/* In-situ Edit Action Button (only visible in edit mode) */}
       <ActionRevealSlot visible={isEditMode} gap={spacing.xs}>
-        <Pressable
+        <AppPressable
           testID={`edit-entry-${entry.id}`}
           accessibilityRole="button"
           accessibilityLabel={`Editar ${entry.conceptName}`}
@@ -322,12 +326,12 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
           }}
         >
           <PencilEditIcon size={16} color={colors.semantic.income} />
-        </Pressable>
+        </AppPressable>
       </ActionRevealSlot>
 
       {/* In-situ Delete Action Button (only visible in delete mode) */}
       <ActionRevealSlot visible={isDeleteMode} gap={spacing.xs}>
-        <Pressable
+        <AppPressable
           testID={`delete-entry-${entry.id}`}
           accessibilityRole="button"
           accessibilityLabel={`Eliminar ${entry.conceptName}`}
@@ -348,7 +352,7 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
           }}
         >
           <TrashBinIcon size={16} color={colors.text.inverse} />
-        </Pressable>
+        </AppPressable>
       </ActionRevealSlot>
     </View>
   );
@@ -368,7 +372,8 @@ export function ChecklistWorkspaceView({
   onDeleteEntry,
   onRemoveRepeatableEntry,
 }: ChecklistWorkspaceViewProps): React.JSX.Element {
-  const { colors, spacing, radius } = useBFlowTheme();
+  const { colors, spacing, radius, typography } = useBFlowTheme();
+  const primaryAction = usePrimaryActionLook();
   const [filterMode, setFilterMode] = useState<ChecklistFilterMode>('all');
 
   // In-situ section modes
@@ -638,7 +643,7 @@ export function ChecklistWorkspaceView({
             />
           </View>
 
-          <Pressable
+          <AppPressable
             testID="open-add-movement-modal-button"
             accessibilityRole="button"
             accessibilityLabel="Agregar o completar movimiento"
@@ -660,17 +665,26 @@ export function ChecklistWorkspaceView({
               backgroundColor: colors.glass.surfaceElevatedTint,
               borderWidth: 1,
               borderColor: colors.glass.specularBorder,
+              // Closed: the view's main action. Open: a quiet "Cerrar" toggle.
+              ...(isAddModalOpen ? null : primaryAction.container),
               flexDirection: 'row',
               justifyContent: 'center',
               alignItems: 'center',
             }}
           >
-            <AppText variant="headline" color={colors.text.primary}>
+            <AppText
+              variant="headline"
+              color={
+                isAddModalOpen
+                  ? colors.text.primary
+                  : (primaryAction.labelColor ?? colors.text.primary)
+              }
+            >
               {isAddModalOpen ? 'Cerrar' : '+ Nuevo Movimiento'}
             </AppText>
-          </Pressable>
+          </AppPressable>
 
-          <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
             {(
               [
                 { id: 'all', label: `Todos (${monthEntries.length})` },
@@ -680,7 +694,7 @@ export function ChecklistWorkspaceView({
             ).map((seg) => {
               const active = filterMode === seg.id;
               return (
-                <Pressable
+                <AppPressable
                   key={seg.id}
                   testID={`checklist-filter-${seg.id}`}
                   accessibilityRole="button"
@@ -690,7 +704,16 @@ export function ChecklistWorkspaceView({
                     setFilterMode(seg.id);
                   }}
                   style={{
+                    // Equal thirds while every label fits on one line; a chip that would
+                    // truncate (narrow phone, larger web type) wraps to its own row instead.
                     flex: 1,
+                    minWidth:
+                      estimateTextWidth(
+                        seg.label,
+                        typography.micro.fontSize,
+                        typography.micro.letterSpacing
+                      ) +
+                      spacing.sm * 2,
                     minHeight: MIN_TOUCH_TARGET_PT,
                     paddingHorizontal: spacing.xxs,
                     borderRadius: radius.md,
@@ -711,7 +734,7 @@ export function ChecklistWorkspaceView({
                   >
                     {seg.label}
                   </AppText>
-                </Pressable>
+                </AppPressable>
               );
             })}
           </View>
@@ -755,7 +778,7 @@ export function ChecklistWorkspaceView({
                 </View>
               </View>
 
-              <Pressable
+              <AppPressable
                 testID="close-edit-entry-modal-button"
                 accessibilityRole="button"
                 accessibilityLabel="Cerrar modal de edición"
@@ -774,7 +797,7 @@ export function ChecklistWorkspaceView({
                 <AppText variant="caption" color={colors.text.secondary}>
                   ✕ Cerrar
                 </AppText>
-              </Pressable>
+              </AppPressable>
             </View>
 
             {/* Hero Amount Input Card with Live Formatted Preview */}
@@ -849,7 +872,7 @@ export function ChecklistWorkspaceView({
                   Vincular pago a una deuda (opcional):
                 </AppText>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-                  <Pressable
+                  <AppPressable
                     testID="edit-entry-debt-none"
                     accessibilityRole="button"
                     onPress={() => {
@@ -873,11 +896,11 @@ export function ChecklistWorkspaceView({
                     }}
                   >
                     <AppText variant="micro">Ninguna deuda</AppText>
-                  </Pressable>
+                  </AppPressable>
                   {debts.map((debt) => {
                     const isLinked = editTargetDebtId === debt.id;
                     return (
-                      <Pressable
+                      <AppPressable
                         key={debt.id}
                         testID={`edit-entry-debt-${debt.id}`}
                         accessibilityRole="button"
@@ -905,7 +928,7 @@ export function ChecklistWorkspaceView({
                         >
                           {`→ ${debt.name}`}
                         </AppText>
-                      </Pressable>
+                      </AppPressable>
                     );
                   })}
                 </View>
@@ -916,7 +939,7 @@ export function ChecklistWorkspaceView({
                       Vincular gasto a un fondo de ahorro (opcional):
                     </AppText>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-                      <Pressable
+                      <AppPressable
                         testID="edit-entry-bucket-none"
                         accessibilityRole="button"
                         onPress={() => {
@@ -940,11 +963,11 @@ export function ChecklistWorkspaceView({
                         }}
                       >
                         <AppText variant="micro">Ningún fondo</AppText>
-                      </Pressable>
+                      </AppPressable>
                       {savingsBuckets.map((bucket) => {
                         const isLinked = editSavingsBucketId === bucket.id;
                         return (
-                          <Pressable
+                          <AppPressable
                             key={bucket.id}
                             testID={`edit-entry-bucket-${bucket.id}`}
                             accessibilityRole="button"
@@ -972,7 +995,7 @@ export function ChecklistWorkspaceView({
                             >
                               {`→ ${bucket.name}`}
                             </AppText>
-                          </Pressable>
+                          </AppPressable>
                         );
                       })}
                     </View>
@@ -995,7 +1018,7 @@ export function ChecklistWorkspaceView({
                 ).map((opt) => {
                   const active = editPersistMonthly === opt.value;
                   return (
-                    <Pressable
+                    <AppPressable
                       key={String(opt.value)}
                       testID={`edit-entry-persist-${opt.value ? 'monthly' : 'once'}`}
                       accessibilityRole="button"
@@ -1022,7 +1045,7 @@ export function ChecklistWorkspaceView({
                       >
                         {opt.label}
                       </AppText>
-                    </Pressable>
+                    </AppPressable>
                   );
                 })}
               </View>
@@ -1044,7 +1067,7 @@ export function ChecklistWorkspaceView({
               </View>
             ) : null}
 
-            <Pressable
+            <AppPressable
               testID="save-edit-entry-button"
               accessibilityRole="button"
               onPress={handleSaveEditEntry}
@@ -1063,7 +1086,7 @@ export function ChecklistWorkspaceView({
               <AppText variant="headline" color={colors.semantic.income}>
                 Guardar Cambios
               </AppText>
-            </Pressable>
+            </AppPressable>
           </View>
         </GlassSurface>
       ) : null}
@@ -1086,7 +1109,7 @@ export function ChecklistWorkspaceView({
                 const isSelected = movementType === tab.type;
                 const isExpense = tab.type === 'expense';
                 return (
-                  <Pressable
+                  <AppPressable
                     key={tab.type}
                     testID={`modal-type-${tab.type}`}
                     accessibilityRole="button"
@@ -1125,7 +1148,7 @@ export function ChecklistWorkspaceView({
                     >
                       {tab.label}
                     </AppText>
-                  </Pressable>
+                  </AppPressable>
                 );
               })}
             </View>
@@ -1196,7 +1219,7 @@ export function ChecklistWorkspaceView({
                 ).map((g) => {
                   const active = conceptGroup === g.id;
                   return (
-                    <Pressable
+                    <AppPressable
                       key={g.id}
                       testID={`custom-group-${g.id}`}
                       accessibilityRole="button"
@@ -1225,7 +1248,7 @@ export function ChecklistWorkspaceView({
                       >
                         {g.label}
                       </AppText>
-                    </Pressable>
+                    </AppPressable>
                   );
                 })}
               </View>
@@ -1251,7 +1274,7 @@ export function ChecklistWorkspaceView({
                   Vincular pago a una deuda (opcional):
                 </AppText>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-                  <Pressable
+                  <AppPressable
                     testID="add-movement-debt-none"
                     accessibilityRole="button"
                     onPress={() => setTargetDebtId(null)}
@@ -1272,11 +1295,11 @@ export function ChecklistWorkspaceView({
                     }}
                   >
                     <AppText variant="micro">Ninguna deuda</AppText>
-                  </Pressable>
+                  </AppPressable>
                   {debts.map((debt) => {
                     const isLinked = targetDebtId === debt.id;
                     return (
-                      <Pressable
+                      <AppPressable
                         key={debt.id}
                         testID={`add-movement-debt-${debt.id}`}
                         accessibilityRole="button"
@@ -1301,7 +1324,7 @@ export function ChecklistWorkspaceView({
                         >
                           {`→ ${debt.name}`}
                         </AppText>
-                      </Pressable>
+                      </AppPressable>
                     );
                   })}
                 </View>
@@ -1312,7 +1335,7 @@ export function ChecklistWorkspaceView({
                       Vincular gasto a un fondo de ahorro (opcional):
                     </AppText>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-                      <Pressable
+                      <AppPressable
                         testID="add-movement-bucket-none"
                         accessibilityRole="button"
                         onPress={() => setSavingsBucketId(null)}
@@ -1333,11 +1356,11 @@ export function ChecklistWorkspaceView({
                         }}
                       >
                         <AppText variant="micro">Ningún fondo</AppText>
-                      </Pressable>
+                      </AppPressable>
                       {savingsBuckets.map((bucket) => {
                         const isLinked = savingsBucketId === bucket.id;
                         return (
-                          <Pressable
+                          <AppPressable
                             key={bucket.id}
                             testID={`add-movement-bucket-${bucket.id}`}
                             accessibilityRole="button"
@@ -1362,7 +1385,7 @@ export function ChecklistWorkspaceView({
                             >
                               {`→ ${bucket.name}`}
                             </AppText>
-                          </Pressable>
+                          </AppPressable>
                         );
                       })}
                     </View>
@@ -1385,7 +1408,7 @@ export function ChecklistWorkspaceView({
                 ).map((opt) => {
                   const active = persistMonthly === opt.value;
                   return (
-                    <Pressable
+                    <AppPressable
                       key={String(opt.value)}
                       testID={`add-movement-persist-${opt.value ? 'monthly' : 'once'}`}
                       accessibilityRole="button"
@@ -1411,7 +1434,7 @@ export function ChecklistWorkspaceView({
                       >
                         {opt.label}
                       </AppText>
-                    </Pressable>
+                    </AppPressable>
                   );
                 })}
               </View>
@@ -1424,7 +1447,7 @@ export function ChecklistWorkspaceView({
             ) : null}
 
             {/* Submit Button */}
-            <Pressable
+            <AppPressable
               testID="submit-movement-button"
               accessibilityRole="button"
               onPress={handleSubmitMovement}
@@ -1433,9 +1456,7 @@ export function ChecklistWorkspaceView({
                 minHeight: MIN_TOUCH_TARGET_PT,
                 borderRadius: radius.md,
                 borderCurve: 'continuous',
-                backgroundColor: colors.glass.surfaceElevatedTint,
-                borderWidth: 1,
-                borderColor: colors.glass.specularBorder,
+                ...primaryAction.container,
                 justifyContent: 'center',
                 alignItems: 'center',
               }}
@@ -1443,243 +1464,245 @@ export function ChecklistWorkspaceView({
               <AppText
                 variant="headline"
                 color={
-                  movementType === 'income'
-                    ? colors.semantic.income
-                    : colors.semantic.expense
+                  primaryAction.labelColor ??
+                  (movementType === 'income' ? colors.semantic.income : colors.semantic.expense)
                 }
               >
                 {movementType === 'income' ? 'Registrar Ingreso' : 'Registrar Gasto'}
               </AppText>
-            </Pressable>
+            </AppPressable>
           </View>
         </GlassSurface>
       </RevealDown>
 
-      {/* Section 1: INGRESOS */}
-      <GlassSurface testID="checklist-incomes-section">
-        <View style={{ gap: spacing.sm }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: spacing.xs,
-            }}
-          >
-            <View style={{ gap: spacing.xxs }}>
-              <AppText variant="title2">Ingresos</AppText>
-              <AppText variant="caption" color={colors.semantic.income}>
-                {`Recibido ${formatCurrency(budget.receivedIncome)} / Previsto ${formatCurrency(budget.plannedIncome)}`}
-              </AppText>
+      {/* Wide windows place income and expenses side by side; phones stack them. */}
+      <ResponsiveColumns testID="checklist-sections">
+        {/* Section 1: INGRESOS */}
+        <GlassSurface testID="checklist-incomes-section">
+          <View style={{ gap: spacing.sm }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: spacing.xs,
+              }}
+            >
+              <View style={{ gap: spacing.xxs, flexShrink: 1, minWidth: 0 }}>
+                <AppText variant="title2">Ingresos</AppText>
+                <AppText variant="caption" color={colors.semantic.income}>
+                  {`Recibido ${formatCurrency(budget.receivedIncome)} / Previsto ${formatCurrency(budget.plannedIncome)}`}
+                </AppText>
+              </View>
+
+              {/* Incomes Section Action Controls: Editar & Eliminar */}
+              <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
+                <AppPressable
+                  testID="incomes-edit-action-button"
+                  accessibilityRole="button"
+                  accessibilityLabel="Editar ingresos"
+                  onPress={() => {
+                    hapticService.light();
+                    setIncomesEditMode((prev) => !prev);
+                    setIncomesDeleteMode(false);
+                  }}
+                  style={{
+                    minHeight: 34,
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: spacing.xxs,
+                    borderRadius: radius.pill,
+                    backgroundColor: incomesEditMode
+                      ? colors.glass.surfaceElevatedTint
+                      : colors.glass.surfaceTint,
+                    borderWidth: 1,
+                    borderColor: incomesEditMode
+                      ? colors.glass.specularBorder
+                      : colors.glass.subtleBorder,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: spacing.xxs,
+                  }}
+                >
+                  <PencilEditIcon
+                    size={14}
+                    color={incomesEditMode ? colors.semantic.income : colors.text.secondary}
+                  />
+                  <AppText
+                    variant="micro"
+                    color={incomesEditMode ? colors.semantic.income : colors.text.secondary}
+                  >
+                    {incomesEditMode ? 'Listo' : 'Editar'}
+                  </AppText>
+                </AppPressable>
+
+                <AppPressable
+                  testID="incomes-delete-action-button"
+                  accessibilityRole="button"
+                  accessibilityLabel="Eliminar ingresos"
+                  onPress={() => {
+                    hapticService.warning();
+                    setIncomesDeleteMode((prev) => !prev);
+                    setIncomesEditMode(false);
+                  }}
+                  style={{
+                    minHeight: 34,
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: spacing.xxs,
+                    borderRadius: radius.pill,
+                    backgroundColor: incomesDeleteMode
+                      ? colors.semantic.expense
+                      : colors.semantic.expenseSoft,
+                    borderWidth: 1,
+                    borderColor: colors.semantic.expense,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: spacing.xxs,
+                  }}
+                >
+                  <TrashBinIcon
+                    size={14}
+                    color={incomesDeleteMode ? colors.text.inverse : colors.semantic.expense}
+                  />
+                  <AppText
+                    variant="micro"
+                    color={incomesDeleteMode ? colors.text.inverse : colors.semantic.expense}
+                  >
+                    {incomesDeleteMode ? 'Listo' : 'Eliminar'}
+                  </AppText>
+                </AppPressable>
+              </View>
             </View>
 
-            {/* Incomes Section Action Controls: Editar & Eliminar */}
-            <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
-              <Pressable
-                testID="incomes-edit-action-button"
-                accessibilityRole="button"
-                accessibilityLabel="Editar ingresos"
-                onPress={() => {
-                  hapticService.light();
-                  setIncomesEditMode((prev) => !prev);
-                  setIncomesDeleteMode(false);
-                }}
-                style={{
-                  minHeight: 34,
-                  paddingHorizontal: spacing.sm,
-                  paddingVertical: spacing.xxs,
-                  borderRadius: radius.pill,
-                  backgroundColor: incomesEditMode
-                    ? colors.glass.surfaceElevatedTint
-                    : colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: incomesEditMode
-                    ? colors.glass.specularBorder
-                    : colors.glass.subtleBorder,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.xxs,
-                }}
-              >
-                <PencilEditIcon
-                  size={14}
-                  color={incomesEditMode ? colors.semantic.income : colors.text.secondary}
-                />
-                <AppText
-                  variant="micro"
-                  color={incomesEditMode ? colors.semantic.income : colors.text.secondary}
-                >
-                  {incomesEditMode ? 'Listo' : 'Editar'}
-                </AppText>
-              </Pressable>
-
-              <Pressable
-                testID="incomes-delete-action-button"
-                accessibilityRole="button"
-                accessibilityLabel="Eliminar ingresos"
-                onPress={() => {
-                  hapticService.warning();
-                  setIncomesDeleteMode((prev) => !prev);
-                  setIncomesEditMode(false);
-                }}
-                style={{
-                  minHeight: 34,
-                  paddingHorizontal: spacing.sm,
-                  paddingVertical: spacing.xxs,
-                  borderRadius: radius.pill,
-                  backgroundColor: incomesDeleteMode
-                    ? colors.semantic.expense
-                    : colors.semantic.expenseSoft,
-                  borderWidth: 1,
-                  borderColor: colors.semantic.expense,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.xxs,
-                }}
-              >
-                <TrashBinIcon
-                  size={14}
-                  color={incomesDeleteMode ? colors.text.inverse : colors.semantic.expense}
-                />
-                <AppText
-                  variant="micro"
-                  color={incomesDeleteMode ? colors.text.inverse : colors.semantic.expense}
-                >
-                  {incomesDeleteMode ? 'Listo' : 'Eliminar'}
-                </AppText>
-              </Pressable>
-            </View>
-          </View>
-
-          <AppText variant="caption" color={colors.text.secondary}>
-            {`Ingresos Fijos · Pendiente: ${formatCurrency(budget.incomeByGroup.fixed.pending)}`}
-          </AppText>
-          {fixedIncomes.map((entry) => renderEntryRow(entry, incomesEditMode, incomesDeleteMode))}
-
-          <View style={{ paddingTop: spacing.xs, gap: spacing.xs }}>
             <AppText variant="caption" color={colors.text.secondary}>
-              {`Ingresos Variables · Recibido: ${formatCurrency(budget.incomeByGroup.variable.paid)}`}
+              {`Ingresos Fijos · Pendiente: ${formatCurrency(budget.incomeByGroup.fixed.pending)}`}
             </AppText>
-            {variableIncomes.map((entry) =>
-              renderEntryRow(entry, incomesEditMode, incomesDeleteMode)
-            )}
-          </View>
-        </View>
-      </GlassSurface>
+            {fixedIncomes.map((entry) => renderEntryRow(entry, incomesEditMode, incomesDeleteMode))}
 
-      {/* Section 2: GASTOS */}
-      <GlassSurface testID="checklist-expenses-section">
-        <View style={{ gap: spacing.sm }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: spacing.xs,
-            }}
-          >
-            <View style={{ gap: spacing.xxs }}>
-              <AppText variant="title2">Gastos</AppText>
-              <AppText variant="caption" color={colors.semantic.expense}>
-                {`Pagado ${formatCurrency(budget.paidExpenses)} / Previsto ${formatCurrency(budget.plannedExpenses)}`}
+            <View style={{ paddingTop: spacing.xs, gap: spacing.xs }}>
+              <AppText variant="caption" color={colors.text.secondary}>
+                {`Ingresos Variables · Recibido: ${formatCurrency(budget.incomeByGroup.variable.paid)}`}
               </AppText>
-            </View>
-
-            {/* Expenses Section Action Controls: Editar & Eliminar */}
-            <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
-              <Pressable
-                testID="expenses-edit-action-button"
-                accessibilityRole="button"
-                accessibilityLabel="Editar gastos"
-                onPress={() => {
-                  hapticService.light();
-                  setExpensesEditMode((prev) => !prev);
-                  setExpensesDeleteMode(false);
-                }}
-                style={{
-                  minHeight: 34,
-                  paddingHorizontal: spacing.sm,
-                  paddingVertical: spacing.xxs,
-                  borderRadius: radius.pill,
-                  backgroundColor: expensesEditMode
-                    ? colors.glass.surfaceElevatedTint
-                    : colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: expensesEditMode
-                    ? colors.glass.specularBorder
-                    : colors.glass.subtleBorder,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.xxs,
-                }}
-              >
-                <PencilEditIcon
-                  size={14}
-                  color={expensesEditMode ? colors.semantic.income : colors.text.secondary}
-                />
-                <AppText
-                  variant="micro"
-                  color={expensesEditMode ? colors.semantic.income : colors.text.secondary}
-                >
-                  {expensesEditMode ? 'Listo' : 'Editar'}
-                </AppText>
-              </Pressable>
-
-              <Pressable
-                testID="expenses-delete-action-button"
-                accessibilityRole="button"
-                accessibilityLabel="Eliminar gastos"
-                onPress={() => {
-                  hapticService.warning();
-                  setExpensesDeleteMode((prev) => !prev);
-                  setExpensesEditMode(false);
-                }}
-                style={{
-                  minHeight: 34,
-                  paddingHorizontal: spacing.sm,
-                  paddingVertical: spacing.xxs,
-                  borderRadius: radius.pill,
-                  backgroundColor: expensesDeleteMode
-                    ? colors.semantic.expense
-                    : colors.semantic.expenseSoft,
-                  borderWidth: 1,
-                  borderColor: colors.semantic.expense,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.xxs,
-                }}
-              >
-                <TrashBinIcon
-                  size={14}
-                  color={expensesDeleteMode ? colors.text.inverse : colors.semantic.expense}
-                />
-                <AppText
-                  variant="micro"
-                  color={expensesDeleteMode ? colors.text.inverse : colors.semantic.expense}
-                >
-                  {expensesDeleteMode ? 'Listo' : 'Eliminar'}
-                </AppText>
-              </Pressable>
+              {variableIncomes.map((entry) =>
+                renderEntryRow(entry, incomesEditMode, incomesDeleteMode)
+              )}
             </View>
           </View>
+        </GlassSurface>
 
-          <AppText variant="caption" color={colors.text.secondary}>
-            {`Gastos Fijos (${formatCurrency(budget.expensesByGroup.fixed.paid)} pagados · ${formatCurrency(budget.expensesByGroup.fixed.pending)} pendientes)`}
-          </AppText>
-          {fixedExpenses.map((entry) => renderEntryRow(entry, expensesEditMode, expensesDeleteMode))}
+        {/* Section 2: GASTOS */}
+        <GlassSurface testID="checklist-expenses-section">
+          <View style={{ gap: spacing.sm }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: spacing.xs,
+              }}
+            >
+              <View style={{ gap: spacing.xxs, flexShrink: 1, minWidth: 0 }}>
+                <AppText variant="title2">Gastos</AppText>
+                <AppText variant="caption" color={colors.semantic.expense}>
+                  {`Pagado ${formatCurrency(budget.paidExpenses)} / Previsto ${formatCurrency(budget.plannedExpenses)}`}
+                </AppText>
+              </View>
 
-          <View style={{ paddingTop: spacing.xs, gap: spacing.xs }}>
+              {/* Expenses Section Action Controls: Editar & Eliminar */}
+              <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
+                <AppPressable
+                  testID="expenses-edit-action-button"
+                  accessibilityRole="button"
+                  accessibilityLabel="Editar gastos"
+                  onPress={() => {
+                    hapticService.light();
+                    setExpensesEditMode((prev) => !prev);
+                    setExpensesDeleteMode(false);
+                  }}
+                  style={{
+                    minHeight: 34,
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: spacing.xxs,
+                    borderRadius: radius.pill,
+                    backgroundColor: expensesEditMode
+                      ? colors.glass.surfaceElevatedTint
+                      : colors.glass.surfaceTint,
+                    borderWidth: 1,
+                    borderColor: expensesEditMode
+                      ? colors.glass.specularBorder
+                      : colors.glass.subtleBorder,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: spacing.xxs,
+                  }}
+                >
+                  <PencilEditIcon
+                    size={14}
+                    color={expensesEditMode ? colors.semantic.income : colors.text.secondary}
+                  />
+                  <AppText
+                    variant="micro"
+                    color={expensesEditMode ? colors.semantic.income : colors.text.secondary}
+                  >
+                    {expensesEditMode ? 'Listo' : 'Editar'}
+                  </AppText>
+                </AppPressable>
+
+                <AppPressable
+                  testID="expenses-delete-action-button"
+                  accessibilityRole="button"
+                  accessibilityLabel="Eliminar gastos"
+                  onPress={() => {
+                    hapticService.warning();
+                    setExpensesDeleteMode((prev) => !prev);
+                    setExpensesEditMode(false);
+                  }}
+                  style={{
+                    minHeight: 34,
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: spacing.xxs,
+                    borderRadius: radius.pill,
+                    backgroundColor: expensesDeleteMode
+                      ? colors.semantic.expense
+                      : colors.semantic.expenseSoft,
+                    borderWidth: 1,
+                    borderColor: colors.semantic.expense,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: spacing.xxs,
+                  }}
+                >
+                  <TrashBinIcon
+                    size={14}
+                    color={expensesDeleteMode ? colors.text.inverse : colors.semantic.expense}
+                  />
+                  <AppText
+                    variant="micro"
+                    color={expensesDeleteMode ? colors.text.inverse : colors.semantic.expense}
+                  >
+                    {expensesDeleteMode ? 'Listo' : 'Eliminar'}
+                  </AppText>
+                </AppPressable>
+              </View>
+            </View>
+
             <AppText variant="caption" color={colors.text.secondary}>
-              {`Gastos Variables (${formatCurrency(budget.expensesByGroup.variable.paid)} pagados · ${formatCurrency(budget.expensesByGroup.variable.pending)} pendientes)`}
+              {`Gastos Fijos (${formatCurrency(budget.expensesByGroup.fixed.paid)} pagados · ${formatCurrency(budget.expensesByGroup.fixed.pending)} pendientes)`}
             </AppText>
-            {variableExpenses.map((entry) =>
-              renderEntryRow(entry, expensesEditMode, expensesDeleteMode)
-            )}
+            {fixedExpenses.map((entry) => renderEntryRow(entry, expensesEditMode, expensesDeleteMode))}
+
+            <View style={{ paddingTop: spacing.xs, gap: spacing.xs }}>
+              <AppText variant="caption" color={colors.text.secondary}>
+                {`Gastos Variables (${formatCurrency(budget.expensesByGroup.variable.paid)} pagados · ${formatCurrency(budget.expensesByGroup.variable.pending)} pendientes)`}
+              </AppText>
+              {variableExpenses.map((entry) =>
+                renderEntryRow(entry, expensesEditMode, expensesDeleteMode)
+              )}
+            </View>
           </View>
-        </View>
-      </GlassSurface>
+        </GlassSurface>
+      </ResponsiveColumns>
     </View>
   );
 }

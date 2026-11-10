@@ -19,11 +19,13 @@
 src/
 ├── domain/          # Funciones 100% puras (TS estricto, CERO imports de React/RN/Firebase/Expo)
 ├── data/            # Repositorios Firestore JS SDK, mappers Zod y seeds idempotentes
-├── platform/        # Adaptadores Modo A (Expo Go / Web) vs Modo B (Build nativo .ipa iOS 26)
-├── design-system/   # Tokens, tipografía SF Pro, <GlassSurface />, componentes base (DESIGN.md)
-├── features/        # Módulos por dominio funcional (budget, checklist, debts, savings, analytics, onboarding, auth)
+├── platform/        # Adaptadores Modo A (Expo Go / Web) vs Modo B (Build nativo .ipa iOS 26), insets, sistema, modo vitrina
+├── design-system/   # Tokens por piel (iOS / Android / Web), tema, layout responsive, componentes base (DESIGN.md)
+├── features/        # Módulos por dominio funcional (budget, checklist, debts, savings, analytics, onboarding, auth, summary, shell)
 └── app/             # Rutas de Expo Router (pantallas delgadas que orquestan features)
 ```
+
+- **Tres plataformas, tres pieles:** iOS (Liquid Glass), Android (Material 3, sin vidrio) y Web (sistema plano). Mismos datos, flujos y tests; cambia el material. Reglas en la Sección 7.
 
 - **Modo A (Expo Go / Web):** Todo el desarrollo diario en Windows 11 corre en Expo Go y navegador web sin romperse. Ningún archivo fuera de `src/platform/**/*.native.ts` puede importar módulos nativos exclusivos de Modo B (`expo-glass-effect`, bridges de WidgetKit).
 - **Modo B (`.ipa` nativo desde GitHub Actions + `iloader`):** Activa Widgets de WidgetKit y Liquid Glass nativo de iOS 26.
@@ -36,7 +38,7 @@ src/
 En cada tarea o cambio, opera coordinando estos 6 roles:
 
 1. **Architect (`Architect`):** Valida contratos de dominio en `src/domain/`, invariantes contables del Excel, consumo de lecturas/escrituras en Firestore Spark y aislamiento Modo A / Modo B.
-2. **UI Builder (`UI Builder`):** Traduce pantallas de `DESIGN.md` a componentes React Native con estética Apple Liquid Glass (iOS 26), soporte Dynamic Type, modo oscuro y claro, áreas táctiles mínimas de `44pt`, haptics perfectamente calibrados y animaciones a 60/120 fps.
+2. **UI Builder (`UI Builder`):** Traduce pantallas de `DESIGN.md` a componentes React Native que se ven correctos en las tres pieles: Apple Liquid Glass (iOS 26), Material 3 (Android) y sistema plano (Web). Soporte Dynamic Type, modo oscuro y claro, layout responsive de 320 pt a escritorio, áreas táctiles mínimas de `44pt` (`48dp` en Android), haptics calibrados y animaciones a 60/120 fps.
 3. **QA Engineer (`QA Engineer` — OBLIGATORIO tras cada cambio):** Ejecuta y amplía la pirámide de tests (unitarios de dominio, golden tests del Excel, componentes con RNTL, reglas de Firestore en emulador, contratos de `WidgetSnapshot`). **Tiene poder de veto si falta cobertura o un test falla.**
 4. **DevOps (`DevOps`):** Mantiene los workflows de GitHub Actions (`ci.yml`, `build-ios.yml`, `e2e.yml`), optimizando minutos de runners macOS/Linux y empaquetando el `.ipa` sin firmar listo para `iloader`.
 5. **Reviewer (`Reviewer`):** Verifica cumplimiento de `AGENTS.md`, ausencia de valores hardcodeados de diseño, ausencia de secretos en el repositorio y paridad con el Excel.
@@ -53,6 +55,7 @@ Ningún cambio, feature o corrección se considera terminado si no cumple **TODO
 4. `npm test` pasa al 100%, manteniendo la cobertura en `src/domain/` **≥ 90%** (sentencias y líneas).
 5. La funcionalidad opera sin errores tanto en **Modo A (Expo Go / Web)** como en el contrato tipado de **Modo B (`.ipa`)**.
 6. **Toda modificación arquitectónica, de esquema o funcional actualiza su documentación asociada** (ver Sección 5).
+7. **Todo cambio de interfaz funciona en las tres pieles (iOS, Android, Web) y en todos los anchos** (ver Sección 7): tests funcionales por piel en verde y revisión con `npm run web:demo`.
 
 ---
 
@@ -77,7 +80,8 @@ Es mandatorio crear un archivo ADR numerado (`docs/decisions/NNNN-<slug>.md`) an
 
 ### 5.3. Sincronización Mandatoria Código-Documentación
 - Si se alteran variables de entorno o dependencias: Actualizar `.env.example`, `package.json` y la sección de instalación en `README.md`.
-- Si se alteran componentes o tokens visuales: Actualizar `DESIGN.md` con los tokens y ratios de contraste correspondientes.
+- Si se alteran componentes o tokens visuales: Actualizar `DESIGN.md` con los tokens y ratios de contraste correspondientes. Un token se define para **las tres pieles** (`DESIGN.md` §10) o no se añade.
+- Si se alteran breakpoints, márgenes o columnas: Actualizar el contrato responsive de `DESIGN.md` §11.
 - Si se agregan rutas o vistas en `src/app/` o `src/features/`: Actualizar el mapa arquitectónico de `README.md`.
 - Si se optimizan consultas o estado: Registrar la evidencia antes/después en `PERF_BASELINE.md`.
 
@@ -89,6 +93,55 @@ Es mandatorio crear un archivo ADR numerado (`docs/decisions/NNNN-<slug>.md`) an
 
 ## 6. Políticas de Calidad Multiplataforma para Producción (Mobile / Web)
 
-1. **Paridad de Plataformas:** La aplicación debe compilar y renderizar limpiamente en iOS, Web (React Native Web) y prepararse para Android sin dependencias exclusivas sin fallback.
+1. **Paridad de Plataformas:** La aplicación debe compilar y renderizar limpiamente en iOS, Android y Web (React Native Web), sin dependencias exclusivas de una plataforma que no tengan fallback. La paridad es **funcional**, no visual: cada plataforma tiene su piel (Sección 7).
 2. **Resiliencia de Red y Modo Offline:** Todas las escrituras en Firestore deben disponer de rollback optimista y mensajes amigables ante fallos de conexión.
 3. **Consumo Eficiente en Capa Gratuita (Spark & GitHub Actions):** Las consultas de Firestore deben acotarse estrictamente por `monthKey` o ID para nunca disparar lecturas masivas descontroladas. Los workflows de GitHub Actions deben aprovechar caché de dependencias y CocoaPods.
+
+---
+
+## 7. Trabajo Multiplataforma: iOS · Android · Web (Regla Dura)
+
+BFlow se entrega en tres plataformas con **una piel cada una**: iOS (Liquid Glass), Android (Material 3) y Web (sistema plano). Decisiones en los ADR [0010](docs/decisions/0010-platform-skins-and-responsive-layout.md) y [0011](docs/decisions/0011-web-redesign-and-vector-curve.md); tokens y contrato responsive en `DESIGN.md` §10 y §11; pasos de validación en [`docs/guides/multiplatform-validation-guide.md`](docs/guides/multiplatform-validation-guide.md).
+
+### 7.1. Dónde vive la diferencia entre plataformas
+
+1. **Las features no deciden aspecto por plataforma.** En `src/features/` y `src/app/` está prohibido elegir colores, radios, tipografía o tamaños con `Platform.OS` o con `skin`: salen de `useBFlowTheme()`, que ya entrega los de la piel activa. `Platform.OS` solo se admite para APIs del sistema (teclado, `LayoutAnimation`, hojas modales).
+2. **Una composición distinta por piel es una excepción documentada**, no un recurso habitual. Hoy son tres: `WorkspaceShell` (marco y navegación), `AuthScreen` (héroe de la primera pantalla Web) y `MonthlyCurveSection` (escenario 3D o vectorial). Una cuarta requiere justificarla en el ADR o en `DESIGN.md` §10.
+3. **La diferencia se encapsula** en `src/design-system/` y `src/platform/`: `GlassSurface` (material), `AppPressable` (respuesta al toque y objetivo táctil), `usePrimaryActionLook` (botón principal), `WorkspaceShell` y los componentes de `navigation/` (marco y navegación). Si una pantalla necesita un comportamiento distinto por piel, se añade ahí un componente o un token, no un `if` en la pantalla.
+4. **Un token nuevo se define para las tres pieles** en `tokens.ts` y se documenta en `DESIGN.md` §10. No existen tokens de una sola plataforma.
+
+### 7.2. Liquid Glass es solo de iOS
+
+1. `expo-blur`, las superficies translúcidas, el borde especular, el lente y el dock flotante **no** aparecen en Android ni en Web. `npm run lint` rechaza cualquier import de `expo-blur` fuera de `GlassSurface` y `IosWheelPickerModal`, que lo condicionan a la piel iOS.
+2. Las superficies se piden siempre con `<GlassSurface />`; nunca se construye una tarjeta a mano con `BlurView` o con un `rgba` translúcido.
+3. La piel Web no usa violeta ni lavanda, ni texto por debajo de 13 px, ni animaciones con rebote o ligadas al scroll.
+
+### 7.3. Interacción
+
+1. Todo elemento interactivo de `src/features/` y `src/app/` es un `AppPressable` (o `TactilePressable`). `npm run lint` rechaza el `Pressable` de React Native en esas carpetas.
+2. Objetivo táctil mínimo: 44 pt en iOS y Web, 48 dp en Android. Un control que declare menos lo compensa `AppPressable` (hit slop en nativo, crecimiento en Web); no se desactiva ni se sobrescribe.
+3. Una vista tiene **una** acción principal, con `usePrimaryActionLook()`.
+
+### 7.4. Responsive
+
+1. Ancho mínimo soportado: **320**. Ninguna pantalla puede provocar scroll horizontal ni partir o truncar una cifra monetaria.
+2. Prohibido leer `Dimensions.get('window')` o escribir anchos fijos de pantalla en features. El tamaño se obtiene de `useResponsiveLayout()` y los paneles se reparten con `ResponsiveColumns`.
+3. El contenido vive dentro de `WorkspaceShell`, que centra y limita la columna; una pantalla no se posiciona contra la ventana.
+4. Toda pantalla nueva o modificada se revisa en 320, 360, 390, 600, 840, 1.024 y 1.440 de ancho, en claro y oscuro.
+
+### 7.5. Tests obligatorios por plataforma
+
+1. Un cambio en una pantalla o en el marco añade o actualiza tests que la ejercitan en **las tres pieles** (`<BFlowThemeProvider skin="android">`, `skin="web"`; Jest corre como iOS por defecto). Referencia: `src/features/shell/__tests__/workspacePlatforms.test.tsx`.
+2. Lo que dependa del ancho se prueba cambiando la ventana con `Dimensions.set(...)` en teléfono (390) y escritorio (1.440).
+3. Los `testID` de navegación (`workspace-tab-<id>`) y de pantalla son idénticos en las tres pieles: un test funcional no debe conocer la plataforma.
+4. Un token nuevo pasa el contrato de `src/design-system/__tests__/skinTokens.test.ts` (contraste AA, sin blur fuera de iOS, sin violeta en Web).
+
+### 7.6. Validación manual y sus límites
+
+1. `npm run web:demo` (modo vitrina, sin Firebase ni credenciales) y `?skin=ios|android|web` con `?theme=dark|light`.
+2. `EXPO_PUBLIC_BFLOW_DEMO` no se define nunca en builds reales ni en workflows de publicación.
+3. La vista previa en el navegador valida la piel, no el sistema. Ripple, insets de borde a borde, háptica y blur nativo se confirman en dispositivo o emulador. Si no se probó en dispositivo, **se dice explícitamente** en la entrega (Sección 5.4).
+
+### 7.7. Cuándo hace falta un ADR
+
+Además de la Sección 5.2: añadir o quitar una piel, cambiar el material o el patrón de navegación de una piel, cambiar los breakpoints o los topes de columna, y sustituir una visualización en una plataforma (como la curva vectorial de Web).

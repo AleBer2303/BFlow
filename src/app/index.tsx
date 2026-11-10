@@ -1,22 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AppState, Platform, View } from 'react-native';
+import { AppState } from 'react-native';
 import {
   ensureStandardSavingsBuckets,
   FirestoreBudgetRepository,
 } from '../data/repositories/budgetRepository';
-import {
-  AppText,
-  AppTextInput,
-  CurrencyText,
-  FloatingLiquidGlassDock,
-  GlassSurface,
-  KeyboardAwareScrollView,
-  StatusBadge,
-  ThemeToggleIconButton,
-  hapticService,
-  useBFlowTheme,
-  type HapticType,
-} from '../design-system';
+import { hapticService, type HapticType } from '../design-system';
 import {
   buildMonthlyCurve,
   calculateChecklistProgress,
@@ -26,7 +14,6 @@ import {
   calculateMonthlySavingsSummary,
   calculateMotoIdealSummary,
   calculateProvisionPlanSummary,
-  formatCurrency,
   formatMonthKeyLabelEs,
   toAppIsoDate,
   type ConceptGroup,
@@ -45,7 +32,8 @@ import { ChecklistWorkspaceView } from '../features/checklist/components/Checkli
 import { DebtsWorkspaceView } from '../features/debts/components/DebtsWorkspaceView';
 import { InitialAccountSetupView } from '../features/onboarding/components/InitialAccountSetupView';
 import { SavingsAndProvisionsView } from '../features/savings/components/SavingsAndProvisionsView';
-import { MonthlyCurveSection } from '../features/summary/components/MonthlyCurveSection';
+import { WorkspaceShell } from '../features/shell/components/WorkspaceShell';
+import { SummaryOverview } from '../features/summary/components/SummaryOverview';
 import {
   registerWithPersonalProfile,
   sendPasswordRecoveryEmail,
@@ -59,13 +47,13 @@ import {
   confirmPasswordResetWithCode,
   requestPasswordResetCode,
 } from '../platform/auth/verificationCodeService';
+import { isDemoModeEnabled } from '../platform/mode/demoMode';
 import {
   loadPersistedAccount,
   savePersistedAccount,
 } from '../platform/storage/accountCache';
 
 export default function PhaseOneHomeScreen(): React.JSX.Element {
-  const { colors, spacing } = useBFlowTheme();
   const {
     activeTab,
     activeMonthKey,
@@ -163,9 +151,10 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     return runSync;
   };
 
-  // Automatic session restoration listener in live runtime
+  // Automatic session restoration listener in live runtime.
+  // The local showcase (demo) mode never talks to Firebase, so it keeps its seeded session.
   useEffect(() => {
-    if (process.env.NODE_ENV === 'test') {
+    if (process.env.NODE_ENV === 'test' || isDemoModeEnabled()) {
       return;
     }
     const unsubscribe = subscribeToAuthUser((restoredUser) => {
@@ -393,255 +382,164 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background.primary }}>
-      <KeyboardAwareScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingHorizontal: spacing.lg,
-          paddingTop: spacing.xl,
-          paddingBottom: Platform.OS === 'ios' ? 84 : 76,
-          gap: spacing.md,
-        }}
-      >
-        {/* Header */}
-        <View
-          style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: spacing.sm,
+    <WorkspaceShell
+      monthLabel={activeMonthLabel}
+      activeTab={activeTab}
+      onSelectTab={setActiveTab}
+      showNavigation={!needsOnboarding}
+    >
+      {needsOnboarding ? (
+        <InitialAccountSetupView
+          onCompleteSetup={(config) => {
+            void completeInitialAccountSetup(config);
+            void triggerHaptic('success');
           }}
-        >
-          <AppText variant="title1">{`BFlow · ${activeMonthLabel}`}</AppText>
-
-          <ThemeToggleIconButton testID="theme-toggle-button" />
-        </View>
-
-        {needsOnboarding ? (
-          <InitialAccountSetupView
-            onCompleteSetup={(config) => {
-              void completeInitialAccountSetup(config);
-              void triggerHaptic('success');
-            }}
-          />
-        ) : (
-          <>
-            {/* Active Workspace Content */}
-            {activeTab === 'summary' ? (
-              <>
-                <GlassSurface elevated testID="net-flow-hero-card">
-                  <View style={{ gap: spacing.xs }}>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: spacing.xs,
-                      }}
-                    >
-                      <AppText variant="caption" color={colors.text.secondary}>
-                        Flujo Neto
-                      </AppText>
-                      <StatusBadge
-                        testID="checklist-progress-badge"
-                        label={
-                          checklist.isMonthComplete
-                            ? `✨ Mes completo (${checklist.completedCount} de ${checklist.totalTrackableCount})`
-                            : `Checklist ${checklist.completedCount} de ${checklist.totalTrackableCount}`
-                        }
-                        status={checklist.isMonthComplete ? 'completed' : 'pending'}
-                      />
-                    </View>
-                    <CurrencyText
-                      testID="golden-net-flow"
-                      amount={budget.netCashFlow}
-                      variant="heroCurrency"
-                      tone="income"
-                    />
-                    <AppText variant="caption" color={colors.text.secondary}>
-                      {`Flujo proyectado del mes: ${formatCurrency(budget.projectedNetFlow)}`}
-                    </AppText>
-                  </View>
-                </GlassSurface>
-
-                <View style={{ flexDirection: 'row', gap: spacing.md }}>
-                  <GlassSurface style={{ flex: 1 }} testID="income-summary-card">
-                    <View style={{ gap: spacing.xs }}>
-                      <AppText variant="caption" color={colors.text.secondary}>
-                        Ingresos Recibidos
-                      </AppText>
-                      <CurrencyText amount={budget.receivedIncome} variant="title2" tone="income" />
-                      <AppText variant="micro" color={colors.text.muted}>
-                        {`Previstos: ${formatCurrency(budget.plannedIncome)}`}
-                      </AppText>
-                    </View>
-                  </GlassSurface>
-
-                  <GlassSurface style={{ flex: 1 }} testID="expense-summary-card">
-                    <View style={{ gap: spacing.xs }}>
-                      <AppText variant="caption" color={colors.text.secondary}>
-                        Gastos Pagados
-                      </AppText>
-                      <CurrencyText amount={budget.paidExpenses} variant="title2" tone="expense" />
-                      <AppText variant="micro" color={colors.text.muted}>
-                        {`Pendientes: ${formatCurrency(budget.pendingExpenses)}`}
-                      </AppText>
-                    </View>
-                  </GlassSurface>
-                </View>
-
-                <MonthlyCurveSection curve={monthlyCurve} />
-              </>
-            ) : null}
-
-            {activeTab === 'checklist' ? (
-              <ChecklistWorkspaceView
-                monthKey={activeMonthKey}
-                concepts={concepts}
-                entries={entries}
-                budget={budget}
-                debts={activeDebts}
-                savingsBuckets={activeSavingsBuckets}
-                onToggleEntry={handleToggleEntry}
-                onAddOrCompleteMovement={handleAddMovement}
-                onCreateCustomMovement={(input) => {
-                  triggerHaptic('success');
-                  void createCustomConceptAndMovement(input);
-                }}
-                onUpdateConcept={(conceptId, updates) => {
-                  triggerHaptic('success');
-                  void updateConcept(conceptId, updates);
-                }}
-                onDeleteConcept={(conceptId) => {
-                  triggerHaptic('light');
-                  void deleteConcept(conceptId);
-                }}
-                onEditEntry={(entryId, updates) => {
-                  triggerHaptic('success');
-                  void editEntry(entryId, updates);
-                }}
-                onDeleteEntry={(entryId) => {
-                  triggerHaptic('light');
-                  void deleteEntryById(entryId);
-                }}
-                onRemoveRepeatableEntry={removeOrResetEntry}
-              />
-            ) : null}
-
-            {activeTab === 'debts' ? (
-              <DebtsWorkspaceView
-                debtSummary={debtSummary}
-                onCreateDebt={(input) => {
-                  triggerHaptic('success');
-                  void createDebt(activeMonthKey, input);
-                }}
-                onUpdateDebt={(debtId, updates) => {
-                  triggerHaptic('success');
-                  void updateDebt(activeMonthKey, debtId, updates);
-                }}
-                onDeleteDebt={(debtId) => {
-                  triggerHaptic('light');
-                  void deleteDebt(activeMonthKey, debtId);
-                }}
-              />
-            ) : null}
-
-            {activeTab === 'savings' ? (
-              <SavingsAndProvisionsView
-                savingsSummary={savingsSummary}
-                motoIdealSummary={motoIdealSummary}
-                provisionPlan={idealMotoPlan}
-                onUpdateOpeningBalance={(bucketId, newBalanceCop, newName) => {
-                  triggerHaptic('success');
-                  void updateSavingsOpeningBalance(activeMonthKey, bucketId, newBalanceCop, newName);
-                }}
-                onCreateSavingsBucket={(name, openingBalanceCop) => {
-                  triggerHaptic('success');
-                  void createSavingsBucket(activeMonthKey, name, openingBalanceCop);
-                }}
-                onDeleteSavingsBucket={(bucketId) => {
-                  triggerHaptic('light');
-                  void deleteSavingsBucket(activeMonthKey, bucketId);
-                }}
-                onSaveProvisionItem={(item) => {
-                  triggerHaptic('success');
-                  void saveProvisionItem(item);
-                }}
-                onDeleteProvisionItem={(itemId) => {
-                  triggerHaptic('light');
-                  void deleteProvisionItem(itemId);
-                }}
-              />
-            ) : null}
-
-            {activeTab === 'analytics' ? (
-              <AnalyticsAndHistoryView
-                activeMonthKey={activeMonthKey}
-                availableMonths={availableMonths}
-                concepts={concepts}
-                entries={entries}
-                budget={budget}
-                checklist={checklist}
-                debtSummary={debtSummary}
-                savingsSummary={savingsSummary}
-                closedSnapshots={closedSnapshots}
-                onSelectMonth={setActiveMonthKey}
-                onCloseCurrentMonth={handleCloseMonth}
-                onReopenClosedMonth={(mk) => {
-                  triggerHaptic('light');
-                  void reopenClosedMonth(mk);
-                }}
-                onDeleteOrRevertMonth={(mk) => {
-                  triggerHaptic('light');
-                  void deleteOrRevertMonth(mk);
-                }}
-                onResetOctoberSeed={resetToOctober2026GoldenState}
-              />
-            ) : null}
-
-            {activeTab === 'account' ? (
-              <AccountProfileWorkspaceView
-                authUser={authUser}
-                syncStatusMessage={syncMessage}
-                isSyncing={isSyncing}
-                onSignOut={handleSignOut}
-                onManualSync={() => {
-                  triggerHaptic('light');
-                  void syncUserCloudAccount(authUser);
-                }}
-                onUpdateProfile={async (updates) => {
-                  triggerHaptic('success');
-                  await updateAuthUserProfile(updates);
-                }}
-                onSendPasswordReset={async (email) => {
-                  triggerHaptic('light');
-                  await handleSendPasswordRecovery(email);
-                }}
-                onRequestPasswordResetCode={async (email) => {
-                  triggerHaptic('light');
-                  await handleRequestPasswordResetCode(email);
-                }}
-                onConfirmPasswordResetWithCode={async (email, code, newPassword) => {
-                  await handleConfirmPasswordResetWithCode(email, code, newPassword);
-                }}
-                onResetFullAccount={() => {
-                  triggerHaptic('light');
-                  void resetFullAccount();
-                }}
-              />
-            ) : null}
-          </>
-        )}
-      </KeyboardAwareScrollView>
-
-      {!needsOnboarding ? (
-        <FloatingLiquidGlassDock
-          testID="liquid-glass-tab-bar"
-          activeTab={activeTab}
-          onSelectTab={setActiveTab}
         />
-      ) : null}
-    </View>
+      ) : (
+        <>
+          {/* Active Workspace Content */}
+          {activeTab === 'summary' ? (
+            <SummaryOverview budget={budget} checklist={checklist} curve={monthlyCurve} />
+          ) : null}
+
+          {activeTab === 'checklist' ? (
+            <ChecklistWorkspaceView
+              monthKey={activeMonthKey}
+              concepts={concepts}
+              entries={entries}
+              budget={budget}
+              debts={activeDebts}
+              savingsBuckets={activeSavingsBuckets}
+              onToggleEntry={handleToggleEntry}
+              onAddOrCompleteMovement={handleAddMovement}
+              onCreateCustomMovement={(input) => {
+                triggerHaptic('success');
+                void createCustomConceptAndMovement(input);
+              }}
+              onUpdateConcept={(conceptId, updates) => {
+                triggerHaptic('success');
+                void updateConcept(conceptId, updates);
+              }}
+              onDeleteConcept={(conceptId) => {
+                triggerHaptic('light');
+                void deleteConcept(conceptId);
+              }}
+              onEditEntry={(entryId, updates) => {
+                triggerHaptic('success');
+                void editEntry(entryId, updates);
+              }}
+              onDeleteEntry={(entryId) => {
+                triggerHaptic('light');
+                void deleteEntryById(entryId);
+              }}
+              onRemoveRepeatableEntry={removeOrResetEntry}
+            />
+          ) : null}
+
+          {activeTab === 'debts' ? (
+            <DebtsWorkspaceView
+              debtSummary={debtSummary}
+              onCreateDebt={(input) => {
+                triggerHaptic('success');
+                void createDebt(activeMonthKey, input);
+              }}
+              onUpdateDebt={(debtId, updates) => {
+                triggerHaptic('success');
+                void updateDebt(activeMonthKey, debtId, updates);
+              }}
+              onDeleteDebt={(debtId) => {
+                triggerHaptic('light');
+                void deleteDebt(activeMonthKey, debtId);
+              }}
+            />
+          ) : null}
+
+          {activeTab === 'savings' ? (
+            <SavingsAndProvisionsView
+              savingsSummary={savingsSummary}
+              motoIdealSummary={motoIdealSummary}
+              provisionPlan={idealMotoPlan}
+              onUpdateOpeningBalance={(bucketId, newBalanceCop, newName) => {
+                triggerHaptic('success');
+                void updateSavingsOpeningBalance(activeMonthKey, bucketId, newBalanceCop, newName);
+              }}
+              onCreateSavingsBucket={(name, openingBalanceCop) => {
+                triggerHaptic('success');
+                void createSavingsBucket(activeMonthKey, name, openingBalanceCop);
+              }}
+              onDeleteSavingsBucket={(bucketId) => {
+                triggerHaptic('light');
+                void deleteSavingsBucket(activeMonthKey, bucketId);
+              }}
+              onSaveProvisionItem={(item) => {
+                triggerHaptic('success');
+                void saveProvisionItem(item);
+              }}
+              onDeleteProvisionItem={(itemId) => {
+                triggerHaptic('light');
+                void deleteProvisionItem(itemId);
+              }}
+            />
+          ) : null}
+
+          {activeTab === 'analytics' ? (
+            <AnalyticsAndHistoryView
+              activeMonthKey={activeMonthKey}
+              availableMonths={availableMonths}
+              concepts={concepts}
+              entries={entries}
+              budget={budget}
+              checklist={checklist}
+              debtSummary={debtSummary}
+              savingsSummary={savingsSummary}
+              closedSnapshots={closedSnapshots}
+              onSelectMonth={setActiveMonthKey}
+              onCloseCurrentMonth={handleCloseMonth}
+              onReopenClosedMonth={(mk) => {
+                triggerHaptic('light');
+                void reopenClosedMonth(mk);
+              }}
+              onDeleteOrRevertMonth={(mk) => {
+                triggerHaptic('light');
+                void deleteOrRevertMonth(mk);
+              }}
+              onResetOctoberSeed={resetToOctober2026GoldenState}
+            />
+          ) : null}
+
+          {activeTab === 'account' ? (
+            <AccountProfileWorkspaceView
+              authUser={authUser}
+              syncStatusMessage={syncMessage}
+              isSyncing={isSyncing}
+              onSignOut={handleSignOut}
+              onManualSync={() => {
+                triggerHaptic('light');
+                void syncUserCloudAccount(authUser);
+              }}
+              onUpdateProfile={async (updates) => {
+                triggerHaptic('success');
+                await updateAuthUserProfile(updates);
+              }}
+              onSendPasswordReset={async (email) => {
+                triggerHaptic('light');
+                await handleSendPasswordRecovery(email);
+              }}
+              onRequestPasswordResetCode={async (email) => {
+                triggerHaptic('light');
+                await handleRequestPasswordResetCode(email);
+              }}
+              onConfirmPasswordResetWithCode={async (email, code, newPassword) => {
+                await handleConfirmPasswordResetWithCode(email, code, newPassword);
+              }}
+              onResetFullAccount={() => {
+                triggerHaptic('light');
+                void resetFullAccount();
+              }}
+            />
+          ) : null}
+        </>
+      )}
+    </WorkspaceShell>
   );
 }

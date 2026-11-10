@@ -2,6 +2,8 @@
 
 > **Fuente de Verdad Visual:** Ningún componente en `src/features/` ni `src/app/` puede usar colores hexadecimales, tamaños de fuente, radios o espaciados hardcodeados. Todo valor visual proviene estrictamente de [`src/design-system/tokens.ts`](file:///C:/Users/D0604763/Documents/BFlow/BFlow/src/design-system/tokens.ts).
 
+> **Tres pieles, un producto:** BFlow tiene una identidad visual por plataforma. Las secciones 1 a 9 describen la piel **iOS** (Liquid Glass), que es la de referencia. La sección 10 define las pieles **Android** (Material 3, sin vidrio) y **Web** (sistema plano), y la sección 11 el contrato responsive común. Los tokens se leen siempre de `useBFlowTheme()`, que entrega los de la piel activa.
+
 ---
 
 ## 1. Filosofía Estética: Apple iOS 26 Liquid Glass & Minimalismo Suizo
@@ -222,6 +224,7 @@ Fallback arquitectural idéntico visualmente mediante `expo-blur`:
    - **Interacción:** deslizar en horizontal recorre el mes día a día, atenúa lo posterior e inclina levemente la curva; más allá de hoy solo existe el cierre previsto. Al soltar, regresa a hoy. Deslizar en vertical desplaza la página.
    - **Accesibilidad:** cada botón del selector mide mínimo `52 pt` y anuncia monto y cierre previsto en `accessibilityLabel`, de modo que la identidad no depende del color. Con *Reducir Movimiento* no hay trazado de entrada, transformación, inclinación ni latido.
    - **Respaldo:** sin WebGL se muestra una barra 2D por día con la misma escala y una barra atenuada para el cierre previsto.
+   - **Por piel:** lo anterior describe la escena three.js de iOS y Android. La piel Web dibuja la misma curva como vector plano y estático (§10.4) y, en escritorio, convierte el selector en una tabla de métricas con su cifra actual.
 
 ---
 
@@ -235,3 +238,137 @@ Fallback arquitectural idéntico visualmente mediante `expo-blur`:
 | **Iconografía** | SVG puros monocromáticos adaptables al tema. | Emojis utilizados como sustitutos de iconos de sistema. |
 | **Áreas táctiles** | Mínimo `44 × 44 pt` con `hitSlop` preventivo. | Botones diminutos menores a 36pt pegados sin espaciado. |
 | **Animaciones** | Resortes rápidos (< 300ms) amortiguados con inercia. | Animaciones lineales o lentas (> 500ms) que demoran la acción del usuario. |
+
+---
+
+## 10. Pieles por Plataforma (iOS · Android · Web)
+
+Decisiones en los ADR [0010](docs/decisions/0010-platform-skins-and-responsive-layout.md) y [0011](docs/decisions/0011-web-redesign-and-vector-curve.md). La piel se resuelve en `src/design-system/platform/platformSkin.ts` y sus tokens viven en `src/design-system/tokens.ts` (`palettesBySkin`, `radiusBySkin`, `typographyBySkin`, `platformSkins`).
+
+### 10.1 Qué cambia y qué no
+
+| | iOS | Android | Web |
+| :--- | :--- | :--- | :--- |
+| Material | Liquid Glass: tinte translúcido + blur + borde especular | Material 3: contenedor tonal **opaco**; la variante elevada sube un tono y usa `elevation: 2` | Tarjeta plana, línea de 1 px, sin sombra |
+| Navegación | Dock flotante con lente líquido | Barra superior + barra de navegación anclada con indicador en píldora | Cabecera opaca con línea; palabras desde 840 px, barra al pie por debajo |
+| Toque | Resorte (escala 0,96) + háptica | Ripple recortado al control | Hover (140 ms) y pulsación (90 ms, escala 0,985), sin rebote |
+| Botón principal | Cápsula de vidrio | Relleno con el acento, totalmente redondeado | El único botón relleno con el acento, radio 4 |
+| Radios `xs / sm / md / lg / xl / pill` | 6 / 10 / 16 / 22 / 28 / 999 | 4 / 8 / 12 / 16 / 28 / 999 | 2 / 4 / 6 / 8 / 8 / 4 |
+| Objetivo táctil | 44 pt | 48 dp | 44 px |
+| Curva del mes | Escena three.js | Escena three.js | Curva vectorial (SVG) |
+
+**No cambia entre pieles:** los datos, los flujos, el significado de los colores semánticos, el espaciado (§4.1), los números tabulares y los `testID`.
+
+**Prohibido fuera de iOS:** `BlurView`, superficies translúcidas, borde especular, lente y dock flotante. Los tokens `colors.glass.*` conservan el nombre, pero en Android y Web son rellenos opacos y `blurIntensity` es 0.
+
+### 10.2 Token de acento (`colors.accent`)
+
+El único color de acción de cada piel: selección de navegación, foco y botón principal.
+
+| Token | iOS oscuro / claro | Android oscuro / claro | Web oscuro / claro |
+| :--- | :--- | :--- | :--- |
+| `accent.primary` | `#388AF6` / `#245F9F` | `#8CD5B4` / `#1B6B51` | `#256F82` / `#256F82` |
+| `accent.onPrimary` | `#0D0F12` / `#FFFFFF` | `#003827` / `#FFFFFF` | `#FFFFFF` / `#FFFFFF` |
+| `accent.container` | `rgba(79,143,234,0.16)` / `rgba(36,95,159,0.14)` | `#1F4F3E` / `#CDE9DB` | `rgba(95,179,198,0.16)` / `rgba(37,111,130,0.14)` |
+| `accent.text` | `#5C9DF2` / `#245F9F` | `#8CD5B4` / `#1B6B51` | `#5FB3C6` / `#1D5F70` |
+
+### 10.3 Piel Android (Material 3)
+
+| Token | Oscuro | Claro |
+| :--- | :--- | :--- |
+| `background.primary` | `#101411` | `#F6FBF4` |
+| `background.secondary` | `#181D19` | `#EFF5EE` |
+| `background.elevated` | `#1E2420` | `#E9EFE8` |
+| `glass.surfaceTint` (contenedor) | `#1A201C` | `#EAF0E9` |
+| `glass.surfaceElevatedTint` | `#232925` | `#E2E9E1` |
+| `text.primary / secondary / muted` | `#E0E4DD` / `#C0C9BF` / `#939C92` | `#171D19` / `#404943` / `#566058` |
+
+Contraste medido (primario / secundario / atenuado): sobre la página **14,4 / 10,9 / 6,6** (oscuro) y **16,3 / 8,9 / 6,2** (claro); sobre tarjeta **12,9 / 9,7 / 5,8** y **14,8 / 8,1 / 5,7**. Texto sobre el acento: **7,7** y **6,4**.
+
+Escala tipográfica (Roboto del sistema, sin `fontFamily` forzada):
+
+| Variante | Tamaño / interlínea | Peso | Tracking | Rol Material |
+| :--- | :--- | :--- | ---: | :--- |
+| `display` | 45 / 52 | 400 | 0 | Display medium |
+| `heroCurrency` | 36 / 44 | 400 | 0 | Display small |
+| `title1` | 28 / 36 | 400 | 0 | Headline medium |
+| `title2` | 22 / 28 | 400 | 0 | Title large |
+| `headline` | 16 / 24 | 500 | 0,15 | Title medium |
+| `body` | 14 / 20 | 400 | 0,25 | Body medium |
+| `callout` | 14 / 20 | 500 | 0,1 | Label large |
+| `caption` | 12 / 16 | 500 | 0,5 | Label medium |
+| `micro` | 11 / 16 | 500 | 0,5 | Label small |
+
+Componentes: barra de navegación de 80 dp, opaca (`background.elevated`), en el flujo del layout, con `insets.bottom` propio; indicador de 56 × 32 con `accent.container`; la píldora existe solo en el destino seleccionado (el estado nunca depende de una animación).
+
+### 10.4 Piel Web (sistema `design-taste-frontend`)
+
+Paleta `putty-black-teal`, tipografía `geist`, radios `sharp`, botones `solid`, repartidos por la skill (historial en `.taste-skill/history.json`).
+
+| Token | Oscuro | Claro |
+| :--- | :--- | :--- |
+| `background.primary` | `#0A0A0A` | `#DEDAD3` |
+| `background.secondary` / tarjeta | `#151515` | `#D3CEC6` |
+| `background.elevated` | `#1F1F1E` | `#E7E4DE` |
+| `glass.subtleBorder` (línea) | tinta al 14 % | tinta al 11 % |
+| `glass.specularBorder` (línea fuerte) | tinta al 26 % | tinta al 20 % |
+| `text.primary / secondary / muted` | `#DEDAD3` / `#B3AFA9` / `#93918C` | `#0A0A0A` / `#3B3835` / `#55514C` |
+| `semantic.savings` | `#E08FB8` | `#8A3A66` |
+
+Contraste medido (primario / secundario / atenuado): sobre la página **14,2 / 9,1 / 6,3** (oscuro) y **14,2 / 8,4 / 5,7** (claro); sobre tarjeta **13,1 / 8,4 / 5,8** y **12,6 / 7,4 / 5,0**. Texto sobre el acento: **5,7**.
+
+Escala tipográfica (Geist; `system-ui` mientras carga):
+
+| Variante | Tamaño / interlínea | Peso | Tracking |
+| :--- | :--- | :--- | ---: |
+| `display` | 52 / 56 | 500 | −2,2 |
+| `heroCurrency` | 38 / 44 | 500 | −1,3 |
+| `title1` | 28 / 34 | 500 | −0,8 |
+| `title2` | 20 / 28 | 500 | −0,3 |
+| `headline` | 18 / 26 | 500 | −0,2 |
+| `body` | 16 / 24 | 400 | 0 |
+| `callout` | 15 / 22 | 500 | 0 |
+| `caption` | 14 / 20 | 500 | 0 |
+| `micro` | 13 / 18 | 500 | 0 |
+
+Reglas propias de la Web:
+
+1. Interfaz 90–95 % neutra y un solo acento. **Nunca violeta ni lavanda** (por eso `savings` es rosa aquí).
+2. Texto de lectura a 16 px; nada por debajo de 13 px; pesos 400 y 500.
+3. Un único botón relleno por vista (`usePrimaryActionLook`); el resto, superficie con línea.
+4. Cabecera opaca de 72 px (56 px por debajo de 640 px) con línea inferior; sin blur, sombra ni píldora flotante.
+5. Movimiento (`webMotion`): 140 / 200 / 90 ms con `cubic-bezier(0.2, 0.8, 0.2, 1)`. Nada rebota, se inclina ni se anima con el scroll. La gráfica es estática.
+6. Foco de teclado: anillo de 2 px con el acento (`:focus-visible`).
+7. Curva del mes vectorial: línea de 2 px, área al 10 %, proyección punteada en `text.muted`. Se recorre con el puntero o con las flechas.
+
+---
+
+## 11. Contrato Responsive
+
+Función pura `resolveResponsiveLayout` y hook `useResponsiveLayout()` en `src/design-system/layout/responsiveLayout.ts`.
+
+| Ancho de ventana | Clase | Columnas | Margen iOS / Android | Margen Web |
+| :--- | :--- | ---: | ---: | ---: |
+| < 360 | `compact` | 4 | 16 | 16 |
+| 360 – 599 | `compact` | 4 | 16 | 24 |
+| 600 – 639 | `medium` | 8 | 24 | 24 |
+| 640 – 839 | `medium` | 8 | 24 | 48 |
+| 840 – 1023 | `expanded` | 12 | 24 | 48 |
+| ≥ 1024 | `expanded` | 12 | 24 | 80 |
+
+- **Ancho mínimo soportado:** 320.
+- **Columna de contenido** centrada con tope de 560 (iOS), 600 (Android) y 1.280 (Web).
+- **Separación entre columnas:** 12 en `compact`, 24 desde `medium`.
+- **Tarjetas con cifras:** comparten fila solo si cada cifra cabe en una línea (`minCardWidthForAmounts`); si no, cada una ocupa su fila. Una cifra nunca se parte ni se trunca.
+- **Paneles** (`ResponsiveColumns`): dos columnas cuando cada una conserva 400 de ancho; una columna en caso contrario.
+- **Resumen en escritorio** (columna ≥ 920): cifras en fila 6 / 3 / 3 y curva en panel partido 4 / 8.
+- **Web:** navegación en la cabecera desde 840; barra al pie por debajo, solo con iconos por debajo de 360.
+
+### Lista de comprobación para cualquier pantalla nueva
+
+1. Probarla a 320, 360, 390, 600, 840, 1.024 y 1.440 de ancho en las tres pieles (`npm run web:demo` con `?skin=`).
+2. Sin scroll horizontal ni elementos fuera de la ventana.
+3. Ninguna cifra monetaria partida en dos líneas.
+4. Todo control interactivo es un `AppPressable` y alcanza el objetivo táctil de la piel.
+5. Ningún `BlurView` ni superficie translúcida fuera de la piel iOS.
+6. Modo claro y oscuro revisados en las tres pieles.

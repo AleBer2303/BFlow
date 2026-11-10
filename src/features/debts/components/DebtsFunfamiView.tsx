@@ -10,18 +10,21 @@
  */
 
 import React, { useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, View } from 'react-native';
 import {
+  AppPressable,
   AppText,
   AppTextInput,
   CurrencyText,
   GlassSurface,
   MIN_TOUCH_TARGET_PT,
   PencilEditIcon,
+  ResponsiveColumns,
   RevealDown,
   StatusBadge,
   TrashBinIcon,
   useBFlowTheme,
+  usePrimaryActionLook,
 } from '../../../design-system';
 import {
   formatCurrency,
@@ -72,6 +75,7 @@ export function DebtsFunfamiView({
   onDeleteDebt,
 }: DebtsFunfamiViewProps): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
+  const primaryAction = usePrimaryActionLook();
 
   const [dismissedBannerMonth, setDismissedBannerMonth] = useState<string | null>(null);
 
@@ -322,7 +326,7 @@ export function DebtsFunfamiView({
         }}
       >
         <AppText variant="title2">Obligaciones Activas</AppText>
-        <Pressable
+        <AppPressable
           testID="debts-add-new-debt-button"
           accessibilityRole="button"
           onPress={() => {
@@ -348,7 +352,7 @@ export function DebtsFunfamiView({
           <AppText variant="callout" color={colors.text.primary}>
             {isFormOpen ? 'Cerrar' : '+ Nueva Deuda'}
           </AppText>
-        </Pressable>
+        </AppPressable>
       </View>
 
       {/* Form Drawer / Card for Creating or Editing a Debt */}
@@ -409,7 +413,7 @@ export function DebtsFunfamiView({
                 ).map((opt) => {
                   const active = formInterestRateType === opt.id;
                   return (
-                    <Pressable
+                    <AppPressable
                       key={opt.id}
                       testID={`debt-form-rate-type-${opt.id}`}
                       accessibilityRole="button"
@@ -433,7 +437,7 @@ export function DebtsFunfamiView({
                       >
                         {opt.label}
                       </AppText>
-                    </Pressable>
+                    </AppPressable>
                   );
                 })}
               </View>
@@ -473,7 +477,7 @@ export function DebtsFunfamiView({
             ) : null}
 
             <View style={{ flexDirection: 'row', gap: spacing.xs, justifyContent: 'flex-end', paddingTop: spacing.xs }}>
-              <Pressable
+              <AppPressable
                 testID="debt-form-submit-button"
                 accessibilityRole="button"
                 onPress={handleSaveDebtForm}
@@ -482,17 +486,15 @@ export function DebtsFunfamiView({
                   paddingHorizontal: spacing.lg,
                   borderRadius: radius.md,
                   borderCurve: 'continuous',
-                  backgroundColor: colors.glass.surfaceElevatedTint,
-                  borderWidth: 1,
-                  borderColor: colors.glass.specularBorder,
+                  ...primaryAction.container,
                   justifyContent: 'center',
                   alignItems: 'center',
                 }}
               >
-                <AppText variant="headline" color={colors.semantic.income}>
+                <AppText variant="headline" color={primaryAction.labelColor ?? colors.semantic.income}>
                   Guardar Deuda
                 </AppText>
-              </Pressable>
+              </AppPressable>
             </View>
           </View>
         </GlassSurface>
@@ -506,7 +508,7 @@ export function DebtsFunfamiView({
               <AppText variant="headline" color={colors.semantic.completed}>
                 {`✨ ¡Deuda "${paidOffDebt?.name ?? 'Obligación'}" liquidada al 100%!`}
               </AppText>
-              <Pressable
+              <AppPressable
                 testID="moto-debt-banner-dismiss-button"
                 accessibilityRole="button"
                 accessibilityLabel="Descartar aviso de deuda completada"
@@ -527,7 +529,7 @@ export function DebtsFunfamiView({
                 <AppText variant="micro" color={colors.text.secondary}>
                   Descartar
                 </AppText>
-              </Pressable>
+              </AppPressable>
             </View>
             <AppText variant="caption" color={colors.text.secondary}>
               El saldo llegó a $ 0. A partir de este momento los abonos de cuota se aplicarán automáticamente a tus siguientes obligaciones para acelerar tu libertad financiera.
@@ -536,133 +538,135 @@ export function DebtsFunfamiView({
         </GlassSurface>
       ) : null}
 
-      {/* Individual Active Obligations Breakdown */}
-      {activeObligations.map((debt) => (
-        <GlassSurface key={debt.debtId} testID={`debt-card-${debt.debtId}`}>
-          <View style={{ gap: spacing.xs }}>
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: spacing.xs,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' }}>
-                <AppText variant="title2">{debt.name}</AppText>
-                {debt.interestRateType === 'annual' &&
-                  debt.annualInterestRate !== undefined &&
-                  debt.annualInterestRate > 0 ? (
-                  <StatusBadge
-                    label={`${debt.annualInterestRate}% anual (${debt.monthlyInterestRate ?? 0}% mes)`}
-                    status="reserve"
-                  />
-                ) : debt.monthlyInterestRate !== undefined && debt.monthlyInterestRate > 0 ? (
-                  <StatusBadge
-                    label={`${debt.monthlyInterestRate}% mes`}
-                    status="reserve"
-                  />
-                ) : (
-                  <StatusBadge label="0% int." status="info" />
-                )}
+      <ResponsiveColumns testID="debt-cards-grid">
+        {/* Individual Active Obligations Breakdown */}
+        {activeObligations.map((debt) => (
+          <GlassSurface key={debt.debtId} testID={`debt-card-${debt.debtId}`}>
+            <View style={{ gap: spacing.xs }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: spacing.xs,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' }}>
+                  <AppText variant="title2">{debt.name}</AppText>
+                  {debt.interestRateType === 'annual' &&
+                    debt.annualInterestRate !== undefined &&
+                    debt.annualInterestRate > 0 ? (
+                    <StatusBadge
+                      label={`${debt.annualInterestRate}% anual (${debt.monthlyInterestRate ?? 0}% mes)`}
+                      status="reserve"
+                    />
+                  ) : debt.monthlyInterestRate !== undefined && debt.monthlyInterestRate > 0 ? (
+                    <StatusBadge
+                      label={`${debt.monthlyInterestRate}% mes`}
+                      status="reserve"
+                    />
+                  ) : (
+                    <StatusBadge label="0% int." status="info" />
+                  )}
+                </View>
+
+                <StatusBadge
+                  label={
+                    debt.appliedPrincipalThisMonth > 0
+                      ? `Abono - ${formatCurrency(debt.appliedPrincipalThisMonth)}`
+                      : 'Sin abono este mes'
+                  }
+                  status={debt.appliedPrincipalThisMonth > 0 ? 'completed' : 'info'}
+                />
               </View>
 
-              <StatusBadge
-                label={
-                  debt.appliedPrincipalThisMonth > 0
-                    ? `Abono - ${formatCurrency(debt.appliedPrincipalThisMonth)}`
-                    : 'Sin abono este mes'
-                }
-                status={debt.appliedPrincipalThisMonth > 0 ? 'completed' : 'info'}
+              <CurrencyText
+                testID={`debt-remaining-${debt.debtId}`}
+                amount={debt.remainingBalance}
+                variant="title1"
+                tone="debt"
               />
-            </View>
 
-            <CurrencyText
-              testID={`debt-remaining-${debt.debtId}`}
-              amount={debt.remainingBalance}
-              variant="title1"
-              tone="debt"
-            />
-
-            {/* Interest calculation feedback if rate > 0 */}
-            {debt.monthlyInterestRate !== undefined && debt.monthlyInterestRate > 0 ? (
-              <AppText variant="micro" color={colors.semantic.debt}>
-                {`Interés generado este mes (${debt.monthlyInterestRate}%): + ${formatCurrency(debt.accruedInterestThisMonth)}`}
-              </AppText>
-            ) : null}
-
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: spacing.xs,
-                paddingTop: spacing.xxs,
-              }}
-            >
-              <View>
-                <AppText variant="caption" color={colors.text.secondary}>
-                  {`Saldo apertura (${debtSummary.monthKey}): ${formatCurrency(debt.openingBalance)}`}
+              {/* Interest calculation feedback if rate > 0 */}
+              {debt.monthlyInterestRate !== undefined && debt.monthlyInterestRate > 0 ? (
+                <AppText variant="micro" color={colors.semantic.debt}>
+                  {`Interés generado este mes (${debt.monthlyInterestRate}%): + ${formatCurrency(debt.accruedInterestThisMonth)}`}
                 </AppText>
-                <AppText variant="caption" color={colors.text.secondary}>
-                  {`Acreedor: ${debt.lender}${debt.monthlyInstallment && debt.monthlyInstallment > 0 ? ` · Cuota: ${formatCurrency(debt.monthlyInstallment)}/mes` : ''}`}
-                </AppText>
-              </View>
+              ) : null}
 
-              {/* Edit & Delete Action Buttons */}
-              <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-                <Pressable
-                  testID={`debt-edit-${debt.debtId}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Editar deuda ${debt.name}`}
-                  onPress={() => openEditForm(debt)}
-                  style={{
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    minWidth: MIN_TOUCH_TARGET_PT,
-                    paddingHorizontal: spacing.sm,
-                    paddingVertical: spacing.xxs,
-                    borderRadius: radius.md,
-                    borderCurve: 'continuous',
-                    backgroundColor: colors.glass.surfaceElevatedTint,
-                    borderWidth: 1,
-                    borderColor: colors.glass.specularBorder,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: spacing.xxs,
-                  }}
-                >
-                  <PencilEditIcon size={16} color={colors.text.secondary} />
-                </Pressable>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: spacing.xs,
+                  paddingTop: spacing.xxs,
+                }}
+              >
+                <View>
+                  <AppText variant="caption" color={colors.text.secondary}>
+                    {`Saldo apertura (${debtSummary.monthKey}): ${formatCurrency(debt.openingBalance)}`}
+                  </AppText>
+                  <AppText variant="caption" color={colors.text.secondary}>
+                    {`Acreedor: ${debt.lender}${debt.monthlyInstallment && debt.monthlyInstallment > 0 ? ` · Cuota: ${formatCurrency(debt.monthlyInstallment)}/mes` : ''}`}
+                  </AppText>
+                </View>
 
-                <Pressable
-                  testID={`debt-delete-${debt.debtId}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Eliminar deuda ${debt.name}`}
-                  onPress={() => handleDeleteDebtConfirm(debt.debtId, debt.name)}
-                  style={{
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    minWidth: MIN_TOUCH_TARGET_PT,
-                    paddingHorizontal: spacing.sm,
-                    paddingVertical: spacing.xxs,
-                    borderRadius: radius.md,
-                    borderCurve: 'continuous',
-                    backgroundColor: colors.semantic.expenseSoft,
-                    borderWidth: 1,
-                    borderColor: colors.glass.subtleBorder,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                >
-                  <TrashBinIcon size={16} color={colors.semantic.expense} />
-                </Pressable>
+                {/* Edit & Delete Action Buttons */}
+                <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                  <AppPressable
+                    testID={`debt-edit-${debt.debtId}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Editar deuda ${debt.name}`}
+                    onPress={() => openEditForm(debt)}
+                    style={{
+                      minHeight: MIN_TOUCH_TARGET_PT,
+                      minWidth: MIN_TOUCH_TARGET_PT,
+                      paddingHorizontal: spacing.sm,
+                      paddingVertical: spacing.xxs,
+                      borderRadius: radius.md,
+                      borderCurve: 'continuous',
+                      backgroundColor: colors.glass.surfaceElevatedTint,
+                      borderWidth: 1,
+                      borderColor: colors.glass.specularBorder,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: spacing.xxs,
+                    }}
+                  >
+                    <PencilEditIcon size={16} color={colors.text.secondary} />
+                  </AppPressable>
+
+                  <AppPressable
+                    testID={`debt-delete-${debt.debtId}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Eliminar deuda ${debt.name}`}
+                    onPress={() => handleDeleteDebtConfirm(debt.debtId, debt.name)}
+                    style={{
+                      minHeight: MIN_TOUCH_TARGET_PT,
+                      minWidth: MIN_TOUCH_TARGET_PT,
+                      paddingHorizontal: spacing.sm,
+                      paddingVertical: spacing.xxs,
+                      borderRadius: radius.md,
+                      borderCurve: 'continuous',
+                      backgroundColor: colors.semantic.expenseSoft,
+                      borderWidth: 1,
+                      borderColor: colors.glass.subtleBorder,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <TrashBinIcon size={16} color={colors.semantic.expense} />
+                  </AppPressable>
+                </View>
               </View>
             </View>
-          </View>
-        </GlassSurface>
-      ))}
+          </GlassSurface>
+        ))}
+      </ResponsiveColumns>
     </View>
   );
 }

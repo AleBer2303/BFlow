@@ -9,17 +9,18 @@
      */
 
     import React, { useMemo, useState } from 'react';
-    import { LayoutAnimation, Platform, Pressable, UIManager, View } from 'react-native';
+    import { LayoutAnimation, Platform, UIManager, View } from 'react-native';
     import {
-      AppText,
-      AppTextInput,
-      CurrencyText,
-      GlassSurface,
-      IosWheelPickerModal,
-      MIN_TOUCH_TARGET_PT,
-      StatusBadge,
-      useBFlowTheme,
-    } from '../../../design-system';
+  AppPressable,
+  AppText,
+  AppTextInput,
+  CurrencyText,
+  GlassSurface,
+  IosWheelPickerModal,
+  MIN_TOUCH_TARGET_PT,
+  StatusBadge,
+  useBFlowTheme,
+} from '../../../design-system';
     import {
       formatCurrency,
       formatMonthKeyLabelEs,
@@ -342,7 +343,7 @@
                   <AppText variant="caption" color={colors.text.secondary}>
                     Año
                   </AppText>
-                  <Pressable
+                  <AppPressable
                     testID="onboarding-year-dropdown-trigger"
                     accessibilityRole="button"
                     accessibilityLabel={`Año actual: ${selectedYear}. Toca para abrir el selector de año.`}
@@ -373,7 +374,7 @@
                     >
                       ▼
                     </AppText>
-                  </Pressable>
+                  </AppPressable>
                 </View>
 
                 {/* Month Picker Trigger */}
@@ -381,7 +382,7 @@
                   <AppText variant="caption" color={colors.text.secondary}>
                     Mes de inicio
                   </AppText>
-                  <Pressable
+                  <AppPressable
                     testID="onboarding-month-dropdown-trigger"
                     accessibilityRole="button"
                     accessibilityLabel={`Mes actual: ${activeMonthOption.label}. Toca para abrir el selector.`}
@@ -408,7 +409,7 @@
                     >
                       ▼
                     </AppText>
-                  </Pressable>
+                  </AppPressable>
                 </View>
               </View>
 
@@ -493,7 +494,7 @@
                         flex: 1,
                       }}
                     />
-                    <Pressable
+                    <AppPressable
                       testID={`onboarding-remove-bucket-${bucket.id}`}
                       accessibilityRole="button"
                       onPress={() => {
@@ -512,13 +513,13 @@
                       <AppText variant="caption" color={colors.semantic.expense}>
                         Quitar
                       </AppText>
-                    </Pressable>
+                    </AppPressable>
                   </View>
                 ))
               )}
 
               {!isAddBucketOpen ? (
-                <Pressable
+                <AppPressable
                   testID="onboarding-toggle-add-bucket"
                   accessibilityRole="button"
                   accessibilityLabel="Agregar nuevo fondo de ahorro"
@@ -542,7 +543,7 @@
                   <AppText variant="caption" color={colors.semantic.savings} style={{ fontWeight: '600' }}>
                     + Agregar Fondo
                   </AppText>
-                </Pressable>
+                </AppPressable>
               ) : (
                 <View
                   style={{
@@ -576,7 +577,7 @@
                     />
                   </View>
                   <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
-                    <Pressable
+                    <AppPressable
                       testID="onboarding-add-bucket-button"
                       accessibilityRole="button"
                       onPress={handleAddCustomBucket}
@@ -595,8 +596,8 @@
                       <AppText variant="caption" color={colors.semantic.savings} style={{ fontWeight: '600' }}>
                         + Agregar Fondo
                       </AppText>
-                    </Pressable>
-                    <Pressable
+                    </AppPressable>
+                    <AppPressable
                       testID="onboarding-cancel-add-bucket"
                       accessibilityRole="button"
                       onPress={() => {
@@ -618,7 +619,7 @@
                       <AppText variant="caption" color={colors.text.secondary}>
                         Cancelar
                       </AppText>
-                    </Pressable>
+                    </AppPressable>
                   </View>
                 </View>
               )}
@@ -672,7 +673,7 @@
                         }`}
                       </AppText>
                     </View>
-                    <Pressable
+                    <AppPressable
                       accessibilityRole="button"
                       onPress={() => setDebts((prev) => prev.filter((_, i) => i !== idx))}
                       style={{
@@ -684,13 +685,13 @@
                       <AppText variant="caption" color={colors.semantic.expense}>
                         Quitar
                       </AppText>
-                    </Pressable>
+                    </AppPressable>
                   </View>
                 ))
               )}
 
               {!isAddDebtOpen ? (
-                <Pressable
+                <AppPressable
                   testID="onboarding-toggle-add-debt"
                   accessibilityRole="button"
                   accessibilityLabel="Agregar nueva deuda"
@@ -714,7 +715,7 @@
                   <AppText variant="caption" color={colors.semantic.debt} style={{ fontWeight: '600' }}>
                     + Agregar Deuda
                   </AppText>
-                </Pressable>
+                </AppPressable>
               ) : (
                 <View
                   style={{
@@ -771,7 +772,7 @@
                   </View>
 
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center' }}>
-                    <Pressable
+                    <AppPressable
                       testID="onboarding-debt-rate-monthly"
                       accessibilityRole="button"
                       onPress={() => setDebtRateType('monthly')}
@@ -797,8 +798,8 @@
                       >
                         Interés Mensual (%)
                       </AppText>
-                    </Pressable>
-                    <Pressable
+                    </AppPressable>
+                    <AppPressable
                       testID="onboarding-debt-rate-annual"
                       accessibilityRole="button"
                       onPress={() => setDebtRateType('annual')}
@@ -824,7 +825,7 @@
                       >
                         Interés Anual (% E.A.)
                       </AppText>
-                    </Pressable>
+                    </AppPressable>
                     <AppTextInput
                       testID="onboarding-debt-rate-input"
                       value={debtRate}
@@ -839,7 +840,7 @@
                   </View>
 
                   <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
-                    <Pressable
+                    <AppPressable
                       testID="onboarding-add-debt-button"
                       accessibilityRole="button"
                       onPress={handleAddDebt}
@@ -858,8 +859,8 @@
                       <AppText variant="caption" color={colors.semantic.debt} style={{ fontWeight: '600' }}>
                         + Agregar Deuda
                       </AppText>
-                    </Pressable>
-                    <Pressable
+                    </AppPressable>
+                    <AppPressable
                       testID="onboarding-cancel-add-debt"
                       accessibilityRole="button"
                       onPress={() => {
@@ -881,7 +882,7 @@
                       <AppText variant="caption" color={colors.text.secondary}>
                         Cancelar
                       </AppText>
-                    </Pressable>
+                    </AppPressable>
                   </View>
                 </View>
               )}
@@ -937,7 +938,7 @@
                       tone="income"
                       style={{ fontWeight: '600', marginRight: spacing.sm }}
                     />
-                    <Pressable
+                    <AppPressable
                       accessibilityRole="button"
                       onPress={() => setIncomes((prev) => prev.filter((_, i) => i !== idx))}
                       style={{
@@ -949,13 +950,13 @@
                       <AppText variant="caption" color={colors.semantic.expense}>
                         Quitar
                       </AppText>
-                    </Pressable>
+                    </AppPressable>
                   </View>
                 ))
               )}
 
               {!isAddIncomeOpen ? (
-                <Pressable
+                <AppPressable
                   testID="onboarding-toggle-add-income"
                   accessibilityRole="button"
                   accessibilityLabel="Agregar nuevo ingreso"
@@ -979,7 +980,7 @@
                   <AppText variant="caption" color={colors.semantic.income} style={{ fontWeight: '600' }}>
                     + Agregar Ingreso
                   </AppText>
-                </Pressable>
+                </AppPressable>
               ) : (
                 <View
                   style={{
@@ -1014,7 +1015,7 @@
                   </View>
 
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center' }}>
-                    <Pressable
+                    <AppPressable
                       testID="onboarding-income-group-fixed"
                       accessibilityRole="button"
                       onPress={() => setIncGroup('fixed')}
@@ -1038,8 +1039,8 @@
                       >
                         Fijo
                       </AppText>
-                    </Pressable>
-                    <Pressable
+                    </AppPressable>
+                    <AppPressable
                       testID="onboarding-income-group-variable"
                       accessibilityRole="button"
                       onPress={() => setIncGroup('variable')}
@@ -1063,8 +1064,8 @@
                       >
                         Variable
                       </AppText>
-                    </Pressable>
-                    <Pressable
+                    </AppPressable>
+                    <AppPressable
                       testID="onboarding-income-persist-toggle"
                       accessibilityRole="button"
                       onPress={() => setIncPersist((v) => !v)}
@@ -1083,11 +1084,11 @@
                       <AppText variant="caption">
                         {incPersist ? 'Persiste cada mes' : 'Solo este mes'}
                       </AppText>
-                    </Pressable>
+                    </AppPressable>
                   </View>
 
                   <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
-                    <Pressable
+                    <AppPressable
                       testID="onboarding-add-income-button"
                       accessibilityRole="button"
                       onPress={handleAddIncome}
@@ -1106,8 +1107,8 @@
                       <AppText variant="caption" color={colors.semantic.income} style={{ fontWeight: '600' }}>
                         + Agregar Ingreso
                       </AppText>
-                    </Pressable>
-                    <Pressable
+                    </AppPressable>
+                    <AppPressable
                       testID="onboarding-cancel-add-income"
                       accessibilityRole="button"
                       onPress={() => {
@@ -1129,7 +1130,7 @@
                       <AppText variant="caption" color={colors.text.secondary}>
                         Cancelar
                       </AppText>
-                    </Pressable>
+                    </AppPressable>
                   </View>
                 </View>
               )}
@@ -1186,7 +1187,7 @@
                       tone="expense"
                       style={{ fontWeight: '600', marginRight: spacing.sm }}
                     />
-                    <Pressable
+                    <AppPressable
                       accessibilityRole="button"
                       onPress={() => setExpenses((prev) => prev.filter((_, i) => i !== idx))}
                       style={{
@@ -1198,13 +1199,13 @@
                       <AppText variant="caption" color={colors.semantic.expense}>
                         Quitar
                       </AppText>
-                    </Pressable>
+                    </AppPressable>
                   </View>
                 ))
               )}
 
               {!isAddExpenseOpen ? (
-                <Pressable
+                <AppPressable
                   testID="onboarding-toggle-add-expense"
                   accessibilityRole="button"
                   accessibilityLabel="Agregar nuevo gasto"
@@ -1228,7 +1229,7 @@
                   <AppText variant="caption" color={colors.semantic.expense} style={{ fontWeight: '600' }}>
                     + Agregar Gasto
                   </AppText>
-                </Pressable>
+                </AppPressable>
               ) : (
                 <View
                   style={{
@@ -1263,7 +1264,7 @@
                   </View>
 
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center' }}>
-                    <Pressable
+                    <AppPressable
                       testID="onboarding-expense-group-fixed"
                       accessibilityRole="button"
                       onPress={() => setExpGroup('fixed')}
@@ -1287,8 +1288,8 @@
                       >
                         Fijo
                       </AppText>
-                    </Pressable>
-                    <Pressable
+                    </AppPressable>
+                    <AppPressable
                       testID="onboarding-expense-group-variable"
                       accessibilityRole="button"
                       onPress={() => setExpGroup('variable')}
@@ -1312,8 +1313,8 @@
                       >
                         Variable
                       </AppText>
-                    </Pressable>
-                    <Pressable
+                    </AppPressable>
+                    <AppPressable
                       testID="onboarding-expense-persist-toggle"
                       accessibilityRole="button"
                       onPress={() => setExpPersist((v) => !v)}
@@ -1332,7 +1333,7 @@
                       <AppText variant="caption">
                         {expPersist ? 'Persiste cada mes' : 'Solo este mes'}
                       </AppText>
-                    </Pressable>
+                    </AppPressable>
                   </View>
 
                   {/* Optional Savings Bucket Link */}
@@ -1342,7 +1343,7 @@
                         Vincular a fondo de ahorro (opcional):
                       </AppText>
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-                        <Pressable
+                        <AppPressable
                           accessibilityRole="button"
                           onPress={() => setExpBucketKey(null)}
                           style={{
@@ -1360,9 +1361,9 @@
                           }}
                         >
                           <AppText variant="caption">Sin fondo</AppText>
-                        </Pressable>
+                        </AppPressable>
                         {savingsBuckets.map((b) => (
-                          <Pressable
+                          <AppPressable
                             key={b.id ?? b.name}
                             testID={`onboarding-expense-bucket-${b.id}`}
                             accessibilityRole="button"
@@ -1384,7 +1385,7 @@
                             }}
                           >
                             <AppText variant="caption">{`Aporta a: ${b.name}`}</AppText>
-                          </Pressable>
+                          </AppPressable>
                         ))}
                       </View>
                     </View>
@@ -1397,7 +1398,7 @@
                         Vincular a deuda (opcional):
                       </AppText>
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-                        <Pressable
+                        <AppPressable
                           accessibilityRole="button"
                           onPress={() => setExpDebtKey(null)}
                           style={{
@@ -1415,9 +1416,9 @@
                           }}
                         >
                           <AppText variant="caption">Sin deuda</AppText>
-                        </Pressable>
+                        </AppPressable>
                         {debts.map((d) => (
-                          <Pressable
+                          <AppPressable
                             key={d.key ?? d.name}
                             testID={`onboarding-expense-debt-${d.key ?? d.name}`}
                             accessibilityRole="button"
@@ -1439,14 +1440,14 @@
                             }}
                           >
                             <AppText variant="caption">{`Abona a: ${d.name}`}</AppText>
-                          </Pressable>
+                          </AppPressable>
                         ))}
                       </View>
                     </View>
                   ) : null}
 
                   <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
-                    <Pressable
+                    <AppPressable
                       testID="onboarding-add-expense-button"
                       accessibilityRole="button"
                       onPress={handleAddExpense}
@@ -1465,8 +1466,8 @@
                       <AppText variant="caption" color={colors.semantic.expense} style={{ fontWeight: '600' }}>
                         + Agregar Gasto
                       </AppText>
-                    </Pressable>
-                    <Pressable
+                    </AppPressable>
+                    <AppPressable
                       testID="onboarding-cancel-add-expense"
                       accessibilityRole="button"
                       onPress={() => {
@@ -1488,7 +1489,7 @@
                       <AppText variant="caption" color={colors.text.secondary}>
                         Cancelar
                       </AppText>
-                    </Pressable>
+                    </AppPressable>
                   </View>
                 </View>
               )}
@@ -1537,7 +1538,7 @@
                         {`${formatCurrency(p.amountCop)} cada ${p.periodMonths} meses`}
                       </AppText>
                     </View>
-                    <Pressable
+                    <AppPressable
                       accessibilityRole="button"
                       onPress={() => setProvisions((prev) => prev.filter((_, i) => i !== idx))}
                       style={{
@@ -1549,13 +1550,13 @@
                       <AppText variant="caption" color={colors.semantic.expense}>
                         Quitar
                       </AppText>
-                    </Pressable>
+                    </AppPressable>
                   </View>
                 ))
               )}
 
               {!isAddProvisionOpen ? (
-                <Pressable
+                <AppPressable
                   testID="onboarding-toggle-add-provision"
                   accessibilityRole="button"
                   accessibilityLabel="Agregar nueva provisión o meta"
@@ -1579,7 +1580,7 @@
                   <AppText variant="caption" color={colors.semantic.provisions} style={{ fontWeight: '600' }}>
                     + Agregar Provisión
                   </AppText>
-                </Pressable>
+                </AppPressable>
               ) : (
                 <View
                   style={{
@@ -1631,7 +1632,7 @@
                       </AppText>
                     </View>
 
-                    <Pressable
+                    <AppPressable
                       testID="onboarding-provision-kind-toggle"
                       accessibilityRole="button"
                       onPress={() =>
@@ -1650,11 +1651,11 @@
                       <AppText variant="caption">
                         {provKind === 'recurring' ? 'Provisión Periódica' : 'Meta Específica'}
                       </AppText>
-                    </Pressable>
+                    </AppPressable>
                   </View>
 
                   <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
-                    <Pressable
+                    <AppPressable
                       testID="onboarding-add-provision-button"
                       accessibilityRole="button"
                       onPress={handleAddProvision}
@@ -1673,8 +1674,8 @@
                       <AppText variant="caption" color={colors.semantic.provisions} style={{ fontWeight: '600' }}>
                         + Agregar Provisión
                       </AppText>
-                    </Pressable>
-                    <Pressable
+                    </AppPressable>
+                    <AppPressable
                       testID="onboarding-cancel-add-provision"
                       accessibilityRole="button"
                       onPress={() => {
@@ -1696,7 +1697,7 @@
                       <AppText variant="caption" color={colors.text.secondary}>
                         Cancelar
                       </AppText>
-                    </Pressable>
+                    </AppPressable>
                   </View>
                 </View>
               )}
@@ -1705,7 +1706,7 @@
 
           {/* Complete Setup CTA */}
           <View style={{ gap: spacing.xs, paddingTop: spacing.sm, paddingBottom: spacing.lg }}>
-            <Pressable
+            <AppPressable
               testID="complete-initial-setup-button"
               accessibilityRole="button"
               onPress={handleFinishSetup}
@@ -1730,7 +1731,7 @@
               >
                 {`Guardar e Iniciar ${formatMonthKeyLabelEs(computedMonthKey)}`}
               </AppText>
-            </Pressable>
+            </AppPressable>
             <AppText variant="caption" color={colors.text.muted} style={{ textAlign: 'center' }}>
               Podrás modificar o agregar cualquier elemento en cualquier momento desde tu presupuesto.
             </AppText>

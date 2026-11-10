@@ -3,11 +3,66 @@
  *
  * Single source of truth for visual tokens in BFlow (documented in DESIGN.md).
  * Never hardcode colors, spacing, radii, or font sizes in feature components.
+ *
+ * Tokens are resolved per platform skin (iOS, Android, Web) by `useBFlowTheme()`. The bare
+ * exports `palettes`, `radius` and `typography` are the iOS (Liquid Glass) set and stay for
+ * backwards compatibility; feature code must read tokens from the theme hook, never from here.
  */
 
 export type ThemeMode = 'dark' | 'light';
 
+/**
+ * Visual identity per platform ("piel"). Same product, data and flows; different material:
+ * - ios:     Apple Liquid Glass (translucent blur, floating dock, spring physics).
+ * - android: Material 3 (opaque tonal surfaces, anchored navigation bar, ripples). No glass.
+ * - web:     flat editorial system dealt with the design-taste-frontend skill (ADR 0011).
+ */
+export type PlatformSkinId = 'ios' | 'android' | 'web';
+
+export const PLATFORM_SKIN_IDS: readonly PlatformSkinId[] = ['ios', 'android', 'web'];
+
+export type SurfaceMaterial = 'liquid-glass' | 'tonal' | 'flat';
+export type NavigationPattern = 'floating-dock' | 'navigation-bar' | 'adaptive-header';
+export type PressFeedback = 'spring' | 'ripple' | 'step';
+
+export interface PlatformSkinSpec {
+  id: PlatformSkinId;
+  label: string;
+  surfaceMaterial: SurfaceMaterial;
+  navigation: NavigationPattern;
+  pressFeedback: PressFeedback;
+  /** Minimum interactive size: 44pt (Apple HIG / WCAG 2.2), 48dp (Material 3). */
+  minTouchTarget: number;
+}
+
 export const MIN_TOUCH_TARGET_PT = 44 as const;
+
+export const platformSkins: Record<PlatformSkinId, PlatformSkinSpec> = {
+  ios: {
+    id: 'ios',
+    label: 'iOS · Liquid Glass',
+    surfaceMaterial: 'liquid-glass',
+    navigation: 'floating-dock',
+    pressFeedback: 'spring',
+    minTouchTarget: MIN_TOUCH_TARGET_PT,
+  },
+  android: {
+    id: 'android',
+    label: 'Android · Material 3',
+    surfaceMaterial: 'tonal',
+    navigation: 'navigation-bar',
+    pressFeedback: 'ripple',
+    minTouchTarget: 48,
+  },
+  web: {
+    id: 'web',
+    label: 'Web · Editorial plano',
+    surfaceMaterial: 'flat',
+    navigation: 'adaptive-header',
+    pressFeedback: 'step',
+    minTouchTarget: MIN_TOUCH_TARGET_PT,
+  },
+};
 
 export const spacing = {
   xxs: 2,
@@ -30,7 +85,27 @@ export const radius = {
   pill: 999,
 } as const;
 
+export type RadiusScale = Record<keyof typeof radius, number>;
+
+/**
+ * iOS squircles · Material 3 shape scale · web "sharp" family (4/6/8) for a finance tool.
+ * The web skin has ONE radius family, so its `pill` collapses to the control radius: buttons
+ * and tags are 4px boxes there, never capsules (small dots still read as circles).
+ */
+export const radiusBySkin: Record<PlatformSkinId, RadiusScale> = {
+  ios: radius,
+  android: { xs: 4, sm: 8, md: 12, lg: 16, xl: 28, pill: 999 },
+  web: { xs: 2, sm: 4, md: 6, lg: 8, xl: 8, pill: 4 },
+};
+
 export const typography = {
+  /** Largest headline: the first-screen statement (web sign-in hero). */
+  display: {
+    fontSize: 34,
+    lineHeight: 41,
+    fontWeight: '700' as const,
+    letterSpacing: -1.2,
+  },
   heroCurrency: {
     fontSize: 38,
     lineHeight: 44,
@@ -81,12 +156,71 @@ export const typography = {
   },
 } as const;
 
+export type TypographyVariantId = keyof typeof typography;
+
+export interface TypographyStyle {
+  fontSize: number;
+  lineHeight: number;
+  fontWeight: '400' | '500' | '600' | '700';
+  letterSpacing: number;
+  fontFamily?: string;
+}
+
+export type TypographyScale = Record<TypographyVariantId, TypographyStyle>;
+
+/** Pairing "geist" dealt by the design-taste-frontend skill; system-ui while it loads. */
+export const WEB_FONT_FAMILY = 'Geist, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+export const WEB_FONT_STYLESHEET_URL =
+  'https://fonts.googleapis.com/css2?family=Geist:wght@400..700&display=swap';
+
+function webType(
+  fontSize: number,
+  lineHeight: number,
+  fontWeight: TypographyStyle['fontWeight'],
+  letterSpacing: number
+): TypographyStyle {
+  return { fontSize, lineHeight, fontWeight, letterSpacing, fontFamily: WEB_FONT_FAMILY };
+}
+
+export const typographyBySkin: Record<PlatformSkinId, TypographyScale> = {
+  // SF Pro: bold display with tight optical tracking.
+  ios: typography,
+  // Material 3 type scale on Roboto: regular-weight display, medium labels, open tracking.
+  android: {
+    display: { fontSize: 45, lineHeight: 52, fontWeight: '400', letterSpacing: 0 },
+    heroCurrency: { fontSize: 36, lineHeight: 44, fontWeight: '400', letterSpacing: 0 },
+    title1: { fontSize: 28, lineHeight: 36, fontWeight: '400', letterSpacing: 0 },
+    title2: { fontSize: 22, lineHeight: 28, fontWeight: '400', letterSpacing: 0 },
+    headline: { fontSize: 16, lineHeight: 24, fontWeight: '500', letterSpacing: 0.15 },
+    body: { fontSize: 14, lineHeight: 20, fontWeight: '400', letterSpacing: 0.25 },
+    callout: { fontSize: 14, lineHeight: 20, fontWeight: '500', letterSpacing: 0.1 },
+    caption: { fontSize: 12, lineHeight: 16, fontWeight: '500', letterSpacing: 0.5 },
+    micro: { fontSize: 11, lineHeight: 16, fontWeight: '500', letterSpacing: 0.5 },
+  },
+  // Geist: display 500 with tight tracking, reading text 16px, nothing under 13px.
+  web: {
+    display: webType(52, 56, '500', -2.2),
+    heroCurrency: webType(38, 44, '500', -1.3),
+    title1: webType(28, 34, '500', -0.8),
+    title2: webType(20, 28, '500', -0.3),
+    headline: webType(18, 26, '500', -0.2),
+    body: webType(16, 24, '400', 0),
+    callout: webType(15, 22, '500', 0),
+    caption: webType(14, 20, '500', 0),
+    micro: webType(13, 18, '500', 0),
+  },
+};
+
 export interface ColorPalette {
   background: {
     primary: string;
     secondary: string;
     elevated: string;
   };
+  /**
+   * Surface tokens. The name is historical: on iOS they tint a blurred glass layer; on Android
+   * and Web they are OPAQUE fills (tonal container / flat card) and `blurIntensity` is 0.
+   */
   glass: {
     surfaceTint: string;
     surfaceElevatedTint: string;
@@ -100,6 +234,16 @@ export interface ColorPalette {
     secondary: string;
     muted: string;
     inverse: string;
+  };
+  /** The one action color of the skin: navigation selection, focus ring, primary controls. */
+  accent: {
+    primary: string;
+    onPrimary: string;
+    /** Quiet selected-state fill (Material "secondary container", web tint). */
+    container: string;
+    onContainer: string;
+    /** Accent used as text or icon on the page background (4.5:1 or more). */
+    text: string;
   };
   semantic: {
     income: string;
@@ -125,6 +269,7 @@ export interface ColorPalette {
   };
 }
 
+/** iOS · Liquid Glass (also the historical default export). */
 export const palettes: Record<ThemeMode, ColorPalette> = {
   dark: {
     background: {
@@ -145,6 +290,13 @@ export const palettes: Record<ThemeMode, ColorPalette> = {
       secondary: '#9BA3AF',
       muted: '#636B79',
       inverse: '#0D0F12',
+    },
+    accent: {
+      primary: '#388AF6',
+      onPrimary: '#0D0F12',
+      container: 'rgba(79, 143, 234, 0.16)',
+      onContainer: '#F4F5F7',
+      text: '#5C9DF2',
     },
     semantic: {
       income: '#2EBD85',
@@ -187,6 +339,13 @@ export const palettes: Record<ThemeMode, ColorPalette> = {
       muted: '#5A6272',
       inverse: '#FFFFFF',
     },
+    accent: {
+      primary: '#245F9F',
+      onPrimary: '#FFFFFF',
+      container: 'rgba(36, 95, 159, 0.14)',
+      onContainer: '#12151B',
+      text: '#245F9F',
+    },
     semantic: {
       income: '#127551',
       incomeSoft: 'rgba(18, 117, 81, 0.10)',
@@ -209,6 +368,250 @@ export const palettes: Record<ThemeMode, ColorPalette> = {
     },
   },
 };
+
+/**
+ * Android · Material 3. Opaque tonal surfaces tinted toward a deep green seed; no translucency
+ * and no blur. The semantic hues keep their meaning across platforms.
+ */
+export const androidPalettes: Record<ThemeMode, ColorPalette> = {
+  dark: {
+    background: {
+      primary: '#101411',
+      secondary: '#181D19',
+      elevated: '#1E2420',
+    },
+    glass: {
+      surfaceTint: '#1A201C',
+      surfaceElevatedTint: '#232925',
+      specularBorder: '#404943',
+      subtleBorder: 'rgba(192, 201, 191, 0.10)',
+      blurIntensity: 0,
+      blurTint: 'dark',
+    },
+    text: {
+      primary: '#E0E4DD',
+      secondary: '#C0C9BF',
+      muted: '#939C92',
+      inverse: '#101411',
+    },
+    accent: {
+      primary: '#8CD5B4',
+      onPrimary: '#003827',
+      container: '#1F4F3E',
+      onContainer: '#C8EBDB',
+      text: '#8CD5B4',
+    },
+    semantic: {
+      income: '#2EBD85',
+      incomeSoft: 'rgba(46, 189, 133, 0.14)',
+      expense: '#E57373',
+      expenseSoft: 'rgba(229, 115, 115, 0.14)',
+      completed: '#2EBD85',
+      completedSoft: 'rgba(46, 189, 133, 0.14)',
+      pending: '#E5A84B',
+      pendingSoft: 'rgba(229, 168, 75, 0.14)',
+      debt: '#D9824C',
+      debtSoft: 'rgba(217, 130, 76, 0.14)',
+      reserve: '#6FA4F0',
+      reserveSoft: 'rgba(111, 164, 240, 0.14)',
+      provisions: '#6FA4F0',
+      provisionsSoft: 'rgba(111, 164, 240, 0.14)',
+      moto: '#6FA4F0',
+      motoSoft: 'rgba(111, 164, 240, 0.14)',
+      savings: '#AD93EA',
+      savingsSoft: 'rgba(173, 147, 234, 0.14)',
+    },
+  },
+  light: {
+    background: {
+      primary: '#F6FBF4',
+      secondary: '#EFF5EE',
+      elevated: '#E9EFE8',
+    },
+    glass: {
+      surfaceTint: '#EAF0E9',
+      surfaceElevatedTint: '#E2E9E1',
+      specularBorder: '#C0C9BF',
+      subtleBorder: 'rgba(64, 73, 67, 0.12)',
+      blurIntensity: 0,
+      blurTint: 'light',
+    },
+    text: {
+      primary: '#171D19',
+      secondary: '#404943',
+      muted: '#566058',
+      inverse: '#FFFFFF',
+    },
+    accent: {
+      primary: '#1B6B51',
+      onPrimary: '#FFFFFF',
+      container: '#CDE9DB',
+      onContainer: '#06201A',
+      text: '#1B6B51',
+    },
+    semantic: {
+      income: '#0F6B4A',
+      incomeSoft: 'rgba(15, 107, 74, 0.12)',
+      expense: '#A83232',
+      expenseSoft: 'rgba(168, 50, 50, 0.12)',
+      completed: '#0F6B4A',
+      completedSoft: 'rgba(15, 107, 74, 0.12)',
+      pending: '#8F5206',
+      pendingSoft: 'rgba(143, 82, 6, 0.12)',
+      debt: '#92440F',
+      debtSoft: 'rgba(146, 68, 15, 0.12)',
+      reserve: '#245F9F',
+      reserveSoft: 'rgba(36, 95, 159, 0.12)',
+      provisions: '#245F9F',
+      provisionsSoft: 'rgba(36, 95, 159, 0.12)',
+      moto: '#245F9F',
+      motoSoft: 'rgba(36, 95, 159, 0.12)',
+      savings: '#5F3DA6',
+      savingsSoft: 'rgba(95, 61, 166, 0.12)',
+    },
+  },
+};
+
+/**
+ * Web · palette "putty-black-teal" dealt by the design-taste-frontend skill (ADR 0011):
+ * a 90-95% neutral interface, one petrol-teal accent, hairlines at 11% / 20% of the ink.
+ * The skill bans violet, so `savings` turns to rose here.
+ */
+export const webPalettes: Record<ThemeMode, ColorPalette> = {
+  dark: {
+    background: {
+      primary: '#0A0A0A',
+      secondary: '#151515',
+      elevated: '#1F1F1E',
+    },
+    glass: {
+      surfaceTint: '#151515',
+      surfaceElevatedTint: '#1F1F1E',
+      specularBorder: 'rgba(222, 218, 211, 0.26)',
+      subtleBorder: 'rgba(222, 218, 211, 0.14)',
+      blurIntensity: 0,
+      blurTint: 'dark',
+    },
+    text: {
+      primary: '#DEDAD3',
+      secondary: '#B3AFA9',
+      muted: '#93918C',
+      inverse: '#0A0A0A',
+    },
+    accent: {
+      primary: '#256F82',
+      onPrimary: '#FFFFFF',
+      container: 'rgba(95, 179, 198, 0.16)',
+      onContainer: '#DEDAD3',
+      text: '#5FB3C6',
+    },
+    semantic: {
+      income: '#2EBD85',
+      incomeSoft: 'rgba(46, 189, 133, 0.12)',
+      expense: '#E57373',
+      expenseSoft: 'rgba(229, 115, 115, 0.12)',
+      completed: '#2EBD85',
+      completedSoft: 'rgba(46, 189, 133, 0.12)',
+      pending: '#E5A84B',
+      pendingSoft: 'rgba(229, 168, 75, 0.12)',
+      debt: '#D9824C',
+      debtSoft: 'rgba(217, 130, 76, 0.12)',
+      reserve: '#6FA4F0',
+      reserveSoft: 'rgba(111, 164, 240, 0.12)',
+      provisions: '#6FA4F0',
+      provisionsSoft: 'rgba(111, 164, 240, 0.12)',
+      moto: '#6FA4F0',
+      motoSoft: 'rgba(111, 164, 240, 0.12)',
+      savings: '#E08FB8',
+      savingsSoft: 'rgba(224, 143, 184, 0.12)',
+    },
+  },
+  light: {
+    background: {
+      primary: '#DEDAD3',
+      secondary: '#D3CEC6',
+      elevated: '#E7E4DE',
+    },
+    glass: {
+      surfaceTint: '#D3CEC6',
+      surfaceElevatedTint: '#E7E4DE',
+      specularBorder: 'rgba(10, 10, 10, 0.20)',
+      subtleBorder: 'rgba(10, 10, 10, 0.11)',
+      blurIntensity: 0,
+      blurTint: 'light',
+    },
+    text: {
+      primary: '#0A0A0A',
+      secondary: '#3B3835',
+      muted: '#55514C',
+      inverse: '#FFFFFF',
+    },
+    accent: {
+      primary: '#256F82',
+      onPrimary: '#FFFFFF',
+      container: 'rgba(37, 111, 130, 0.14)',
+      onContainer: '#0A0A0A',
+      text: '#1D5F70',
+    },
+    semantic: {
+      income: '#0F6143',
+      incomeSoft: 'rgba(15, 97, 67, 0.10)',
+      expense: '#9A2B2B',
+      expenseSoft: 'rgba(154, 43, 43, 0.10)',
+      completed: '#0F6143',
+      completedSoft: 'rgba(15, 97, 67, 0.10)',
+      pending: '#7A4504',
+      pendingSoft: 'rgba(122, 69, 4, 0.10)',
+      debt: '#843C0C',
+      debtSoft: 'rgba(132, 60, 12, 0.10)',
+      reserve: '#1F5590',
+      reserveSoft: 'rgba(31, 85, 144, 0.10)',
+      provisions: '#1F5590',
+      provisionsSoft: 'rgba(31, 85, 144, 0.10)',
+      moto: '#1F5590',
+      motoSoft: 'rgba(31, 85, 144, 0.10)',
+      savings: '#8A3A66',
+      savingsSoft: 'rgba(138, 58, 102, 0.10)',
+    },
+  },
+};
+
+export const palettesBySkin: Record<PlatformSkinId, Record<ThemeMode, ColorPalette>> = {
+  ios: palettes,
+  android: androidPalettes,
+  web: webPalettes,
+};
+
+/**
+ * Responsive breakpoints (window width in pt/dp/px). Material 3 window size classes; the web
+ * skin switches its header navigation and grid on the same steps.
+ */
+export const breakpoints = {
+  /** From here up: `medium` (large phones in landscape, foldables, small tablets). */
+  medium: 600,
+  /** From here up: `expanded` (tablets, desktop browsers). */
+  expanded: 840,
+  /** From here up the web grid uses its full 80px gutters. */
+  wide: 1024,
+} as const;
+
+/** Widest content column per skin. Web: the skill's 1280px `.wrap`. */
+export const contentMaxWidth: Record<PlatformSkinId, number> = {
+  ios: 560,
+  android: 600,
+  web: 1280,
+};
+
+/** Web micro-interaction timings (skill: motion.md). No bounce or overshoot on the web skin. */
+export const webMotion = {
+  hoverInMs: 140,
+  hoverOutMs: 200,
+  pressMs: 90,
+  slideMs: 240,
+  easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+  buttonStepPt: 1,
+  pressScale: 0.985,
+} as const;
 
 export const springConfigs = {
   snappy: {

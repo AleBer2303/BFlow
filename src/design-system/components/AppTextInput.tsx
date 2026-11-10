@@ -1,10 +1,11 @@
 /**
  * src/design-system/components/AppTextInput.tsx
  *
- * Universal Liquid Glass TextInput for BFlow.
+ * Universal TextInput for BFlow, styled by the active platform skin.
  *
  * Enforces:
- * 1. Apple iOS 26 Liquid Glass styling (subtle borders, theme-aware surface tint, 44pt touch target).
+ * 1. Skin-aware styling (subtle borders, theme-aware surface, 44pt / 48dp touch target, accent
+ *    focus edge on Android and Web).
  * 2. Universal keyboard awareness: upon focus, automatically requests the enclosing
  *    KeyboardAwareScrollView to scroll this input into clear view above the keyboard.
  * 3. Works consistently for existing and all future forms in the application.
@@ -17,7 +18,6 @@ import {
   type TextInputProps,
 } from 'react-native';
 import { useBFlowTheme } from '../theme/ThemeContext';
-import { MIN_TOUCH_TARGET_PT, typography } from '../tokens';
 import { useKeyboardAware } from './KeyboardAwareScrollView';
 
 export type AppTextInputElement = React.ElementRef<typeof TextInput>;
@@ -42,7 +42,9 @@ export const AppTextInput = React.forwardRef<AppTextInputElement, AppTextInputPr
     },
     forwardedRef
   ) {
-    const { colors, spacing, radius } = useBFlowTheme();
+    const { colors, spacing, radius, typography, minTouchTarget, skin } = useBFlowTheme();
+    // Liquid Glass brightens its specular edge on focus; Material and Web mark it with the accent.
+    const focusBorderColor = skin === 'ios' ? colors.glass.specularBorder : colors.accent.primary;
     const innerRef = useRef<AppTextInputElement | null>(null);
     const [isFocused, setIsFocused] = useState(false);
     const { registerInputFocus } = useKeyboardAware();
@@ -70,7 +72,7 @@ export const AppTextInput = React.forwardRef<AppTextInputElement, AppTextInputPr
         placeholderTextColor={placeholderTextColor ?? colors.text.muted}
         style={[
           {
-            minHeight: MIN_TOUCH_TARGET_PT,
+            minHeight: minTouchTarget,
             paddingHorizontal: spacing.md,
             borderRadius: radius.md,
             borderCurve: 'continuous',
@@ -78,9 +80,10 @@ export const AppTextInput = React.forwardRef<AppTextInputElement, AppTextInputPr
               ? colors.glass.surfaceElevatedTint
               : colors.glass.surfaceTint,
             borderWidth: 1,
-            borderColor: isFocused ? colors.glass.specularBorder : colors.glass.subtleBorder,
+            borderColor: isFocused ? focusBorderColor : colors.glass.subtleBorder,
             color: colors.text.primary,
             fontSize: typography.body.fontSize,
+            fontFamily: typography.body.fontFamily,
           },
           style,
         ]}

@@ -54,6 +54,21 @@ export function curveXForDay(day: number, daysInMonth: number, widthPt: number):
   return CURVE_MARGIN_PT + (day / daysInMonth) * (widthPt - CURVE_MARGIN_PT * 2);
 }
 
+/**
+ * A stop is only valid for the curve it was picked on. After the month or the cutoff changes
+ * (or the projection disappears) a stale stop would point at a day with no data, so it falls
+ * back to null: "no stop", which every consumer reads as today.
+ */
+export function clampCurveStop(curve: MonthlyCurve, stop: CurveStop | null): CurveStop | null {
+  if (stop === null) {
+    return null;
+  }
+  if (stop === 'close') {
+    return curve.hasProjection ? stop : null;
+  }
+  return Number.isInteger(stop) && stop >= 1 && stop <= curve.cutoffDay ? stop : null;
+}
+
 /** Maps a finger position to its stop. Past the cutoff there are only projections. */
 export function resolveCurveStop(curve: MonthlyCurve, xPt: number, widthPt: number): CurveStop {
   const t = ((xPt - CURVE_MARGIN_PT) / (widthPt - CURVE_MARGIN_PT * 2)) * curve.daysInMonth;

@@ -277,6 +277,14 @@ export interface ColorPalette {
     savings: string;
     savingsSoft: string;
   };
+  /**
+   * Data visualization. Six categorical hues, in order, for series that carry no financial
+   * meaning (the slices of the expense donut). Each one keeps 3:1 against the page and the
+   * cards (WCAG 1.4.11); series that do mean something use `semantic` instead.
+   */
+  chart: {
+    categorical: readonly [string, string, string, string, string, string];
+  };
 }
 
 /** iOS · Liquid Glass (also the historical default export). */
@@ -328,6 +336,9 @@ export const palettes: Record<ThemeMode, ColorPalette> = {
       savings: '#9D7FE6',
       savingsSoft: 'rgba(157, 127, 230, 0.10)',
     },
+    chart: {
+      categorical: ['#4F8FEA', '#2BB3A6', '#E5A84B', '#E07A9A', '#9D7FE6', '#9CC45A'],
+    },
   },
   light: {
     background: {
@@ -375,6 +386,9 @@ export const palettes: Record<ThemeMode, ColorPalette> = {
       motoSoft: 'rgba(36, 95, 159, 0.10)',
       savings: '#5F3DA6',
       savingsSoft: 'rgba(95, 61, 166, 0.10)',
+    },
+    chart: {
+      categorical: ['#245F9F', '#0F7A70', '#8F5206', '#A8345F', '#5F3DA6', '#5A6E12'],
     },
   },
 };
@@ -431,6 +445,9 @@ export const androidPalettes: Record<ThemeMode, ColorPalette> = {
       savings: '#AD93EA',
       savingsSoft: 'rgba(173, 147, 234, 0.14)',
     },
+    chart: {
+      categorical: ['#6FA4F0', '#4FC3B5', '#E5A84B', '#E88AA6', '#AD93EA', '#A5CB66'],
+    },
   },
   light: {
     background: {
@@ -478,6 +495,9 @@ export const androidPalettes: Record<ThemeMode, ColorPalette> = {
       motoSoft: 'rgba(36, 95, 159, 0.12)',
       savings: '#5F3DA6',
       savingsSoft: 'rgba(95, 61, 166, 0.12)',
+    },
+    chart: {
+      categorical: ['#245F9F', '#0B6E66', '#8F5206', '#A8345F', '#5F3DA6', '#556A10'],
     },
   },
 };
@@ -535,6 +555,9 @@ export const webPalettes: Record<ThemeMode, ColorPalette> = {
       savings: '#E08FB8',
       savingsSoft: 'rgba(224, 143, 184, 0.12)',
     },
+    chart: {
+      categorical: ['#6FA4F0', '#5FB3C6', '#E5A84B', '#E08FB8', '#A5CB66', '#C2B89A'],
+    },
   },
   light: {
     background: {
@@ -582,6 +605,9 @@ export const webPalettes: Record<ThemeMode, ColorPalette> = {
       motoSoft: 'rgba(31, 85, 144, 0.10)',
       savings: '#8A3A66',
       savingsSoft: 'rgba(138, 58, 102, 0.10)',
+    },
+    chart: {
+      categorical: ['#1F5590', '#0E6B5E', '#7A4504', '#8A3A66', '#4C5E0E', '#5E574C'],
     },
   },
 };

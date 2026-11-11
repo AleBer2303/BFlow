@@ -35,3 +35,4 @@ Thumbs.db
 #Junctions de .agents a .claude
 .claude/skills
 .claude/commands
+.claude/settings.local.json

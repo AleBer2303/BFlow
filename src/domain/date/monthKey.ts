@@ -94,6 +94,13 @@ const MONTH_NAMES_ES = [
   'Diciembre',
 ] as const;
 
+/** Three-letter month for chart axes ("Oct"); the readout shows the full label. */
+export function formatMonthKeyShortLabelEs(monthKey: string): string {
+  assertValidMonthKey(monthKey);
+  const monthIdx = Number(monthKey.slice(5, 7)) - 1;
+  return (MONTH_NAMES_ES[monthIdx] as string).slice(0, 3);
+}
+
 export function formatMonthKeyLabelEs(monthKey: string): string {
   assertValidMonthKey(monthKey);
   const [yearStr, monthStr] = monthKey.split('-');

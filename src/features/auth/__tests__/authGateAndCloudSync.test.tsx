@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, within } from '@testing-library/react-native';
 import React from 'react';
 import PhaseOneHomeScreen from '../../../app/index';
 import {
@@ -390,7 +390,8 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     await act(async () => {
       fireEvent.press(screen.getByTestId('save-opening-balances-button'));
     });
-    expect(screen.getByText('Fondo Moto Personal')).toBeTruthy();
+    // The savings chart legend repeats the bucket name, so read it from the bucket card.
+    expect(within(screen.getByTestId('bucket-moto-card')).getByText('Fondo Moto Personal')).toBeTruthy();
 
     // Delete Fondo Moto and Fondo Ahorros
     await act(async () => {

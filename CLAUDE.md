@@ -64,6 +64,13 @@ src/app/index.tsx  ──(hooks/props)──>  features/*/components
 - **Sistema de diseño** (`src/design-system/`, documentado en `DESIGN.md`): todo color/espaciado/radio/tipografía sale de `useBFlowTheme()`; cifras monetarias con `CurrencyText` (tabular-nums); áreas táctiles ≥ `minTouchTarget` del tema (44 en iOS y Web, 48 en Android); háptica vía `hapticService`.
 - **Curva del mes** (`src/domain/overview/`, `src/features/summary/`): el escenario lo decide el token `skinSpec.curveStage`. Solo iOS (`scene-3d`) la dibuja con three.js/`expo-gl` (ADR 0007 y 0008). Android y Web (`vector`) usan `MonthlyCurveVectorStage` (SVG animado por `scene/vectorCurveAnimator.ts`): Web nunca descarga three.js (ADR 0011 y 0012) y Android no monta ningún `GLView`, porque allí la superficie de `expo-gl` no refrescaba los cuadros y la curva se veía quieta (ADR 0014). Si la escena 3D no puede dibujar en iOS (incluida la superficie GL que no llega en `GL_CONTEXT_TIMEOUT_MS`), se usa esa misma curva vectorial con gesto táctil. Ambas comparten la geometría de `scene/curveGeometry.ts` y los tiempos de `scene/curveMotion.ts`.
 
+- **Gráficos (Fase 6, ADR 0020):** `src/design-system/components/charts/` (`BarChart`, `LineChart` y `DonutChart` con `react-native-svg`, animados por `chartTransition.ts`), con datos de `src/domain/analytics/chartSeries.ts`:
+  - Un mes cerrado anterior al activo lee su snapshot. El mes activo, aunque esté cerrado, y los meses abiertos se calculan en vivo, igual que las tarjetas.
+  - La ventana es de 6 meses hasta el mes activo. Cada gráfico muestra los que caben con el objetivo táctil completo por columna (`useChartWindow`).
+  - Los gráficos aparecen en Cierre (`AnalyticsChartsPanel`), Deudas (`DebtTrendChart`) y Ahorros (`SavingsTrendCharts`, solo la evolución apilada), alimentados por `useChartHistory`.
+  - Los tramos sin significado financiero usan `colors.chart.categorical`.
+  - En los tests, el SVG está oculto para accesibilidad: búscalo con `{ includeHiddenElements: true }`.
+
 ## Multiplataforma: tres pieles (ADR 0010 y 0011)
 
 Reglas vinculantes en `AGENTS.md` §7; tokens y breakpoints en `DESIGN.md` §10 y §11; pasos en `docs/guides/multiplatform-validation-guide.md`.
@@ -81,6 +88,7 @@ Reglas vinculantes en `AGENTS.md` §7; tokens y breakpoints en `DESIGN.md` §10 
 
 - `ci.yml` (ubuntu, Node 22, push a `main`/`develop` y PR a `main`): fixture dorado → guardia de tests (solo PR) → `typecheck` → `lint` → `npm test -- --coverage --ci`. `build-ios.yml` genera el `.ipa` sin firmar en macOS para `iloader` y `build-android.yml` el `.apk`/`.aab` con keystore de depuración (cambios en ambos requieren ADR).
 - **Release de Android y R8 (ADR 0013):** el `.apk` se compila con R8 (`android.enableMinifyInReleaseBuilds=true` en la plantilla del SDK) y Expo Go no, así que un fallo de minificación solo aparece en el `.apk`. `android/` no está en git: las reglas keep viven en `plugins/withAndroidKeepRules.js` (declarado en `app.json`, tests en `plugins/__tests__/`). Hoy conserva `expo.modules.gl.**`, porque `expo-gl` busca `GLContext.flush()` por nombre vía JNI y no trae reglas de consumidor; sin la regla la app se cierra al montar el primer `GLView` (el Resumen, justo tras iniciar sesión).
+- **Runtime de expo-modules (ADR 0019):** los módulos de Expo llegan como AAR precompilados (`node_modules/<pkg>/local-maven-repo`) y deben coincidir con el `expoModulesV2Version` de `expo-modules-core`. Si no coinciden, el `.apk` se cierra al abrir (`Cannot find native module 'ExpoSQLite'`), pero Expo Go funciona. Al actualizar un módulo de Expo, actualiza también `expo` (`npx expo install --fix`). La guardia es `plugins/__tests__/expoModulesRuntimeVersion.test.js`. Para compilar el release en este Windows (ruta con espacio) ver ADR 0019 §4.1.
 - `.env` está ignorado; la plantilla es `.env.example`. Si cambias variables de entorno o dependencias, actualiza `.env.example`, `package.json` y `README.md`.
 - `scripts/setup-claude.sh` enlaza `.agents/skills` → `.claude/skills` y `.agents/workflows` → `.claude/commands` (junctions en Windows) y fija `core.hooksPath=.githooks`; ese directorio todavía no existe en el repo.
 - `README.md` contiene enlaces `file:///` a una ruta de otra máquina y cifras (tests, cobertura) que pueden estar desactualizadas; no tomarlos como evidencia sin medir.

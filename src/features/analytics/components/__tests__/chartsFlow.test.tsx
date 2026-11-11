@@ -7,6 +7,7 @@
 
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
+import { Dimensions } from 'react-native';
 import PhaseOneHomeScreen from '../../../../app/index';
 import { BFlowThemeProvider } from '../../../../design-system/theme/ThemeContext';
 import { PLATFORM_SKIN_IDS, type PlatformSkinId } from '../../../../design-system/tokens';
@@ -21,10 +22,27 @@ function renderApp(skin: PlatformSkinId) {
   );
 }
 
+const ORIGINAL_WINDOW = Dimensions.get('window');
+const ORIGINAL_SCREEN = Dimensions.get('screen');
+
+function setWindowSize(width: number, height: number): void {
+  act(() => {
+    const metrics = { width, height, scale: 2, fontScale: 1 };
+    Dimensions.set({ window: metrics, screen: metrics });
+  });
+}
+
 beforeEach(() => {
   act(() => {
     useBudgetStore.setState({ authUser: DEMO_OWNER_USER, needsOnboarding: false });
     useBudgetStore.getState().resetToOctober2026GoldenState();
+  });
+  setWindowSize(390, 844);
+});
+
+afterAll(() => {
+  act(() => {
+    Dimensions.set({ window: ORIGINAL_WINDOW, screen: ORIGINAL_SCREEN });
   });
 });
 
@@ -91,5 +109,45 @@ describe('charts follow the store', () => {
     fireEvent.press(screen.getByTestId('workspace-tab-debts'));
     // November opens with October's closing debt; the payoff estimate stays the same.
     expect(screen.getByTestId('debt-trend-chart-readout')).toHaveTextContent(/Noviembre 2026.*\$ 6\.200\.000/);
+  });
+});
+
+describe('charts and cards agree', () => {
+  it('on a closed month that is edited again from the history', async () => {
+    renderApp('android');
+    fireEvent.press(screen.getByTestId('workspace-tab-analytics'));
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('confirm-month-close-button'));
+    });
+
+    // Back to the closed October, then a pending expense is paid.
+    fireEvent.press(screen.getByTestId('history-month-pill-2026-10'));
+    await act(async () => {
+      await useBudgetStore.getState().toggleEntryStatus('2026-10_exp_smart_fit', '2026-10-31');
+    });
+
+    // The card and the charts read the same live month: $ 1.080.000 - $ 100.000.
+    expect(screen.getByTestId('analytics-and-history-view')).toHaveTextContent(/\$ 980\.000/);
+    expect(screen.getByTestId('balance-chart-readout')).toHaveTextContent(/\$ 980\.000/);
+    expect(screen.getByTestId('cash-flow-chart-readout')).toHaveTextContent(/Pagado\s*\$ 3\.020\.000/);
+    expect(screen.getByTestId('cash-flow-chart-readout')).toHaveTextContent(/Mes cerrado/);
+    // October is now the oldest month, already closed: no invitation to close one.
+    expect(screen.getByTestId('analytics-charts-panel')).toHaveTextContent(/No hay meses anteriores registrados/);
+  });
+});
+
+describe('chart layout by width', () => {
+  it('stacks the chart cards on a phone and sets them side by side on a desktop', () => {
+    renderApp('web');
+    fireEvent.press(screen.getByTestId('workspace-tab-analytics'));
+    expect(screen.queryByTestId('analytics-charts-grid-row-0')).toBeNull();
+
+    setWindowSize(1440, 900);
+    expect(screen.getByTestId('analytics-charts-grid-row-0')).toBeTruthy();
+    expect(screen.getByTestId('analytics-charts-grid-row-2')).toBeTruthy();
+    expect(screen.queryByTestId('analytics-charts-grid-row-3')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('workspace-tab-savings'));
+    expect(screen.getByTestId('savings-charts-grid-row-0')).toBeTruthy();
   });
 });

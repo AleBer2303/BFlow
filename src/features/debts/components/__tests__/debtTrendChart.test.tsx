@@ -65,6 +65,8 @@ describe('DebtTrendChart', () => {
     expect(readout).toHaveTextContent(/Febrero 2027 · cierre estimado/);
     expect(readout).toHaveTextContent(/\$ 0/);
     expect(readout).toHaveTextContent(/Faltan 4 meses de cuotas/);
+    // The estimate may lie in another year, so its axis label carries it.
+    expect(screen.getByTestId('debt-trend-chart')).toHaveTextContent(/Feb ’27/);
   });
 
   it('uses the singular for a single month left', () => {

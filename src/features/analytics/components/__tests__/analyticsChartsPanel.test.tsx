@@ -45,10 +45,20 @@ const SEPTEMBER: MonthlyHistoryPoint = {
 };
 const BUDGET = calculateMonthlyBudgetSummary(ENTRIES, '2026-10');
 
-function renderPanel(history: readonly MonthlyHistoryPoint[] = OCTOBER_HISTORY, skin: PlatformSkinId = 'ios') {
+function renderPanel(
+  history: readonly MonthlyHistoryPoint[] = OCTOBER_HISTORY,
+  skin: PlatformSkinId = 'ios',
+  hasClosedMonths = false
+) {
   return render(
     <BFlowThemeProvider skin={skin}>
-      <AnalyticsChartsPanel activeMonthKey="2026-10" history={history} budget={BUDGET} entries={ENTRIES} />
+      <AnalyticsChartsPanel
+        activeMonthKey="2026-10"
+        history={history}
+        budget={BUDGET}
+        entries={ENTRIES}
+        hasClosedMonths={hasClosedMonths}
+      />
     </BFlowThemeProvider>
   );
 }
@@ -90,6 +100,14 @@ describe('AnalyticsChartsPanel', () => {
     );
     expect(screen.getByTestId('comparison-chart-empty')).toBeTruthy();
     expect(screen.queryByTestId('comparison-chart')).toBeNull();
+  });
+
+  it('does not invite to close a month when an older one was already closed', () => {
+    renderPanel(OCTOBER_HISTORY, 'ios', true);
+    expect(screen.getByTestId('analytics-charts-panel')).toHaveTextContent(/No hay meses anteriores registrados/);
+    expect(screen.getByTestId('comparison-chart-empty')).toHaveTextContent(
+      'No hay un mes anterior registrado para comparar.'
+    );
   });
 
   it('switches the planned vs actual chart between expenses and incomes', () => {
@@ -147,6 +165,7 @@ describe('AnalyticsChartsPanel', () => {
           history={OCTOBER_HISTORY}
           budget={calculateMonthlyBudgetSummary([], '2026-10')}
           entries={[]}
+          hasClosedMonths={false}
         />
       </BFlowThemeProvider>
     );

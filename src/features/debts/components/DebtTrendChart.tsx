@@ -56,7 +56,12 @@ export function DebtTrendChart({ history, projection }: DebtTrendChartProps): Re
       {hasDebtHistory ? (
         <LineChart
           testID="debt-trend-chart"
-          categories={points.map((point) => formatMonthKeyShortLabelEs(point.monthKey))}
+          categories={points.map((point) =>
+            // The estimate may lie years ahead, so its label carries the year: "Feb ’27".
+            point.isProjected
+              ? `${formatMonthKeyShortLabelEs(point.monthKey)} ’${point.monthKey.slice(2, 4)}`
+              : formatMonthKeyShortLabelEs(point.monthKey)
+          )}
           categoryTitles={points.map((point) =>
             point.isProjected
               ? `${formatMonthKeyLabelEs(point.monthKey)} · cierre estimado`

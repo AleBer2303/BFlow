@@ -84,6 +84,7 @@ export const AnalyticsTab = React.memo(function AnalyticsTab(): React.JSX.Elemen
         history={history}
         budget={budget}
         entries={entries}
+        hasClosedMonths={Object.keys(closedSnapshots).length > 0}
       />
     </View>
   );

@@ -12,11 +12,10 @@ import React, { useMemo } from 'react';
 import { BarChart, ChartCard, ResponsiveColumns, useBFlowTheme, type ChartSeries } from '../../../design-system';
 import {
   formatCurrency,
-  formatMonthKeyLabelEs,
-  formatMonthKeyShortLabelEs,
   formatSignedCurrency,
   type MonthlyHistoryPoint,
 } from '../../../domain';
+import { useMonthAxis } from '../../budget/hooks/useChartHistory';
 
 export interface SavingsTrendChartsProps {
   history: readonly MonthlyHistoryPoint[];
@@ -29,8 +28,7 @@ export function SavingsTrendCharts({
   idealMonthlyProvision,
 }: SavingsTrendChartsProps): React.JSX.Element {
   const { colors } = useBFlowTheme();
-  const categories = useMemo(() => history.map((p) => formatMonthKeyShortLabelEs(p.monthKey)), [history]);
-  const titles = useMemo(() => history.map((p) => formatMonthKeyLabelEs(p.monthKey)), [history]);
+  const { categories, titles } = useMonthAxis(history);
   const last = history[history.length - 1];
 
   const balanceSeries = useMemo<ChartSeries[]>(() => {

@@ -32,18 +32,20 @@ import {
   buildMonthComparison,
   buildPaidVsPendingSplit,
   formatMonthKeyLabelEs,
-  formatMonthKeyShortLabelEs,
   formatSignedCurrency,
   type MonthEntry,
   type MonthlyBudgetSummary,
   type MonthlyHistoryPoint,
 } from '../../../domain';
+import { useMonthAxis } from '../../budget/hooks/useChartHistory';
 
 export interface AnalyticsChartsPanelProps {
   activeMonthKey: string;
   history: readonly MonthlyHistoryPoint[];
   budget: MonthlyBudgetSummary;
   entries: readonly MonthEntry[];
+  /** True once any month has been closed: the copy stops inviting to close the first one. */
+  hasClosedMonths: boolean;
 }
 
 type PlanKind = 'expenses' | 'incomes';
@@ -58,13 +60,13 @@ export function AnalyticsChartsPanel({
   history,
   budget,
   entries,
+  hasClosedMonths,
 }: AnalyticsChartsPanelProps): React.JSX.Element {
   const { colors, spacing } = useBFlowTheme();
   const [planKind, setPlanKind] = useState<PlanKind>('expenses');
   const palette = colors.chart.categorical;
 
-  const categories = useMemo(() => history.map((p) => formatMonthKeyShortLabelEs(p.monthKey)), [history]);
-  const titles = useMemo(() => history.map((p) => formatMonthKeyLabelEs(p.monthKey)), [history]);
+  const { categories, titles } = useMonthAxis(history);
   const isSingleMonth = history.length < 2;
   const monthState = (index: number) => {
     const point = history[index];
@@ -139,7 +141,9 @@ export function AnalyticsChartsPanel({
         </AppText>
         <AppText variant="caption" color={colors.text.secondary}>
           {isSingleMonth
-            ? `${formatMonthKeyLabelEs(activeMonthKey)}. Al cerrar el mes verás aquí la evolución mes a mes.`
+            ? hasClosedMonths
+              ? `${formatMonthKeyLabelEs(activeMonthKey)}. No hay meses anteriores registrados.`
+              : `${formatMonthKeyLabelEs(activeMonthKey)}. Al cerrar el mes verás aquí la evolución mes a mes.`
             : `Últimos ${history.length} meses hasta ${formatMonthKeyLabelEs(activeMonthKey)}. Toca un mes para ver sus cifras.`}
         </AppText>
       </View>
@@ -255,7 +259,9 @@ export function AnalyticsChartsPanel({
             />
           ) : (
             <AppText variant="caption" color={colors.text.muted} testID="comparison-chart-empty">
-              Cuando cierres tu primer mes verás aquí la comparación con el anterior.
+              {hasClosedMonths
+                ? 'No hay un mes anterior registrado para comparar.'
+                : 'Cuando cierres tu primer mes verás aquí la comparación con el anterior.'}
             </AppText>
           )}
         </ChartCard>

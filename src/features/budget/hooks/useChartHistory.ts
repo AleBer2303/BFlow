@@ -7,8 +7,31 @@
  */
 
 import { useMemo } from 'react';
-import { buildMonthlyHistory, type MonthlyHistoryPoint } from '../../../domain';
+import {
+  buildMonthlyHistory,
+  formatMonthKeyLabelEs,
+  formatMonthKeyShortLabelEs,
+  type MonthlyHistoryPoint,
+} from '../../../domain';
 import { useBudgetStore } from '../store/useBudgetStore';
+
+export interface MonthAxis {
+  /** "Oct", under the plot. */
+  categories: readonly string[];
+  /** "Octubre 2026", in the readout and for screen readers. */
+  titles: readonly string[];
+}
+
+/** Axis labels of a month-by-month history, shared by every history chart. */
+export function useMonthAxis(history: readonly Pick<MonthlyHistoryPoint, 'monthKey'>[]): MonthAxis {
+  return useMemo(
+    () => ({
+      categories: history.map((point) => formatMonthKeyShortLabelEs(point.monthKey)),
+      titles: history.map((point) => formatMonthKeyLabelEs(point.monthKey)),
+    }),
+    [history]
+  );
+}
 
 export function useChartHistory(): readonly MonthlyHistoryPoint[] {
   const activeMonthKey = useBudgetStore((state) => state.activeMonthKey);

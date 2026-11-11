@@ -67,7 +67,7 @@ src/app/index.tsx  ──(hooks/props)──>  features/*/components
 - **Gráficos (Fase 6, ADR 0020):** `src/design-system/components/charts/` (`BarChart`, `LineChart` y `DonutChart` con `react-native-svg`, animados por `chartTransition.ts`), con datos de `src/domain/analytics/chartSeries.ts`:
   - Un mes cerrado anterior al activo lee su snapshot. El mes activo, aunque esté cerrado, y los meses abiertos se calculan en vivo, igual que las tarjetas.
   - La ventana es de 6 meses hasta el mes activo. Cada gráfico muestra los que caben con el objetivo táctil completo por columna (`useChartWindow`).
-  - Los gráficos aparecen en Cierre (`AnalyticsChartsPanel`), Deudas (`DebtTrendChart`) y Ahorros (`SavingsTrendCharts`), alimentados por `useChartHistory`.
+  - Los gráficos aparecen en Cierre (`AnalyticsChartsPanel`), Deudas (`DebtTrendChart`) y Ahorros (`SavingsTrendCharts`, solo la evolución apilada), alimentados por `useChartHistory`.
   - Los tramos sin significado financiero usan `colors.chart.categorical`.
   - En los tests, el SVG está oculto para accesibilidad: búscalo con `{ includeHiddenElements: true }`.
 

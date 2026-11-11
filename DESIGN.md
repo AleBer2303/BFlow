@@ -228,16 +228,17 @@ Fallback arquitectural idéntico visualmente mediante `expo-blur`:
 6. **Gráficos animados (`src/design-system/components/charts/`):** ver [ADR 0020](docs/decisions/0020-animated-charts.md).
    - Hay tres tipos: `BarChart` (agrupado o apilado, con una línea de referencia punteada; los negativos cuelgan bajo el cero y en una pila se apilan hacia abajo), `LineChart` (con área y un tramo proyectado punteado) y `DonutChart` (con leyenda). Todos se dibujan con `react-native-svg`, igual en las tres pieles y sin WebGL.
    - **Meses visibles:** cada gráfico muestra los meses más recientes que caben con el objetivo táctil completo de la piel por columna (4 a 320 de ancho, hasta 6 en escritorio).
-   - Cada gráfico va en una `ChartCard`, que es una `GlassSurface` elevada, con título `headline` y subtítulo `caption`. Debajo del título, la **lectura** muestra un mes con sus cifras en `callout` tabular. Por defecto es el mes activo.
+   - Cada gráfico va en una `ChartCard`, que es una `GlassSurface` elevada, con título `headline` y, solo si hace falta, un subtítulo `caption`. Debajo del título, la **lectura** muestra un mes con sus cifras en `callout` tabular. Por defecto es el mes activo.
+   - **Texto mínimo:** «Flujo de Dinero», «Balance mensual» y «Evolución de ahorros» solo llevan el título, la lectura y el dibujo, sin subtítulo, leyenda ni notas. Con una sola serie, la lectura es el mes y el monto en `title2` (`readout="value"`).
    - **Ejes:** el eje de valores va a la derecha (52 pt) en `micro` `text.muted`, con pasos redondos y el cero siempre visible. La cuadrícula usa `glass.subtleBorder` y la línea de cero, `text.muted`. Debajo van los meses en `micro`; el activo, en `text.primary`.
    - **Interacción:** cada mes es una columna `AppPressable` de alto completo. Un toque, un clic o Enter fija el mes, y volver a tocarlo lo suelta. El puntero y el foco lo muestran mientras siguen encima, sin fijarlo. Los meses no elegidos bajan al 38 % de opacidad. En la dona, cada fila de la leyenda (alto mínimo de la piel) elige su tramo: el tramo engrosa de 18 a 24 pt, el resto baja al 35 % y el centro muestra el monto y el porcentaje.
    - **Movimiento:** al entrar, cada valor crece desde cero en 0,7 s, con 40 ms de desfase entre valores. Con datos nuevos, los valores se mueven en 0,45 s. La curva es `easeOutCubic`, sin rebote, en las tres pieles. Con *Reducir Movimiento* se dibuja el estado final.
    - **Colores:** las series con significado usan `semantic`: recibido `income`, pagado `expense`, pendiente `pending`, deuda `debt`, reserva `reserve` y ahorro `savings`. Las series sin significado usan `chart.categorical` (§10.5).
    - **Accesibilidad:** el SVG queda oculto para los lectores de pantalla. Cada columna o fila anuncia sus cifras, de modo que el dato no depende del color.
    - **Dónde aparecen:**
-     - **Cierre** (sección «Gráficos»): flujo de efectivo, balance mensual, previsto vs real, pagado vs pendiente, distribución de gastos y este mes vs el anterior.
+     - **Cierre** (sección «Gráficos»): Flujo de Dinero, balance mensual, previsto vs real, pagado vs pendiente, distribución de gastos y la comparación de los dos últimos meses («Noviembre 2026 vs Octubre 2026»).
      - **Deudas:** evolución de la deuda con la proyección de cierre.
-     - **Ahorros:** evolución de ahorros apilada y provisión ideal vs aporte real.
+     - **Ahorros:** evolución de ahorros apilada.
 
 ---
 

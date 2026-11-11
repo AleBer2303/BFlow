@@ -20,7 +20,7 @@ La sección GRÁFICOS de `PROMT BFLOW.md` pide gráficos animados al entrar, con
 - pagado frente a pendiente del mes;
 - evolución de la deuda con su proyección de cierre;
 - evolución de los ahorros apilados (Moto y Ahorros);
-- provisión ideal de la moto frente al aporte real.
+- provisión ideal de la moto frente al aporte real (descartado después a petición del usuario, ver §2.7).
 
 Hasta ahora la app solo tenía la curva del mes en Resumen.
 
@@ -85,7 +85,6 @@ La dona no lleva desfase: sus ángulos acumulados tienen que quedar ordenados, a
   - Un mes cerrado anterior al activo lee su `MonthSnapshot`: el saldo congelado es el que se arrastró.
   - El mes activo se calcula siempre en vivo, aunque esté cerrado. Un mes cerrado se puede volver a abrir desde el historial y editarse, y los gráficos deben coincidir con las tarjetas de la misma pantalla, que también se calculan en vivo.
   - Un mes abierto se calcula con `calculateMonthlyBudgetSummary`, `calculateDebtsSummary` y `calculateMonthlySavingsSummary`, igual que las pestañas.
-  - El aporte a la reserva sale de los movimientos del mes, porque el snapshot no lo guarda.
 - **`buildExpenseDistribution`:** agrupa los gastos por concepto. Un gasto pagado cuenta su monto real y uno pendiente, su monto previsto. Los 5 mayores tienen tramo propio y el resto va a «Otros», salvo si solo queda uno. Los tramos suman exactamente el total, que es pagado + pendiente (3.370.000 en octubre de 2026).
 - **`buildPaidVsPendingSplit`:** separa lo pagado de lo pendiente (celdas B4 y B5 del Excel).
 - **`buildMonthComparison`:** compara el último mes con el anterior. Devuelve `null` si solo hay un mes.
@@ -103,8 +102,6 @@ Valores dorados de octubre de 2026 que cubren los tests:
 | Moto | 2.300.000 |
 | Ahorros | 2.080.000 |
 | Total de ahorros | 4.380.000 |
-| Aporte a Moto | 700.000 |
-| Brecha frente al ideal (872.667) | −172.667 |
 
 `useChartHistory` (`features/budget/hooks`) se suscribe solo a los *slices* que lee, con la misma disciplina de selectores que la auditoría de rendimiento (R-15).
 
@@ -112,15 +109,28 @@ Valores dorados de octubre de 2026 que cubren los tests:
 
 | Pestaña | Gráficos |
 | :--- | :--- |
-| Cierre (`analytics`), sección «Gráficos» bajo el cierre y el historial | Flujo de efectivo (recibido, pagado y pendiente por mes, que cubre también «ingresos vs gastos»); balance mensual; previsto vs real (con un control para elegir gastos o ingresos); pagado vs pendiente; distribución de gastos; este mes vs el anterior |
+| Cierre (`analytics`), sección «Gráficos» bajo el cierre y el historial | Flujo de Dinero (recibido, pagado y pendiente por mes, que cubre también «ingresos vs gastos»); balance mensual; previsto vs real (con un control para elegir gastos o ingresos); pagado vs pendiente; distribución de gastos; comparación del último mes con el anterior, titulada con los dos meses («Noviembre 2026 vs Octubre 2026») |
 | Deudas | Evolución de la deuda con la proyección punteada |
-| Ahorros | Evolución de ahorros apilada; provisión ideal vs aporte real, con el ideal como línea punteada |
+| Ahorros | Evolución de ahorros apilada |
 
 - No hay pestaña nueva y la navegación de las pieles no cambia.
 - Las vistas existentes, sus `testID` y la acción principal de cada pantalla no cambian: los gráficos se añaden en el contenedor de cada pestaña.
 - En escritorio, `ResponsiveColumns` reparte las tarjetas en dos columnas.
 
-### 2.6. Token nuevo: `colors.chart.categorical`
+### 2.6. Texto mínimo en los gráficos de evolución
+
+Tras verlos, el usuario pidió aligerar «Flujo de Dinero», «Balance mensual» y «Evolución de ahorros». Ahora solo tienen el título, la lectura del mes elegido y el dibujo:
+
+- **Sin subtítulo:** el título basta.
+- **Sin leyenda:** la lectura ya pone nombre a cada color (`showLegend={false}`).
+- **Sin notas:** se quitan «Mes abierto», «Mes cerrado» y «Total».
+- **Una sola cifra en «Balance mensual»:** solo hay una serie, así que la lectura muestra el mes y el monto en `title2`, sin el nombre de la serie (`readout="value"`). VoiceOver y TalkBack siguen oyendo «Flujo neto» en cada columna.
+
+### 2.7. Gráfico retirado: provisión ideal vs aporte real
+
+El usuario pidió eliminar de Ahorros el gráfico de la provisión ideal frente al aporte real, porque no le gustó. Se quitó también el campo `reserveContribution` del historial, que solo lo alimentaba. Un mes cerrado anterior al activo ya no recalcula sus ahorros.
+
+### 2.8. Token nuevo: `colors.chart.categorical`
 
 Los tramos de la dona de distribución no tienen significado financiero, así que no pueden usar los colores semánticos. Se añaden seis tonos por paleta, en las seis paletas (tres pieles, claro y oscuro). Su contrato está en `skinTokens.test.ts`:
 
@@ -135,7 +145,7 @@ Los demás gráficos usan los colores semánticos de siempre: ingreso, gasto, pe
 - Las tres pieles dibujan lo mismo con su material. Las tarjetas son `GlassSurface`: vidrio en iOS, tonal en Android y plano en Web.
 - No hay dependencias nuevas. Web sigue sin descargar three.js, porque los gráficos no importan nada de `features/summary/scene`. No se midió el peso del paquete Web antes y después.
 - Cada gráfico vuelve a pintarse unos 0,7 s al entrar y 0,45 s al cambiar los datos. En reposo no hay trabajo. Al abrir Cierre se animan seis gráficos a la vez.
-- El nombre del fondo de reserva aparece también en la leyenda de Ahorros. Un test de autenticación que lo buscaba por texto en toda la pantalla ahora lo busca dentro de su tarjeta.
+- El nombre del fondo de reserva aparece también en la lectura del gráfico de Ahorros. Un test de autenticación que lo buscaba por texto en toda la pantalla ahora lo busca dentro de su tarjeta.
 - **Riesgo residual de *Reducir Movimiento*:** la preferencia se lee de forma asíncrona. Si un gráfico obtiene su tamaño antes de la respuesta, la entrada empieza y salta al estado final. No se guardó la preferencia a nivel de módulo, porque haría que los tests dependieran de su orden.
 - **Revisión:** se pidió una revisión con el agente `code-reviewer` antes de cerrar. Sus hallazgos de gravedad media están corregidos y probados: mes activo cerrado y editado, negativos apilados, elección fuera de rango, clic tras el puntero y objetivo táctil. También los de gravedad baja salvo dos: la caché de *Reducir Movimiento* (ver arriba) y la distancia del punto estimado, que se decidió conservar.
 - **Sin verificar en un dispositivo:** se validó con tests en Jest y en el navegador (`npm run web:demo` con las pieles `ios` oscuro a 375, `android` claro a 320 y `web` claro en escritorio). Faltan la fluidez en un iPhone o Android real, la háptica de selección y el comportamiento de VoiceOver y TalkBack.

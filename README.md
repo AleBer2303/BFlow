@@ -268,7 +268,7 @@ BFlow/
 │   │   ├── checklist/            # Lista de movimientos y filtros
 │   │   ├── debts/                # Amortización de deudas, abonos y gráfico de evolución
 │   │   ├── onboarding/           # Configuración inicial de usuario nuevo
-│   │   ├── savings/              # Tarjetas de fondos, provisión moto y sus gráficos
+│   │   ├── savings/              # Tarjetas de fondos, provisión moto y gráfico de evolución
 │   │   ├── shell/                # WorkspaceShell: cabecera, columna y navegación de cada piel
 │   │   └── summary/              # Resumen y curva del mes: three.js (iOS), SVG animado (Android, Web y respaldo de iOS)
 │   └── platform/                 # Adaptadores Modo A vs Modo B

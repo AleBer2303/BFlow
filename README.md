@@ -1,6 +1,6 @@
 # BFlow — Gestión de Flujo de Caja Personal & Provisiones Inteligentes
 
-[![Expo SDK 58](https://img.shields.io/badge/Expo-SDK_58.0.21-000020?style=for-the-badge&logo=expo&logoColor=white)](https://expo.dev/)
+[![Expo SDK 58](https://img.shields.io/badge/Expo-SDK_58.0.23-000020?style=for-the-badge&logo=expo&logoColor=white)](https://expo.dev/)
 [![React Native 0.88](https://img.shields.io/badge/React_Native-0.88.1-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactnative.dev/)
 [![React 19](https://img.shields.io/badge/React-19.3.0-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript Strict](https://img.shields.io/badge/TypeScript-5.9.2_Strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)

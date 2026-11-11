@@ -1,6 +1,7 @@
 export * from './tokens';
 export * from './theme/ThemeContext';
 export * from './platform/platformSkin';
+export * from './platform/useReducedMotionPreference';
 export * from './layout/responsiveLayout';
 export * from './layout/currencyFit';
 export * from './components/AppPressable';
@@ -20,5 +21,6 @@ export * from './components/KeyboardAwareScrollView';
 export * from './components/AppTextInput';
 export * from './components/TactilePressable';
 export * from './components/RevealDown';
+export * from './components/charts';
 export * from '../platform/glass/GlassSurface';
 export * from '../platform/haptics/hapticService';

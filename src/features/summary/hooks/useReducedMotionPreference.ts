@@ -1,31 +1,5 @@
-import { useEffect, useState } from 'react';
-import { AccessibilityInfo } from 'react-native';
-
-/** Tracks the system "Reduce Motion" setting on iOS, Android and Web. */
-export function useReducedMotionPreference(): boolean {
-  const [isReducedMotion, setIsReducedMotion] = useState(false);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((isEnabled) => {
-        if (isMounted && isEnabled) {
-          setIsReducedMotion(true);
-        }
-      })
-      .catch(() => undefined);
-
-    const subscription = AccessibilityInfo.addEventListener(
-      'reduceMotionChanged',
-      setIsReducedMotion
-    );
-
-    return () => {
-      isMounted = false;
-      subscription.remove();
-    };
-  }, []);
-
-  return isReducedMotion;
-}
+/**
+ * The hook moved to the design system so the charts can share it (Phase 6). This path is
+ * kept for the summary curve and its tests.
+ */
+export { useReducedMotionPreference } from '../../../design-system/platform/useReducedMotionPreference';

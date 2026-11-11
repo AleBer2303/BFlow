@@ -31,10 +31,13 @@ export function useChartTransition(
 
   useEffect(() => {
     const transition = transitionRef.current as ChartTransition;
-    transition.setAnimate(!reducedMotion);
-    transition.retarget(targets);
+    const jumped = transition.setAnimate(!reducedMotion);
+    const retargeted = transition.retarget(targets);
     if (!enabled || transition.isSettled()) {
-      redraw();
+      // Repaint only when the values to draw changed; a mount with nothing new costs nothing.
+      if (jumped || retargeted) {
+        redraw();
+      }
       return undefined;
     }
 

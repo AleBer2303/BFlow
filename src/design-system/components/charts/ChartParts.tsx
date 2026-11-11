@@ -8,7 +8,7 @@
  * reach the same data as a finger.
  */
 
-import React from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { formatCurrency, formatCurrencyCompact } from '../../../domain/money/money';
 import { GlassSurface } from '../../../platform/glass/GlassSurface';
@@ -16,6 +16,7 @@ import { hapticService } from '../../../platform/haptics/hapticService';
 import { useBFlowTheme } from '../../theme/ThemeContext';
 import { AppPressable } from '../AppPressable';
 import { AppText } from '../Typography';
+import { resolveVisibleCount } from './chartScale';
 
 /** Room on the right of the plot for the value labels ("$ 2.5M"). */
 export const CHART_AXIS_GUTTER_PT = 52;
@@ -116,11 +117,14 @@ export interface ChartReadoutProps {
   testID?: string;
 }
 
-/** Figures of the chosen point. Announced politely when the choice changes. */
+/**
+ * Figures of the chosen point. Not a live region: hovering would announce every move, and a
+ * screen reader already reads the same figures from the focused column.
+ */
 export function ChartReadout({ title, rows, note, testID }: ChartReadoutProps): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
   return (
-    <View testID={testID} accessibilityLiveRegion="polite" style={{ gap: spacing.xxs }}>
+    <View testID={testID} style={{ gap: spacing.xxs }}>
       <AppText variant="caption" color={colors.text.secondary}>
         {title}
       </AppText>
@@ -148,49 +152,114 @@ export function ChartReadout({ title, rows, note, testID }: ChartReadoutProps): 
   );
 }
 
+export interface ChartSelection<T> {
+  /** What the readout describes: the hovered or focused item, else the pinned one. */
+  active: T | null;
+  /** Tap (or click) pins an item; tapping it again lets go. */
+  press: (value: T) => void;
+  /** Pointer and keyboard focus follow without pinning; null when they leave. */
+  hover: (value: T | null) => void;
+}
+
+/**
+ * Selection of a chart. Pinning (touch, click, Enter) and hovering (pointer, focus) are kept
+ * apart, so a click on the hovered month pins it instead of letting it go. A choice that no
+ * longer exists (fewer months after the data changed) is ignored.
+ */
+export function useChartSelection<T>(isValid: (value: T) => boolean): ChartSelection<T> {
+  const [pinned, setPinned] = useState<T | null>(null);
+  const [hovered, setHovered] = useState<T | null>(null);
+  const press = useCallback((value: T) => {
+    hapticService.selection();
+    setPinned((current) => (current === value ? null : value));
+  }, []);
+  const hover = useCallback((value: T | null) => setHovered(value), []);
+
+  let active: T | null = null;
+  if (hovered !== null && isValid(hovered)) {
+    active = hovered;
+  } else if (pinned !== null && isValid(pinned)) {
+    active = pinned;
+  }
+  return { active, press, hover };
+}
+
+export interface ChartWindow {
+  /** Index in the full data of the first visible category. */
+  start: number;
+  categories: readonly string[];
+  categoryTitles: readonly string[];
+  series: readonly ChartSeries[];
+  describeNote?: (index: number) => string | undefined;
+}
+
+/**
+ * Keeps the most recent categories that fit with a full touch target each (44pt, 48dp on
+ * Android). Until the plot is measured every category is kept.
+ */
+export function useChartWindow(
+  categories: readonly string[],
+  categoryTitles: readonly string[],
+  series: readonly ChartSeries[],
+  describeNote: ((index: number) => string | undefined) | undefined,
+  plotWidth: number,
+  minVisible = 1
+): ChartWindow {
+  const { minTouchTarget } = useBFlowTheme();
+  const visible = resolveVisibleCount(categories.length, plotWidth, minTouchTarget, minVisible);
+  const start = categories.length - visible;
+  const visibleSeries = useMemo(
+    () =>
+      start === 0 ? series : series.map((item) => ({ ...item, values: item.values.slice(start) })),
+    [series, start]
+  );
+  return {
+    start,
+    categories: start === 0 ? categories : categories.slice(start),
+    categoryTitles: start === 0 ? categoryTitles : categoryTitles.slice(start),
+    series: visibleSeries,
+    describeNote: describeNote && ((index: number) => describeNote(index + start)),
+  };
+}
+
 export interface ChartTouchColumnsProps {
   count: number;
-  selectedIndex: number | null;
-  onSelect: (index: number | null) => void;
+  activeIndex: number | null;
+  selection: ChartSelection<number>;
   describe: (index: number) => string;
   testIDPrefix: string;
   style?: StyleProp<ViewStyle>;
 }
 
 /**
- * One column per category over the plot. Tap selects it (tap again to let go), a fine
- * pointer selects on hover, and keyboard focus selects it on the web skin.
+ * One column per category over the plot. Tap pins it (tap again to let go); a fine pointer
+ * and the keyboard focus show it while they stay on it (web skin, iPad with a pointer).
  */
 export function ChartTouchColumns({
   count,
-  selectedIndex,
-  onSelect,
+  activeIndex,
+  selection,
   describe,
   testIDPrefix,
   style,
 }: ChartTouchColumnsProps): React.JSX.Element {
   return (
     <View style={[StyleSheet.absoluteFill, { flexDirection: 'row' }, style]}>
-      {Array.from({ length: count }, (_, index) => {
-        const isSelected = selectedIndex === index;
-        return (
-          <AppPressable
-            key={index}
-            testID={`${testIDPrefix}-${index}`}
-            accessibilityRole="button"
-            accessibilityLabel={describe(index)}
-            accessibilityState={{ selected: isSelected }}
-            onPress={() => {
-              hapticService.selection();
-              onSelect(isSelected ? null : index);
-            }}
-            onHoverIn={() => onSelect(index)}
-            onHoverOut={() => onSelect(null)}
-            onFocus={() => onSelect(index)}
-            style={{ flex: 1 }}
-          />
-        );
-      })}
+      {Array.from({ length: count }, (_, index) => (
+        <AppPressable
+          key={index}
+          testID={`${testIDPrefix}-${index}`}
+          accessibilityRole="button"
+          accessibilityLabel={describe(index)}
+          accessibilityState={{ selected: activeIndex === index }}
+          onPress={() => selection.press(index)}
+          onHoverIn={() => selection.hover(index)}
+          onHoverOut={() => selection.hover(null)}
+          onFocus={() => selection.hover(index)}
+          onBlur={() => selection.hover(null)}
+          style={{ flex: 1 }}
+        />
+      ))}
     </View>
   );
 }

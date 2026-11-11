@@ -4,10 +4,14 @@
  * Animated bar chart, grouped or stacked, drawn with react-native-svg so it is the same
  * vector drawing on iOS, Android and Web (no WebGL, no three.js: ADR 0011, 0014 and 0020).
  * - Bars grow from the zero line on entrance and move to new values when the data changes.
- * - Negative values (a month with negative net flow) hang below the zero line.
+ * - Negative values (a month with negative net flow, an overdrawn savings bucket) hang below
+ *   the zero line; in a stack they pile downwards, so the stack still adds up to its total.
  * - Optional reference line (the ideal monthly provision).
  * - Touching, hovering or focusing a category shows its figures in the readout; with
  *   nothing chosen the readout shows the last category (the active month).
+ * - Only the most recent categories that fit a full touch target each are shown.
+ * Only the drawing (`BarPlot`) repaints on each animation frame; the readout, labels and
+ * touch columns render again only when the data or the choice changes.
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
@@ -22,10 +26,12 @@ import {
   ChartTouchColumns,
   ChartValueLabels,
   describeChartPoint,
+  useChartSelection,
+  useChartWindow,
   type ChartLegendItem,
   type ChartSeries,
 } from './ChartParts';
-import { bandCenter, buildValueScale, valueToY, type PlotBox } from './chartScale';
+import { bandCenter, buildValueScale, valueToY, type PlotBox, type ValueScale } from './chartScale';
 import { useChartTransition } from './useChartTransition';
 
 export interface BarChartReferenceLine {
@@ -55,60 +61,59 @@ const MAX_GROUP_WIDTH_PT = 64;
 const BAR_GAP_PT = 2;
 const DIMMED_OPACITY = 0.38;
 
-export function BarChart({
-  categories,
-  categoryTitles,
-  series,
-  layout = 'grouped',
-  referenceLine,
-  describeNote,
-  plotHeight = DEFAULT_PLOT_HEIGHT_PT,
-  testID,
-}: BarChartProps): React.JSX.Element {
-  const { colors, spacing, radius } = useBFlowTheme();
-  const [width, setWidth] = useState(0);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const count = categories.length;
-  const isStacked = layout === 'stacked';
+/** Highest and lowest point a stack reaches (positives pile up, negatives pile down). */
+export function stackExtents(series: readonly ChartSeries[], count: number): number[] {
+  const extents: number[] = [];
+  for (let index = 0; index < count; index += 1) {
+    let up = 0;
+    let down = 0;
+    for (const item of series) {
+      const value = item.values[index] ?? 0;
+      if (value >= 0) up += value;
+      else down += value;
+    }
+    extents.push(up, down);
+  }
+  return extents;
+}
 
+interface BarPlotProps {
+  width: number;
+  plotHeight: number;
+  count: number;
+  series: readonly ChartSeries[];
+  isStacked: boolean;
+  scale: ValueScale;
+  box: PlotBox;
+  referenceLine?: BarChartReferenceLine;
+  dimExcept: number | null;
+  testID: string;
+}
+
+const BarPlot = React.memo(function BarPlot({
+  width,
+  plotHeight,
+  count,
+  series,
+  isStacked,
+  scale,
+  box,
+  referenceLine,
+  dimExcept,
+  testID,
+}: BarPlotProps): React.JSX.Element | null {
+  const { colors, radius } = useBFlowTheme();
   // Category-major order, so the entrance staggers month by month.
   const targets = useMemo(
-    () =>
-      Array.from({ length: count }, (_, index) =>
-        series.map((item) => {
-          const value = item.values[index] ?? 0;
-          return isStacked ? Math.max(0, value) : value;
-        })
-      ).flat(),
-    [count, series, isStacked]
+    () => Array.from({ length: count }, (_, i) => series.map((item) => item.values[i] ?? 0)).flat(),
+    [count, series]
   );
-  const animated = useChartTransition(targets, { enabled: width > 0 });
-
-  const scale = useMemo(() => {
-    const extents = isStacked
-      ? Array.from({ length: count }, (_, index) =>
-          series.reduce((sum, item) => sum + Math.max(0, item.values[index] ?? 0), 0)
-        )
-      : targets;
-    return buildValueScale(referenceLine ? [...extents, referenceLine.value] : extents);
-  }, [count, isStacked, series, targets, referenceLine]);
-
-  const handleLayout = useCallback((event: LayoutChangeEvent) => {
-    setWidth(Math.round(event.nativeEvent.layout.width));
-  }, []);
-
-  const activeIndex = selectedIndex ?? Math.max(0, count - 1);
-  const pointFigures = (index: number) =>
-    series.map((item) => ({ label: item.label, value: item.values[index] ?? 0 }));
-  const legend: ChartLegendItem[] = [
-    ...series.map((item) => ({ id: item.id, label: item.label, color: item.color })),
-    ...(referenceLine
-      ? [{ id: 'reference', label: referenceLine.label, color: referenceLine.color, dashed: true }]
-      : []),
-  ];
-
   const plotWidth = Math.max(0, width - CHART_AXIS_GUTTER_PT);
-  const box: PlotBox = { top: PLOT_PADDING_TOP_PT, height: plotHeight - PLOT_PADDING_TOP_PT };
+  const animated = useChartTransition(targets, { enabled: plotWidth > 0 });
+  if (plotWidth <= 0) {
+    return null;
+  }
+
   const zeroY = valueToY(0, scale, box);
   const band = count > 0 ? plotWidth / count : 0;
   const groupWidth = Math.min(band * MAX_GROUP_SHARE, MAX_GROUP_WIDTH_PT);
@@ -118,48 +123,121 @@ export function BarChart({
   const corner = Math.min(radius.xs, barWidth / 3);
 
   const bars: React.ReactNode[] = [];
-  if (plotWidth > 0) {
-    for (let index = 0; index < count; index += 1) {
-      const center = bandCenter(index, count, plotWidth);
-      const opacity = selectedIndex === null || selectedIndex === index ? 1 : DIMMED_OPACITY;
-      let stackTop = 0;
-      series.forEach((item, seriesIndex) => {
-        const value = animated[index * series.length + seriesIndex] ?? 0;
-        let x: number;
-        let from: number;
-        let to: number;
-        if (isStacked) {
-          x = center - barWidth / 2;
-          from = stackTop;
-          to = stackTop + value;
-          stackTop = to;
-        } else {
-          x = center - groupWidth / 2 + seriesIndex * (barWidth + BAR_GAP_PT);
-          from = 0;
-          to = value;
-        }
-        const y1 = valueToY(from, scale, box);
-        const y2 = valueToY(to, scale, box);
-        const height = Math.abs(y1 - y2);
-        if (height < 0.5) {
-          return;
-        }
-        bars.push(
-          <Rect
-            key={`${item.id}-${index}`}
-            testID={`${testID}-bar-${item.id}-${index}`}
-            x={x}
-            y={Math.min(y1, y2)}
-            width={barWidth}
-            height={height}
-            rx={isStacked ? 0 : corner}
-            fill={item.color}
-            opacity={opacity}
-          />
-        );
-      });
-    }
+  for (let index = 0; index < count; index += 1) {
+    const center = bandCenter(index, count, plotWidth);
+    const opacity = dimExcept === null || dimExcept === index ? 1 : DIMMED_OPACITY;
+    let stackUp = 0;
+    let stackDown = 0;
+    series.forEach((item, seriesIndex) => {
+      const value = animated[index * series.length + seriesIndex] ?? 0;
+      let x = center - groupWidth / 2 + seriesIndex * (barWidth + BAR_GAP_PT);
+      let from = 0;
+      let to = value;
+      if (isStacked) {
+        x = center - barWidth / 2;
+        from = value >= 0 ? stackUp : stackDown;
+        to = from + value;
+        if (value >= 0) stackUp = to;
+        else stackDown = to;
+      }
+      const y1 = valueToY(from, scale, box);
+      const y2 = valueToY(to, scale, box);
+      const height = Math.abs(y1 - y2);
+      if (height < 0.5) {
+        return;
+      }
+      bars.push(
+        <Rect
+          key={`${item.id}-${index}`}
+          testID={`${testID}-bar-${item.id}-${index}`}
+          x={x}
+          y={Math.min(y1, y2)}
+          width={barWidth}
+          height={height}
+          rx={isStacked ? 0 : corner}
+          fill={item.color}
+          opacity={opacity}
+        />
+      );
+    });
   }
+
+  return (
+    <Svg width={width} height={plotHeight} testID={`${testID}-svg`}>
+      {scale.ticks.map((tick) => (
+        <Line
+          key={`grid-${tick}`}
+          x1={0}
+          x2={plotWidth}
+          y1={valueToY(tick, scale, box)}
+          y2={valueToY(tick, scale, box)}
+          stroke={colors.glass.subtleBorder}
+          strokeWidth={1}
+        />
+      ))}
+      {bars}
+      {referenceLine ? (
+        <Line
+          testID={`${testID}-reference`}
+          x1={0}
+          x2={plotWidth}
+          y1={valueToY(referenceLine.value, scale, box)}
+          y2={valueToY(referenceLine.value, scale, box)}
+          stroke={referenceLine.color}
+          strokeWidth={1.5}
+          strokeDasharray="5 4"
+        />
+      ) : null}
+      <Line x1={0} x2={plotWidth} y1={zeroY} y2={zeroY} stroke={colors.text.muted} strokeWidth={1} />
+    </Svg>
+  );
+});
+
+export function BarChart({
+  categories: allCategories,
+  categoryTitles: allTitles,
+  series: allSeries,
+  layout = 'grouped',
+  referenceLine,
+  describeNote: allNotes,
+  plotHeight = DEFAULT_PLOT_HEIGHT_PT,
+  testID,
+}: BarChartProps): React.JSX.Element {
+  const { spacing } = useBFlowTheme();
+  const [width, setWidth] = useState(0);
+  const isStacked = layout === 'stacked';
+  const { categories, categoryTitles, series, describeNote } = useChartWindow(
+    allCategories,
+    allTitles,
+    allSeries,
+    allNotes,
+    Math.max(0, width - CHART_AXIS_GUTTER_PT)
+  );
+  const count = categories.length;
+  const selection = useChartSelection<number>((index) => index < count);
+
+  const scale = useMemo(() => {
+    const extents = isStacked
+      ? stackExtents(series, count)
+      : series.flatMap((item) => Array.from({ length: count }, (_, i) => item.values[i] ?? 0));
+    return buildValueScale(referenceLine ? [...extents, referenceLine.value] : extents);
+  }, [count, isStacked, series, referenceLine]);
+  const box = useMemo<PlotBox>(
+    () => ({ top: PLOT_PADDING_TOP_PT, height: plotHeight - PLOT_PADDING_TOP_PT }),
+    [plotHeight]
+  );
+
+  const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    setWidth(Math.round(event.nativeEvent.layout.width));
+  }, []);
+
+  const activeIndex = selection.active ?? Math.max(0, count - 1);
+  const legend: ChartLegendItem[] = [
+    ...series.map((item) => ({ id: item.id, label: item.label, color: item.color })),
+    ...(referenceLine
+      ? [{ id: 'reference', label: referenceLine.label, color: referenceLine.color, dashed: true }]
+      : []),
+  ];
 
   return (
     <View style={{ gap: spacing.sm }} testID={testID}>
@@ -182,48 +260,35 @@ export function BarChart({
           importantForAccessibility="no-hide-descendants"
           pointerEvents="none"
         >
-          {plotWidth > 0 ? (
-            <Svg width={width} height={plotHeight} testID={`${testID}-svg`}>
-              {scale.ticks.map((tick) => (
-                <Line
-                  key={`grid-${tick}`}
-                  x1={0}
-                  x2={plotWidth}
-                  y1={valueToY(tick, scale, box)}
-                  y2={valueToY(tick, scale, box)}
-                  stroke={tick === 0 ? colors.glass.specularBorder : colors.glass.subtleBorder}
-                  strokeWidth={1}
-                />
-              ))}
-              {bars}
-              {referenceLine ? (
-                <Line
-                  testID={`${testID}-reference`}
-                  x1={0}
-                  x2={plotWidth}
-                  y1={valueToY(referenceLine.value, scale, box)}
-                  y2={valueToY(referenceLine.value, scale, box)}
-                  stroke={referenceLine.color}
-                  strokeWidth={1.5}
-                  strokeDasharray="5 4"
-                />
-              ) : null}
-              <Line x1={0} x2={plotWidth} y1={zeroY} y2={zeroY} stroke={colors.text.muted} strokeWidth={1} />
-            </Svg>
-          ) : null}
-          {plotWidth > 0 ? (
+          <BarPlot
+            width={width}
+            plotHeight={plotHeight}
+            count={count}
+            series={series}
+            isStacked={isStacked}
+            scale={scale}
+            box={box}
+            referenceLine={referenceLine}
+            dimExcept={selection.active}
+            testID={testID}
+          />
+          {width > CHART_AXIS_GUTTER_PT ? (
             <ChartValueLabels ticks={scale.ticks} yFor={(tick) => valueToY(tick, scale, box)} />
           ) : null}
         </View>
 
         <ChartTouchColumns
           count={count}
-          selectedIndex={selectedIndex}
-          onSelect={setSelectedIndex}
+          activeIndex={selection.active}
+          selection={selection}
           testIDPrefix={`${testID}-point`}
           style={{ right: CHART_AXIS_GUTTER_PT }}
           describe={(index) =>
-            describeChartPoint(categoryTitles[index] ?? '', pointFigures(index), describeNote?.(index))
+            describeChartPoint(
+              categoryTitles[index] ?? '',
+              series.map((item) => ({ label: item.label, value: item.values[index] ?? 0 })),
+              describeNote?.(index)
+            )
           }
         />
       </View>

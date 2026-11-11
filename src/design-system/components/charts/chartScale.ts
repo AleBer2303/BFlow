@@ -3,8 +3,9 @@
  *
  * Value axis and drawing geometry shared by the bar, line and donut charts. Pure functions,
  * so the shapes are tested without rendering. The value axis always contains zero (money
- * charts compare against nothing spent / nothing owed) and uses round steps (1, 2, 2.5, 5
- * times a power of ten) so the grid reads "$ 1M, $ 2M" instead of odd figures.
+ * charts compare against nothing spent / nothing owed) and uses round steps (1, 2 or 5
+ * times a power of ten) so the grid reads "$ 1M, $ 2M" instead of odd figures. A step of
+ * 2.5 is left out because the compact labels would round it ("$ 1.3M" for 1.250.000).
  */
 
 export interface ValueScale {
@@ -24,7 +25,7 @@ export interface ChartPoint {
   y: number;
 }
 
-const NICE_FACTORS = [1, 2, 2.5, 5, 10] as const;
+const NICE_FACTORS = [1, 2, 5, 10] as const;
 
 /** Smallest round step that splits `range` into at most `maxSteps` parts. */
 export function resolveNiceStep(range: number, maxSteps: number): number {
@@ -65,6 +66,26 @@ export function valueToY(value: number, scale: ValueScale, box: PlotBox): number
   const span = scale.max - scale.min || 1;
   const clamped = Math.min(scale.max, Math.max(scale.min, value));
   return box.top + box.height - ((clamped - scale.min) / span) * box.height;
+}
+
+/**
+ * How many of the most recent categories fit in `plotWidth` with `minColumnWidth` each
+ * (the skin's touch target). An unmeasured plot keeps them all.
+ */
+export function resolveVisibleCount(
+  total: number,
+  plotWidth: number,
+  minColumnWidth: number,
+  minVisible = 1
+): number {
+  if (total <= 0) {
+    return 0;
+  }
+  if (!(plotWidth > 0) || !(minColumnWidth > 0)) {
+    return total;
+  }
+  const fitting = Math.floor(plotWidth / minColumnWidth);
+  return Math.min(total, Math.max(minVisible, fitting, 1));
 }
 
 /** Center of band `index` when `count` equal bands fill `width`. */

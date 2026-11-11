@@ -74,10 +74,13 @@ export class ChartTransition {
     }
   }
 
-  /** Moves towards new targets from wherever the values are now. */
-  retarget(targets: readonly number[]): void {
+  /**
+   * Moves towards new targets from wherever the values are now.
+   * @returns true when the values to draw changed.
+   */
+  retarget(targets: readonly number[]): boolean {
     if (sameValues(targets, this.to)) {
-      return;
+      return false;
     }
     // A value that did not exist yet (a new month) grows from zero.
     this.from = targets.map((_, index) => this.current[index] ?? 0);
@@ -87,13 +90,17 @@ export class ChartTransition {
     if (!this.animate) {
       this.settle();
     }
+    return true;
   }
 
-  setAnimate(animate: boolean): void {
+  /** @returns true when turning motion off jumped the values to their targets. */
+  setAnimate(animate: boolean): boolean {
     this.animate = animate;
-    if (!animate) {
-      this.settle();
+    if (animate || this.isSettled()) {
+      return false;
     }
+    this.settle();
+    return true;
   }
 
   /** Jumps to the targets. */
@@ -136,6 +143,10 @@ export class ChartTransition {
       this.stagger && count > 1
         ? Math.min(CHART_STAGGER_SECONDS, CHART_MAX_STAGGER_SECONDS / (count - 1))
         : 0;
+    // Nothing to move (no data, or zeros growing to zeros): rest at once, no frames.
+    if (sameValues(this.from, this.to)) {
+      this.elapsed = this.totalSeconds();
+    }
   }
 
   private totalSeconds(): number {

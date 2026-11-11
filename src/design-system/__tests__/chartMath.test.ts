@@ -10,8 +10,11 @@ import {
   buildValueScale,
   resolveNiceStep,
   resolveSliceEndAngles,
+  resolveVisibleCount,
   valueToY,
 } from '../components/charts/chartScale';
+import { formatCurrencyCompact } from '../../domain/money/money';
+import { stackExtents } from '../components/charts/BarChart';
 import {
   CHART_ENTRANCE_SECONDS,
   CHART_FALLBACK_FRAME_SECONDS,
@@ -37,7 +40,8 @@ describe('value scale', () => {
   it('picks round steps', () => {
     expect(resolveNiceStep(4_000_000, 4)).toBe(1_000_000);
     expect(resolveNiceStep(3_370_000, 4)).toBe(1_000_000);
-    expect(resolveNiceStep(900_000, 4)).toBe(250_000);
+    expect(resolveNiceStep(900_000, 4)).toBe(500_000);
+    expect(resolveNiceStep(1_250_000, 5)).toBe(500_000);
     expect(resolveNiceStep(700, 4)).toBe(200);
     expect(resolveNiceStep(0, 4)).toBe(1);
     expect(resolveNiceStep(Number.NaN, 4)).toBe(1);
@@ -216,5 +220,70 @@ describe('chart motion', () => {
     expect(transition.getValues()).toEqual([]);
     runToRest(transition);
     expect(transition.isSettled()).toBe(true);
+  });
+});
+
+/** Reads a compact label back into pesos: "-$ 1.5M" → -1.500.000. */
+function readCompact(label: string): number {
+  const match = /^(-?)\$ ([\d.]+)([kMB]?)$/.exec(label);
+  if (!match) throw new Error(label);
+  const factor = { '': 1, k: 1_000, M: 1_000_000, B: 1_000_000_000 }[match[3] as '' | 'k' | 'M' | 'B'];
+  const value = Math.round(Number(match[2]) * factor);
+  return match[1] ? -value : value;
+}
+
+describe('review fixes', () => {
+  it('labels every grid line exactly with the compact format (no 2.5 steps)', () => {
+    for (const values of [[1_250_000], [7_500], [1_750_000, -300_000], [872_667, 700_000]]) {
+      for (const tick of buildValueScale(values).ticks) {
+        expect(Number.isInteger(tick)).toBe(true);
+        // The axis label must read back as the exact tick ("$ 1.5M" is 1.500.000).
+        expect({ tick, read: readCompact(formatCurrencyCompact(tick)) }).toEqual({ tick, read: tick });
+      }
+    }
+    expect(buildValueScale([1_250_000]).ticks).toEqual([0, 500_000, 1_000_000, 1_500_000]);
+  });
+
+  it('keeps the most recent categories that fit a full touch target each', () => {
+    expect(resolveVisibleCount(6, 204, 44)).toBe(4);
+    expect(resolveVisibleCount(6, 204, 48)).toBe(4);
+    expect(resolveVisibleCount(6, 1_000, 44)).toBe(6);
+    expect(resolveVisibleCount(6, 30, 44)).toBe(1);
+    expect(resolveVisibleCount(6, 30, 44, 2)).toBe(2);
+    expect(resolveVisibleCount(1, 30, 44, 2)).toBe(1);
+    expect(resolveVisibleCount(6, 0, 44)).toBe(6);
+    expect(resolveVisibleCount(6, 300, 0)).toBe(6);
+    expect(resolveVisibleCount(0, 300, 44)).toBe(0);
+  });
+
+  it('stacks positives up and negatives down', () => {
+    expect(
+      stackExtents(
+        [
+          { id: 'a', label: 'A', color: '#000000', values: [1_000, 3_000] },
+          { id: 'b', label: 'B', color: '#000000', values: [-500, 2_000] },
+        ],
+        2
+      )
+    ).toEqual([1_000, -500, 5_000, 0]);
+  });
+
+  it('rests at once when there is nothing to move', () => {
+    expect(new ChartTransition([], { animate: true }).isSettled()).toBe(true);
+    expect(new ChartTransition([0, 0], { animate: true }).isSettled()).toBe(true);
+
+    const transition = new ChartTransition([5], { animate: true });
+    runToRest(transition);
+    transition.retarget([5]);
+    expect(transition.isSettled()).toBe(true);
+  });
+
+  it('reports whether the values to draw changed', () => {
+    const transition = new ChartTransition([10], { animate: true });
+    expect(transition.retarget([10])).toBe(false);
+    expect(transition.retarget([20])).toBe(true);
+    expect(transition.setAnimate(true)).toBe(false);
+    expect(transition.setAnimate(false)).toBe(true);
+    expect(transition.setAnimate(false)).toBe(false);
   });
 });

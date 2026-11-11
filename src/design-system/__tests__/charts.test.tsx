@@ -171,8 +171,13 @@ describe('BarChart', () => {
     const lower = hidden('stack-bar-a-0');
     const upper = hidden('stack-bar-b-0');
     expect(Number(upper.props.y) + Number(upper.props.height)).toBeCloseTo(Number(lower.props.y), 3);
-    // A negative share of a stack is not drawn.
-    expect(queryHidden('stack-bar-b-1')).toBeNull();
+    // A negative share of a stack piles down from the zero line, where the positive one starts.
+    const stackUp = hidden('stack-bar-a-1');
+    const negativeShare = hidden('stack-bar-b-1');
+    expect(Number(negativeShare.props.y)).toBeCloseTo(
+      Number(stackUp.props.y) + Number(stackUp.props.height),
+      3
+    );
     expect(hidden('stack-reference')).toBeTruthy();
     expect(screen.getByTestId('stack-legend')).toHaveTextContent(/Ideal/);
 
@@ -414,5 +419,131 @@ describe('chart parts', () => {
   it('describes a point with its figures and an optional note', () => {
     expect(describeChartPoint('Oct', [{ label: 'Neto', value: -5_000 }])).toBe('Oct: Neto -$ 5.000');
     expect(describeChartPoint('Oct', [], 'Sin datos')).toBe('Oct: . Sin datos');
+  });
+});
+
+describe('selection and visible window (review fixes)', () => {
+  const SIX = ['Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov'];
+  const SIX_TITLES = ['Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre'];
+  const SIX_SERIES = [{ id: 'net', label: 'Neto', color: '#2EBD85', values: [1, 2, 3, 4, 5, 6] }];
+
+  it('pins the hovered month on click instead of letting it go (web)', () => {
+    render(
+      wrap(
+        <BarChart testID="flow" categories={MONTHS} categoryTitles={MONTH_TITLES} series={FLOW_SERIES} />,
+        'web'
+      )
+    );
+    const september = screen.getByTestId('flow-point-0');
+    fireEvent(september, 'hoverIn', {});
+    fireEvent.press(september);
+    expect(screen.getByTestId('flow-readout')).toHaveTextContent(/Septiembre 2026/);
+    // Leaving with the pointer keeps the pinned month.
+    fireEvent(september, 'hoverOut', {});
+    expect(screen.getByTestId('flow-readout')).toHaveTextContent(/Septiembre 2026/);
+    expect(screen.getByTestId('flow-point-0').props.accessibilityState).toEqual({ selected: true });
+  });
+
+  it('lets go of the keyboard focus on blur', () => {
+    render(
+      wrap(
+        <BarChart testID="flow" categories={MONTHS} categoryTitles={MONTH_TITLES} series={FLOW_SERIES} />,
+        'web'
+      )
+    );
+    fireEvent(screen.getByTestId('flow-point-0'), 'focus', {});
+    expect(screen.getByTestId('flow-readout')).toHaveTextContent(/Septiembre 2026/);
+    fireEvent(screen.getByTestId('flow-point-0'), 'blur', {});
+    expect(screen.getByTestId('flow-readout')).toHaveTextContent(/Octubre 2026/);
+  });
+
+  it('falls back to the last month when the pinned one no longer exists', () => {
+    const view = render(
+      wrap(<LineChart testID="net" categories={SIX} categoryTitles={SIX_TITLES} series={SIX_SERIES} />)
+    );
+    fireEvent.press(screen.getByTestId('net-point-5'));
+    expect(screen.getByTestId('net-readout')).toHaveTextContent(/Noviembre/);
+
+    view.rerender(
+      wrap(
+        <LineChart
+          testID="net"
+          categories={SIX.slice(0, 3)}
+          categoryTitles={SIX_TITLES.slice(0, 3)}
+          series={[{ ...SIX_SERIES[0]!, values: [1, 2, 3] }]}
+        />
+      )
+    );
+    expect(screen.getByTestId('net-readout')).toHaveTextContent(/Agosto/);
+    expect(screen.getByTestId('net-readout')).toHaveTextContent(/\$ 3/);
+  });
+
+  it('shows only the recent months that fit a full touch target on a narrow phone', () => {
+    jest.useFakeTimers();
+    render(
+      wrap(
+        <BarChart
+          testID="narrow"
+          categories={SIX}
+          categoryTitles={SIX_TITLES}
+          series={SIX_SERIES}
+          describeNote={(index) => `Nota ${index}`}
+        />,
+        'android'
+      )
+    );
+    expect(screen.getAllByTestId(/^narrow-point-\d$/)).toHaveLength(6);
+
+    // 256pt of chart minus the 52pt value gutter fits four 48dp columns.
+    layoutPlot('narrow', 256);
+    expect(screen.getAllByTestId(/^narrow-point-\d$/)).toHaveLength(4);
+    // The readout keeps the active month, with the note of its real index.
+    expect(screen.getByTestId('narrow-readout')).toHaveTextContent(/Noviembre.*Nota 5/);
+    fireEvent.press(screen.getByTestId('narrow-point-0'));
+    expect(screen.getByTestId('narrow-readout')).toHaveTextContent(/Agosto.*Nota 2/);
+    jest.useRealTimers();
+  });
+
+  it('keeps the estimate and the month it starts from in a narrow line chart', () => {
+    render(
+      wrap(
+        <LineChart
+          testID="debt"
+          categories={SIX}
+          categoryTitles={SIX_TITLES}
+          series={SIX_SERIES}
+          projectedFromIndex={4}
+          projectionLabel="Proyección"
+        />
+      )
+    );
+    layoutPlot('debt', 52 + 60);
+    expect(screen.getAllByTestId(/^debt-point-\d$/)).toHaveLength(2);
+    expect(screen.getByTestId('debt-readout')).toHaveTextContent(/Octubre/);
+    expect(screen.getByTestId('debt-legend')).toHaveTextContent(/Proyección/);
+  });
+
+  it('pins a donut slice on click after hovering it', () => {
+    render(
+      wrap(
+        <DonutChart
+          testID="split"
+          slices={[
+            { id: 'paid', label: 'Pagado', amount: 2_920_000, color: '#2EBD85' },
+            { id: 'pending', label: 'Pendiente', amount: 450_000, color: '#E5A84B' },
+          ]}
+          totalLabel="Total"
+          emptyLabel="Nada"
+        />,
+        'web'
+      )
+    );
+    const row = screen.getByTestId('split-slice-pending');
+    fireEvent(row, 'hoverIn', {});
+    fireEvent.press(row);
+    fireEvent(row, 'hoverOut', {});
+    expect(hidden('split-center-value')).toHaveTextContent('$ 450.000');
+    fireEvent(row, 'blur', {});
+    expect(hidden('split-center-value')).toHaveTextContent('$ 450.000');
   });
 });

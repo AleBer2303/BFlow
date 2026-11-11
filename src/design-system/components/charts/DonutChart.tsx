@@ -3,19 +3,20 @@
  *
  * Animated donut with its legend, drawn with react-native-svg on the three skins. On
  * entrance the ring sweeps clockwise from the top; with new data each slice moves to its
- * new angle. Each legend row is the touch target of its slice (tap, hover or focus): it
- * highlights the slice and the center states its amount and share. With nothing chosen the
- * center shows the total.
+ * new angle. Each legend row is the touch target of its slice: a tap pins it (tap again to
+ * let go), a pointer or the keyboard focus shows it while they stay on it. The chosen slice
+ * is highlighted and the center states its amount and share; with nothing chosen the center
+ * shows the total.
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { formatCurrency } from '../../../domain/money/money';
-import { hapticService } from '../../../platform/haptics/hapticService';
 import { useBFlowTheme } from '../../theme/ThemeContext';
 import { AppPressable } from '../AppPressable';
 import { AppText } from '../Typography';
+import { useChartSelection } from './ChartParts';
 import { buildArcPath, resolveSliceEndAngles } from './chartScale';
 import { useChartTransition } from './useChartTransition';
 
@@ -56,7 +57,10 @@ export function DonutChart({
 }: DonutChartProps): React.JSX.Element {
   const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
   const [isLaidOut, setIsLaidOut] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selection = useChartSelection<string>((id) =>
+    slices.some((slice) => slice.id === id && slice.amount > 0)
+  );
+  const selectedId = selection.active;
 
   const total = slices.reduce((sum, slice) => sum + Math.max(0, slice.amount), 0);
   const targets = useMemo(() => resolveSliceEndAngles(slices.map((s) => s.amount)), [slices]);
@@ -162,13 +166,11 @@ export function DonutChart({
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSelected }}
                 accessibilityLabel={`${slice.label}: ${formatCurrency(slice.amount)}, ${formatShare(share)} del total`}
-                onPress={() => {
-                  hapticService.selection();
-                  setSelectedId(isSelected ? null : slice.id);
-                }}
-                onHoverIn={() => setSelectedId(slice.id)}
-                onHoverOut={() => setSelectedId(null)}
-                onFocus={() => setSelectedId(slice.id)}
+                onPress={() => selection.press(slice.id)}
+                onHoverIn={() => selection.hover(slice.id)}
+                onHoverOut={() => selection.hover(null)}
+                onFocus={() => selection.hover(slice.id)}
+                onBlur={() => selection.hover(null)}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',

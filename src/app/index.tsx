@@ -58,6 +58,10 @@ import {
   savePersistedAccount,
   schedulePersistedAccountSave,
 } from '../platform/storage/accountCache';
+import {
+  drainOfflineWriteQueue,
+  hasPendingOfflineWrites,
+} from '../platform/storage/offlineWriteQueue';
 
 export default function PhaseOneHomeScreen(): React.JSX.Element {
   const {
@@ -76,6 +80,8 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     syncMessage,
     isSyncing,
     isAccountHydrated,
+    pendingOfflineWritesCount,
+    flushOfflineWrites,
     setActiveTab,
     setActiveMonthKey,
     setAuthUser,
@@ -118,6 +124,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     hapticService.trigger(type);
   };
 
+  const storeSyncUserCloudAccount = useBudgetStore((state) => state.syncUserCloudAccount);
   const syncInFlightRef = React.useRef<Map<string, Promise<void>>>(new Map());
 
   const syncUserCloudAccount = async (
@@ -130,34 +137,8 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     }
 
     const runSync = (async () => {
-      // 1. Instant offline cold-start: rehydrate from local cache if available
-      const cached = loadPersistedAccount(user.uid);
-      if (cached) {
-        applyFullCloudAccount(cached);
-        markPerf('cache_applied');
-      }
-
-      setSyncStatus('Cargando tu presupuesto e historial...', true);
       try {
-        const repo = new FirestoreBudgetRepository();
-        const fullAccount = await repo.loadFullCloudAccount(user.uid, user.email, options);
-        const currentUid = useBudgetStore.getState().authUser?.uid;
-        if (!currentUid || currentUid !== user.uid) {
-          return;
-        }
-        savePersistedAccount(user.uid, fullAccount);
-        if (!isEquivalentCloudAccount(cached, fullAccount)) {
-          applyFullCloudAccount(fullAccount);
-          markPerf('cloud_applied');
-        }
-        setSyncStatus('Sincronizado', false);
-        markPerf('sync_completed');
-      } catch {
-        const hasLocalData = loadPersistedAccount(user.uid) !== null;
-        setSyncStatus(
-          hasLocalData ? 'Modo sin conexión' : 'No fue posible conectar con el servidor',
-          false
-        );
+        await storeSyncUserCloudAccount(user, options);
       } finally {
         syncInFlightRef.current.delete(user.uid);
       }
@@ -246,6 +227,8 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
         flushPendingPersistedAccount();
         void syncActiveWidget();
+      } else if (nextAppState === 'active') {
+        void flushOfflineWrites();
       }
     });
 
@@ -466,6 +449,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
       activeTab={activeTab}
       onSelectTab={setActiveTab}
       showNavigation={!needsOnboarding}
+      pendingSyncCount={pendingOfflineWritesCount}
     >
       {needsOnboarding ? (
         <InitialAccountSetupView

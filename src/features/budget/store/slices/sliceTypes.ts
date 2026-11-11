@@ -43,6 +43,9 @@ import {
   schedulePersistedAccountSave,
 } from '../../../../platform/storage/accountCache';
 import {
+  getPendingOfflineWritesCount,
+} from '../../../../platform/storage/offlineWriteQueue';
+import {
   buildWidgetSnapshotV1,
   syncWidgetSnapshotNative,
   type WidgetSyncResult,
@@ -156,6 +159,7 @@ export interface SyncSlice {
   syncMessage: string;
   isSyncing: boolean;
   isAccountHydrated: boolean;
+  pendingOfflineWritesCount: number;
 
   setActiveTab: (tab: BFlowWorkspaceTab) => void;
   setActiveMonthKey: (monthKey: string) => void;
@@ -172,6 +176,12 @@ export interface SyncSlice {
   }) => void;
   applyFullCloudAccount: (payload: FullCloudAccountData) => void;
   syncActiveWidget: () => Promise<WidgetSyncResult>;
+  flushOfflineWrites: () => Promise<void>;
+  refreshPendingOfflineWritesCount: () => void;
+  syncUserCloudAccount: (
+    user: BFlowAuthUser,
+    options?: { isRegistration?: boolean }
+  ) => Promise<void>;
 }
 
 export interface BudgetSlice {
@@ -438,6 +448,7 @@ export function buildCleanEmptyWorkspaceState(authUser: BFlowAuthUser | null) {
     isSyncing: false,
     isAccountHydrated: isTestOrDemo,
     needsOnboarding: false,
+    pendingOfflineWritesCount: authUser?.uid ? getPendingOfflineWritesCount(authUser.uid) : 0,
   };
 }
 
@@ -469,6 +480,7 @@ export function buildHydratedWorkspaceState(
     isSyncing: false,
     isAccountHydrated: true,
     needsOnboarding: account.needsOnboarding ?? false,
+    pendingOfflineWritesCount: authUser.uid ? getPendingOfflineWritesCount(authUser.uid) : 0,
   };
 }
 
@@ -495,6 +507,7 @@ export function buildOctober2026SeedWorkspaceState(authUser: BFlowAuthUser | nul
     isSyncing: false,
     isAccountHydrated: true,
     needsOnboarding: false,
+    pendingOfflineWritesCount: authUser?.uid ? getPendingOfflineWritesCount(authUser.uid) : 0,
   };
 }
 

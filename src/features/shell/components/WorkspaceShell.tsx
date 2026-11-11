@@ -40,6 +40,8 @@ export interface WorkspaceShellProps {
   onSelectTab: (tab: BFlowWorkspaceTab) => void;
   /** Hidden while the account is being set up (onboarding). */
   showNavigation: boolean;
+  /** Pending offline mutations waiting to be synced to cloud. */
+  pendingSyncCount?: number;
   children: React.ReactNode;
 }
 
@@ -53,6 +55,7 @@ export function WorkspaceShell({
   activeTab,
   onSelectTab,
   showNavigation,
+  pendingSyncCount,
   children,
 }: WorkspaceShellProps): React.JSX.Element {
   const { colors, spacing, skin } = useBFlowTheme();
@@ -108,16 +111,35 @@ export function WorkspaceShell({
                 gap: spacing.sm,
               }}
             >
-              <AppText
-                variant="title1"
-                accessibilityRole="header"
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.7}
-                style={{ flexShrink: 1 }}
-              >
-                {title}
-              </AppText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 }}>
+                <AppText
+                  variant="title1"
+                  accessibilityRole="header"
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                  style={{ flexShrink: 1 }}
+                >
+                  {title}
+                </AppText>
+                {pendingSyncCount && pendingSyncCount > 0 ? (
+                  <View
+                    testID="pending-offline-sync-badge"
+                    style={{
+                      paddingHorizontal: spacing.sm,
+                      paddingVertical: 2,
+                      borderRadius: 10,
+                      backgroundColor: colors.background.secondary,
+                      borderWidth: 1,
+                      borderColor: colors.glass.subtleBorder,
+                    }}
+                  >
+                    <AppText variant="caption" color={colors.semantic.pending}>
+                      {`☁️ ${pendingSyncCount}`}
+                    </AppText>
+                  </View>
+                ) : null}
+              </View>
               <ThemeToggleIconButton testID="theme-toggle-button" />
             </View>
           ) : null}
@@ -133,16 +155,33 @@ export function WorkspaceShell({
                 gap: spacing.sm,
               }}
             >
-              <AppText
-                variant="title2"
-                accessibilityRole="header"
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.8}
-                style={{ flexShrink: 1 }}
-              >
-                {title}
-              </AppText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 }}>
+                <AppText
+                  variant="title2"
+                  accessibilityRole="header"
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                  style={{ flexShrink: 1 }}
+                >
+                  {title}
+                </AppText>
+                {pendingSyncCount && pendingSyncCount > 0 ? (
+                  <View
+                    testID="pending-offline-sync-badge-android"
+                    style={{
+                      paddingHorizontal: spacing.sm,
+                      paddingVertical: 2,
+                      borderRadius: 8,
+                      backgroundColor: colors.background.secondary,
+                    }}
+                  >
+                    <AppText variant="caption" color={colors.semantic.pending}>
+                      {`☁️ ${pendingSyncCount}`}
+                    </AppText>
+                  </View>
+                ) : null}
+              </View>
               <ThemeToggleIconButton testID="theme-toggle-button" />
             </View>
           ) : null}
@@ -162,6 +201,23 @@ export function WorkspaceShell({
               <AppText variant="title1" color={colors.text.muted}>
                 {monthLabel}
               </AppText>
+              {pendingSyncCount && pendingSyncCount > 0 ? (
+                <View
+                  testID="pending-offline-sync-badge-web"
+                  style={{
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: 2,
+                    borderRadius: 6,
+                    backgroundColor: colors.background.secondary,
+                    borderWidth: 1,
+                    borderColor: colors.glass.subtleBorder,
+                  }}
+                >
+                  <AppText variant="caption" color={colors.semantic.pending}>
+                    {`☁️ ${pendingSyncCount} pendientes`}
+                  </AppText>
+                </View>
+              ) : null}
             </View>
           ) : null}
 

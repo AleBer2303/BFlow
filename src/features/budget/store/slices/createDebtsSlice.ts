@@ -11,6 +11,7 @@ import {
   type DebtInterestRateType,
   type MonthEntry,
 } from '../../../../domain';
+import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
   buildInitialState,
   isRealAuthUser,
@@ -27,6 +28,7 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
 
   createDebt: async (monthKey, input) => {
     const state = get();
+    const previousDebtsByMonth = state.debtsByMonth;
     const id = `debt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const rateType: DebtInterestRateType = input.interestRateType ?? 'monthly';
     const resolvedMonthlyRate =
@@ -73,13 +75,26 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
     });
     triggerWidgetSync(get());
 
-    if (isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.saveDebt(state.authUser.uid, newDebt);
-      } catch {
-        set({ syncMessage: '' });
-      }
+    const authUser = state.authUser;
+    if (isRealAuthUser(authUser)) {
+      const uid = authUser.uid;
+      await executeOptimisticCloudWrite({
+        uid,
+        operation: {
+          type: 'save_debt',
+          payload: { debt: newDebt },
+        },
+        performCloudWrite: async () => {
+          const repo = new FirestoreBudgetRepository();
+          await repo.saveDebt(uid, newDebt);
+        },
+        rollback: () => {
+          set({ debtsByMonth: previousDebtsByMonth });
+        },
+        friendlyErrorMessage: 'No se pudo guardar la deuda en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
 
     return newDebt;
@@ -87,6 +102,7 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
 
   updateDebt: async (monthKey, debtId, updates) => {
     const state = get();
+    const previousDebtsByMonth = state.debtsByMonth;
     const fallbackMonth = state.availableMonths[state.availableMonths.length - 1] ?? monthKey;
     const currentDebts = state.debtsByMonth[monthKey] ?? state.debtsByMonth[fallbackMonth] ?? [];
     let updatedDebt: Debt | null = null;
@@ -172,18 +188,33 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
     });
     triggerWidgetSync(get());
 
-    if (updatedDebt && isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.saveDebt(state.authUser.uid, updatedDebt);
-      } catch {
-        set({ syncMessage: '' });
-      }
+    const authUser = state.authUser;
+    if (updatedDebt && isRealAuthUser(authUser)) {
+      const uid = authUser.uid;
+      const nonNullDebt = updatedDebt;
+      await executeOptimisticCloudWrite({
+        uid,
+        operation: {
+          type: 'save_debt',
+          payload: { debt: nonNullDebt },
+        },
+        performCloudWrite: async () => {
+          const repo = new FirestoreBudgetRepository();
+          await repo.saveDebt(uid, nonNullDebt);
+        },
+        rollback: () => {
+          set({ debtsByMonth: previousDebtsByMonth });
+        },
+        friendlyErrorMessage: 'No se pudo actualizar la deuda en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
   },
 
   deleteDebt: async (monthKey, debtId) => {
     const state = get();
+    const previousDebtsByMonth = state.debtsByMonth;
     const nextDebtsByMonth: Record<string, Debt[]> = {};
     for (const [mk, list] of Object.entries(state.debtsByMonth)) {
       nextDebtsByMonth[mk] = list.filter((d) => d.id !== debtId);
@@ -197,13 +228,26 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
     });
     triggerWidgetSync(get());
 
-    if (isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.deleteDebt(state.authUser.uid, debtId);
-      } catch {
-        set({ syncMessage: '' });
-      }
+    const authUser = state.authUser;
+    if (isRealAuthUser(authUser)) {
+      const uid = authUser.uid;
+      await executeOptimisticCloudWrite({
+        uid,
+        operation: {
+          type: 'delete_debt',
+          payload: { debtId },
+        },
+        performCloudWrite: async () => {
+          const repo = new FirestoreBudgetRepository();
+          await repo.deleteDebt(uid, debtId);
+        },
+        rollback: () => {
+          set({ debtsByMonth: previousDebtsByMonth });
+        },
+        friendlyErrorMessage: 'No se pudo eliminar la deuda en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
   },
 
@@ -213,6 +257,9 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
 
   updateFunfamiInstallmentAmount: async (monthKey, newAmountCop) => {
     const state = get();
+    const previousEntries = state.entries;
+    const previousDebtPayments = state.debtPayments;
+
     const safeAmount = Math.max(0, Math.round(newAmountCop));
     if (safeAmount <= 0) return;
 
@@ -246,18 +293,37 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
     });
     triggerWidgetSync(get());
 
-    if (isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.saveOrUpdateEntry(
-          state.authUser.uid,
-          updatedEntry,
-          undefined,
-          cascadedPayments
-        );
-      } catch {
-        set({ syncMessage: '' });
-      }
+    const authUser = state.authUser;
+    if (isRealAuthUser(authUser)) {
+      const uid = authUser.uid;
+      await executeOptimisticCloudWrite({
+        uid,
+        operation: {
+          type: 'save_or_update_entry',
+          payload: {
+            entry: updatedEntry,
+            debtPayments: cascadedPayments,
+          },
+        },
+        performCloudWrite: async () => {
+          const repo = new FirestoreBudgetRepository();
+          await repo.saveOrUpdateEntry(
+            uid,
+            updatedEntry,
+            undefined,
+            cascadedPayments
+          );
+        },
+        rollback: () => {
+          set({
+            entries: previousEntries,
+            debtPayments: previousDebtPayments,
+          });
+        },
+        friendlyErrorMessage: 'No se pudo actualizar la cuota en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
   },
 };

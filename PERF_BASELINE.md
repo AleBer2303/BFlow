@@ -323,5 +323,26 @@ Implementado el 2026-11-10 en la rama `perf/phase-2-cache-first-boot`.
 ### No medido
 - Tiempo exacto de cold start en hardware iOS físico con conexión 3G/LTE estrangulada (se dispone del procedimiento de validación para iPhone).
 
+---
+
+## 14. Fase 3: Cola Persistente de Escrituras Offline, Rollback Optimista y Protección de Sobrescritura (R-07, R-08, R-09)
+
+Implementado el 2026-11-10 en la rama `perf/phase-3-offline-writes`. Decisión en el [ADR 0017](docs/decisions/0017-offline-writes-persistent-queue-and-rollback.md).
+
+| Requerimiento / Optimización | Antes | Después |
+| :--- | :--- | :--- |
+| **R-07 (Cola persistente FIFO offline por UID y ejecución optimista)** | Las escrituras en Firestore se ejecutaban directamente sin timeout de red; en Hermes (sin IndexedDB persistente), si fallaba la red la escritura se perdía en RAM o fallaba de inmediato, dejando datos inconsistentes si el usuario cerraba la app | `executeOptimisticCloudWrite`: la UI se actualiza de inmediato; si la red falla o excede el timeout de 3.500 ms, la operación se encola en una cola persistente y cifrada (`loadOfflineWriteQueue` / `saveOfflineWriteQueue`) en SQLite/localStorage sin hacer rollback. Al reconectar o volver a primer plano (`AppState.active`), `drainOfflineWriteQueue` vacía la cola FIFO de forma idempotente |
+| **R-08 (Rollback automático y mensaje amigable en rechazos permanentes)** | Las 18 escrituras del store capturaban errores y enmudecían el fallo (`catch { set({ syncMessage: '' }) }`), violando `AGENTS.md` §6.2 y dejando la UI en un estado desincronizado con el servidor | Errores permanentes (`permission-denied`, `invalid-argument`, `unauthenticated`, etc.) detectados por `isPermanentCloudError` ejecutan la función de `rollback` restaurando el estado previo del store y notificando al usuario mediante `friendlyErrorMessage` |
+| **R-09 (Protección de sobrescritura en `syncUserCloudAccount`)** | `syncUserCloudAccount` descargaba los datos del servidor y sobreescribía ciegamente el estado local de Zustand, borrando cambios que el usuario había realizado en modo offline antes de que subieran a la nube | `syncUserCloudAccount` drena primero la cola offline (`drainOfflineWriteQueue`); si aún quedan cambios pendientes (`hasPendingOfflineWrites(uid)`), **se suspende la sobrescritura del estado local** (`setSyncStatus('Cambios locales pendientes por sincronizar')`) preservando intactas las mutaciones del usuario |
+| **Indicador UI de cambios pendientes** | No había indicación visual de sincronización pendiente | `WorkspaceShell` muestra una píldora discreta (`☁️ N`) en la cabecera cuando `pendingSyncCount > 0` en iOS, Android y Web |
+
+### Cobertura y Verificación de Fase 3
+- `src/platform/storage/__tests__/offlineWriteQueue.test.ts` (10 tests pasando): orden FIFO, deduplicación idempotente, clasificación de errores, timeout sin rollback, descarte de poison pills y pausa sin perder operaciones.
+- `src/features/budget/store/__tests__/optimisticRollback.test.ts` (5 tests pasando): rollback en rechazo permanente, mantenimiento de estado optimista en timeout, rollback en slices de presupuesto/deudas y protección R-09 en `syncUserCloudAccount`.
+- Total suite de pruebas del proyecto: **46 suites pasando, 497 tests en verde, 0 errores**.
+
+### No medido
+- Tiempo exacto de reconexión y drenaje de la cola en red celular Edge/3G física (validado en emulación de timeout y desconexión).
+
 
 

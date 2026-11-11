@@ -34,6 +34,10 @@ import {
   loadPersistedAccount,
 } from '../../../../platform/storage/accountCache';
 import {
+  clearOfflineWriteQueue,
+  isPermanentCloudError,
+} from '../../../../platform/storage/offlineWriteQueue';
+import {
   buildCleanEmptyWorkspaceState,
   buildHydratedWorkspaceState,
   buildInitialState,
@@ -112,6 +116,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
     const prevUid = get().authUser?.uid;
     if (prevUid) {
       clearPersistedAccount(prevUid);
+      clearOfflineWriteQueue(prevUid);
     }
     set(buildCleanEmptyWorkspaceState(null));
   },
@@ -377,6 +382,20 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       provisionPlan,
     };
 
+    const previousState = {
+      activeTab: state.activeTab,
+      activeMonthKey: state.activeMonthKey,
+      availableMonths: state.availableMonths,
+      concepts: state.concepts,
+      entries: state.entries,
+      debtsByMonth: state.debtsByMonth,
+      debtPayments: state.debtPayments,
+      savingsBucketsByMonth: state.savingsBucketsByMonth,
+      idealMotoPlan: state.idealMotoPlan,
+      closedSnapshots: state.closedSnapshots,
+      needsOnboarding: state.needsOnboarding,
+    };
+
     const updatedUser = state.authUser
       ? { ...state.authUser, activeMonthKey: monthKey }
       : null;
@@ -409,14 +428,37 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       try {
         const repo = new FirestoreBudgetRepository();
         await repo.saveInitialAccountSetup(state.authUser.uid, payload);
-      } catch {
-        set({ syncMessage: '' });
+      } catch (err) {
+        if (isPermanentCloudError(err)) {
+          set({
+            ...previousState,
+            syncMessage: 'No se pudo guardar la configuración inicial en la nube.',
+          });
+        } else {
+          set({
+            syncMessage: 'Configuración guardada localmente. Se sincronizará al conectar.',
+          });
+        }
       }
     }
   },
 
   resetFullAccount: async (newStartMonthKey) => {
     const state = get();
+    const previousState = {
+      activeTab: state.activeTab,
+      activeMonthKey: state.activeMonthKey,
+      availableMonths: state.availableMonths,
+      concepts: state.concepts,
+      entries: state.entries,
+      debtsByMonth: state.debtsByMonth,
+      debtPayments: state.debtPayments,
+      savingsBucketsByMonth: state.savingsBucketsByMonth,
+      idealMotoPlan: state.idealMotoPlan,
+      closedSnapshots: state.closedSnapshots,
+      needsOnboarding: state.needsOnboarding,
+    };
+
     const startMonth =
       newStartMonthKey && /^\d{4}-(0[1-9]|1[0-2])$/.test(newStartMonthKey)
         ? newStartMonthKey
@@ -428,6 +470,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
 
     if (state.authUser?.uid) {
       clearPersistedAccount(state.authUser.uid);
+      clearOfflineWriteQueue(state.authUser.uid);
     }
 
     set({
@@ -455,6 +498,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
     triggerWidgetSync(get());
     if (state.authUser?.uid) {
       clearPersistedAccount(state.authUser.uid);
+      clearOfflineWriteQueue(state.authUser.uid);
     }
 
     if (isRealAuthUser(state.authUser)) {
@@ -462,7 +506,10 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
         const repo = new FirestoreBudgetRepository();
         await repo.resetFullAccountInCloud(state.authUser.uid, startMonth);
       } catch {
-        set({ syncMessage: '' });
+        set({
+          ...previousState,
+          syncMessage: 'El reseteo total de la cuenta requiere conexión a internet.',
+        });
       }
     }
   },

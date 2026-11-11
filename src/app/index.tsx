@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 import { hapticService, type HapticType } from '../design-system';
@@ -365,6 +365,12 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     void useBudgetStore.getState().resetFullAccount();
   }, []);
 
+  // The navigation shows the new tab at once; the tab's content mounts as a transition. A
+  // heavy tab (Checklist, most visible on Android, where every ripple is a native drawable)
+  // used to mount in the same frame as the tap, so the indicator and ripple froze until it
+  // finished. Meanwhile the previous tab stays on screen instead of a blank frame.
+  const contentTab = useDeferredValue(activeTab);
+
   const isAwaitingInitialHydration =
     Boolean(authUser) && !isAccountHydrated && !needsOnboarding;
 
@@ -402,12 +408,12 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
       ) : (
         <>
           {/* Active Workspace Content */}
-          {activeTab === 'summary' ? <SummaryTab /> : null}
-          {activeTab === 'checklist' ? <ChecklistTab /> : null}
-          {activeTab === 'debts' ? <DebtsTab /> : null}
-          {activeTab === 'savings' ? <SavingsTab /> : null}
-          {activeTab === 'analytics' ? <AnalyticsTab /> : null}
-          {activeTab === 'account' ? (
+          {contentTab === 'summary' ? <SummaryTab /> : null}
+          {contentTab === 'checklist' ? <ChecklistTab /> : null}
+          {contentTab === 'debts' ? <DebtsTab /> : null}
+          {contentTab === 'savings' ? <SavingsTab /> : null}
+          {contentTab === 'analytics' ? <AnalyticsTab /> : null}
+          {contentTab === 'account' ? (
             <AccountTab
               onSignOut={handleSignOut}
               onManualSync={handleManualSync}

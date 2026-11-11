@@ -442,3 +442,14 @@ No cambian ni el comportamiento visual ni los testID, y no se añadió virtualiz
 El test corre una vez por piel (`skin="ios" | "android" | "web"`, ancho de Jest 750 px). En las tres, los cambios de `syncMessage` dan 0 commits en las pestañas de datos, marcar una fila renderiza 1 fila y escribir en el formulario 0 filas.
 
 Con el contador de escrituras pendientes, iOS y Android ya daban 0 renders de navegación. En Web, `WebTabBar` y `WebAppHeader` se renderizaban 1 vez cada uno porque recibían objetos nuevos en cada render. Se corrigió memoizando `useResponsiveLayout` y el objeto `navigation` del shell, y envolviendo ambos componentes en `React.memo`: ahora dan **0**.
+
+### Cambio de pestaña a Checklist en Android
+
+Al tocar Checklist en Android, la barra y el ripple respondían tarde: la pestaña, la que más botones con ripple tiene (cada uno es un drawable nativo en Android), se montaba en el mismo commit que el toque. Ahora `index.tsx` monta el contenido con `useDeferredValue(activeTab)`. La navegación cambia en el primer commit, la pestaña anterior sigue visible y el Checklist llega en el siguiente.
+
+| Medida (Jest DEV, piel Android, 5 repeticiones Deudas → Checklist) | Antes | Después |
+| :--- | ---: | ---: |
+| Primer commit tras el toque (la selección se ve) | 50–113 ms | 8–19 ms |
+| Trabajo total del cambio | 50–114 ms | 47–61 ms |
+
+`renderCommits.test.tsx` comprueba en las tres pieles que el primer commit no monta el Checklist. Pendiente: confirmarlo en un teléfono Android.

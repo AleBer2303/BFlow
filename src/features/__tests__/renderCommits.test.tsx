@@ -21,9 +21,17 @@ function mockCounts(): Counts {
   return holder.__bflowRenderCounts;
 }
 
+/** Render events in order; a Profiler reports nested ids before its parent's `root`. */
+function mockTimeline(): string[] {
+  const holder = globalThis as unknown as { __bflowRenderTimeline?: string[] };
+  holder.__bflowRenderTimeline ??= [];
+  return holder.__bflowRenderTimeline;
+}
+
 function mockBump(id: string): void {
   const counts = mockCounts();
   counts[id] = (counts[id] ?? 0) + 1;
+  mockTimeline().push(id);
 }
 
 type MockRenderFn = (props: Record<string, unknown>) => React.ReactElement;
@@ -243,4 +251,37 @@ describe('Fase 5: renders por acción', () => {
     expect(report.pending_count_change_with_form_open?.nav ?? 0).toBe(0);
     expect(report.pending_count_change_with_form_open?.webHeader ?? 0).toBe(0);
   });
+
+  it.each(SKINS)(
+    'al tocar Checklist la navegación cambia antes de montar el contenido (piel %s)',
+    async (skin) => {
+      render(
+        <BFlowThemeProvider initialMode="dark" skin={skin}>
+          <React.Profiler id="root" onRender={() => mockTimeline().push('root')}>
+            <PhaseOneHomeScreen />
+          </React.Profiler>
+        </BFlowThemeProvider>
+      );
+      await act(async () => {});
+      await act(async () => useBudgetStore.getState().setActiveTab('debts'));
+      mockTimeline().length = 0;
+
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('workspace-tab-checklist'));
+      });
+
+      const timeline = [...mockTimeline()];
+      const firstCommitEnd = timeline.indexOf('root');
+      const firstCommit = timeline.slice(0, firstCommitEnd);
+      // First commit: the selection only (no checklist yet). Then the checklist mounts.
+      expect(firstCommitEnd).toBeGreaterThanOrEqual(0);
+      expect(firstCommit).not.toContain('checklist');
+      expect(timeline.slice(firstCommitEnd + 1)).toContain('checklist');
+      expect(screen.getByTestId('checklist-workspace-view')).toBeTruthy();
+      expect(screen.getByTestId('workspace-tab-checklist')).toHaveProp(
+        'accessibilityState',
+        expect.objectContaining({ selected: true })
+      );
+    }
+  );
 });

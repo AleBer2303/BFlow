@@ -199,5 +199,11 @@ describe('Fase 5: renders por acción', () => {
 
     expect(report.mount?.root).toBeGreaterThan(0);
     expect(report.toggle_one_row?.row).toBeGreaterThan(0);
+
+    // R-15: the sync message only re-renders the Account tab.
+    for (const tab of VIEW_IDS.filter((id) => id !== 'account')) {
+      expect(report[`syncMessage_x5_on_${tab}`]?.[tab] ?? 0).toBe(0);
+    }
+    expect(report.syncMessage_x5_on_account?.account).toBe(5);
   });
 });

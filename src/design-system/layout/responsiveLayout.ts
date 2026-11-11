@@ -9,6 +9,7 @@
  * gutters and 4 / 8 / 12 columns.
  */
 
+import { useMemo } from 'react';
 import { useWindowDimensions } from 'react-native';
 import { useBFlowTheme } from '../theme/ThemeContext';
 import { breakpoints, contentMaxWidth, spacing, type PlatformSkinId } from '../tokens';
@@ -86,5 +87,6 @@ export function resolveResponsiveLayout(
 export function useResponsiveLayout(): ResponsiveLayout {
   const { width, height } = useWindowDimensions();
   const { skin } = useBFlowTheme();
-  return resolveResponsiveLayout(width, height, skin);
+  // Same object while the window and skin are unchanged, so memoized consumers can skip.
+  return useMemo(() => resolveResponsiveLayout(width, height, skin), [width, height, skin]);
 }

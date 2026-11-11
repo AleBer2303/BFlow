@@ -391,3 +391,54 @@ Implementado el 2026-11-10 en la rama `perf/phase-4-firestore-reads`. Decisión 
 - `src/data/__tests__/phase4FirestoreReads.test.ts` (8 tests pasando): verifica conteo exacto de `getDoc`, `getDocs`, `docsReadCount` y `setDoc` en arranque, login, usuario nuevo, `deleteOrResetEntry`, actualización de `dataRevision`, cortocircuito de 1 documento cuando la revisión coincide ($< 24\text{ h}$), recarga completa cuando difiere o en `forceFullSync: true`, y test guardián estático/dinámico que falla si algún método de escritura de `FirestoreBudgetRepository` no usa `commitUserDataMutationBatch`.
 - `src/platform/storage/__tests__/accountCache.test.ts`: verifica persistencia de `dataRevision` en el sobre cifrado `v2`, preservación en `schedulePersistedAccountSave`, actualización con `updatePersistedAccountRevision` y ventana de 24 horas (`isCacheFreshWithin24Hours`).
 
+## 16. Fase 5: Renderizado (R-15, R-16, R-17, R-21)
+
+Implementado el 2026-11-10 en la rama `perf/phase-5-rendering`.
+
+### Cómo se midió
+
+`src/features/__tests__/renderCommits.test.tsx` envuelve cada vista de pestaña en un `React.Profiler` y cuenta sus commits. Las filas del checklist y los campos de texto se cuentan a través de `AppPressable` y `AppTextInput`, y el dock por las ejecuciones de su propio cuerpo. Corre en Jest (modo DEV, piel iOS, seed de octubre con 12 movimientos), así que **solo se comparan conteos de renders, no milisegundos**. `BFLOW_RENDER_REPORT=1 npx jest src/features/__tests__/renderCommits.test.tsx` imprime las cifras.
+
+### Antes y después
+
+| Acción | Antes (`cb22f90`) | Después (`a76f692`) | Hallazgo |
+| :--- | ---: | ---: | :---: |
+| 5 cambios de `syncMessage` con Resumen, Checklist, Deudas, Ahorros o Análisis abiertos | 5 commits de la pestaña (y 60 filas en Checklist) | **0** | R-15 |
+| 5 cambios de `syncMessage` con Cuenta abierta | 5 commits | 5 commits (es la única pestaña que lo muestra) | R-15 |
+| Marcar una fila del checklist | 12 filas renderizadas | **1** | R-16 |
+| Escribir 5 caracteres en "Nuevo Movimiento" | 60 filas + 15 renders de input | **0 filas** + 15 renders de input (los 3 campos del formulario) | R-17 |
+| Cambiar el contador de escrituras pendientes con el formulario abierto | 1 commit del checklist (12 filas, 3 inputs) + 1 render del dock | **0** en el checklist y **0** en el dock | R-21 |
+| `applyFullCloudAccount` con copias nuevas de los mismos datos, llamado directamente | 12 filas | 12 filas | Fuera de alcance: la sincronización ya lo evita antes de llegar aquí con `isEquivalentCloudAccount` (Fase 2) |
+
+El test ahora exige estas cifras, así que una regresión rompe `npm test`.
+
+### React Compiler (experimento descartado)
+
+Se activó `experiments.reactCompiler` (commit `5adbe60`) y se revirtió con las cifras (commit `8b94aa8`):
+
+| Medida | Sin compilador | Con compilador |
+| :--- | ---: | ---: |
+| Renders de `AppTextInput` al escribir 5 caracteres | 15 | 5 |
+| Resto de acciones de la tabla anterior | igual | igual |
+| Primera carga web sin `MonthlyCurveStage` (`expo export --platform web`) | 2.443,6 KB · **599,1 KB gzip** | 2.557,6 KB · **646,5 KB gzip** (+7,9 %) |
+| Tests | 508/508 | 508/508 |
+
+El compilador dejó sin compilar el dock, `ChecklistWorkspaceView`, `RevealDown` y otros 46 casos (lee refs durante el render, usa `try/finally` o `??=`), así que no sustituye la memoización manual de esos componentes. Como solo mejora una métrica menor y añade 47 KB gzip, no se conservó. Para reactivarlo hay que poner `"reactCompiler": true` en `app.json` y añadir el plugin a Jest para que los tests usen el mismo código compilado; el commit `5adbe60` muestra cómo.
+
+### Cambios
+
+1. **R-15:** `index.tsx` solo se suscribe a lo que necesitan la puerta de autenticación, el shell y el dock. Cada pestaña es un contenedor memoizado (`SummaryTab`, `ChecklistTab`, `DebtsTab`, `SavingsTab`, `AnalyticsTab`, `AccountTab`) que calcula sus resúmenes con los hooks de `features/budget/hooks/useActiveMonthSummaries.ts`. `syncMessage` e `isSyncing` solo los leen `AccountTab` y la pantalla de acceso.
+2. **R-16 y R-17:** `ChecklistAddMovementForm` y `ChecklistEditEntryForm` tienen su propio estado y se montan con una `key` nueva al abrirse. Los handlers de las filas son estables y los conceptos se buscan en un `Map`.
+3. **R-21:** el valor de `KeyboardAwareContext` está memoizado, y `FloatingLiquidGlassDock` y `MaterialNavigationBar` usan `React.memo`.
+
+No cambian ni el comportamiento visual ni los testID, y no se añadió virtualización.
+
+### No medido
+
+- Tiempo de render y FPS en iPhone y Android (Hermes, modo release). Los conteos de Jest muestran cuánto trabajo se evita, no cuántos milisegundos.
+
+### Por piel (iOS, Android y Web)
+
+El test corre una vez por piel (`skin="ios" | "android" | "web"`, ancho de Jest 750 px). En las tres, los cambios de `syncMessage` dan 0 commits en las pestañas de datos, marcar una fila renderiza 1 fila y escribir en el formulario 0 filas.
+
+Con el contador de escrituras pendientes, iOS y Android ya daban 0 renders de navegación. En Web, `WebTabBar` y `WebAppHeader` se renderizaban 1 vez cada uno porque recibían objetos nuevos en cada render. Se corrigió memoizando `useResponsiveLayout` y el objeto `navigation` del shell, y envolviendo ambos componentes en `React.memo`: ahora dan **0**.

@@ -16,7 +16,7 @@
  * foldable or a desktop browser never gets a stretched phone layout.
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Platform, View } from 'react-native';
 import {
   AppText,
@@ -68,6 +68,11 @@ export function WorkspaceShell({
   const showsWebTabBar = isWeb && showNavigation && layout.sizeClass !== 'expanded';
   const activeTabLabel = WORKSPACE_TABS.find((tab) => tab.id === activeTab)?.label ?? '';
   const title = `BFlow · ${monthLabel}`;
+  // Stable while the tab is unchanged, so the memoized web header can skip re-rendering.
+  const webHeaderNavigation = useMemo(
+    () => (showNavigation ? { activeTab, onSelectTab, testID: NAVIGATION_TEST_ID } : undefined),
+    [showNavigation, activeTab, onSelectTab]
+  );
 
   const contentGap = isWeb && layout.sizeClass !== 'compact' ? spacing.xl : spacing.md;
   const paddingTop = isWeb ? (layout.isWide ? spacing.xxxl : spacing.xxl) : spacing.xl;
@@ -76,13 +81,7 @@ export function WorkspaceShell({
   return (
     <View testID="workspace-shell" style={{ flex: 1, backgroundColor: colors.background.primary }}>
       {isWeb ? (
-        <WebAppHeader
-          layout={layout}
-          contextLabel={monthLabel}
-          navigation={
-            showNavigation ? { activeTab, onSelectTab, testID: NAVIGATION_TEST_ID } : undefined
-          }
-        />
+        <WebAppHeader layout={layout} contextLabel={monthLabel} navigation={webHeaderNavigation} />
       ) : null}
 
       <KeyboardAwareScrollView

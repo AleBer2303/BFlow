@@ -205,5 +205,10 @@ describe('Fase 5: renders por acción', () => {
       expect(report[`syncMessage_x5_on_${tab}`]?.[tab] ?? 0).toBe(0);
     }
     expect(report.syncMessage_x5_on_account?.account).toBe(5);
+
+    // R-16: toggling one row re-renders only that row.
+    expect(report.toggle_one_row?.row).toBe(1);
+    // R-17: typing in the add form never re-renders the rows.
+    expect(report.type_5_chars_in_add_form?.row ?? 0).toBe(0);
   });
 });

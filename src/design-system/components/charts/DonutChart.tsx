@@ -68,7 +68,9 @@ export function DonutChart({
   const selected = slices.find((slice) => slice.id === selectedId) ?? null;
   const center = size / 2;
   const ringRadius = center - SELECTED_RING_WIDTH_PT / 2;
-  const gap = slices.length > 1 ? SLICE_GAP_DEGREES : 0;
+  // A gap only separates two visible slices; a lone slice closes the ring.
+  const visibleSlices = slices.filter((slice) => slice.amount > 0).length;
+  const gap = visibleSlices > 1 ? SLICE_GAP_DEGREES : 0;
 
   return (
     <View

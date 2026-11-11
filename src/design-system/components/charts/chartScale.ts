@@ -37,8 +37,11 @@ export function resolveNiceStep(range: number, maxSteps: number): number {
   return factor * magnitude;
 }
 
-/** Scale that fits every value (and zero) in at most `maxSteps` round steps. */
-export function buildValueScale(values: readonly number[], maxSteps = 4): ValueScale {
+/**
+ * Scale that fits every value (and zero) in at most `maxSteps` round steps. Five steps keep
+ * the headroom above the tallest value small without crowding a 168pt plot.
+ */
+export function buildValueScale(values: readonly number[], maxSteps = 5): ValueScale {
   const finite = values.filter((value) => Number.isFinite(value));
   const low = Math.min(0, ...finite);
   const high = Math.max(0, ...finite);

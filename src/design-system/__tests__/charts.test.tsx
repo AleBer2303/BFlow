@@ -268,7 +268,8 @@ describe('LineChart', () => {
     layoutPlot('one');
     elapse(SETTLE_MS);
     expect(queryHidden('one-line-net')).toBeNull();
-    expect(hidden('one-dot-net-0')).toBeTruthy();
+    // The point the readout describes is drawn larger even before any touch.
+    expect(hidden('one-dot-net-0').props.r).toBe(5);
   });
 });
 
@@ -327,6 +328,27 @@ describe('DonutChart', () => {
     fireEvent(row, 'hoverOut', {});
     fireEvent(screen.getByTestId('split-slice-paid'), 'focus', {});
     expect(hidden('split-center-value')).toHaveTextContent('$ 2.920.000');
+  });
+
+  it('closes the ring with no gap when a single slice holds the whole amount', () => {
+    render(
+      wrap(
+        <DonutChart
+          testID="lone"
+          slices={[
+            { id: 'paid', label: 'Pagado', amount: 0, color: '#2EBD85' },
+            { id: 'pending', label: 'Pendiente', amount: 3_370_000, color: '#E5A84B' },
+          ]}
+          totalLabel="Total"
+          emptyLabel="Nada"
+        />
+      )
+    );
+    layoutDonut('lone');
+    elapse(SETTLE_MS);
+    expect(queryHidden('lone-arc-paid')).toBeNull();
+    // A full turn is drawn as two half arcs.
+    expect(String(hidden('lone-arc-pending').props.d).match(/A/g)).toHaveLength(2);
   });
 
   it('shows the empty message and an empty ring when there is nothing to split', () => {

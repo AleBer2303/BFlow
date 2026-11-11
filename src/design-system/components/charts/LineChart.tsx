@@ -181,7 +181,8 @@ export function LineChart({
                     />
                   ) : null}
                   {points.map((point, index) => {
-                    const isSelected = index === selectedIndex;
+                    // The point the readout describes stands out, chosen or not.
+                    const isSelected = index === activeIndex;
                     const isProjected = index > lastMeasured;
                     return (
                       <Circle

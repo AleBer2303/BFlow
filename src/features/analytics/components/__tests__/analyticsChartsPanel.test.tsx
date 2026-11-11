@@ -83,9 +83,14 @@ describe.each(PLATFORM_SKIN_IDS)('AnalyticsChartsPanel on the %s skin', (skin) =
     expect(cashFlow).toHaveTextContent(/Recibido\s*\$ 4\.000\.000/);
     expect(cashFlow).toHaveTextContent(/Pagado\s*\$ 2\.920\.000/);
     expect(cashFlow).toHaveTextContent(/Pendiente\s*\$ 450\.000/);
-    expect(cashFlow).toHaveTextContent(/Mes abierto/);
+    // Only the title, the month and its amounts: no subtitle, legend or month state.
+    expect(screen.getByTestId('analytics-chart-cash-flow')).toHaveTextContent(/^Flujo de Dinero/);
+    expect(cashFlow).not.toHaveTextContent(/Mes abierto/);
+    expect(screen.queryByTestId('cash-flow-chart-legend')).toBeNull();
+    expect(screen.queryByTestId('balance-chart-legend')).toBeNull();
 
-    expect(screen.getByTestId('balance-chart-readout')).toHaveTextContent(/\$ 1\.080\.000/);
+    // A single series: the readout is the month and the amount, without the series name.
+    expect(screen.getByTestId('balance-chart-readout')).toHaveTextContent('Octubre 2026$ 1.080.000');
     expect(screen.getByTestId('paid-pending-chart-legend')).toHaveTextContent(/Pagado.*87 %/);
     expect(screen.getByTestId('distribution-chart-legend')).toHaveTextContent(/Cuota FUNFAMI/);
     expect(screen.getByTestId('distribution-chart-legend')).toHaveTextContent(/Otros/);
@@ -135,7 +140,7 @@ describe('AnalyticsChartsPanel', () => {
 
     expect(screen.getByTestId('analytics-charts-panel')).toHaveTextContent(/Últimos 2 meses/);
     expect(screen.getByTestId('analytics-chart-comparison')).toHaveTextContent(
-      /Octubre 2026 frente a Septiembre 2026/
+      /^Octubre 2026 vs Septiembre 2026/
     );
     const comparison = screen.getByTestId('comparison-chart-readout');
     expect(comparison).toHaveTextContent(/Flujo neto/);
@@ -147,13 +152,13 @@ describe('AnalyticsChartsPanel', () => {
     );
 
     fireEvent.press(screen.getByTestId('cash-flow-chart-point-0'));
-    expect(screen.getByTestId('cash-flow-chart-readout')).toHaveTextContent(/Septiembre 2026.*Mes cerrado/);
+    expect(screen.getByTestId('cash-flow-chart-readout')).toHaveTextContent(/Septiembre 2026.*\$ 2\.500\.000/);
   });
 
   it('states each month to screen readers', () => {
     renderPanel([SEPTEMBER, OCTOBER]);
     expect(screen.getByTestId('balance-chart-point-0').props.accessibilityLabel).toBe(
-      'Septiembre 2026: Flujo neto $ 1.500.000. Mes cerrado'
+      'Septiembre 2026: Flujo neto $ 1.500.000'
     );
   });
 

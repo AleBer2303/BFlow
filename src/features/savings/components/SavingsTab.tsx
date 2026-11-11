@@ -2,7 +2,7 @@
  * src/features/savings/components/SavingsTab.tsx
  *
  * Container of the Savings tab: reads only the savings and provision data it shows, plus
- * the month-by-month history for the savings charts (Phase 6).
+ * the month-by-month history for the savings chart (Phase 6).
  */
 
 import React, { useCallback } from 'react';
@@ -91,10 +91,7 @@ export const SavingsTab = React.memo(function SavingsTab(): React.JSX.Element {
         onSaveProvisionItem={handleSaveProvisionItem}
         onDeleteProvisionItem={handleDeleteProvisionItem}
       />
-      <SavingsTrendCharts
-        history={history}
-        idealMonthlyProvision={provisionSummary.recurringMonthlyTotal}
-      />
+      <SavingsTrendCharts history={history} />
     </View>
   );
 });

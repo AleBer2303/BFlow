@@ -26,7 +26,6 @@ function point(monthKey: string, totalDebt: number): MonthlyHistoryPoint {
     savingsBalance: 0,
     otherSavingsBalance: 0,
     totalSavings: 0,
-    reserveContribution: 0,
   };
 }
 

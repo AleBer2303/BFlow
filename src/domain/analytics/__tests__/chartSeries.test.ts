@@ -84,7 +84,6 @@ function pointFor(monthKey: string, overrides: Partial<MonthlyHistoryPoint> = {}
     savingsBalance: 0,
     otherSavingsBalance: 0,
     totalSavings: 0,
-    reserveContribution: 0,
     ...overrides,
   } satisfies MonthlyHistoryPoint;
 }
@@ -146,7 +145,6 @@ describe('buildMonthlyHistory', () => {
       savingsBalance: 2_080_000,
       otherSavingsBalance: 0,
       totalSavings: 4_380_000,
-      reserveContribution: 700_000,
     });
   });
 
@@ -165,7 +163,6 @@ describe('buildMonthlyHistory', () => {
       reserveBalance: 2_300_000,
       savingsBalance: 2_080_000,
       totalSavings: 4_380_000,
-      reserveContribution: 700_000,
     });
     // November opens with October's closing balances and nothing paid yet.
     expect(november).toMatchObject({
@@ -176,7 +173,6 @@ describe('buildMonthlyHistory', () => {
       reserveBalance: 2_300_000,
       savingsBalance: 2_080_000,
       totalSavings: 4_380_000,
-      reserveContribution: 0,
     });
   });
 

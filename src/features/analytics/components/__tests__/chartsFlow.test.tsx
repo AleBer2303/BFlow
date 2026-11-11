@@ -63,8 +63,8 @@ describe.each(PLATFORM_SKIN_IDS)('charts in the app on the %s skin', (skin) => {
 
     fireEvent.press(screen.getByTestId('workspace-tab-savings'));
     expect(screen.getByTestId('savings-and-moto-ideal-view')).toBeTruthy();
-    expect(screen.getByTestId('savings-chart-trend')).toHaveTextContent(/Total hoy: \$ 4\.380\.000/);
-    expect(screen.getByTestId('provision-chart-readout')).toHaveTextContent(/Aporte real\s*\$ 700\.000/);
+    expect(screen.getByTestId('savings-trend-chart-readout')).toHaveTextContent(/Moto\s*\$ 2\.300\.000/);
+    expect(screen.queryByTestId('savings-chart-provision')).toBeNull();
   });
 });
 
@@ -101,10 +101,10 @@ describe('charts follow the store', () => {
     expect(useBudgetStore.getState().activeMonthKey).toBe('2026-11');
     expect(screen.getByTestId('analytics-charts-panel')).toHaveTextContent(/Últimos 2 meses hasta Noviembre 2026/);
     expect(screen.getByTestId('analytics-chart-comparison')).toHaveTextContent(
-      /Noviembre 2026 frente a Octubre 2026/
+      /^Noviembre 2026 vs Octubre 2026/
     );
     fireEvent.press(screen.getByTestId('cash-flow-chart-point-0'));
-    expect(screen.getByTestId('cash-flow-chart-readout')).toHaveTextContent(/Octubre 2026.*Mes cerrado/);
+    expect(screen.getByTestId('cash-flow-chart-readout')).toHaveTextContent(/Octubre 2026.*\$ 4\.000\.000/);
 
     fireEvent.press(screen.getByTestId('workspace-tab-debts'));
     // November opens with October's closing debt; the payoff estimate stays the same.
@@ -130,7 +130,6 @@ describe('charts and cards agree', () => {
     expect(screen.getByTestId('analytics-and-history-view')).toHaveTextContent(/\$ 980\.000/);
     expect(screen.getByTestId('balance-chart-readout')).toHaveTextContent(/\$ 980\.000/);
     expect(screen.getByTestId('cash-flow-chart-readout')).toHaveTextContent(/Pagado\s*\$ 3\.020\.000/);
-    expect(screen.getByTestId('cash-flow-chart-readout')).toHaveTextContent(/Mes cerrado/);
     // October is now the oldest month, already closed: no invitation to close one.
     expect(screen.getByTestId('analytics-charts-panel')).toHaveTextContent(/No hay meses anteriores registrados/);
   });
@@ -147,7 +146,5 @@ describe('chart layout by width', () => {
     expect(screen.getByTestId('analytics-charts-grid-row-2')).toBeTruthy();
     expect(screen.queryByTestId('analytics-charts-grid-row-3')).toBeNull();
 
-    fireEvent.press(screen.getByTestId('workspace-tab-savings'));
-    expect(screen.getByTestId('savings-charts-grid-row-0')).toBeTruthy();
   });
 });

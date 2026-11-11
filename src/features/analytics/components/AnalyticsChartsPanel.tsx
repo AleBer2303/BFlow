@@ -6,12 +6,14 @@
  * (`chartSeries.ts`), so the charts agree with the cards; colors come from the skin's tokens
  * and each chart is the same vector drawing on iOS, Android and Web.
  *
- * - Flujo de efectivo: received, paid and pending per month (incomes against expenses).
+ * - Flujo de Dinero: received, paid and pending per month (incomes against expenses).
  * - Balance mensual: net cash flow per month.
+ * Both keep only the title, the chosen month with its amounts and the drawing: the readout
+ * names every color, so they carry no subtitle, legend or note.
  * - Previsto vs real: planned against actual, for expenses or incomes.
  * - Pagado vs pendiente: this month's expenses already paid and still pending.
  * - Distribución de gastos: this month's expenses by concept.
- * - Este mes vs el anterior: received, paid and net flow side by side.
+ * - "Noviembre 2026 vs Octubre 2026": received, paid and net flow of the last two months.
  */
 
 import React, { useMemo, useState } from 'react';
@@ -68,11 +70,6 @@ export function AnalyticsChartsPanel({
 
   const { categories, titles } = useMonthAxis(history);
   const isSingleMonth = history.length < 2;
-  const monthState = (index: number) => {
-    const point = history[index];
-    if (!point) return undefined;
-    return point.isClosed ? 'Mes cerrado' : 'Mes abierto';
-  };
 
   const cashFlowSeries = useMemo<ChartSeries[]>(
     () => [
@@ -149,32 +146,25 @@ export function AnalyticsChartsPanel({
       </View>
 
       <ResponsiveColumns testID="analytics-charts-grid">
-        <ChartCard
-          title="Flujo de efectivo"
-          subtitle="Ingresos recibidos frente a gastos pagados y pendientes"
-          testID="analytics-chart-cash-flow"
-        >
+        <ChartCard title="Flujo de Dinero" testID="analytics-chart-cash-flow">
           <BarChart
             testID="cash-flow-chart"
             categories={categories}
             categoryTitles={titles}
             series={cashFlowSeries}
-            describeNote={monthState}
+            showLegend={false}
           />
         </ChartCard>
 
-        <ChartCard
-          title="Balance mensual"
-          subtitle="Flujo neto: recibido menos pagado"
-          testID="analytics-chart-balance"
-        >
+        <ChartCard title="Balance mensual" testID="analytics-chart-balance">
           <LineChart
             testID="balance-chart"
             categories={categories}
             categoryTitles={titles}
             series={balanceSeries}
             area
-            describeNote={monthState}
+            showLegend={false}
+            readout="value"
           />
         </ChartCard>
 
@@ -238,11 +228,10 @@ export function AnalyticsChartsPanel({
         </ChartCard>
 
         <ChartCard
-          title="Este mes vs el anterior"
-          subtitle={
+          title={
             comparison
-              ? `${formatMonthKeyLabelEs(comparison.currentMonthKey)} frente a ${formatMonthKeyLabelEs(comparison.previousMonthKey)}`
-              : 'Comparación con el mes anterior'
+              ? `${formatMonthKeyLabelEs(comparison.currentMonthKey)} vs ${formatMonthKeyLabelEs(comparison.previousMonthKey)}`
+              : 'Este mes vs el anterior'
           }
           testID="analytics-chart-comparison"
         >

@@ -61,8 +61,6 @@ export interface MonthlyHistoryPoint {
   /** User-created buckets beyond the reserve and the general savings. */
   otherSavingsBalance: number;
   totalSavings: number;
-  /** Paid contributions to the reserve bucket this month (what the ideal provision compares). */
-  reserveContribution: number;
 }
 
 export interface DistributionSlice {
@@ -154,8 +152,7 @@ function bucketName(
 
 function buildPointFromSnapshot(
   snapshot: MonthSnapshot,
-  buckets: readonly SavingsBucket[],
-  reserveContribution: number
+  buckets: readonly SavingsBucket[]
 ): MonthlyHistoryPoint {
   const { budget, closingSavings } = snapshot;
   const reserveBalance = closingSavings.reserveClosingBalance ?? closingSavings.motoClosingBalance;
@@ -179,7 +176,6 @@ function buildPointFromSnapshot(
       closingSavings.totalClosingSavings - reserveBalance - savingsBalance
     ),
     totalSavings: closingSavings.totalClosingSavings,
-    reserveContribution,
   };
 }
 
@@ -196,8 +192,13 @@ export function buildMonthlyHistory(input: MonthlyHistoryInput): MonthlyHistoryP
 
   return window.map((monthKey) => {
     const buckets = input.savingsBucketsByMonth[monthKey] ?? [];
+    const snapshot = input.closedSnapshots[monthKey];
+    const isActive = monthKey === input.activeMonthKey;
+    if (snapshot && !isActive) {
+      return buildPointFromSnapshot(snapshot, buckets);
+    }
+
     const budget = calculateMonthlyBudgetSummary(input.entries, monthKey);
-    // Contributions are not frozen in the snapshot; the month's entries still hold them.
     const savings = calculateMonthlySavingsSummary(
       buckets,
       input.concepts,
@@ -205,13 +206,6 @@ export function buildMonthlyHistory(input: MonthlyHistoryInput): MonthlyHistoryP
       budget,
       monthKey
     );
-    const reserveContribution = savings.reserve.paidContributionsThisMonth;
-
-    const snapshot = input.closedSnapshots[monthKey];
-    const isActive = monthKey === input.activeMonthKey;
-    if (snapshot && !isActive) {
-      return buildPointFromSnapshot(snapshot, buckets, reserveContribution);
-    }
 
     const debts = calculateDebtsSummary(
       input.debtsByMonth[monthKey] ?? [],
@@ -240,7 +234,6 @@ export function buildMonthlyHistory(input: MonthlyHistoryInput): MonthlyHistoryP
         savings.customBuckets.map((bucket) => bucket.currentBalance)
       ),
       totalSavings: savings.totalCurrentSavings,
-      reserveContribution,
     };
   });
 }

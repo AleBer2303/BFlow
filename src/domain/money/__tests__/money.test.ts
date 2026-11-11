@@ -4,6 +4,7 @@ import {
   formatCop,
   formatCurrency,
   formatCurrencyCompact,
+  formatSignedCurrency,
   parseCopInteger,
   parseCurrencyInteger,
   sumMoneyIntegers,
@@ -57,5 +58,17 @@ describe('domain/money — integer monetary operations and universal formatting'
     expect(calculateMonthlyProvisionCeil(1_000_000, 12)).toBe(83_334);
     expect(() => calculateMonthlyProvisionCeil(-1, 12)).toThrow(RangeError);
     expect(() => calculateMonthlyProvisionCeil(100_000, 0)).toThrow(RangeError);
+  });
+});
+
+describe('formatSignedCurrency', () => {
+  it('always shows the sign of a difference', () => {
+    expect(formatSignedCurrency(120_000)).toBe('+$ 120.000');
+    expect(formatSignedCurrency(-80_000)).toBe('-$ 80.000');
+    expect(formatSignedCurrency(0)).toBe('$ 0');
+  });
+
+  it('refuses decimals like every money formatter', () => {
+    expect(() => formatSignedCurrency(1.5)).toThrow();
   });
 });

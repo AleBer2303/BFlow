@@ -86,6 +86,15 @@ Jest corre como iOS: sin `skin`, el proveedor entrega la piel iOS.
 
 ## 5. Antes de dar el cambio por terminado
 
+Si el cambio toca los gráficos (ADR 0020), comprueba en cada piel:
+
+1. Abre **Cierre**, **Deudas** y **Ahorros**. Cada gráfico debe crecer al entrar y quedarse quieto después.
+2. Toca un mes, o pasa el puntero en `?skin=web`. La lectura debe mostrar sus cifras y los demás meses deben atenuarse.
+3. Cierra el mes con **Confirmar … → Siguiente Mes**. Deben aparecer dos meses y una tarjeta titulada «Noviembre 2026 vs Octubre 2026».
+4. A 320 de ancho no puede haber scroll horizontal ni cifras partidas.
+
+Después, ejecuta los tres comandos:
+
 ```bash
 npm run typecheck
 ```

@@ -292,3 +292,42 @@ describe('Web skin (design-taste-frontend system)', () => {
     expect(parseColor(palettesBySkin.web.light.glass.specularBorder).a).toBeCloseTo(0.2, 2);
   });
 });
+
+describe.each(PLATFORM_SKIN_IDS)('chart colors of the %s skin', (skin: PlatformSkinId) => {
+  it.each(MODES)('gives six distinct categorical hues at 3:1 on the page and cards (%s)', (mode) => {
+    const colors = palettesBySkin[skin][mode];
+    const { categorical } = colors.chart;
+    expect(categorical).toHaveLength(6);
+    expect(new Set(categorical.map((tint) => tint.toUpperCase())).size).toBe(6);
+
+    const page = colors.background.primary;
+    for (const surface of [page, colors.background.secondary, over(colors.glass.surfaceTint, page)]) {
+      for (const tint of categorical) {
+        expect({ tint, surface, ok: contrast(tint, surface) >= 3 }).toEqual({ tint, surface, ok: true });
+      }
+    }
+  });
+
+  it.each(MODES)('keeps every categorical hue apart from its neighbours (%s)', (mode) => {
+    const { categorical } = palettesBySkin[skin][mode].chart;
+    const hues = categorical.map((tint) => oklch(tint));
+    for (let index = 1; index < hues.length; index += 1) {
+      const previous = hues[index - 1] as { hue: number };
+      const current = hues[index] as { hue: number };
+      const distance = Math.abs(previous.hue - current.hue);
+      expect(Math.min(distance, 360 - distance)).toBeGreaterThan(25);
+    }
+  });
+});
+
+describe('chart colors of the web skin', () => {
+  it('never use violet or lavender', () => {
+    for (const mode of MODES) {
+      for (const tint of palettesBySkin.web[mode].chart.categorical) {
+        const { chroma, hue } = oklch(tint);
+        const isViolet = chroma > 0.05 && hue > 270 && hue < 330;
+        expect({ tint, isViolet }).toEqual({ tint, isViolet: false });
+      }
+    }
+  });
+});

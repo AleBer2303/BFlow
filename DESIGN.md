@@ -225,6 +225,20 @@ Fallback arquitectural idéntico visualmente mediante `expo-blur`:
    - **Accesibilidad:** cada botón del selector mide mínimo `52 pt` y anuncia monto y cierre previsto en `accessibilityLabel`, de modo que la identidad no depende del color. Con *Reducir Movimiento* no hay trazado de entrada, transformación, inclinación ni latido.
    - **Respaldo (iOS):** si la escena 3D no puede dibujar (sin WebGL, shader que no enlaza, superficie GL que no llega en 6 s o error en un cuadro), se muestra la curva vectorial animada con el mismo gesto horizontal. Ver [ADR 0012](docs/decisions/0012-animated-vector-curve.md).
    - **Por piel (`platformSkins[piel].curveStage`):** lo anterior describe la escena three.js, que es solo de iOS (`scene-3d`). Android y Web (`vector`) dibujan la misma curva como vector plano y animado (§10.4): mismo trazado de entrada, transformación y latido, sin brillo ni inclinación. Android la recorre con el dedo, con el mismo gesto y bloqueo de scroll que iOS ([ADR 0014](docs/decisions/0014-android-vector-curve.md)); Web, con el puntero y el teclado, y en escritorio convierte el selector en una tabla de métricas con su cifra actual.
+6. **Gráficos animados (`src/design-system/components/charts/`):** ver [ADR 0020](docs/decisions/0020-animated-charts.md).
+   - Hay tres tipos: `BarChart` (agrupado o apilado, con una línea de referencia punteada; los negativos cuelgan bajo el cero y en una pila se apilan hacia abajo), `LineChart` (con área y un tramo proyectado punteado) y `DonutChart` (con leyenda). Todos se dibujan con `react-native-svg`, igual en las tres pieles y sin WebGL.
+   - **Meses visibles:** cada gráfico muestra los meses más recientes que caben con el objetivo táctil completo de la piel por columna (4 a 320 de ancho, hasta 6 en escritorio).
+   - Cada gráfico va en una `ChartCard`, que es una `GlassSurface` elevada, con título `headline` y, solo si hace falta, un subtítulo `caption`. Debajo del título, la **lectura** muestra un mes con sus cifras en `callout` tabular. Por defecto es el mes activo.
+   - **Texto mínimo:** «Flujo de Dinero», «Balance mensual» y «Evolución de ahorros» solo llevan el título, la lectura y el dibujo, sin subtítulo, leyenda ni notas. Con una sola serie, la lectura es el mes y el monto en `title2` (`readout="value"`).
+   - **Ejes:** el eje de valores va a la derecha (52 pt) en `micro` `text.muted`, con pasos redondos y el cero siempre visible. La cuadrícula usa `glass.subtleBorder` y la línea de cero, `text.muted`. Debajo van los meses en `micro`; el activo, en `text.primary`.
+   - **Interacción:** cada mes es una columna `AppPressable` de alto completo. Un toque, un clic o Enter fija el mes, y volver a tocarlo lo suelta. El puntero y el foco lo muestran mientras siguen encima, sin fijarlo. Los meses no elegidos bajan al 38 % de opacidad. En la dona, cada fila de la leyenda (alto mínimo de la piel) elige su tramo: el tramo engrosa de 18 a 24 pt, el resto baja al 35 % y el centro muestra el monto y el porcentaje.
+   - **Movimiento:** al entrar, cada valor crece desde cero en 0,7 s, con 40 ms de desfase entre valores. Con datos nuevos, los valores se mueven en 0,45 s. La curva es `easeOutCubic`, sin rebote, en las tres pieles. Con *Reducir Movimiento* se dibuja el estado final.
+   - **Colores:** las series con significado usan `semantic`: recibido `income`, pagado `expense`, pendiente `pending`, deuda `debt`, reserva `reserve` y ahorro `savings`. Las series sin significado usan `chart.categorical` (§10.5).
+   - **Accesibilidad:** el SVG queda oculto para los lectores de pantalla. Cada columna o fila anuncia sus cifras, de modo que el dato no depende del color.
+   - **Dónde aparecen:**
+     - **Cierre** (sección «Gráficos»): Flujo de Dinero, balance mensual, previsto vs real, pagado vs pendiente, distribución de gastos y la comparación de los dos últimos meses («Noviembre 2026 vs Octubre 2026»).
+     - **Deudas:** evolución de la deuda con la proyección de cierre.
+     - **Ahorros:** evolución de ahorros apilada.
 
 ---
 
@@ -256,6 +270,7 @@ Decisiones en los ADR [0010](docs/decisions/0010-platform-skins-and-responsive-l
 | Radios `xs / sm / md / lg / xl / pill` | 6 / 10 / 16 / 22 / 28 / 999 | 4 / 8 / 12 / 16 / 28 / 999 | 2 / 4 / 6 / 8 / 8 / 4 |
 | Objetivo táctil | 44 pt | 48 dp | 44 px |
 | Curva del mes (`curveStage`) | `scene-3d`: escena three.js (respaldo: curva vectorial) | `vector`: curva vectorial (SVG) animada, gesto táctil | `vector`: curva vectorial (SVG) animada, puntero y teclado |
+| Gráficos (ADR 0020) | SVG animado en tarjeta de vidrio; toque | SVG animado en tarjeta tonal; toque | SVG animado en tarjeta plana; toque, puntero y teclado |
 
 **No cambia entre pieles:** los datos, los flujos, el significado de los colores semánticos, el espaciado (§4.1), los números tabulares y los `testID`.
 
@@ -337,9 +352,30 @@ Reglas propias de la Web:
 2. Texto de lectura a 16 px; nada por debajo de 13 px; pesos 400 y 500.
 3. Un único botón relleno por vista (`usePrimaryActionLook`); el resto, superficie con línea.
 4. Cabecera opaca de 72 px (56 px por debajo de 640 px) con línea inferior; sin blur, sombra ni píldora flotante.
-5. Movimiento (`webMotion`): 140 / 200 / 90 ms con `cubic-bezier(0.2, 0.8, 0.2, 1)`. Nada rebota, se inclina ni se anima con el scroll. Única excepción: la curva del mes se dibuja al entrar, se transforma al cambiar de métrica y su marcador late 3 veces (ADR 0012); con `prefers-reduced-motion` aparece quieta.
+5. Movimiento (`webMotion`): 140 / 200 / 90 ms con `cubic-bezier(0.2, 0.8, 0.2, 1)`. Nada rebota, se inclina ni se anima con el scroll. Hay dos excepciones, y en ambas, con `prefers-reduced-motion`, el dibujo aparece quieto:
+   - La curva del mes se dibuja al entrar, se transforma al cambiar de métrica y su marcador late 3 veces (ADR 0012).
+   - Los gráficos crecen al entrar y se mueven al cambiar los datos, sin rebote (ADR 0020).
 6. Foco de teclado: anillo de 2 px con el acento (`:focus-visible`).
 7. Curva del mes vectorial: línea de 2 px, área al 10 %, proyección punteada en `text.muted`, marcador con anillo de latido. Se recorre con el puntero o con las flechas.
+
+### 10.5 Colores de gráficos (`colors.chart`)
+
+`chart.categorical` tiene seis tonos, en orden, para las series sin significado financiero, como los tramos de «Distribución de gastos». Se definen en las seis paletas y su contrato está en `skinTokens.test.ts`:
+
+- contraste de al menos **3:1** sobre la página, el fondo secundario y las tarjetas (WCAG 1.4.11);
+- seis tonos distintos, con al menos 25° de tono entre vecinos;
+- sin violeta ni lavanda en Web.
+
+| Piel / tema | Tonos (1 → 6) |
+| :--- | :--- |
+| iOS oscuro | `#4F8FEA` `#2BB3A6` `#E5A84B` `#E07A9A` `#9D7FE6` `#9CC45A` |
+| iOS claro | `#245F9F` `#0F7A70` `#8F5206` `#A8345F` `#5F3DA6` `#5A6E12` |
+| Android oscuro | `#6FA4F0` `#4FC3B5` `#E5A84B` `#E88AA6` `#AD93EA` `#A5CB66` |
+| Android claro | `#245F9F` `#0B6E66` `#8F5206` `#A8345F` `#5F3DA6` `#556A10` |
+| Web oscuro | `#6FA4F0` `#5FB3C6` `#E5A84B` `#E08FB8` `#A5CB66` `#C2B89A` |
+| Web claro | `#1F5590` `#0E6B5E` `#7A4504` `#8A3A66` `#4C5E0E` `#5E574C` |
+
+Si una serie tiene significado (ingreso, gasto, pendiente, deuda, reserva o ahorro), se usa su color `semantic` y no uno categórico.
 
 ---
 

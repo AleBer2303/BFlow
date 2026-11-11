@@ -1,12 +1,13 @@
 /**
  * src/features/analytics/components/AnalyticsTab.tsx
  *
- * Container of the Analytics & History tab.
+ * Container of the Analytics & History tab: month close, history and the charts (Phase 6).
  */
 
 import React, { useCallback } from 'react';
+import { View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
-import { hapticService } from '../../../design-system';
+import { hapticService, useBFlowTheme } from '../../../design-system';
 import {
   useActiveMonthKey,
   useBudgetSummary,
@@ -14,7 +15,9 @@ import {
   useDebtSummary,
   useSavingsSummary,
 } from '../../budget/hooks/useActiveMonthSummaries';
+import { useChartHistory } from '../../budget/hooks/useChartHistory';
 import { useBudgetStore } from '../../budget/store/useBudgetStore';
+import { AnalyticsChartsPanel } from './AnalyticsChartsPanel';
 import { AnalyticsAndHistoryView } from './AnalyticsAndHistoryView';
 
 export const AnalyticsTab = React.memo(function AnalyticsTab(): React.JSX.Element {
@@ -27,6 +30,8 @@ export const AnalyticsTab = React.memo(function AnalyticsTab(): React.JSX.Elemen
   const checklist = useChecklistProgress();
   const debtSummary = useDebtSummary();
   const savingsSummary = useSavingsSummary(budget);
+  const history = useChartHistory();
+  const { spacing } = useBFlowTheme();
   const actions = useBudgetStore(
     useShallow((state) => ({
       setActiveMonthKey: state.setActiveMonthKey,
@@ -57,21 +62,30 @@ export const AnalyticsTab = React.memo(function AnalyticsTab(): React.JSX.Elemen
   );
 
   return (
-    <AnalyticsAndHistoryView
-      activeMonthKey={activeMonthKey}
-      availableMonths={availableMonths}
-      concepts={concepts}
-      entries={entries}
-      budget={budget}
-      checklist={checklist}
-      debtSummary={debtSummary}
-      savingsSummary={savingsSummary}
-      closedSnapshots={closedSnapshots}
-      onSelectMonth={actions.setActiveMonthKey}
-      onCloseCurrentMonth={handleCloseMonth}
-      onReopenClosedMonth={handleReopenClosedMonth}
-      onDeleteOrRevertMonth={handleDeleteOrRevertMonth}
-      onResetOctoberSeed={actions.resetToOctober2026GoldenState}
-    />
+    <View style={{ gap: spacing.xl }}>
+      <AnalyticsAndHistoryView
+        activeMonthKey={activeMonthKey}
+        availableMonths={availableMonths}
+        concepts={concepts}
+        entries={entries}
+        budget={budget}
+        checklist={checklist}
+        debtSummary={debtSummary}
+        savingsSummary={savingsSummary}
+        closedSnapshots={closedSnapshots}
+        onSelectMonth={actions.setActiveMonthKey}
+        onCloseCurrentMonth={handleCloseMonth}
+        onReopenClosedMonth={handleReopenClosedMonth}
+        onDeleteOrRevertMonth={handleDeleteOrRevertMonth}
+        onResetOctoberSeed={actions.resetToOctober2026GoldenState}
+      />
+      <AnalyticsChartsPanel
+        activeMonthKey={activeMonthKey}
+        history={history}
+        budget={budget}
+        entries={entries}
+        hasClosedMonths={Object.keys(closedSnapshots).length > 0}
+      />
+    </View>
   );
 });

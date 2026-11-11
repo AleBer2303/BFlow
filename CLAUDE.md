@@ -64,6 +64,13 @@ src/app/index.tsx  ──(hooks/props)──>  features/*/components
 - **Sistema de diseño** (`src/design-system/`, documentado en `DESIGN.md`): todo color/espaciado/radio/tipografía sale de `useBFlowTheme()`; cifras monetarias con `CurrencyText` (tabular-nums); áreas táctiles ≥ `minTouchTarget` del tema (44 en iOS y Web, 48 en Android); háptica vía `hapticService`.
 - **Curva del mes** (`src/domain/overview/`, `src/features/summary/`): el escenario lo decide el token `skinSpec.curveStage`. Solo iOS (`scene-3d`) la dibuja con three.js/`expo-gl` (ADR 0007 y 0008). Android y Web (`vector`) usan `MonthlyCurveVectorStage` (SVG animado por `scene/vectorCurveAnimator.ts`): Web nunca descarga three.js (ADR 0011 y 0012) y Android no monta ningún `GLView`, porque allí la superficie de `expo-gl` no refrescaba los cuadros y la curva se veía quieta (ADR 0014). Si la escena 3D no puede dibujar en iOS (incluida la superficie GL que no llega en `GL_CONTEXT_TIMEOUT_MS`), se usa esa misma curva vectorial con gesto táctil. Ambas comparten la geometría de `scene/curveGeometry.ts` y los tiempos de `scene/curveMotion.ts`.
 
+- **Gráficos (Fase 6, ADR 0020):** `src/design-system/components/charts/` (`BarChart`, `LineChart` y `DonutChart` con `react-native-svg`, animados por `chartTransition.ts`), con datos de `src/domain/analytics/chartSeries.ts`:
+  - Un mes cerrado anterior al activo lee su snapshot. El mes activo, aunque esté cerrado, y los meses abiertos se calculan en vivo, igual que las tarjetas.
+  - La ventana es de 6 meses hasta el mes activo. Cada gráfico muestra los que caben con el objetivo táctil completo por columna (`useChartWindow`).
+  - Los gráficos aparecen en Cierre (`AnalyticsChartsPanel`), Deudas (`DebtTrendChart`) y Ahorros (`SavingsTrendCharts`, solo la evolución apilada), alimentados por `useChartHistory`.
+  - Los tramos sin significado financiero usan `colors.chart.categorical`.
+  - En los tests, el SVG está oculto para accesibilidad: búscalo con `{ includeHiddenElements: true }`.
+
 ## Multiplataforma: tres pieles (ADR 0010 y 0011)
 
 Reglas vinculantes en `AGENTS.md` §7; tokens y breakpoints en `DESIGN.md` §10 y §11; pasos en `docs/guides/multiplatform-validation-guide.md`.

@@ -1,23 +1,27 @@
 /**
  * src/features/savings/components/SavingsTab.tsx
  *
- * Container of the Savings tab: reads only the savings and provision data it shows.
+ * Container of the Savings tab: reads only the savings and provision data it shows, plus
+ * the month-by-month history for the savings chart (Phase 6).
  */
 
 import React, { useCallback } from 'react';
+import { View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
-import { hapticService } from '../../../design-system';
+import { hapticService, useBFlowTheme } from '../../../design-system';
 import {
   useActiveMonthKey,
   useBudgetSummary,
   useProvisionPlanSummary,
   useSavingsSummary,
 } from '../../budget/hooks/useActiveMonthSummaries';
+import { useChartHistory } from '../../budget/hooks/useChartHistory';
 import { useBudgetStore } from '../../budget/store/useBudgetStore';
 import {
   SavingsAndProvisionsView,
   type SavingsAndProvisionsViewProps,
 } from './SavingsAndProvisionsView';
+import { SavingsTrendCharts } from './SavingsTrendCharts';
 
 type Props = SavingsAndProvisionsViewProps;
 
@@ -27,6 +31,8 @@ export const SavingsTab = React.memo(function SavingsTab(): React.JSX.Element {
   const savingsSummary = useSavingsSummary(budget);
   const provisionSummary = useProvisionPlanSummary(savingsSummary);
   const provisionPlan = useBudgetStore((state) => state.idealMotoPlan);
+  const history = useChartHistory();
+  const { spacing } = useBFlowTheme();
   const actions = useBudgetStore(
     useShallow((state) => ({
       updateSavingsOpeningBalance: state.updateSavingsOpeningBalance,
@@ -74,15 +80,18 @@ export const SavingsTab = React.memo(function SavingsTab(): React.JSX.Element {
   );
 
   return (
-    <SavingsAndProvisionsView
-      savingsSummary={savingsSummary}
-      motoIdealSummary={provisionSummary}
-      provisionPlan={provisionPlan}
-      onUpdateOpeningBalance={handleUpdateOpeningBalance}
-      onCreateSavingsBucket={handleCreateSavingsBucket}
-      onDeleteSavingsBucket={handleDeleteSavingsBucket}
-      onSaveProvisionItem={handleSaveProvisionItem}
-      onDeleteProvisionItem={handleDeleteProvisionItem}
-    />
+    <View style={{ gap: spacing.md }}>
+      <SavingsAndProvisionsView
+        savingsSummary={savingsSummary}
+        motoIdealSummary={provisionSummary}
+        provisionPlan={provisionPlan}
+        onUpdateOpeningBalance={handleUpdateOpeningBalance}
+        onCreateSavingsBucket={handleCreateSavingsBucket}
+        onDeleteSavingsBucket={handleDeleteSavingsBucket}
+        onSaveProvisionItem={handleSaveProvisionItem}
+        onDeleteProvisionItem={handleDeleteProvisionItem}
+      />
+      <SavingsTrendCharts history={history} />
+    </View>
   );
 });

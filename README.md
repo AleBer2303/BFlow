@@ -245,11 +245,13 @@ BFlow/
 │   │   └── seed/                 # Carga de datos iniciales de octubre 2026
 │   ├── design-system/            # Tokens por piel (iOS / Android / Web), tema y componentes base
 │   │   ├── components/           # AppPressable, AppText, CurrencyText, ResponsiveColumns…
+│   │   │   ├── charts/           # Gráficos animados SVG: barras, línea y dona (ADR 0020)
 │   │   │   └── navigation/       # Dock iOS, barra Material (Android), cabecera y barra Web
 │   │   ├── layout/               # Contrato responsive (useResponsiveLayout) y ancho de cifras
-│   │   ├── platform/             # Resolución de la piel de la plataforma
+│   │   ├── platform/             # Resolución de la piel y preferencia de Reducir Movimiento
 │   │   └── theme/                # BFlowThemeProvider / useBFlowTheme
 │   ├── domain/                   # 100% PURO: Fórmulas matemáticas, checklist, deudas, ahorros
+│   │   ├── analytics/            # Series de los gráficos: historial de 6 meses, distribución, comparativa
 │   │   ├── budget/               # Cálculos de ingresos, gastos y flujos netos
 │   │   ├── checklist/            # Reglas de disponibilidad, progreso y autogeneración
 │   │   ├── date/                 # Manejo inmutable de monthKey y zona horaria Bogotá
@@ -260,13 +262,13 @@ BFlow/
 │   │   ├── overview/             # Reconstrucción diaria de la curva del mes
 │   │   └── savings/              # Fondos de ahorro y proyecciones
 │   ├── features/                 # Pantallas y componentes por dominio funcional
-│   │   ├── analytics/            # Historial, gráficos y tendencias
+│   │   ├── analytics/            # Cierre de mes, historial y sección «Gráficos»
 │   │   ├── auth/                 # Login, registro, perfil y recuperación
 │   │   ├── budget/               # Resumen mensual y modal de agregar movimiento
 │   │   ├── checklist/            # Lista de movimientos y filtros
-│   │   ├── debts/                # Amortización de deudas y abonos
+│   │   ├── debts/                # Amortización de deudas, abonos y gráfico de evolución
 │   │   ├── onboarding/           # Configuración inicial de usuario nuevo
-│   │   ├── savings/              # Tarjetas de fondos y provisión moto
+│   │   ├── savings/              # Tarjetas de fondos, provisión moto y sus gráficos
 │   │   ├── shell/                # WorkspaceShell: cabecera, columna y navegación de cada piel
 │   │   └── summary/              # Resumen y curva del mes: three.js (iOS), SVG animado (Android, Web y respaldo de iOS)
 │   └── platform/                 # Adaptadores Modo A vs Modo B

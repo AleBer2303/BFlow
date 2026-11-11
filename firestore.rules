@@ -21,6 +21,7 @@ rules_version = '2';
 //      - onboardingCompleted: bool | null (optional)
 //      - accountResetByUser: bool | null (optional)
 //      - activeMonthKey: string (optional, YYYY-MM)
+//      - dataRevision: string | null (optional, 1..120 chars)
 //      - updatedAt: timestamp | string | null (optional, <= 64 chars)
 //
 // 2. Collection: /users/{uid}/concepts/{conceptId}
@@ -135,6 +136,7 @@ service cloud.firestore {
           'onboardingCompleted',
           'accountResetByUser',
           'activeMonthKey',
+          'dataRevision',
           'updatedAt'
         ]) &&
         (!('uid' in data) || (data.uid is string && data.uid == uid)) &&
@@ -153,6 +155,7 @@ service cloud.firestore {
         (!('onboardingCompleted' in data) || data.onboardingCompleted == null || data.onboardingCompleted is bool) &&
         (!('accountResetByUser' in data) || data.accountResetByUser == null || data.accountResetByUser is bool) &&
         (!('activeMonthKey' in data) || isValidMonthKey(data.activeMonthKey)) &&
+        (!('dataRevision' in data) || data.dataRevision == null || isNonEmptyString(data.dataRevision, 120)) &&
         isValidUpdatedAt(data);
     }
 

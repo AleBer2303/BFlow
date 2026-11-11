@@ -9,6 +9,7 @@ import {
   FirestoreBudgetRepository,
 } from '../../../../data/repositories/budgetRepository';
 import { type SavingsBucket } from '../../../../domain';
+import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
   buildInitialState,
   isRealAuthUser,
@@ -24,6 +25,7 @@ export const createSavingsSlice: SliceCreator<SavingsSlice> = (set, get) => {
 
   updateSavingsOpeningBalance: async (monthKey, bucketId, newBalanceCop, bucketName) => {
     const state = get();
+    const previousSavings = state.savingsBucketsByMonth;
     const safeAmount = Math.max(0, Math.round(newBalanceCop));
     const monthBuckets = ensureStandardSavingsBuckets(
       state.savingsBucketsByMonth[monthKey] ?? []
@@ -58,24 +60,43 @@ export const createSavingsSlice: SliceCreator<SavingsSlice> = (set, get) => {
     });
     triggerWidgetSync(get());
 
-    if (isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.saveSavingsBucket(
-          state.authUser.uid,
-          bucketId,
-          safeAmount,
-          monthKey,
-          resolvedName
-        );
-      } catch {
-        set({ syncMessage: '' });
-      }
+    const authUser = state.authUser;
+    if (isRealAuthUser(authUser)) {
+      const uid = authUser.uid;
+      await executeOptimisticCloudWrite({
+        uid,
+        operation: {
+          type: 'save_savings_bucket',
+          payload: {
+            bucketId,
+            openingBalanceCop: safeAmount,
+            monthKey,
+            name: resolvedName,
+          },
+        },
+        performCloudWrite: async () => {
+          const repo = new FirestoreBudgetRepository();
+          await repo.saveSavingsBucket(
+            uid,
+            bucketId,
+            safeAmount,
+            monthKey,
+            resolvedName
+          );
+        },
+        rollback: () => {
+          set({ savingsBucketsByMonth: previousSavings });
+        },
+        friendlyErrorMessage: 'No se pudo actualizar el saldo de ahorro en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
   },
 
   createSavingsBucket: async (monthKey, name, openingBalanceCop) => {
     const state = get();
+    const previousSavings = state.savingsBucketsByMonth;
     const trimmedName = name.trim();
     if (!trimmedName) return null;
 
@@ -105,19 +126,37 @@ export const createSavingsSlice: SliceCreator<SavingsSlice> = (set, get) => {
     });
     triggerWidgetSync(get());
 
-    if (isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.saveSavingsBucket(
-          state.authUser.uid,
-          bucketId,
-          safeAmount,
-          monthKey,
-          trimmedName
-        );
-      } catch {
-        set({ syncMessage: '' });
-      }
+    const authUser = state.authUser;
+    if (isRealAuthUser(authUser)) {
+      const uid = authUser.uid;
+      await executeOptimisticCloudWrite({
+        uid,
+        operation: {
+          type: 'save_savings_bucket',
+          payload: {
+            bucketId,
+            openingBalanceCop: safeAmount,
+            monthKey,
+            name: trimmedName,
+          },
+        },
+        performCloudWrite: async () => {
+          const repo = new FirestoreBudgetRepository();
+          await repo.saveSavingsBucket(
+            uid,
+            bucketId,
+            safeAmount,
+            monthKey,
+            trimmedName
+          );
+        },
+        rollback: () => {
+          set({ savingsBucketsByMonth: previousSavings });
+        },
+        friendlyErrorMessage: 'No se pudo crear el bolsillo de ahorro en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
 
     return newBucket;
@@ -125,6 +164,9 @@ export const createSavingsSlice: SliceCreator<SavingsSlice> = (set, get) => {
 
   deleteSavingsBucket: async (monthKey, bucketId) => {
     const state = get();
+    const previousSavings = state.savingsBucketsByMonth;
+    const previousConcepts = state.concepts;
+
     const nextSavingsByMonth: Record<string, SavingsBucket[]> = {};
     for (const [mk, list] of Object.entries(state.savingsBucketsByMonth)) {
       nextSavingsByMonth[mk] = list.filter((b) => b.id !== bucketId);
@@ -145,13 +187,29 @@ export const createSavingsSlice: SliceCreator<SavingsSlice> = (set, get) => {
     });
     triggerWidgetSync(get());
 
-    if (isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.deleteSavingsBucket(state.authUser.uid, bucketId);
-      } catch {
-        set({ syncMessage: '' });
-      }
+    const authUser = state.authUser;
+    if (isRealAuthUser(authUser)) {
+      const uid = authUser.uid;
+      await executeOptimisticCloudWrite({
+        uid,
+        operation: {
+          type: 'delete_savings_bucket',
+          payload: { bucketId },
+        },
+        performCloudWrite: async () => {
+          const repo = new FirestoreBudgetRepository();
+          await repo.deleteSavingsBucket(uid, bucketId);
+        },
+        rollback: () => {
+          set({
+            concepts: previousConcepts,
+            savingsBucketsByMonth: previousSavings,
+          });
+        },
+        friendlyErrorMessage: 'No se pudo eliminar el bolsillo de ahorro en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
   },
 };

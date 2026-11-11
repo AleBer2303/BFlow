@@ -10,6 +10,17 @@ import {
 } from '../../../../data/repositories/budgetRepository';
 import { savePersistedSession } from '../../../../platform/auth/authAdapter';
 import {
+  isEquivalentCloudAccount,
+  loadPersistedAccount,
+  loadPersistedAccountEnvelope,
+  savePersistedAccount,
+} from '../../../../platform/storage/accountCache';
+import {
+  drainOfflineWriteQueue,
+  getPendingOfflineWritesCount,
+  hasPendingOfflineWrites,
+} from '../../../../platform/storage/offlineWriteQueue';
+import {
   buildInitialState,
   isRealAuthUser,
   triggerWidgetSync,
@@ -24,7 +35,9 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
     activeMonthKey: initial.activeMonthKey,
     availableMonths: initial.availableMonths,
     syncMessage: '',
-    isSyncing: false,
+    isSyncing: initial.isSyncing,
+    isAccountHydrated: initial.isAccountHydrated,
+    pendingOfflineWritesCount: initial.pendingOfflineWritesCount ?? 0,
 
   setActiveTab: (tab) => set({ activeTab: tab }),
 
@@ -84,6 +97,7 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
       closedSnapshots: payload.closedSnapshot
         ? { ...state.closedSnapshots, [payload.monthKey]: payload.closedSnapshot }
         : state.closedSnapshots,
+      isAccountHydrated: true,
     }));
     triggerWidgetSync(get());
   },
@@ -104,6 +118,7 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
       savingsBucketsByMonth: payload.savingsBucketsByMonth,
       idealMotoPlan: payload.provisionPlan,
       closedSnapshots: payload.closedSnapshots,
+      isAccountHydrated: true,
       needsOnboarding: payload.needsOnboarding ?? false,
       ...(updatedUser ? { authUser: updatedUser } : {}),
     });
@@ -115,6 +130,85 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
 
   syncActiveWidget: async () => {
     return triggerWidgetSync(get());
+  },
+
+  flushOfflineWrites: async () => {
+    const user = get().authUser;
+    if (!isRealAuthUser(user)) return;
+    const repo = new FirestoreBudgetRepository();
+    const result = await drainOfflineWriteQueue(user.uid, repo);
+    set({
+      pendingOfflineWritesCount: result.remaining,
+      syncMessage:
+        result.remaining === 0
+          ? 'Todos los cambios locales se sincronizaron con la nube'
+          : `${result.remaining} cambios pendientes por sincronizar`,
+    });
+    triggerWidgetSync(get());
+  },
+
+  refreshPendingOfflineWritesCount: () => {
+    const user = get().authUser;
+    const count = user?.uid ? getPendingOfflineWritesCount(user.uid) : 0;
+    set({ pendingOfflineWritesCount: count });
+  },
+
+  syncUserCloudAccount: async (user, options) => {
+    // 1. Instant offline cold-start: rehydrate from local cache if available
+    const initialEnvelope = loadPersistedAccountEnvelope(user.uid);
+    const cached = initialEnvelope?.data ?? null;
+    if (cached) {
+      get().applyFullCloudAccount(cached);
+    }
+
+    set({ syncMessage: 'Cargando tu presupuesto e historial...', isSyncing: true });
+    try {
+      const repo = new FirestoreBudgetRepository();
+
+      // Drain any pending offline writes first so cloud receives our local changes
+      await drainOfflineWriteQueue(user.uid, repo);
+      get().refreshPendingOfflineWritesCount();
+
+      // R-09: If pending offline writes remain, DO NOT overwrite local state with outdated cloud data
+      if (hasPendingOfflineWrites(user.uid)) {
+        set({ syncMessage: 'Cambios locales pendientes por sincronizar', isSyncing: false });
+        return;
+      }
+
+      // Re-read envelope in case draining offline writes updated dataRevision
+      const latestEnvelope = loadPersistedAccountEnvelope(user.uid) ?? initialEnvelope;
+
+      const fullAccount = await repo.loadFullCloudAccount(user.uid, user.email, {
+        ...options,
+        cachedAccount: latestEnvelope?.data ?? cached,
+        cachedDataRevision: latestEnvelope?.dataRevision ?? cached?.dataRevision,
+        cachedSavedAt: latestEnvelope?.savedAt,
+      });
+      const currentUid = get().authUser?.uid;
+      if (!currentUid || currentUid !== user.uid) {
+        return;
+      }
+      if (hasPendingOfflineWrites(user.uid)) {
+        set({ syncMessage: 'Cambios locales pendientes por sincronizar', isSyncing: false });
+        return;
+      }
+      savePersistedAccount(
+        user.uid,
+        fullAccount,
+        new Date().toISOString(),
+        fullAccount.dataRevision
+      );
+      if (!isEquivalentCloudAccount(cached, fullAccount)) {
+        get().applyFullCloudAccount(fullAccount);
+      }
+      set({ syncMessage: 'Sincronizado', isSyncing: false });
+    } catch {
+      const hasLocalData = loadPersistedAccount(user.uid) !== null;
+      set({
+        syncMessage: hasLocalData ? 'Modo sin conexión' : 'No fue posible conectar con el servidor',
+        isSyncing: false,
+      });
+    }
   },
 };
 };

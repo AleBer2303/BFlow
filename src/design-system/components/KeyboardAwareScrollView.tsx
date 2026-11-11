@@ -311,11 +311,11 @@ export const KeyboardAwareScrollView = React.forwardRef<
     };
   }, [extraScrollHeight, checkAndScrollInput]);
 
-  const contextValue: KeyboardAwareContextValue = {
-    registerInputFocus,
-    isKeyboardVisible,
-    keyboardHeight,
-  };
+  // Memoized so a re-render of the scroll view does not re-render every input (R-21).
+  const contextValue = useMemo<KeyboardAwareContextValue>(
+    () => ({ registerInputFocus, isKeyboardVisible, keyboardHeight }),
+    [registerInputFocus, isKeyboardVisible, keyboardHeight]
+  );
 
   return (
     <KeyboardAwareContext.Provider value={contextValue}>

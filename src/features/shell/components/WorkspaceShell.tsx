@@ -16,7 +16,7 @@
  * foldable or a desktop browser never gets a stretched phone layout.
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Platform, View } from 'react-native';
 import {
   AppText,
@@ -40,6 +40,8 @@ export interface WorkspaceShellProps {
   onSelectTab: (tab: BFlowWorkspaceTab) => void;
   /** Hidden while the account is being set up (onboarding). */
   showNavigation: boolean;
+  /** Pending offline mutations waiting to be synced to cloud. */
+  pendingSyncCount?: number;
   children: React.ReactNode;
 }
 
@@ -53,6 +55,7 @@ export function WorkspaceShell({
   activeTab,
   onSelectTab,
   showNavigation,
+  pendingSyncCount,
   children,
 }: WorkspaceShellProps): React.JSX.Element {
   const { colors, spacing, skin } = useBFlowTheme();
@@ -65,6 +68,11 @@ export function WorkspaceShell({
   const showsWebTabBar = isWeb && showNavigation && layout.sizeClass !== 'expanded';
   const activeTabLabel = WORKSPACE_TABS.find((tab) => tab.id === activeTab)?.label ?? '';
   const title = `BFlow · ${monthLabel}`;
+  // Stable while the tab is unchanged, so the memoized web header can skip re-rendering.
+  const webHeaderNavigation = useMemo(
+    () => (showNavigation ? { activeTab, onSelectTab, testID: NAVIGATION_TEST_ID } : undefined),
+    [showNavigation, activeTab, onSelectTab]
+  );
 
   const contentGap = isWeb && layout.sizeClass !== 'compact' ? spacing.xl : spacing.md;
   const paddingTop = isWeb ? (layout.isWide ? spacing.xxxl : spacing.xxl) : spacing.xl;
@@ -73,13 +81,7 @@ export function WorkspaceShell({
   return (
     <View testID="workspace-shell" style={{ flex: 1, backgroundColor: colors.background.primary }}>
       {isWeb ? (
-        <WebAppHeader
-          layout={layout}
-          contextLabel={monthLabel}
-          navigation={
-            showNavigation ? { activeTab, onSelectTab, testID: NAVIGATION_TEST_ID } : undefined
-          }
-        />
+        <WebAppHeader layout={layout} contextLabel={monthLabel} navigation={webHeaderNavigation} />
       ) : null}
 
       <KeyboardAwareScrollView
@@ -108,16 +110,35 @@ export function WorkspaceShell({
                 gap: spacing.sm,
               }}
             >
-              <AppText
-                variant="title1"
-                accessibilityRole="header"
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.7}
-                style={{ flexShrink: 1 }}
-              >
-                {title}
-              </AppText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 }}>
+                <AppText
+                  variant="title1"
+                  accessibilityRole="header"
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                  style={{ flexShrink: 1 }}
+                >
+                  {title}
+                </AppText>
+                {pendingSyncCount && pendingSyncCount > 0 ? (
+                  <View
+                    testID="pending-offline-sync-badge"
+                    style={{
+                      paddingHorizontal: spacing.sm,
+                      paddingVertical: 2,
+                      borderRadius: 10,
+                      backgroundColor: colors.background.secondary,
+                      borderWidth: 1,
+                      borderColor: colors.glass.subtleBorder,
+                    }}
+                  >
+                    <AppText variant="caption" color={colors.semantic.pending}>
+                      {`☁️ ${pendingSyncCount}`}
+                    </AppText>
+                  </View>
+                ) : null}
+              </View>
               <ThemeToggleIconButton testID="theme-toggle-button" />
             </View>
           ) : null}
@@ -133,16 +154,33 @@ export function WorkspaceShell({
                 gap: spacing.sm,
               }}
             >
-              <AppText
-                variant="title2"
-                accessibilityRole="header"
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.8}
-                style={{ flexShrink: 1 }}
-              >
-                {title}
-              </AppText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 }}>
+                <AppText
+                  variant="title2"
+                  accessibilityRole="header"
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                  style={{ flexShrink: 1 }}
+                >
+                  {title}
+                </AppText>
+                {pendingSyncCount && pendingSyncCount > 0 ? (
+                  <View
+                    testID="pending-offline-sync-badge-android"
+                    style={{
+                      paddingHorizontal: spacing.sm,
+                      paddingVertical: 2,
+                      borderRadius: 8,
+                      backgroundColor: colors.background.secondary,
+                    }}
+                  >
+                    <AppText variant="caption" color={colors.semantic.pending}>
+                      {`☁️ ${pendingSyncCount}`}
+                    </AppText>
+                  </View>
+                ) : null}
+              </View>
               <ThemeToggleIconButton testID="theme-toggle-button" />
             </View>
           ) : null}
@@ -162,6 +200,23 @@ export function WorkspaceShell({
               <AppText variant="title1" color={colors.text.muted}>
                 {monthLabel}
               </AppText>
+              {pendingSyncCount && pendingSyncCount > 0 ? (
+                <View
+                  testID="pending-offline-sync-badge-web"
+                  style={{
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: 2,
+                    borderRadius: 6,
+                    backgroundColor: colors.background.secondary,
+                    borderWidth: 1,
+                    borderColor: colors.glass.subtleBorder,
+                  }}
+                >
+                  <AppText variant="caption" color={colors.semantic.pending}>
+                    {`☁️ ${pendingSyncCount} pendientes`}
+                  </AppText>
+                </View>
+              ) : null}
             </View>
           ) : null}
 

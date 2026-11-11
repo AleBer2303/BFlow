@@ -64,12 +64,28 @@ for (const filePath of files) {
   // Rule 4: Mode B native-only modules restricted to src/platform/**/*.native.{ts,tsx}
   const isNativePlatformAdapter =
     relPath.startsWith('src/platform/') && /\.native\.tsx?$/.test(relPath);
+  const isNativeFirebaseAdapter =
+    relPath.startsWith('src/data/firebase/') && /\.native\.tsx?$/.test(relPath);
   if (!isNativePlatformAdapter && !isTest) {
     const modeBNativeImport =
       /from\s+['"](@react-native-google-signin\/google-signin|expo-glass-effect)['"]/;
     if (modeBNativeImport.test(content)) {
       errors.push(
         `${relPath}: Mode B native module imported outside src/platform/**/*.native.{ts,tsx} (breaks Mode A Expo Go/Web).`
+      );
+    }
+  }
+
+  // Rule 4b: expo-sqlite and expo-secure-store are restricted to .native.{ts,tsx} files so Web never loads native storage modules.
+  if (!isNativePlatformAdapter && !isNativeFirebaseAdapter && !isTest) {
+    if (/from\s+['"]expo-sqlite(?:\/[^'"]*)?['"]/.test(content)) {
+      errors.push(
+        `${relPath}: expo-sqlite imported outside a .native.ts adapter (must not be loaded on Web).`
+      );
+    }
+    if (/from\s+['"]expo-secure-store(?:\/[^'"]*)?['"]/.test(content)) {
+      errors.push(
+        `${relPath}: expo-secure-store imported outside a .native.ts adapter (must not be loaded on Web).`
       );
     }
   }

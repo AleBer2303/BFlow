@@ -28,7 +28,11 @@ import { getFirebaseAuth, getFirebaseDb } from '../../data/firebase/firebaseConf
 import { stripUndefinedFields } from '../../data/mappers/firestoreSchemas';
 import { isOwnerCanonicalEmail } from '../../data/repositories/budgetRepository';
 import { toBogotaMonthKey } from '../../domain/date/monthKey';
-import { persistentStorage } from '../storage/persistentStorageAdapter';
+import { clearPersistedAccount } from '../storage/accountCache';
+import {
+  persistentStorage,
+  rotateDeviceSecretToken,
+} from '../storage/persistentStorageAdapter';
 
 export interface BFlowAuthUser {
   uid: string;
@@ -62,6 +66,20 @@ export const DEMO_OWNER_USER: BFlowAuthUser = {
 };
 
 const SESSION_STORAGE_KEY = 'bflow.auth.session.v1';
+const LAST_LOGIN_THROTTLE_MS = 24 * 60 * 60 * 1000;
+
+const profileSyncInFlightByUid = new Map<string, Promise<BFlowAuthUser>>();
+
+function isWithinLast24Hours(isoTimestamp: string | undefined, nowMs = Date.now()): boolean {
+  if (!isoTimestamp || typeof isoTimestamp !== 'string') return false;
+  const parsedMs = Date.parse(isoTimestamp);
+  if (Number.isNaN(parsedMs)) return false;
+  return nowMs - parsedMs >= 0 && nowMs - parsedMs < LAST_LOGIN_THROTTLE_MS;
+}
+
+export function __resetProfileSyncInFlightForTests(): void {
+  profileSyncInFlightByUid.clear();
+}
 
 export function savePersistedSession(user: BFlowAuthUser | null): void {
   try {
@@ -107,94 +125,164 @@ async function syncUserProfileDocument(
     isNewRegistration?: boolean;
   }
 ): Promise<BFlowAuthUser> {
-  const db = getFirebaseDb();
-  const userRef = doc(db, 'users', firebaseUser.uid);
-  const nowIso = new Date().toISOString();
+  const hasExplicitOverrides = Boolean(
+    overrides?.isNewRegistration ||
+      overrides?.displayName ||
+      overrides?.phone ||
+      overrides?.financialGoal
+  );
 
-  let existingData: Record<string, unknown> = {};
-  try {
-    const snap = await getDoc(userRef);
-    if (snap.exists()) {
-      existingData = snap.data() as Record<string, unknown>;
-    }
-  } catch {
-    // Offline or first read before rules propagation
+  // R-12: Deduplicate concurrent profile syncs (e.g. signInWithEmail + onAuthStateChanged firing together)
+  const inFlight = profileSyncInFlightByUid.get(firebaseUser.uid);
+  if (inFlight && !hasExplicitOverrides) {
+    return inFlight;
   }
 
-  const resolvedDisplayName =
-    overrides?.displayName?.trim() ||
-    (typeof existingData.displayName === 'string' && existingData.displayName.trim()
-      ? existingData.displayName
-      : null) ||
-    firebaseUser.displayName ||
-    firebaseUser.email?.split('@')[0] ||
-    'Usuario BFlow';
+  const runSync = (async (): Promise<BFlowAuthUser> => {
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
 
-  const resolvedPhone =
-    overrides?.phone?.trim() ||
-    (typeof existingData.phone === 'string' ? existingData.phone : undefined);
+    const persisted = loadPersistedSession();
+    const canReusePersistedProfile =
+      !hasExplicitOverrides &&
+      persisted !== null &&
+      persisted.uid === firebaseUser.uid &&
+      isWithinLast24Hours(persisted.lastLoginAt, nowMs);
 
-  const resolvedGoal =
-    overrides?.financialGoal?.trim() ||
-    (typeof existingData.financialGoal === 'string' ? existingData.financialGoal : undefined);
+    // R-12: If the session was already synced within the last 24h on this device and has no explicit overrides,
+    // skip both the redundant getDoc(users/{uid}) read and the setDoc(lastLoginAt) write on boot/listener.
+    if (canReusePersistedProfile && persisted) {
+      return persisted;
+    }
 
-  const resolvedProvider: 'password' | 'google.com' =
-    overrides?.authProvider ??
-    (firebaseUser.providerData[0]?.providerId === 'google.com' ? 'google.com' : 'password');
+    let db: ReturnType<typeof getFirebaseDb> | null = null;
+    let userRef: ReturnType<typeof doc> | null = null;
+    try {
+      db = getFirebaseDb();
+      userRef = doc(db, 'users', firebaseUser.uid);
+    } catch {
+      // Non-fatal in isolated test environments without Firestore mock
+    }
 
-  const createdAt =
-    typeof existingData.createdAt === 'string' ? existingData.createdAt : nowIso;
+    let existingData: Record<string, unknown> = {};
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+    try {
+      if (userRef) {
+        const snap = await Promise.race([
+          getDoc(userRef),
+          new Promise<null>((resolve) => {
+            timeoutHandle = setTimeout(() => resolve(null), 1500);
+          }),
+        ]);
+        if (snap && snap.exists()) {
+          existingData = snap.data() as Record<string, unknown>;
+        }
+      }
+    } catch {
+      // Offline or first read before rules propagation
+    } finally {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+    }
 
-  const isOwner = isOwnerCanonicalEmail(firebaseUser.email);
-  const hasValidExistingMonth =
-    typeof existingData.activeMonthKey === 'string' &&
-    /^\d{4}-(0[1-9]|1[0-2])$/.test(existingData.activeMonthKey) &&
-    !(
-      !isOwner &&
-      existingData.activeMonthKey === '2026-10' &&
-      existingData.onboardingCompleted !== true
-    );
+    const resolvedDisplayName =
+      overrides?.displayName?.trim() ||
+      (typeof existingData.displayName === 'string' && existingData.displayName.trim()
+        ? existingData.displayName
+        : null) ||
+      persisted?.displayName ||
+      firebaseUser.displayName ||
+      firebaseUser.email?.split('@')[0] ||
+      'Usuario BFlow';
 
-  const activeMonthKey = hasValidExistingMonth
-    ? (existingData.activeMonthKey as string)
-    : isOwner
-      ? '2026-10'
-      : `${toBogotaMonthKey().slice(0, 4)}-01`;
+    const resolvedPhone =
+      overrides?.phone?.trim() ||
+      (typeof existingData.phone === 'string' ? existingData.phone : undefined) ||
+      persisted?.phone;
 
-  const profilePayload = stripUndefinedFields({
-    uid: firebaseUser.uid,
-    email: firebaseUser.email ?? null,
-    displayName: resolvedDisplayName,
-    phone: resolvedPhone,
-    financialGoal: resolvedGoal,
-    authProvider: resolvedProvider,
-    createdAt,
-    lastLoginAt: nowIso,
-    ...(!hasValidExistingMonth ? { activeMonthKey } : {}),
-    updatedAt: nowIso,
+    const resolvedGoal =
+      overrides?.financialGoal?.trim() ||
+      (typeof existingData.financialGoal === 'string' ? existingData.financialGoal : undefined) ||
+      persisted?.financialGoal;
+
+    const resolvedProvider: 'password' | 'google.com' =
+      overrides?.authProvider ??
+      (firebaseUser.providerData[0]?.providerId === 'google.com' ? 'google.com' : 'password');
+
+    const createdAt =
+      typeof existingData.createdAt === 'string'
+        ? existingData.createdAt
+        : persisted?.createdAt ?? nowIso;
+
+    const isOwner = isOwnerCanonicalEmail(firebaseUser.email);
+    const hasValidExistingMonth =
+      typeof existingData.activeMonthKey === 'string' &&
+      /^\d{4}-(0[1-9]|1[0-2])$/.test(existingData.activeMonthKey) &&
+      !(
+        !isOwner &&
+        existingData.activeMonthKey === '2026-10' &&
+        existingData.onboardingCompleted !== true
+      );
+
+    const activeMonthKey = hasValidExistingMonth
+      ? (existingData.activeMonthKey as string)
+      : persisted?.activeMonthKey ??
+        (isOwner ? '2026-10' : `${toBogotaMonthKey().slice(0, 4)}-01`);
+
+    const previousLastLoginAt =
+      typeof existingData.lastLoginAt === 'string'
+        ? existingData.lastLoginAt
+        : persisted?.lastLoginAt;
+    const isLastLoginFresh = isWithinLast24Hours(previousLastLoginAt, nowMs);
+    const effectiveLastLoginAt = isLastLoginFresh && previousLastLoginAt ? previousLastLoginAt : nowIso;
+
+    const shouldWriteProfileDoc =
+      hasExplicitOverrides || !isLastLoginFresh || !hasValidExistingMonth;
+
+    if (shouldWriteProfileDoc && userRef) {
+      const profilePayload = stripUndefinedFields({
+        uid: firebaseUser.uid,
+        email: firebaseUser.email ?? null,
+        displayName: resolvedDisplayName,
+        phone: resolvedPhone,
+        financialGoal: resolvedGoal,
+        authProvider: resolvedProvider,
+        createdAt,
+        lastLoginAt: effectiveLastLoginAt,
+        ...(!hasValidExistingMonth ? { activeMonthKey } : {}),
+        updatedAt: nowIso,
+      });
+
+      // Asynchronously synchronize user document in background; never block returning the authenticated session
+      void setDoc(userRef, profilePayload, { merge: true }).catch(() => {
+        // Non-fatal if offline; local cache handles queuing
+      });
+    }
+
+    const authUser: BFlowAuthUser = {
+      uid: firebaseUser.uid,
+      email: firebaseUser.email,
+      displayName: resolvedDisplayName,
+      ...(resolvedPhone ? { phone: resolvedPhone } : {}),
+      ...(resolvedGoal ? { financialGoal: resolvedGoal } : {}),
+      authProvider: resolvedProvider,
+      createdAt,
+      lastLoginAt: effectiveLastLoginAt,
+      activeMonthKey,
+      provider: 'firebase',
+    };
+
+    savePersistedSession(authUser);
+    return authUser;
+  })();
+
+  profileSyncInFlightByUid.set(firebaseUser.uid, runSync);
+  void runSync.finally(() => {
+    if (profileSyncInFlightByUid.get(firebaseUser.uid) === runSync) {
+      profileSyncInFlightByUid.delete(firebaseUser.uid);
+    }
   });
 
-  try {
-    await setDoc(userRef, profilePayload, { merge: true });
-  } catch {
-    // Non-fatal if offline; local cache handles queuing
-  }
-
-  const authUser: BFlowAuthUser = {
-    uid: firebaseUser.uid,
-    email: firebaseUser.email,
-    displayName: resolvedDisplayName,
-    ...(resolvedPhone ? { phone: resolvedPhone } : {}),
-    ...(resolvedGoal ? { financialGoal: resolvedGoal } : {}),
-    authProvider: resolvedProvider,
-    createdAt,
-    lastLoginAt: nowIso,
-    activeMonthKey,
-    provider: 'firebase',
-  };
-
-  savePersistedSession(authUser);
-  return authUser;
+  return runSync;
 }
 
 export function formatAuthError(err: unknown, fallbackMessage: string): string {
@@ -310,13 +398,21 @@ export async function sendPasswordRecoveryEmail(email: string): Promise<void> {
 }
 
 export async function signOutCurrentUser(): Promise<void> {
+  const persistedUser = loadPersistedSession();
   savePersistedSession(null);
+  if (persistedUser?.uid) {
+    clearPersistedAccount(persistedUser.uid);
+  }
   try {
     const auth = getFirebaseAuth();
+    if (auth.currentUser?.uid && auth.currentUser.uid !== persistedUser?.uid) {
+      clearPersistedAccount(auth.currentUser.uid);
+    }
     await signOut(auth);
   } catch {
     // Ignore if already signed out
   }
+  rotateDeviceSecretToken();
 }
 
 export function subscribeToAuthUser(
@@ -324,14 +420,45 @@ export function subscribeToAuthUser(
 ): () => void {
   try {
     const auth = getFirebaseAuth();
-    return onAuthStateChanged(auth, async (firebaseUser) => {
+    return onAuthStateChanged(auth, (firebaseUser) => {
       if (!firebaseUser) {
         savePersistedSession(null);
         listener(null);
         return;
       }
-      const syncedUser = await syncUserProfileDocument(firebaseUser);
-      listener(syncedUser);
+      const persisted = loadPersistedSession();
+      if (persisted && persisted.uid === firebaseUser.uid) {
+        listener(persisted);
+      } else {
+        const isOwner = isOwnerCanonicalEmail(firebaseUser.email);
+        const fastUser: BFlowAuthUser = {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          displayName:
+            firebaseUser.displayName ||
+            firebaseUser.email?.split('@')[0] ||
+            'Usuario BFlow',
+          authProvider:
+            firebaseUser.providerData[0]?.providerId === 'google.com'
+              ? 'google.com'
+              : 'password',
+          activeMonthKey: isOwner
+            ? '2026-10'
+            : `${toBogotaMonthKey().slice(0, 4)}-01`,
+          provider: 'firebase',
+        };
+        savePersistedSession(fastUser);
+        listener(fastUser);
+      }
+
+      // Run profile document sync strictly in background without blocking listener
+      void syncUserProfileDocument(firebaseUser)
+        .then((syncedUser) => {
+          listener(syncedUser);
+        })
+        .catch(() => {
+          // Non-fatal if offline
+        });
     });
   } catch {
     listener(loadPersistedSession());

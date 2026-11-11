@@ -231,7 +231,7 @@ BFlow/
 │   └── workflows/                # CI/CD (ci.yml, build-ios.yml, build-android.yml, e2e.yml)
 ├── assets/                       # Iconos y splash screens de la aplicación
 ├── docs/
-│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0014)
+│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0016)
 │   ├── guides/                   # Guías operativas (firma con iloader, validación multiplataforma)
 │   └── Improvements/             # Guías de auditoría de rendimiento
 ├── fixtures/                     # Datos dorados de prueba (october-2026.json)
@@ -239,7 +239,7 @@ BFlow/
 ├── src/
 │   ├── app/                      # Expo Router (punto de entrada _layout.tsx, index.tsx)
 │   ├── data/                     # Repositorios Firestore, esquemas Zod, seeds
-│   │   ├── firebase/             # Configuración Firebase SDK y emulador
+│   │   ├── firebase/             # Configuración Firebase SDK, persistencia Auth por plataforma y emulador
 │   │   ├── mappers/              # Esquemas de validación Zod
 │   │   ├── repositories/         # budgetRepository.ts (acceso a datos)
 │   │   └── seed/                 # Carga de datos iniciales de octubre 2026
@@ -276,6 +276,7 @@ BFlow/
 │       ├── insets/               # Áreas seguras (borde a borde en Android)
 │       ├── mail/                 # Integración de correos transaccionales vía Resend API
 │       ├── mode/                 # Detección de entorno (runtimeMode.ts) y modo vitrina (demoMode.ts)
+│       ├── storage/              # Persistencia KV síncrona cifrada (AES-256 + HMAC-SHA256, expo-secure-store + expo-sqlite/kv-store en iOS/Android, localStorage cifrado en Web) y caché v2
 │       ├── system/               # Fondo de la ventana nativa / documento HTML según el tema
 │       └── widgets/              # Serialización y puente de sincronización con WidgetKit
 ├── plugins/                      # Config plugins locales del prebuild (reglas keep de R8 para Android, ADR 0013)
@@ -311,7 +312,7 @@ BFlow/
    ```bash
    npm ci --legacy-peer-deps
    ```
-   *(El script postinstall aplicará automáticamente el parche de almacenamiento para extensiones nativas. Este paso también instala `three` y `expo-gl`, usados por la escena 3D de Resumen; `expo-gl` viene incluido en Expo Go y no requiere configuración adicional).*
+   *(El script postinstall aplicará automáticamente el parche de almacenamiento para extensiones nativas. Este paso también instala `three`, `expo-gl`, `expo-sqlite` y `expo-secure-store`, usados por la escena 3D de Resumen y la persistencia local nativa cifrada con Keychain/Keystore + `expo-sqlite/kv-store`; todos vienen incluidos en Expo Go y no requieren configuración adicional).*
 
 3. **Configurar variables de entorno:**
    ```bash
@@ -387,10 +388,10 @@ Como parte de la evaluación técnica exhaustiva requerida antes de un lanzamien
 6. **Diseño Visual e Inclusividad:** Cumplimiento riguroso de WCAG 2.2 AAA en contraste tipográfico, soporte Dynamic Type, modo oscuro/claro y áreas táctiles de 44pt.
 7. **CI/CD Automatizado:** Pipeline en GitHub Actions con guardias heurísticas y publicación automatizada de binarios.
 
-### ✅ Aspectos Existentes Mejorados y Optimizados (Implementado - ADR 0006)
-1. **Persistencia Local y Caché de Cuenta Offline (2.2.1):**
-   - *Solución:* Implementación de `persistentStorageAdapter` y `accountCache` en `src/platform/storage/`, junto con `persistentLocalCache({ CACHE_SIZE_UNLIMITED, tabManager: persistentMultipleTabManager() })` en Web.
-   - *Impacto:* Rehidratación instantánea de la cuenta en arranques en frío antes de consultar red; tolerancia total a arranques sin conexión a internet.
+### ✅ Aspectos Existentes Mejorados y Optimizados (Implementado - ADR 0006, ADR 0015 y ADR 0016)
+1. **Persistencia Local Cifrada y Caché de Cuenta Offline (2.2.1):**
+   - *Solución:* Implementación de `persistentStorageAdapter` con cifrado simétrico autenticado **AES-256-CTR + HMAC-SHA256 (`storageCipher.ts`, ADR 0016)** cuya llave se deriva de una palabra secreta de aplicación (`EXPO_PUBLIC_LOCAL_CIPHER_PEPPER`) más un token aleatorio de 256 bits generado y custodiado en **`expo-secure-store` (iOS Keychain / Android Keystore)**; custodia directa del token de sesión activa en `expo-secure-store` en nativo (`storageBackend.native.ts` y `authPersistence.native.ts`); almacenamiento del presupuesto cifrado en `expo-sqlite/kv-store` (iOS/Android) y `localStorage` (Web); sobre versionado `v2` en `accountCache` (`{ schemaVersion, uid, savedAt, data }`) con borrado y rotación de llave al cerrar sesión o reiniciar cuenta.
+   - *Impacto:* La sesión y la caché de cuenta sobreviven al cierre de la app en iOS, Android y Web hidratando desde el frame 0 sin plantillas ni valores en `$ 0`, y manteniendo el 100% de los datos y tokens locales cifrados e ilegibles fuera de la sesión autenticada.
 2. **Modularización del Store Global en Slices (2.2.2):**
    - *Solución:* Descomposición de `useBudgetStore.ts` (originalmente de 1.984 líneas) en 6 slices en `src/features/budget/store/slices/`: `createAuthSlice`, `createSyncSlice`, `createBudgetSlice`, `createDebtsSlice`, `createSavingsSlice` y `createProvisionsSlice`.
    - *Impacto:* `useBudgetStore.ts` reducido a menos de 45 líneas conservando 100% la compatibilidad retroactiva.
@@ -429,6 +430,7 @@ Configurables en el archivo `.env` local (basado en `.env.example`):
 | `EXPO_PUBLIC_FIREBASE_APP_ID` | App ID asignado en Firebase Console | `1:1021469032737:web:8656ad9e4871ddb6ffce73` |
 | `EXPO_PUBLIC_RESEND_API_KEY` | API Key de Resend para correos reales | Opcional (si falta, simula en consola en desarrollo) |
 | `EXPO_PUBLIC_RESEND_FROM_EMAIL` | Dirección remitente autorizada en Resend| `BFlow <onboarding@resend.dev>` |
+| `EXPO_PUBLIC_LOCAL_CIPHER_PEPPER` | Semilla/palabra secreta de aplicación combinada con el token de 256 bits de `expo-secure-store` para derivar la llave AES-256 local (ADR 0016) | Opcional (incluye semilla criptográfica integrada por defecto) |
 | `EXPO_PUBLIC_BFLOW_DEMO` | Modo vitrina local: sesión demo con el seed, sin Firebase, y `?skin=` / `?theme=` en la URL | Vacío (lo activa `npm run web:demo`). **Nunca** definirlo en builds reales |
 
 ---

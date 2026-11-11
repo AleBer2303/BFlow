@@ -123,7 +123,7 @@ function MaterialNavItem({ tab, isSelected, onSelect }: MaterialNavItemProps): R
   );
 }
 
-export function MaterialNavigationBar({
+export const MaterialNavigationBar = React.memo(function MaterialNavigationBar({
   activeTab,
   onSelectTab,
   bottomInset = 0,
@@ -171,4 +171,4 @@ export function MaterialNavigationBar({
       </View>
     </View>
   );
-}
+});

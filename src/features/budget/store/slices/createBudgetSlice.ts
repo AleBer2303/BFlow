@@ -21,10 +21,14 @@ import {
   type MonthEntry,
 } from '../../../../domain';
 import { savePersistedSession } from '../../../../platform/auth/authAdapter';
+import { clearPersistedAccount } from '../../../../platform/storage/accountCache';
+import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
   applyConceptLinkageUpdates,
   buildInitialState,
+  buildOctober2026SeedWorkspaceState,
   isRealAuthUser,
+  resolveDefaultInitialAuthUser,
   triggerWidgetSync,
   type BudgetSlice,
   type SliceCreator,
@@ -74,24 +78,37 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     });
     triggerWidgetSync(get());
 
-    if (updatedEntry && isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.saveOrUpdateEntry(
-          state.authUser.uid,
-          updatedEntry,
-          concept,
-          nextDebtPayments.filter((dp) => dp.entryId === entryId)
-        );
-      } catch {
-        // Rollback optimistic update if cloud write fails
-        set({
-          entries: previousEntries,
-          debtPayments: previousDebtPayments,
-          syncMessage: 'Error de sincronización. No se pudo guardar el cambio en la nube.',
-        });
-        triggerWidgetSync(get());
-      }
+    const authUser = state.authUser;
+    if (updatedEntry && isRealAuthUser(authUser)) {
+      await executeOptimisticCloudWrite({
+        uid: authUser.uid,
+        operation: {
+          type: 'save_or_update_entry',
+          payload: {
+            entry: updatedEntry,
+            concept,
+            debtPayments: nextDebtPayments.filter((dp) => dp.entryId === entryId),
+          },
+        },
+        performCloudWrite: async () => {
+          const repo = new FirestoreBudgetRepository();
+          await repo.saveOrUpdateEntry(
+            authUser.uid,
+            updatedEntry,
+            concept,
+            nextDebtPayments.filter((dp) => dp.entryId === entryId)
+          );
+        },
+        rollback: () => {
+          set({
+            entries: previousEntries,
+            debtPayments: previousDebtPayments,
+          });
+        },
+        friendlyErrorMessage: 'Error de sincronización. No se pudo guardar el cambio en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
   },
 
@@ -147,30 +164,48 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     });
     triggerWidgetSync(get());
 
-    if (updatedEntry && isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.saveOrUpdateEntry(
-          state.authUser.uid,
-          updatedEntry,
-          concept,
-          nextDebtPayments.filter((dp) => dp.entryId === updatedEntry.id)
-        );
-      } catch {
-        // Rollback optimistic update if cloud write fails
-        set({
-          concepts: previousConcepts,
-          entries: previousEntries,
-          debtPayments: previousDebtPayments,
-          syncMessage: 'Error de conexión. No se pudo registrar el movimiento en la nube.',
-        });
-        triggerWidgetSync(get());
-      }
+    const authUser = state.authUser;
+    if (updatedEntry && isRealAuthUser(authUser)) {
+      const entryPayments = nextDebtPayments.filter((dp) => dp.entryId === updatedEntry.id);
+      await executeOptimisticCloudWrite({
+        uid: authUser.uid,
+        operation: {
+          type: 'save_or_update_entry',
+          payload: {
+            entry: updatedEntry,
+            concept,
+            debtPayments: entryPayments,
+          },
+        },
+        performCloudWrite: async () => {
+          const repo = new FirestoreBudgetRepository();
+          await repo.saveOrUpdateEntry(
+            authUser.uid,
+            updatedEntry,
+            concept,
+            entryPayments
+          );
+        },
+        rollback: () => {
+          set({
+            concepts: previousConcepts,
+            entries: previousEntries,
+            debtPayments: previousDebtPayments,
+          });
+        },
+        friendlyErrorMessage: 'Error de conexión. No se pudo registrar el movimiento en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
   },
 
   createCustomConceptAndMovement: async (input) => {
     const state = get();
+    const previousConcepts = state.concepts;
+    const previousEntries = state.entries;
+    const previousDebtPayments = state.debtPayments;
+
     const rawAmount = input.amount ?? input.amountCop ?? 0;
     const safeAmount = Math.max(0, Math.round(rawAmount));
     const trimmedName = input.name.trim();
@@ -246,23 +281,47 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     });
     triggerWidgetSync(get());
 
-    if (isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.saveCustomConceptAndEntry(
-          state.authUser.uid,
-          newConcept,
-          newEntry,
-          createdPayments
-        );
-      } catch {
-        set({ syncMessage: '' });
-      }
+    const authUser = state.authUser;
+    if (isRealAuthUser(authUser)) {
+      await executeOptimisticCloudWrite({
+        uid: authUser.uid,
+        operation: {
+          type: 'save_custom_concept_and_entry',
+          payload: {
+            concept: newConcept,
+            entry: newEntry,
+            createdPayments,
+          },
+        },
+        performCloudWrite: async () => {
+          const repo = new FirestoreBudgetRepository();
+          await repo.saveCustomConceptAndEntry(
+            authUser.uid,
+            newConcept,
+            newEntry,
+            createdPayments
+          );
+        },
+        rollback: () => {
+          set({
+            concepts: previousConcepts,
+            entries: previousEntries,
+            debtPayments: previousDebtPayments,
+          });
+        },
+        friendlyErrorMessage: 'No se pudo guardar el concepto personalizado en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
   },
 
   updateConcept: async (conceptId, updates) => {
     const state = get();
+    const previousConcepts = state.concepts;
+    const previousEntries = state.entries;
+    const previousDebtPayments = state.debtPayments;
+
     const target = state.concepts.find((c) => c.id === conceptId);
     if (!target) return;
 
@@ -332,27 +391,52 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     });
     triggerWidgetSync(get());
 
-    if (isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        if (activeEntry) {
-          await repo.saveOrUpdateEntry(
-            state.authUser.uid,
-            activeEntry,
-            updatedConcept,
-            nextDebtPayments.filter((dp) => dp.entryId === activeEntry.id)
-          );
-        } else {
-          await repo.saveConcept(state.authUser.uid, updatedConcept);
-        }
-      } catch {
-        set({ syncMessage: '' });
-      }
+    const updateAuthUser = state.authUser;
+    if (isRealAuthUser(updateAuthUser)) {
+      await executeOptimisticCloudWrite({
+        uid: updateAuthUser.uid,
+        operation: {
+          type: activeEntry ? 'save_or_update_entry' : 'save_concept',
+          payload: activeEntry
+            ? {
+                entry: activeEntry,
+                concept: updatedConcept,
+                debtPayments: nextDebtPayments.filter((dp) => dp.entryId === activeEntry.id),
+              }
+            : { concept: updatedConcept },
+        },
+        performCloudWrite: async () => {
+          const repo = new FirestoreBudgetRepository();
+          if (activeEntry) {
+            await repo.saveOrUpdateEntry(
+              updateAuthUser.uid,
+              activeEntry,
+              updatedConcept,
+              nextDebtPayments.filter((dp) => dp.entryId === activeEntry.id)
+            );
+          } else {
+            await repo.saveConcept(updateAuthUser.uid, updatedConcept);
+          }
+        },
+        rollback: () => {
+          set({
+            concepts: previousConcepts,
+            entries: previousEntries,
+            debtPayments: previousDebtPayments,
+          });
+        },
+        friendlyErrorMessage: 'No se pudo actualizar el concepto en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
   },
 
   deleteConcept: async (conceptId) => {
     const state = get();
+    const previousConcepts = state.concepts;
+    const previousEntries = state.entries;
+
     const nextConcepts = state.concepts.filter((c) => c.id !== conceptId);
     const nextEntries = state.entries.filter(
       (e) => !(e.conceptId === conceptId && e.status === 'pending')
@@ -364,18 +448,37 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     });
     triggerWidgetSync(get());
 
-    if (isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.deleteConcept(state.authUser.uid, conceptId);
-      } catch {
-        set({ syncMessage: '' });
-      }
+    const deleteAuthUser = state.authUser;
+    if (isRealAuthUser(deleteAuthUser)) {
+      await executeOptimisticCloudWrite({
+        uid: deleteAuthUser.uid,
+        operation: {
+          type: 'delete_concept',
+          payload: { conceptId },
+        },
+        performCloudWrite: async () => {
+          const repo = new FirestoreBudgetRepository();
+          await repo.deleteConcept(deleteAuthUser.uid, conceptId);
+        },
+        rollback: () => {
+          set({
+            concepts: previousConcepts,
+            entries: previousEntries,
+          });
+        },
+        friendlyErrorMessage: 'No se pudo eliminar el concepto en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
   },
 
   editEntry: async (entryId, updates) => {
     const state = get();
+    const previousEntries = state.entries;
+    const previousConcepts = state.concepts;
+    const previousDebtPayments = state.debtPayments;
+
     const target = state.entries.find((e) => e.id === entryId);
     if (!target) return;
 
@@ -450,18 +553,41 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     });
     triggerWidgetSync(get());
 
-    if (isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.saveOrUpdateEntry(
-          state.authUser.uid,
-          updatedEntry,
-          updatedConcept,
-          entryPaymentsForCloud ?? nextDebtPayments.filter((dp) => dp.entryId === entryId)
-        );
-      } catch {
-        set({ syncMessage: '' });
-      }
+    const authUser = state.authUser;
+    if (isRealAuthUser(authUser)) {
+      const uid = authUser.uid;
+      const paymentsForSync =
+        entryPaymentsForCloud ?? nextDebtPayments.filter((dp) => dp.entryId === entryId);
+      await executeOptimisticCloudWrite({
+        uid,
+        operation: {
+          type: 'save_or_update_entry',
+          payload: {
+            entry: updatedEntry,
+            concept: updatedConcept,
+            debtPayments: paymentsForSync,
+          },
+        },
+        performCloudWrite: async () => {
+          const repo = new FirestoreBudgetRepository();
+          await repo.saveOrUpdateEntry(
+            uid,
+            updatedEntry,
+            updatedConcept,
+            paymentsForSync
+          );
+        },
+        rollback: () => {
+          set({
+            entries: previousEntries,
+            concepts: previousConcepts,
+            debtPayments: previousDebtPayments,
+          });
+        },
+        friendlyErrorMessage: 'Error de sincronización. No se pudo editar el movimiento en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
   },
 
@@ -482,19 +608,33 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     });
     triggerWidgetSync(get());
 
-    if (isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.deleteEntryCompletely(state.authUser.uid, entryId);
-      } catch {
-        // Rollback optimistic deletion if cloud write fails
-        set({
-          entries: previousEntries,
-          debtPayments: previousDebtPayments,
-          syncMessage: 'Error de conexión. No se pudo eliminar la entrada en la nube.',
-        });
-        triggerWidgetSync(get());
-      }
+    const authUser = state.authUser;
+    if (isRealAuthUser(authUser)) {
+      const uid = authUser.uid;
+      await executeOptimisticCloudWrite({
+        uid,
+        operation: {
+          type: 'delete_or_reset_entry',
+          payload: {
+            entryId,
+            conceptId: target.conceptId,
+            monthKey: target.monthKey,
+          },
+        },
+        performCloudWrite: async () => {
+          const repo = new FirestoreBudgetRepository();
+          await repo.deleteEntryCompletely(uid, entryId);
+        },
+        rollback: () => {
+          set({
+            entries: previousEntries,
+            debtPayments: previousDebtPayments,
+          });
+        },
+        friendlyErrorMessage: 'Error de conexión. No se pudo eliminar la entrada en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
   },
 
@@ -527,19 +667,38 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     });
     triggerWidgetSync(get());
 
-    if (isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.deleteOrResetEntry(state.authUser.uid, entryId);
-      } catch {
-        // Rollback optimistic reset if cloud write fails
-        set({
-          entries: previousEntries,
-          debtPayments: previousDebtPayments,
-          syncMessage: 'Error de conexión. No se pudo restablecer la entrada en la nube.',
-        });
-        triggerWidgetSync(get());
-      }
+    const authUser = state.authUser;
+    if (isRealAuthUser(authUser)) {
+      const uid = authUser.uid;
+      await executeOptimisticCloudWrite({
+        uid,
+        operation: {
+          type: 'delete_or_reset_entry',
+          payload: {
+            entryId,
+            conceptId: target?.conceptId ?? '',
+            monthKey: target?.monthKey ?? '',
+            entry: target,
+            concept,
+          },
+        },
+        performCloudWrite: async () => {
+          const repo = new FirestoreBudgetRepository();
+          await repo.deleteOrResetEntry(uid, entryId, {
+            entry: target,
+            concept,
+          });
+        },
+        rollback: () => {
+          set({
+            entries: previousEntries,
+            debtPayments: previousDebtPayments,
+          });
+        },
+        friendlyErrorMessage: 'Error de conexión. No se pudo restablecer la entrada en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
   },
 
@@ -553,6 +712,14 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     const currentDebtPayments = state.debtPayments.filter(
       (dp) => dp.monthKey === currentMonthKey
     );
+
+    const previousClosedSnapshots = state.closedSnapshots;
+    const previousUser = state.authUser;
+    const previousMonthKey = state.activeMonthKey;
+    const previousAvailableMonths = state.availableMonths;
+    const previousEntries = state.entries;
+    const previousDebtsByMonth = state.debtsByMonth;
+    const previousSavingsBucketsByMonth = state.savingsBucketsByMonth;
 
     const result = closeMonthAndRollover({
       closingMonthKey: currentMonthKey,
@@ -594,13 +761,34 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     }
     triggerWidgetSync(get());
 
-    if (isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.persistMonthCloseResult(state.authUser.uid, currentMonthKey, result);
-      } catch {
-        set({ syncMessage: '' });
-      }
+    const authUser = state.authUser;
+    if (isRealAuthUser(authUser)) {
+      const uid = authUser.uid;
+      await executeOptimisticCloudWrite({
+        uid,
+        operation: {
+          type: 'persist_month_close',
+          payload: { monthKey: currentMonthKey, result },
+        },
+        performCloudWrite: async () => {
+          const repo = new FirestoreBudgetRepository();
+          await repo.persistMonthCloseResult(uid, currentMonthKey, result);
+        },
+        rollback: () => {
+          set({
+            activeMonthKey: previousMonthKey,
+            availableMonths: previousAvailableMonths,
+            entries: previousEntries,
+            debtsByMonth: previousDebtsByMonth,
+            savingsBucketsByMonth: previousSavingsBucketsByMonth,
+            closedSnapshots: previousClosedSnapshots,
+            ...(previousUser ? { authUser: previousUser } : {}),
+          });
+        },
+        friendlyErrorMessage: 'No se pudo registrar el cierre del mes en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
 
     return result;
@@ -608,6 +796,9 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
 
   reopenClosedMonth: async (monthKey) => {
     const state = get();
+    const previousClosedSnapshots = state.closedSnapshots;
+    const previousActiveMonth = state.activeMonthKey;
+
     const nextClosedSnapshots = { ...state.closedSnapshots };
     delete nextClosedSnapshots[monthKey];
 
@@ -617,18 +808,44 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     });
     triggerWidgetSync(get());
 
-    if (isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.reopenMonthInCloud(state.authUser.uid, monthKey);
-      } catch {
-        set({ syncMessage: '' });
-      }
+    const authUser = state.authUser;
+    if (isRealAuthUser(authUser)) {
+      const uid = authUser.uid;
+      await executeOptimisticCloudWrite({
+        uid,
+        operation: {
+          type: 'reopen_month',
+          payload: { monthKey },
+        },
+        performCloudWrite: async () => {
+          const repo = new FirestoreBudgetRepository();
+          await repo.reopenMonthInCloud(uid, monthKey);
+        },
+        rollback: () => {
+          set({
+            activeMonthKey: previousActiveMonth,
+            closedSnapshots: previousClosedSnapshots,
+          });
+        },
+        friendlyErrorMessage: 'No se pudo reabrir el mes en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
   },
 
   deleteOrRevertMonth: async (monthKey) => {
     const state = get();
+    const previousState = {
+      activeMonthKey: state.activeMonthKey,
+      availableMonths: state.availableMonths,
+      entries: state.entries,
+      debtsByMonth: state.debtsByMonth,
+      savingsBucketsByMonth: state.savingsBucketsByMonth,
+      debtPayments: state.debtPayments,
+      closedSnapshots: state.closedSnapshots,
+    };
+
     const sortedMonths = [...state.availableMonths].sort();
 
     if (sortedMonths.length <= 1) {
@@ -639,13 +856,26 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
         closedSnapshots: nextSnapshots,
       });
       triggerWidgetSync(get());
-      if (isRealAuthUser(state.authUser)) {
-        try {
-          const repo = new FirestoreBudgetRepository();
-          await repo.reopenMonthInCloud(state.authUser.uid, monthKey);
-        } catch {
-          // Non-fatal
-        }
+      const authUser = state.authUser;
+      if (isRealAuthUser(authUser)) {
+        const uid = authUser.uid;
+        await executeOptimisticCloudWrite({
+          uid,
+          operation: {
+            type: 'reopen_month',
+            payload: { monthKey },
+          },
+          performCloudWrite: async () => {
+            const repo = new FirestoreBudgetRepository();
+            await repo.reopenMonthInCloud(uid, monthKey);
+          },
+          rollback: () => {
+            set(previousState);
+          },
+          friendlyErrorMessage: 'No se pudo restablecer el mes en la nube.',
+          setStoreState: set,
+          onWidgetSync: () => triggerWidgetSync(get()),
+        });
       }
       return;
     }
@@ -676,19 +906,35 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     });
     triggerWidgetSync(get());
 
-    if (isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.deleteMonthInCloud(state.authUser.uid, monthKey, fallbackMonth);
-      } catch {
-        set({ syncMessage: '' });
-      }
+    const authUser = state.authUser;
+    if (isRealAuthUser(authUser)) {
+      const uid = authUser.uid;
+      await executeOptimisticCloudWrite({
+        uid,
+        operation: {
+          type: 'delete_month',
+          payload: { monthKey, fallbackMonth },
+        },
+        performCloudWrite: async () => {
+          const repo = new FirestoreBudgetRepository();
+          await repo.deleteMonthInCloud(uid, monthKey, fallbackMonth);
+        },
+        rollback: () => {
+          set(previousState);
+        },
+        friendlyErrorMessage: 'No se pudo revertir el mes en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
   },
 
   resetToOctober2026GoldenState: () => {
     const currentUser = get().authUser;
-    set(buildInitialState(currentUser));
+    if (currentUser?.uid) {
+      clearPersistedAccount(currentUser.uid);
+    }
+    set(buildOctober2026SeedWorkspaceState(currentUser ?? resolveDefaultInitialAuthUser()));
     triggerWidgetSync(get());
   },
 };

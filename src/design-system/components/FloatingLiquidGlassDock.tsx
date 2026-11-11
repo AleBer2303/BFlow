@@ -218,7 +218,7 @@ export function buildLensGeometry({
  * fluid 60/120Hz ProMotion spring animations, touch/drag gesture sliding,
  * zero-delay mechanical haptic feedback on touch-down, and Apple magnifying lens.
  */
-export function FloatingLiquidGlassDock({
+export const FloatingLiquidGlassDock = React.memo(function FloatingLiquidGlassDock({
   activeTab,
   onSelectTab,
   testID = 'floating-liquid-glass-dock',
@@ -787,4 +787,4 @@ export function FloatingLiquidGlassDock({
     </View>
     </View>
   );
-}
+});

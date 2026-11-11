@@ -38,6 +38,14 @@ import {
 } from '../../../../platform/auth/authAdapter';
 import { isDemoModeEnabled } from '../../../../platform/mode/demoMode';
 import {
+  loadPersistedAccount,
+  savePersistedAccount,
+  schedulePersistedAccountSave,
+} from '../../../../platform/storage/accountCache';
+import {
+  getPendingOfflineWritesCount,
+} from '../../../../platform/storage/offlineWriteQueue';
+import {
   buildWidgetSnapshotV1,
   syncWidgetSnapshotNative,
   type WidgetSyncResult,
@@ -150,6 +158,8 @@ export interface SyncSlice {
   availableMonths: string[];
   syncMessage: string;
   isSyncing: boolean;
+  isAccountHydrated: boolean;
+  pendingOfflineWritesCount: number;
 
   setActiveTab: (tab: BFlowWorkspaceTab) => void;
   setActiveMonthKey: (monthKey: string) => void;
@@ -166,6 +176,12 @@ export interface SyncSlice {
   }) => void;
   applyFullCloudAccount: (payload: FullCloudAccountData) => void;
   syncActiveWidget: () => Promise<WidgetSyncResult>;
+  flushOfflineWrites: () => Promise<void>;
+  refreshPendingOfflineWritesCount: () => void;
+  syncUserCloudAccount: (
+    user: BFlowAuthUser,
+    options?: { isRegistration?: boolean; forceFullSync?: boolean }
+  ) => Promise<void>;
 }
 
 export interface BudgetSlice {
@@ -333,7 +349,37 @@ export function applyConceptLinkageUpdates(
   return next;
 }
 
+export function persistHydratedAccountSnapshot(state: BudgetStoreState): void {
+  const uid = state.authUser?.uid;
+  if (!uid || uid === 'local-owner' || uid === 'local-demo') {
+    return;
+  }
+  if (!state.isAccountHydrated) {
+    return;
+  }
+  schedulePersistedAccountSave(uid, {
+    activeMonthKey: state.activeMonthKey,
+    availableMonths: state.availableMonths,
+    concepts: state.concepts,
+    entries: state.entries,
+    debtsByMonth: state.debtsByMonth,
+    debtPayments: state.debtPayments,
+    savingsBucketsByMonth: state.savingsBucketsByMonth,
+    provisionPlan: state.idealMotoPlan,
+    closedSnapshots: state.closedSnapshots,
+    needsOnboarding: state.needsOnboarding,
+  });
+}
+
 export function triggerWidgetSync(state: BudgetStoreState): Promise<WidgetSyncResult> {
+  if (!state.isAccountHydrated) {
+    return Promise.resolve({
+      synced: false,
+      mode: 'mode-a-preview' as const,
+      appGroupId: 'group.com.bflow.app',
+    });
+  }
+  persistHydratedAccountSnapshot(state);
   try {
     const monthDebts = state.debtsByMonth[state.activeMonthKey] ?? [];
     const monthSavings = state.savingsBucketsByMonth[state.activeMonthKey] ?? [];
@@ -380,6 +426,7 @@ export function buildCleanEmptyWorkspaceState(authUser: BFlowAuthUser | null) {
       : isOwnerCanonicalEmail(authUser?.email)
         ? '2026-10'
         : `${toAppMonthKey().slice(0, 4)}-01`;
+  const isTestOrDemo = process.env.NODE_ENV === 'test' || isDemoModeEnabled();
 
   return {
     activeTab: 'summary' as BFlowWorkspaceTab,
@@ -399,18 +446,45 @@ export function buildCleanEmptyWorkspaceState(authUser: BFlowAuthUser | null) {
     authUser,
     syncMessage: '',
     isSyncing: false,
+    isAccountHydrated: isTestOrDemo,
     needsOnboarding: false,
+    pendingOfflineWritesCount: authUser?.uid ? getPendingOfflineWritesCount(authUser.uid) : 0,
   };
 }
 
-export function buildInitialState(authUserOverride?: BFlowAuthUser | null) {
-  const resolvedUser =
-    authUserOverride !== undefined ? authUserOverride : resolveDefaultInitialAuthUser();
+export function buildHydratedWorkspaceState(
+  authUser: BFlowAuthUser,
+  account: FullCloudAccountData
+) {
+  const hydratedUser: BFlowAuthUser = {
+    ...authUser,
+    activeMonthKey: account.activeMonthKey,
+  };
 
-  if (process.env.NODE_ENV !== 'test' && !isOwnerCanonicalEmail(resolvedUser?.email)) {
-    return buildCleanEmptyWorkspaceState(resolvedUser);
-  }
+  return {
+    activeTab: 'summary' as BFlowWorkspaceTab,
+    activeMonthKey: account.activeMonthKey,
+    availableMonths:
+      account.availableMonths.length > 0
+        ? account.availableMonths
+        : [account.activeMonthKey],
+    concepts: account.concepts,
+    entries: account.entries,
+    debtsByMonth: account.debtsByMonth,
+    debtPayments: account.debtPayments,
+    savingsBucketsByMonth: account.savingsBucketsByMonth,
+    idealMotoPlan: account.provisionPlan,
+    closedSnapshots: account.closedSnapshots,
+    authUser: hydratedUser,
+    syncMessage: '',
+    isSyncing: false,
+    isAccountHydrated: true,
+    needsOnboarding: account.needsOnboarding ?? false,
+    pendingOfflineWritesCount: authUser.uid ? getPendingOfflineWritesCount(authUser.uid) : 0,
+  };
+}
 
+export function buildOctober2026SeedWorkspaceState(authUser: BFlowAuthUser | null) {
   const seed = buildOctober2026SeedPayload();
 
   return {
@@ -428,9 +502,43 @@ export function buildInitialState(authUserOverride?: BFlowAuthUser | null) {
     },
     idealMotoPlan: seed.provisionPlan,
     closedSnapshots: {} as Record<string, MonthSnapshot>,
-    authUser: resolvedUser,
+    authUser,
     syncMessage: '',
     isSyncing: false,
+    isAccountHydrated: true,
     needsOnboarding: false,
+    pendingOfflineWritesCount: authUser?.uid ? getPendingOfflineWritesCount(authUser.uid) : 0,
   };
+}
+
+export function buildInitialState(authUserOverride?: BFlowAuthUser | null) {
+  const resolvedUser =
+    authUserOverride !== undefined ? authUserOverride : resolveDefaultInitialAuthUser();
+
+  if (
+    resolvedUser?.uid &&
+    resolvedUser.uid !== 'local-owner' &&
+    resolvedUser.uid !== 'local-demo'
+  ) {
+    const cachedAccount = loadPersistedAccount(resolvedUser.uid);
+    if (cachedAccount) {
+      return buildHydratedWorkspaceState(resolvedUser, cachedAccount);
+    }
+  }
+
+  const isTestOrDemo = process.env.NODE_ENV === 'test' || isDemoModeEnabled();
+
+  if (!isTestOrDemo) {
+    return {
+      ...buildCleanEmptyWorkspaceState(resolvedUser),
+      isAccountHydrated: false,
+      isSyncing: Boolean(resolvedUser),
+    };
+  }
+
+  if (!isOwnerCanonicalEmail(resolvedUser?.email)) {
+    return buildCleanEmptyWorkspaceState(resolvedUser);
+  }
+
+  return buildOctober2026SeedWorkspaceState(resolvedUser);
 }

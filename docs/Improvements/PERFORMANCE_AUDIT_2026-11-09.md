@@ -196,7 +196,7 @@ Cierra con typecheck, lint y npm test en 0 errores.
 
 ---
 
-### Fase 1: persistencia real en iOS
+### Fase 1: persistencia real en iOS/Android/Web
 
 **Solución recomendada:** `expo-sqlite/kv-store`, en un backend exclusivo de nativo. Según la documentación del SDK 58 viene incluido en Expo Go, ofrece API síncrona (`getItemSync`, `setItemSync`) y es un reemplazo directo de AsyncStorage. La API síncrona es clave, porque `buildInitialState` lee la sesión al crear el store y así no hay que reescribir ese contrato. Web sigue con `localStorage`, por lo que no necesita WASM ni cabeceras COOP/COEP.
 

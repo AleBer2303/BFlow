@@ -41,7 +41,9 @@
     "plugins": [
       "expo-router",
       "@bacons/apple-targets",
-      "./plugins/withAndroidKeepRules"
+      "./plugins/withAndroidKeepRules",
+      "expo-sqlite",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

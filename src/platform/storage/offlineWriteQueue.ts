@@ -299,6 +299,10 @@ export async function executeOptimisticCloudWrite<T = void>(
     if (timer) clearTimeout(timer);
 
     if (isPermanentCloudError(error)) {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        // eslint-disable-next-line no-console
+        console.error('[CloudWrite Rejected]', error);
+      }
       // Permanent server error: rollback optimistic change immediately
       rollback();
       onWidgetSync?.();
@@ -385,7 +389,10 @@ async function executeQueuedOperation(
       break;
 
     case 'delete_or_reset_entry':
-      await repo.deleteOrResetEntry(uid, p.entryId as string);
+      await repo.deleteOrResetEntry(uid, p.entryId as string, {
+        entry: p.entry as MonthEntry | undefined,
+        concept: p.concept as Concept | undefined,
+      });
       break;
 
     case 'save_custom_concept_and_entry':

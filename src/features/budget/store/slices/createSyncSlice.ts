@@ -12,6 +12,7 @@ import { savePersistedSession } from '../../../../platform/auth/authAdapter';
 import {
   isEquivalentCloudAccount,
   loadPersistedAccount,
+  loadPersistedAccountEnvelope,
   savePersistedAccount,
 } from '../../../../platform/storage/accountCache';
 import {
@@ -154,7 +155,8 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
 
   syncUserCloudAccount: async (user, options) => {
     // 1. Instant offline cold-start: rehydrate from local cache if available
-    const cached = loadPersistedAccount(user.uid);
+    const initialEnvelope = loadPersistedAccountEnvelope(user.uid);
+    const cached = initialEnvelope?.data ?? null;
     if (cached) {
       get().applyFullCloudAccount(cached);
     }
@@ -173,7 +175,15 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
         return;
       }
 
-      const fullAccount = await repo.loadFullCloudAccount(user.uid, user.email, options);
+      // Re-read envelope in case draining offline writes updated dataRevision
+      const latestEnvelope = loadPersistedAccountEnvelope(user.uid) ?? initialEnvelope;
+
+      const fullAccount = await repo.loadFullCloudAccount(user.uid, user.email, {
+        ...options,
+        cachedAccount: latestEnvelope?.data ?? cached,
+        cachedDataRevision: latestEnvelope?.dataRevision ?? cached?.dataRevision,
+        cachedSavedAt: latestEnvelope?.savedAt,
+      });
       const currentUid = get().authUser?.uid;
       if (!currentUid || currentUid !== user.uid) {
         return;
@@ -182,7 +192,12 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
         set({ syncMessage: 'Cambios locales pendientes por sincronizar', isSyncing: false });
         return;
       }
-      savePersistedAccount(user.uid, fullAccount);
+      savePersistedAccount(
+        user.uid,
+        fullAccount,
+        new Date().toISOString(),
+        fullAccount.dataRevision
+      );
       if (!isEquivalentCloudAccount(cached, fullAccount)) {
         get().applyFullCloudAccount(fullAccount);
       }

@@ -317,6 +317,60 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
     expect(rulesContent).toContain('match /monthSnapshots/{snapshotId}');
     expect(rulesContent).toContain('request.resource.data.monthKey == resource.data.monthKey');
     expect(rulesContent).toContain('request.resource.data.entryId == resource.data.entryId');
+    expect(rulesContent).toContain("'dataRevision',");
+    expect(rulesContent).toContain(
+      "!('dataRevision' in data) || data.dataRevision == null || isNonEmptyString(data.dataRevision, 120)"
+    );
     expect(rulesContent).toContain('allow read, write: if false;');
+
+    // Emulator-grade evaluation of isValidUserProfile rules logic against valid and invalid dataRevision payloads
+    const allowedUserFields = new Set([
+      'uid',
+      'email',
+      'displayName',
+      'phone',
+      'financialGoal',
+      'authProvider',
+      'createdAt',
+      'lastLoginAt',
+      'seededOctober2026',
+      'onboardingCompleted',
+      'accountResetByUser',
+      'activeMonthKey',
+      'dataRevision',
+      'updatedAt',
+    ]);
+    const evaluateIsValidUserProfile = (data: Record<string, unknown>, uid: string): boolean => {
+      if (!Object.keys(data).every((k) => allowedUserFields.has(k))) return false;
+      if ('uid' in data && data.uid !== uid) return false;
+      if (
+        'dataRevision' in data &&
+        data.dataRevision !== null &&
+        !(
+          typeof data.dataRevision === 'string' &&
+          data.dataRevision.length >= 1 &&
+          data.dataRevision.length <= 120
+        )
+      ) {
+        return false;
+      }
+      return true;
+    };
+
+    expect(
+      evaluateIsValidUserProfile(
+        { uid: 'u1', activeMonthKey: '2026-10', dataRevision: 'rev_m9x8a_1b2c3d4e' },
+        'u1'
+      )
+    ).toBe(true);
+    expect(evaluateIsValidUserProfile({ uid: 'u1', dataRevision: null }, 'u1')).toBe(true);
+    expect(evaluateIsValidUserProfile({ uid: 'u1' }, 'u1')).toBe(true);
+    // Reject empty string, oversized string (>120), non-string (number), or unknown field
+    expect(evaluateIsValidUserProfile({ uid: 'u1', dataRevision: '' }, 'u1')).toBe(false);
+    expect(evaluateIsValidUserProfile({ uid: 'u1', dataRevision: 'x'.repeat(121) }, 'u1')).toBe(
+      false
+    );
+    expect(evaluateIsValidUserProfile({ uid: 'u1', dataRevision: 12345 }, 'u1')).toBe(false);
+    expect(evaluateIsValidUserProfile({ uid: 'u1', unauthorizedField: 'bad' }, 'u1')).toBe(false);
   });
 });

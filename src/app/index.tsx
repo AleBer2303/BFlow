@@ -129,7 +129,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
 
   const syncUserCloudAccount = async (
     user: BFlowAuthUser,
-    options?: { isRegistration?: boolean }
+    options?: { isRegistration?: boolean; forceFullSync?: boolean }
   ): Promise<void> => {
     const activePromise = syncInFlightRef.current.get(user.uid);
     if (activePromise) {
@@ -578,7 +578,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
               onSignOut={handleSignOut}
               onManualSync={() => {
                 triggerHaptic('light');
-                void syncUserCloudAccount(authUser);
+                void syncUserCloudAccount(authUser, { forceFullSync: true });
               }}
               onUpdateProfile={async (updates) => {
                 triggerHaptic('success');

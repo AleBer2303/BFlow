@@ -180,7 +180,7 @@ export interface SyncSlice {
   refreshPendingOfflineWritesCount: () => void;
   syncUserCloudAccount: (
     user: BFlowAuthUser,
-    options?: { isRegistration?: boolean }
+    options?: { isRegistration?: boolean; forceFullSync?: boolean }
   ) => Promise<void>;
 }
 

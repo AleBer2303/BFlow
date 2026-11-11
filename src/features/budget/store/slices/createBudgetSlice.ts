@@ -678,11 +678,16 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
             entryId,
             conceptId: target?.conceptId ?? '',
             monthKey: target?.monthKey ?? '',
+            entry: target,
+            concept,
           },
         },
         performCloudWrite: async () => {
           const repo = new FirestoreBudgetRepository();
-          await repo.deleteOrResetEntry(uid, entryId);
+          await repo.deleteOrResetEntry(uid, entryId, {
+            entry: target,
+            concept,
+          });
         },
         rollback: () => {
           set({

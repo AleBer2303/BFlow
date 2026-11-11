@@ -108,10 +108,10 @@ Medición obtenida mediante exportación de producción con el empaquetador Metr
 - **Web:** Utiliza `persistentLocalCache()` respaldado por IndexedDB.
 - **Nativo (iOS / Android):** Utiliza `memoryLocalCache()`. Cada vez que la aplicación se cierra y vuelve a abrir en un dispositivo móvil, la caché se pierde y se requieren viajes completos de red a Firebase.
 
-### 3. Re-renders y Recálculos de Dominio en UI
+### 3. Re-renders de Árbol en UI
 - **Ubicación:** `src/app/index.tsx:63-109`.
 - **Comportamiento:** `PhaseOneHomeScreen` se suscribe a la totalidad del store global de Zustand desestructurando más de 30 propiedades y métodos sin selectores finos (`useBudgetStore((s) => s.x)`).
-- **Efecto:** Cualquier cambio atómico en el store (ej. actualizar un mensaje de sincronización, abrir un modal o cambiar una pestaña) provoca la re-ejecución del renderizado del árbol completo y la re-evaluación de los 5 hooks memoizados de dominio (`calculateMonthlyBudgetSummary`, `calculateChecklistProgress`, `calculateFunfamiDebtSummary`, `calculateMonthlySavingsSummary`, `calculateMotoIdealSummary`).
+- **Efecto:** Cualquier cambio en el store (ej. actualizar un mensaje de sincronización, abrir un modal o cambiar una pestaña) provoca la re-ejecución del renderizado del árbol de componentes. *(Nota corregida por auditoría: los 5 `useMemo` de dominio no se recalculan si sus dependencias son estables; lo que se repite es el render del árbol).*
 
 ### 4. Virtualización de Listas
 - **Ubicación:** `src/features/checklist/components/ChecklistWorkspaceView.tsx`.
@@ -159,7 +159,7 @@ Para reproducir estas mediciones en cualquier momento en la rama `perf/baseline-
 
 | Dimensión de Rendimiento | Antes (Línea Base) | Después (Optimizaciones) | Impacto / Diferencia |
 | :--- | :---: | :---: | :--- |
-| **Consultas concurrentes en login/restore** | 16 lecturas Firestore (doble disparo redundante) | 8 lecturas Firestore (deduplicadas por promesa en vuelo) | **-50% lecturas de red** (cero consultas duplicadas) |
+| **Consultas concurrentes en login/restore** | 16 consultas Firestore (doble disparo redundante; ver §15 para conteo exacto en **documentos**) | 8 consultas Firestore (deduplicadas por promesa en vuelo) | **-50% consultas de red** (cero consultas duplicadas) |
 | **Tiempo ante caída/timeout de red externa** | Cuelgue indefinido (UI congelada sin respuesta) | Aborto seguro a los 10s con mensaje amigable de reintento | **Protección total contra congelamiento** de la app |
 | **Consistencia ante fallo de red (Optimistic UI)** | Sin reversión: la UI mostraba estado falso no guardado | Reversión automática del estado local + banner de aviso | **100% integridad y consistencia** con la nube |
 | **Re-renders al escribir en inputs de movimiento** | 100% del árbol de `PhaseOneHomeScreen` y 5 `useMemo` | 0 re-renders en la pantalla principal (estado aislado) | **Fluidez de escritura a 60/120 fps** garantizada |
@@ -190,7 +190,7 @@ Para reproducir estas mediciones en cualquier momento en la rama `perf/baseline-
 | **11** | Dependencias sin usar | Ya resuelto: 0 dependencias huérfanas en los 67 archivos de código. |
 | **13** | Streaming IA | No aplica: la app no cuenta con LLM en tiempo de ejecución. |
 | **15** | Lazy loading imágenes | No aplica: la UI es 100% SVG y Flexbox nativo, sin imágenes raster en vistas. |
-| **16** | Peticiones en paralelo | Ya resuelto: uso sistemático de `Promise.all` en repositorios. |
+| **16** | Peticiones en paralelo | Parcial en aquel corte (resuelto en Fase 4 / §15): `Promise.all` se usaba en la carga de colecciones, pero el arranque completo tenía 4 viajes secuenciales (`seedOctober2026IfEmpty` pre-vuelo + doble `getDoc(users/{uid})`) eliminados en R-11. |
 | **17** | Índices en base de datos | Ya resuelto: índices compuestos definidos en `firestore.indexes.json`. |
 | **19** | Misma región | Ya resuelto: Cloud Firestore opera en `nam5` directo. |
 | **20** | SSR/SSG | No aplica: dashboard privado altamente interactivo protegido por autenticación. |
@@ -203,8 +203,8 @@ Para reproducir estas mediciones en cualquier momento en la rama `perf/baseline-
 
 ### 04 / Validación Bajo Condiciones Difíciles
 
-- **CPU 4x más lenta:** `[X] Usable`. Con el modal aislado en `SummaryAddMovementModal`, la captura de texto y animaciones de entrada corren a 60/120 fps en el hilo principal sin recalcular los 5 algoritmos financieros.
-- **Red 3G lenta / inestable:** `[X] Usable`. Las consultas duplicadas se eliminaron al 100%, las peticiones tienen timeout de 10s y ante caídas de red la interfaz revierte limpiamente el cambio sin corromper el estado.
+- **CPU 4x más lenta:** *No medido en dispositivo ni con estrangulamiento real de CPU.* El aislamiento de estado en `SummaryAddMovementModal` evita re-renderizar `PhaseOneHomeScreen` al teclear en ese modal, pero la medición con CPU 4x queda pendiente de captura instrumentada.
+- **Red 3G lenta / inestable:** *No medido en red 3G real.* Se validó mediante tests unitarios y de integración que las consultas duplicadas se eliminaron, que las peticiones tienen timeout de 10 s y que ante rechazos permanentes la interfaz revierte el estado optimista.
 - **Suite de Pruebas:** `[X] Correctas`. 21 test suites y 123 tests pasando al 100% en 10.6 segundos.
 - **Decisión Final:** `[X] Conservar`. Todos los cambios demostraron mejoras medibles, respetaron las invariantes contables y no introdujeron complejidad innecesaria.
 
@@ -344,5 +344,50 @@ Implementado el 2026-11-10 en la rama `perf/phase-3-offline-writes`. Decisión e
 ### No medido
 - Tiempo exacto de reconexión y drenaje de la cola en red celular Edge/3G física (validado en emulación de timeout y desconexión).
 
+---
 
+## 15. Fase 4: Reducción de Lecturas de Firestore, Eliminación de Cascadas Secuenciales y Validación de Caché con `dataRevision` (R-11, R-12, R-13, R-14)
+
+Implementado el 2026-11-10 en la rama `perf/phase-4-firestore-reads`. Decisión arquitectónica documentada en el [ADR 0018](docs/decisions/0018-account-data-revision-and-cache-validation.md).
+
+### Resumen de Cambios Aplicados
+
+1. **R-11 (Eliminación del viaje pre-vuelo `seedOctober2026IfEmpty`):**
+   - `loadFullCloudAccount` y `loadMonthWorkspace` ya no ejecutan `await this.seedOctober2026IfEmpty(uid)` antes del `Promise.all`.
+   - `users/{uid}` se lee una sola vez y su resultado se pasa como `existingUserData` a `seedOctober2026IfEmpty`, que solo consulta subcolecciones si la cuenta realmente necesita semilla.
+   - En `restoreBalancesFromSnapshotIfPresent`, `getDoc(snapshotRef)` corre en paralelo dentro del mismo `Promise.all` que las colecciones.
+2. **R-12 (Deduplicación de `syncUserProfileDocument` y límite de 24 h en `lastLoginAt`):**
+   - `authAdapter.ts` deduplica promesas en vuelo por `uid` (`profileSyncInFlightByUid`) para que la concurrencia entre `signInWithEmail` y `onAuthStateChanged` ejecute una sola lectura de `users/{uid}`.
+   - En arranque en frío con sesión persistida sincronizada hace $< 24\text{ h}$, `subscribeToAuthUser` omite la lectura y escritura redundante de `users/{uid}`.
+   - `lastLoginAt` solo se escribe en Firestore si no existe o si han transcurrido $\ge 24\text{ horas}$ desde el último registro.
+3. **R-14 (`deleteOrResetEntry` y `toggleEntryCompletion` sin `getDoc` secuenciales):**
+   - `deleteOrResetEntry(uid, entryId, { entry, concept })` recibe `entry` y `concept` directamente desde el store de Zustand (`createBudgetSlice.ts`) y desde la cola offline (`offlineWriteQueue.ts`), eliminando las **2 llamadas `getDoc` secuenciales** por operación.
+4. **R-13 (`users/{uid}.dataRevision` y validación condicional de caché en arranque):**
+   - Todas las rutas de escritura de `FirestoreBudgetRepository` pasan por el helper común `commitUserDataMutationBatch`, que adjunta en el mismo `writeBatch` un `users/{uid}.dataRevision` aleatorio y actualiza la revisión del sobre local (`updatePersistedAccountRevision`).
+   - En el arranque (`loadFullCloudAccount`), si la caché local tiene menos de 24 horas y `cachedDataRevision === remoteDataRevision`, se omiten las 6 consultas `getDocs` de subcolecciones y la lectura de `provisionPlans/moto_ideal`, leyendo **únicamente 1 documento (`users/{uid}`)**.
+   - El botón de sincronización manual (`AccountProfileWorkspaceView` -> `forceFullSync: true`) siempre ejecuta la descarga completa de colecciones.
+
+### Documentos Leídos en Firestore: Antes vs Después (Contados en Documentos, no en Consultas)
+
+> **Criterio de conteo (facturación real de Cloud Firestore):** Cada `getDoc` consume **1 documento leído**. Cada `getDocs` consume **$\max(1, N)$ documentos leídos** (Firestore cobra mínimo 1 lectura cuando una consulta devuelve 0 documentos).
+> - **1 mes (semilla Octubre 2026):** 1 `users/{uid}` + 14 `concepts` + 12 `entries` + 2 `debts` + 1 `debtPayments` + 2 `savingsBuckets` + 1 `provisionPlans/moto_ideal` + 1 `monthSnapshots` (vacía, mín. 1) = **34 documentos** en carga completa.
+> - **Proyección multi-mes ($M$ meses, con ~12 `entries`/mes, 1 `debtPayment`/mes y $M-1$ `monthSnapshots`):**
+>   - **12 meses (1 año):** 1 + 14 + 144 + 2 + 12 + 2 + 1 + 11 = **187 documentos** (o **177 documentos** con ~11,2 movimientos/mes promedio del modelo de auditoría).
+>   - **24 meses (2 años):** **333 documentos** en carga completa (modelo de auditoría R-13).
+>   - **60 meses (5 años):** **801 documentos** en carga completa (modelo de auditoría R-13).
+
+| Escenario | Antes de Fase 4 (Documentos Leídos) | Después de Parte A (Documentos Leídos) | Después de Parte B (`dataRevision` coincide y caché $< 24\text{ h}$) | Ahorro Total (Parte B vs Antes) |
+| :--- | :---: | :---: | :---: | :---: |
+| **Arranque en frío — 1 mes (Oct 2026)** | **36 docs** *(3 lecturas a `users/{uid}` + 33 docs de colecciones/plan)* + 1 escritura `lastLoginAt` | **34 docs** *(1 lectura a `users/{uid}` + 33 docs)* + 0 escrituras | **1 doc** *(solo `users/{uid}`; 0 `getDocs`)* + 0 escrituras | **-97,2 %** (de 36 a 1 doc) |
+| **Arranque en frío — 12 meses (1 año)** | **179 docs** | **177 docs** | **1 doc** *(solo `users/{uid}`)* | **-99,4 %** (de 179 a 1 doc) |
+| **Arranque en frío — 24 meses (2 años)** | **335 docs** | **333 docs** | **1 doc** *(solo `users/{uid}`)* | **-99,7 %** (de 335 a 1 doc) |
+| **Arranque en frío — 60 meses (5 años)** | **803 docs** | **801 docs** | **1 doc** *(solo `users/{uid}`)* | **-99,9 %** (de 803 a 1 doc) |
+| **Login explícito — 1 mes (`signInWithEmail`)** | **37 docs** *(4 lecturas a `users/{uid}` + 33 docs)* + 2 escrituras `lastLoginAt` | **35 docs** *(2 lecturas a `users/{uid}`: 1 en Auth + 1 en carga)* + máx. 1 escritura cada 24 h | **2 docs** *(si tiene caché fresca $< 24\text{ h}$ con misma revisión)* o **35 docs** *(si no hay caché previa)* | **-2 docs y -1 escritura** en login sin caché; **-94,6 %** con caché |
+| **Usuario nuevo (registro sin semilla)** | **9 docs** *(2 `getDoc` a `users/{uid}` + 1 `moto_ideal` + 6 colecciones vacías $\times 1$)* | **8 docs** *(1 `getDoc` a `users/{uid}` + 1 `moto_ideal` + 6 colecciones vacías $\times 1$)* | **8 docs** *(registro siempre hace carga inicial completa)* | **-11,1 %** (elimina viaje pre-vuelo) |
+| **`deleteOrResetEntry` (eliminar/reiniciar ítem)** | **2 docs** *(2 `getDoc` secuenciales: `entry` y `concept`)* | **0 docs** *(usa `entry` y `concept` del store)* | **0 docs** *(usa `entry` y `concept` del store)* | **-100 %** (0 lecturas) |
+| **Sincronización manual (`forceFullSync: true`)** | **36 docs** (1 mes) / **335 docs** (24 meses) | **34 docs** (1 mes) / **333 docs** (24 meses) | **34 docs** (1 mes) / **333 docs** (24 meses) *(descarga completa garantizada)* | Elimina lecturas redundantes de `users/{uid}` |
+
+### Verificación Automatizada de Fase 4
+- `src/data/__tests__/phase4FirestoreReads.test.ts` (8 tests pasando): verifica conteo exacto de `getDoc`, `getDocs`, `docsReadCount` y `setDoc` en arranque, login, usuario nuevo, `deleteOrResetEntry`, actualización de `dataRevision`, cortocircuito de 1 documento cuando la revisión coincide ($< 24\text{ h}$), recarga completa cuando difiere o en `forceFullSync: true`, y test guardián estático/dinámico que falla si algún método de escritura de `FirestoreBudgetRepository` no usa `commitUserDataMutationBatch`.
+- `src/platform/storage/__tests__/accountCache.test.ts`: verifica persistencia de `dataRevision` en el sobre cifrado `v2`, preservación en `schedulePersistedAccountSave`, actualización con `updatePersistedAccountRevision` y ventana de 24 horas (`isCacheFreshWithin24Hours`).
 

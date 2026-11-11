@@ -12,12 +12,10 @@
 
 import {
   collection,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
   query,
-  setDoc,
   where,
   writeBatch,
   type Firestore,
@@ -49,6 +47,10 @@ import type {
 import { sumMoneyIntegers } from '../../domain/money/money';
 import { calculateMonthlySavingsSummary } from '../../domain/savings/savingsCalculator';
 import { getFirebaseDb } from '../firebase/firebaseConfig';
+import {
+  isCacheFreshWithin24Hours,
+  updatePersistedAccountRevision,
+} from '../../platform/storage/accountCache';
 import {
   parseConceptFromFirestore,
   parseDebtFromFirestore,
@@ -89,6 +91,15 @@ export interface FullCloudAccountData {
   provisionPlan: IdealMotoPlan;
   closedSnapshots: Record<string, MonthSnapshot>;
   needsOnboarding?: boolean;
+  dataRevision?: string;
+}
+
+export function generateDataRevision(): string {
+  const randomPart =
+    typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID().replace(/-/g, '')
+      : `${Math.random().toString(36).slice(2, 12)}${Math.random().toString(36).slice(2, 12)}`;
+  return `rev_${Date.now().toString(36)}_${randomPart}`;
 }
 
 export interface InitialAccountSetupPayload {
@@ -147,6 +158,10 @@ export function ensureStandardSavingsBuckets(
 
 export interface LoadCloudAccountOptions {
   isRegistration?: boolean;
+  forceFullSync?: boolean;
+  cachedAccount?: FullCloudAccountData | null;
+  cachedDataRevision?: string;
+  cachedSavedAt?: string;
 }
 
 export interface BudgetRepository {
@@ -164,10 +179,20 @@ export interface BudgetRepository {
     uid: string,
     entryId: string,
     monthKey: string,
-    options?: { actualAmount?: number; completedAtDateIso?: string; targetDebtId?: string }
+    options?: {
+      actualAmount?: number;
+      completedAtDateIso?: string;
+      targetDebtId?: string;
+      entry?: MonthEntry;
+      concept?: Concept;
+    }
   ): Promise<ToggleEntryCompletionResult>;
   addMonthEntry(uid: string, input: RegisterOrCompleteMovementInput): Promise<MonthEntry>;
-  deleteOrResetEntry(uid: string, entryId: string): Promise<void>;
+  deleteOrResetEntry(
+    uid: string,
+    entryId: string,
+    options?: { entry?: MonthEntry; concept?: Concept }
+  ): Promise<void>;
   deleteEntryCompletely(uid: string, entryId: string): Promise<void>;
   saveOrUpdateEntry(
     uid: string,
@@ -931,13 +956,50 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     this.db = db;
   }
 
+  /**
+   * Common write helper (ADR 0018, R-13): stamps `users/{uid}.dataRevision` with a newly generated
+   * client revision string inside a `writeBatch`, commits atomically, and updates the local cache
+   * envelope revision so subsequent cold boots know the local cache matches Firestore.
+   */
+  private async commitUserDataMutationBatch(
+    uid: string,
+    buildBatch: (batch: ReturnType<typeof writeBatch>, updatedAt: string) => void,
+    extraUserFields?: Record<string, unknown>
+  ): Promise<string> {
+    const batch = writeBatch(this.db);
+    const updatedAt = new Date().toISOString();
+    const dataRevision = generateDataRevision();
+
+    buildBatch(batch, updatedAt);
+
+    const userDocRef = doc(this.db, 'users', uid);
+    batch.set(
+      userDocRef,
+      {
+        uid,
+        ...(extraUserFields ?? {}),
+        dataRevision,
+        updatedAt,
+      },
+      { merge: true }
+    );
+
+    await batch.commit();
+    updatePersistedAccountRevision(uid, dataRevision, updatedAt);
+    return dataRevision;
+  }
+
   async seedOctober2026IfEmpty(
     uid: string,
-    userEmail?: string | null
+    userEmail?: string | null,
+    existingUserData?: Record<string, unknown>
   ): Promise<{ seeded: boolean; monthKey: string }> {
     const userDocRef = doc(this.db, 'users', uid);
-    const userSnap = await getDoc(userDocRef);
-    const userData = userSnap.exists() ? userSnap.data() : undefined;
+    let userData = existingUserData;
+    if (!userData) {
+      const userSnap = await getDoc(userDocRef);
+      userData = userSnap.exists() ? userSnap.data() : undefined;
+    }
     const resolvedEmail =
       userEmail ?? (typeof userData?.email === 'string' ? userData.email : null);
 
@@ -965,91 +1027,82 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     // Extra safety check: if concepts already exist in Firestore for the owner, never overwrite them.
     const existingConceptsSnap = await getDocs(collection(this.db, 'users', uid, 'concepts'));
     if (existingConceptsSnap.docs.length > 0) {
-      void setDoc(
-        userDocRef,
+      void this.commitUserDataMutationBatch(
+        uid,
+        () => {},
         {
-          uid,
           seededOctober2026: true,
           onboardingCompleted: true,
           activeMonthKey: existingActive,
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true }
+        }
       ).catch(() => {});
       return { seeded: false, monthKey: existingActive };
     }
 
     const payload = buildOctober2026SeedPayload();
-    const batch = writeBatch(this.db);
-    const updatedAt = new Date().toISOString();
+    await this.commitUserDataMutationBatch(
+      uid,
+      (batch, updatedAt) => {
+        for (const concept of payload.concepts) {
+          const ref = doc(this.db, 'users', uid, 'concepts', concept.id);
+          batch.set(ref, {
+            ...serializeConceptForFirestore(concept),
+            updatedAt,
+          });
+        }
 
-    for (const concept of payload.concepts) {
-      const ref = doc(this.db, 'users', uid, 'concepts', concept.id);
-      batch.set(ref, {
-        ...serializeConceptForFirestore(concept),
-        updatedAt,
-      });
-    }
+        for (const entry of payload.entries) {
+          const ref = doc(this.db, 'users', uid, 'entries', entry.id);
+          batch.set(ref, {
+            ...serializeMonthEntryForFirestore(entry),
+            updatedAt,
+          });
+        }
 
-    for (const entry of payload.entries) {
-      const ref = doc(this.db, 'users', uid, 'entries', entry.id);
-      batch.set(ref, {
-        ...serializeMonthEntryForFirestore(entry),
-        updatedAt,
-      });
-    }
+        for (const debt of payload.debts) {
+          const ref = doc(this.db, 'users', uid, 'debts', debt.id);
+          batch.set(ref, {
+            ...serializeDebtForFirestore(debt),
+            updatedAt,
+          });
+        }
 
-    for (const debt of payload.debts) {
-      const ref = doc(this.db, 'users', uid, 'debts', debt.id);
-      batch.set(ref, {
-        ...serializeDebtForFirestore(debt),
-        updatedAt,
-      });
-    }
+        for (const payment of payload.debtPayments) {
+          const ref = doc(this.db, 'users', uid, 'debtPayments', payment.id);
+          batch.set(ref, {
+            ...serializeDebtPaymentForFirestore(payment),
+            updatedAt,
+          });
+        }
 
-    for (const payment of payload.debtPayments) {
-      const ref = doc(this.db, 'users', uid, 'debtPayments', payment.id);
-      batch.set(ref, {
-        ...serializeDebtPaymentForFirestore(payment),
-        updatedAt,
-      });
-    }
+        for (const bucket of payload.savingsBuckets) {
+          const ref = doc(this.db, 'users', uid, 'savingsBuckets', bucket.id);
+          batch.set(ref, {
+            ...serializeSavingsBucketForFirestore(bucket),
+            updatedAt,
+          });
+        }
 
-    for (const bucket of payload.savingsBuckets) {
-      const ref = doc(this.db, 'users', uid, 'savingsBuckets', bucket.id);
-      batch.set(ref, {
-        ...serializeSavingsBucketForFirestore(bucket),
-        updatedAt,
-      });
-    }
-
-    const planRef = doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal');
-    batch.set(planRef, {
-      id: 'moto_ideal',
-      ...serializeIdealMotoPlanForFirestore(payload.provisionPlan),
-      updatedAt,
-    });
-
-    batch.set(
-      userDocRef,
+        const planRef = doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal');
+        batch.set(planRef, {
+          id: 'moto_ideal',
+          ...serializeIdealMotoPlanForFirestore(payload.provisionPlan),
+          updatedAt,
+        });
+      },
       {
-        uid,
         seededOctober2026: true,
         onboardingCompleted: true,
         activeMonthKey: '2026-10',
-        updatedAt,
-      },
-      { merge: true }
+      }
     );
 
-    await batch.commit();
     return { seeded: true, monthKey: '2026-10' };
   }
 
   async loadMonthWorkspace(uid: string, monthKey: string): Promise<MonthWorkspaceData> {
-    await this.seedOctober2026IfEmpty(uid);
-
     const [
+      userSnap,
       conceptsSnap,
       entriesSnap,
       debtsSnap,
@@ -1058,6 +1111,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       planSnap,
       snapshotSnap,
     ] = await Promise.all([
+      getDoc(doc(this.db, 'users', uid)),
       getDocs(collection(this.db, 'users', uid, 'concepts')),
       getDocs(
         query(collection(this.db, 'users', uid, 'entries'), where('monthKey', '==', monthKey))
@@ -1073,6 +1127,19 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       getDoc(doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal')),
       getDoc(doc(this.db, 'users', uid, 'monthSnapshots', monthKey)),
     ]);
+
+    const userData = userSnap.exists() ? userSnap.data() : undefined;
+    const resolvedEmail = typeof userData?.email === 'string' ? userData.email : null;
+    const isUnseededOwner =
+      isOwnerCanonicalEmail(resolvedEmail) &&
+      userData?.accountResetByUser !== true &&
+      userData?.seededOctober2026 !== true &&
+      userData?.onboardingCompleted !== true &&
+      conceptsSnap.docs.length === 0;
+
+    if (isUnseededOwner) {
+      await this.seedOctober2026IfEmpty(uid, resolvedEmail, userData);
+    }
 
     const concepts = safeParseList(conceptsSnap.docs, parseConceptFromFirestore).sort(
       (a, b) => a.order - b.order
@@ -1131,9 +1198,37 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     userEmail?: string | null,
     options?: LoadCloudAccountOptions
   ): Promise<FullCloudAccountData> {
-    const seedInfo = await this.seedOctober2026IfEmpty(uid, userEmail);
+    const userDocRef = doc(this.db, 'users', uid);
 
-    const [
+    const canCheckRevisionFirst =
+      !options?.forceFullSync &&
+      !options?.isRegistration &&
+      Boolean(options?.cachedAccount) &&
+      typeof options?.cachedDataRevision === 'string' &&
+      options.cachedDataRevision.length > 0 &&
+      isCacheFreshWithin24Hours(options?.cachedSavedAt);
+
+    let preloadedUserSnap: Awaited<ReturnType<typeof getDoc<Record<string, unknown>, Record<string, unknown>>>> | null = null;
+
+    if (canCheckRevisionFirst && options?.cachedAccount) {
+      preloadedUserSnap = await getDoc(userDocRef);
+      const remoteData = (preloadedUserSnap.exists() ? preloadedUserSnap.data() : undefined) as
+        | Record<string, unknown>
+        | undefined;
+      const remoteRevision =
+        typeof remoteData?.dataRevision === 'string' ? remoteData.dataRevision : undefined;
+
+      // R-13: If remote dataRevision matches the local cache envelope (< 24h old),
+      // skip all 7 collection/plan queries (reading only 1 document: users/{uid}).
+      if (remoteRevision && remoteRevision === options.cachedDataRevision) {
+        return {
+          ...options.cachedAccount,
+          dataRevision: remoteRevision,
+        };
+      }
+    }
+
+    let [
       userSnap,
       conceptsSnap,
       entriesSnap,
@@ -1143,7 +1238,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       planSnap,
       snapshotsSnap,
     ] = await Promise.all([
-      getDoc(doc(this.db, 'users', uid)),
+      preloadedUserSnap ? Promise.resolve(preloadedUserSnap) : getDoc(userDocRef),
       getDocs(collection(this.db, 'users', uid, 'concepts')),
       getDocs(collection(this.db, 'users', uid, 'entries')),
       getDocs(collection(this.db, 'users', uid, 'debts')),
@@ -1153,11 +1248,75 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       getDocs(collection(this.db, 'users', uid, 'monthSnapshots')),
     ]);
 
-    const userData = userSnap.exists() ? userSnap.data() : undefined;
+    let userData = (userSnap.exists() ? userSnap.data() : undefined) as
+      | Record<string, unknown>
+      | undefined;
     const resolvedEmail =
       userEmail ?? (typeof userData?.email === 'string' ? userData.email : null);
     const isOwner = isOwnerCanonicalEmail(resolvedEmail);
     const isResetByUser = userData?.accountResetByUser === true;
+
+    let seedMonthKey =
+      typeof userData?.activeMonthKey === 'string'
+        ? (userData.activeMonthKey as string)
+        : isOwner
+          ? '2026-10'
+          : `${toAppMonthKey().slice(0, 4)}-01`;
+
+    // R-11 & R-12: Avoid pre-flight seedOctober2026IfEmpty round-trip and duplicate users/{uid} read.
+    // Only seed when the account is the canonical owner and has 0 concepts yet.
+    if (
+      isOwner &&
+      !isResetByUser &&
+      userData?.seededOctober2026 !== true &&
+      userData?.onboardingCompleted !== true
+    ) {
+      if (conceptsSnap.docs.length > 0) {
+        const nextRev = generateDataRevision();
+        void this.commitUserDataMutationBatch(
+          uid,
+          () => {},
+          {
+            seededOctober2026: true,
+            onboardingCompleted: true,
+            activeMonthKey: seedMonthKey,
+          }
+        ).catch(() => {});
+        userData = {
+          ...(userData ?? {}),
+          seededOctober2026: true,
+          onboardingCompleted: true,
+          dataRevision: nextRev,
+        };
+      } else {
+        const seedInfo = await this.seedOctober2026IfEmpty(uid, resolvedEmail, userData);
+        seedMonthKey = seedInfo.monthKey;
+        if (seedInfo.seeded) {
+          [
+            userSnap,
+            conceptsSnap,
+            entriesSnap,
+            debtsSnap,
+            paymentsSnap,
+            bucketsSnap,
+            planSnap,
+            snapshotsSnap,
+          ] = await Promise.all([
+            getDoc(userDocRef),
+            getDocs(collection(this.db, 'users', uid, 'concepts')),
+            getDocs(collection(this.db, 'users', uid, 'entries')),
+            getDocs(collection(this.db, 'users', uid, 'debts')),
+            getDocs(collection(this.db, 'users', uid, 'debtPayments')),
+            getDocs(collection(this.db, 'users', uid, 'savingsBuckets')),
+            getDoc(doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal')),
+            getDocs(collection(this.db, 'users', uid, 'monthSnapshots')),
+          ]);
+          userData = userSnap.exists() ? userSnap.data() : undefined;
+        }
+      }
+    }
+
+    const seedInfo = { monthKey: seedMonthKey };
 
     const savedActiveMonthKey =
       typeof userData?.activeMonthKey === 'string' &&
@@ -1214,18 +1373,18 @@ export class FirestoreBudgetRepository implements BudgetRepository {
 
     if (isOwner && !isResetByUser && (needsOwnerSavingsHeal || staleBucketRefsToDelete.length > 0)) {
       try {
-        const healBatch = writeBatch(this.db);
-        for (const staleRef of staleBucketRefsToDelete) {
-          healBatch.delete(staleRef);
-        }
-        const savingsBucket = bucketMap.get('savings');
-        if (needsOwnerSavingsHeal && savingsBucket) {
-          healBatch.set(doc(this.db, 'users', uid, 'savingsBuckets', 'savings'), {
-            ...serializeSavingsBucketForFirestore(savingsBucket),
-            updatedAt: new Date().toISOString(),
-          });
-        }
-        void healBatch.commit().catch(() => {});
+        void this.commitUserDataMutationBatch(uid, (healBatch, updatedAt) => {
+          for (const staleRef of staleBucketRefsToDelete) {
+            healBatch.delete(staleRef);
+          }
+          const savingsBucket = bucketMap.get('savings');
+          if (needsOwnerSavingsHeal && savingsBucket) {
+            healBatch.set(doc(this.db, 'users', uid, 'savingsBuckets', 'savings'), {
+              ...serializeSavingsBucketForFirestore(savingsBucket),
+              updatedAt,
+            });
+          }
+        }).catch(() => {});
       } catch {
         // Non-fatal if offline; in-memory state is already healed
       }
@@ -1352,19 +1511,30 @@ export class FirestoreBudgetRepository implements BudgetRepository {
         needsOnboarding) &&
       userData?.onboardingCompleted !== true;
 
-    if (savedActiveMonthKey !== activeMonthKey || shouldMarkOnboardingDoneInCloud) {
+    let resolvedDataRevision =
+      typeof userData?.dataRevision === 'string' && userData.dataRevision.length > 0
+        ? userData.dataRevision
+        : undefined;
+
+    if (
+      savedActiveMonthKey !== activeMonthKey ||
+      shouldMarkOnboardingDoneInCloud ||
+      !resolvedDataRevision
+    ) {
+      const generatedRev = generateDataRevision();
+      if (!resolvedDataRevision) {
+        resolvedDataRevision = generatedRev;
+      }
       try {
-        void setDoc(
-          doc(this.db, 'users', uid),
+        void this.commitUserDataMutationBatch(
+          uid,
+          () => {},
           {
-            uid,
             activeMonthKey,
             ...(shouldMarkOnboardingDoneInCloud
               ? { onboardingCompleted: true, accountResetByUser: false }
               : {}),
-            updatedAt: new Date().toISOString(),
-          },
-          { merge: true }
+          }
         ).catch(() => {});
       } catch {
         // Non-fatal if offline
@@ -1630,6 +1800,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       provisionPlan,
       closedSnapshots,
       needsOnboarding,
+      ...(resolvedDataRevision ? { dataRevision: resolvedDataRevision } : {}),
     };
   }
 
@@ -1637,24 +1808,37 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     uid: string,
     entryId: string,
     monthKey: string,
-    options?: { actualAmount?: number; completedAtDateIso?: string; targetDebtId?: string }
+    options?: {
+      actualAmount?: number;
+      completedAtDateIso?: string;
+      targetDebtId?: string;
+      entry?: MonthEntry;
+      concept?: Concept;
+    }
   ): Promise<ToggleEntryCompletionResult> {
     const entryRef = doc(this.db, 'users', uid, 'entries', entryId);
-    const entrySnap = await getDoc(entryRef);
-    if (!entrySnap.exists()) {
-      throw new Error(`Entry ${entryId} not found for user ${uid}`);
+    let currentEntry = options?.entry;
+    let concept: Concept | null | undefined = options?.concept;
+
+    if (!currentEntry) {
+      const entrySnap = await getDoc(entryRef);
+      if (!entrySnap.exists()) {
+        throw new Error(`Entry ${entryId} not found for user ${uid}`);
+      }
+      currentEntry = parseMonthEntryFromFirestore(entrySnap.data());
     }
 
-    const currentEntry = parseMonthEntryFromFirestore(entrySnap.data());
     if (currentEntry.monthKey !== monthKey) {
       throw new Error(`Entry ${entryId} belongs to ${currentEntry.monthKey}, expected ${monthKey}`);
     }
 
-    const conceptRef = doc(this.db, 'users', uid, 'concepts', currentEntry.conceptId);
-    const conceptSnap = await getDoc(conceptRef);
-    const concept = conceptSnap.exists()
-      ? parseConceptFromFirestore(conceptSnap.data())
-      : null;
+    if (concept === undefined) {
+      const conceptRef = doc(this.db, 'users', uid, 'concepts', currentEntry.conceptId);
+      const conceptSnap = await getDoc(conceptRef);
+      concept = conceptSnap.exists()
+        ? parseConceptFromFirestore(conceptSnap.data())
+        : null;
+    }
 
     const nextEntries = toggleMovementStatus([currentEntry], entryId, {
       actualAmount: options?.actualAmount ?? currentEntry.plannedAmount,
@@ -1666,20 +1850,11 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       throw new Error(`Failed to compute updated entry for ${entryId}`);
     }
 
-    const batch = writeBatch(this.db);
-    const updatedAt = new Date().toISOString();
-
-    batch.set(entryRef, {
-      ...serializeMonthEntryForFirestore(updatedEntry),
-      updatedAt,
-    });
-
     let updatedDebtPayment: DebtPayment | undefined;
     if (concept?.linkedDebtGroup || concept?.defaultTargetDebtId) {
       const targetDebtId =
         options?.targetDebtId ?? concept.defaultTargetDebtId ?? 'debt_obligation_primary';
       const paymentId = `${updatedEntry.id}_${targetDebtId}`;
-      const paymentRef = doc(this.db, 'users', uid, 'debtPayments', paymentId);
 
       updatedDebtPayment = {
         id: paymentId,
@@ -1692,14 +1867,22 @@ export class FirestoreBudgetRepository implements BudgetRepository {
         completedAt: updatedEntry.completedAt,
         active: updatedEntry.status === 'completed',
       };
-
-      batch.set(paymentRef, {
-        ...serializeDebtPaymentForFirestore(updatedDebtPayment),
-        updatedAt,
-      });
     }
 
-    await batch.commit();
+    await this.commitUserDataMutationBatch(uid, (batch, updatedAt) => {
+      batch.set(entryRef, {
+        ...serializeMonthEntryForFirestore(updatedEntry),
+        updatedAt,
+      });
+
+      if (updatedDebtPayment) {
+        const paymentRef = doc(this.db, 'users', uid, 'debtPayments', updatedDebtPayment.id);
+        batch.set(paymentRef, {
+          ...serializeDebtPaymentForFirestore(updatedDebtPayment),
+          updatedAt,
+        });
+      }
+    });
 
     return {
       updatedEntry,
@@ -1738,83 +1921,93 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       throw new Error('Failed to create month entry');
     }
 
-    const batch = writeBatch(this.db);
-    const updatedAt = new Date().toISOString();
-    const entryRef = doc(this.db, 'users', uid, 'entries', created.id);
-    batch.set(entryRef, {
-      ...serializeMonthEntryForFirestore(created),
-      updatedAt,
-    });
-
     const concept = concepts.find((c) => c.id === created.conceptId);
-    if (concept?.linkedDebtGroup || concept?.defaultTargetDebtId) {
-      const targetDebtId = concept.defaultTargetDebtId ?? 'debt_obligation_primary';
-      const paymentId = `${created.id}_${targetDebtId}`;
-      const paymentRef = doc(this.db, 'users', uid, 'debtPayments', paymentId);
-      batch.set(paymentRef, {
-        ...serializeDebtPaymentForFirestore({
-          id: paymentId,
-          entryId: created.id,
-          monthKey: created.monthKey,
-          debtId: targetDebtId,
-          principalAmount: created.actualAmount,
-          interestAmount: 0,
-          totalApplied: created.actualAmount,
-          completedAt: created.completedAt,
-          active: true,
-        }),
+    await this.commitUserDataMutationBatch(uid, (batch, updatedAt) => {
+      const entryRef = doc(this.db, 'users', uid, 'entries', created.id);
+      batch.set(entryRef, {
+        ...serializeMonthEntryForFirestore(created),
         updatedAt,
       });
-    }
 
-    await batch.commit();
+      if (concept?.linkedDebtGroup || concept?.defaultTargetDebtId) {
+        const targetDebtId = concept.defaultTargetDebtId ?? 'debt_obligation_primary';
+        const paymentId = `${created.id}_${targetDebtId}`;
+        const paymentRef = doc(this.db, 'users', uid, 'debtPayments', paymentId);
+        batch.set(paymentRef, {
+          ...serializeDebtPaymentForFirestore({
+            id: paymentId,
+            entryId: created.id,
+            monthKey: created.monthKey,
+            debtId: targetDebtId,
+            principalAmount: created.actualAmount,
+            interestAmount: 0,
+            totalApplied: created.actualAmount,
+            completedAt: created.completedAt,
+            active: true,
+          }),
+          updatedAt,
+        });
+      }
+    });
+
     return created;
   }
 
-  async deleteOrResetEntry(uid: string, entryId: string): Promise<void> {
+  async deleteOrResetEntry(
+    uid: string,
+    entryId: string,
+    options?: { entry?: MonthEntry; concept?: Concept }
+  ): Promise<void> {
     const entryRef = doc(this.db, 'users', uid, 'entries', entryId);
-    const snap = await getDoc(entryRef);
-    if (!snap.exists()) return;
+    let entry = options?.entry;
+    let concept = options?.concept;
 
-    const entry = parseMonthEntryFromFirestore(snap.data());
-    const conceptSnap = await getDoc(doc(this.db, 'users', uid, 'concepts', entry.conceptId));
-    const concept = conceptSnap.exists()
-      ? parseConceptFromFirestore(conceptSnap.data())
-      : undefined;
+    // R-14: Avoid 2 sequential getDoc calls when entry and concept are already supplied from the store.
+    if (!entry) {
+      const snap = await getDoc(entryRef);
+      if (!snap.exists()) return;
+      entry = parseMonthEntryFromFirestore(snap.data());
+    }
+
+    if (!concept) {
+      const conceptSnap = await getDoc(doc(this.db, 'users', uid, 'concepts', entry.conceptId));
+      concept = conceptSnap.exists()
+        ? parseConceptFromFirestore(conceptSnap.data())
+        : undefined;
+    }
 
     if (concept?.allowMultiplePerMonth) {
-      await deleteDoc(entryRef);
+      await this.commitUserDataMutationBatch(uid, (batch) => {
+        batch.delete(entryRef);
+      });
     } else {
       const resetEntry = uncompleteMovement([entry], entryId)[0];
       if (resetEntry) {
-        const batch = writeBatch(this.db);
-        const updatedAt = new Date().toISOString();
-
-        batch.set(entryRef, {
-          ...serializeMonthEntryForFirestore(resetEntry),
-          updatedAt,
-        });
-
-        if (concept?.linkedDebtGroup || concept?.defaultTargetDebtId) {
-          const targetDebtId = concept.defaultTargetDebtId ?? 'debt_obligation_primary';
-          const paymentId = `${resetEntry.id}_${targetDebtId}`;
-          const paymentRef = doc(this.db, 'users', uid, 'debtPayments', paymentId);
-          batch.set(paymentRef, {
-            ...serializeDebtPaymentForFirestore({
-              id: paymentId,
-              entryId: resetEntry.id,
-              monthKey: resetEntry.monthKey,
-              debtId: targetDebtId,
-              principalAmount: resetEntry.actualAmount,
-              interestAmount: 0,
-              totalApplied: resetEntry.actualAmount,
-              active: false,
-            }),
+        await this.commitUserDataMutationBatch(uid, (batch, updatedAt) => {
+          batch.set(entryRef, {
+            ...serializeMonthEntryForFirestore(resetEntry),
             updatedAt,
           });
-        }
 
-        await batch.commit();
+          if (concept?.linkedDebtGroup || concept?.defaultTargetDebtId) {
+            const targetDebtId = concept.defaultTargetDebtId ?? 'debt_obligation_primary';
+            const paymentId = `${resetEntry.id}_${targetDebtId}`;
+            const paymentRef = doc(this.db, 'users', uid, 'debtPayments', paymentId);
+            batch.set(paymentRef, {
+              ...serializeDebtPaymentForFirestore({
+                id: paymentId,
+                entryId: resetEntry.id,
+                monthKey: resetEntry.monthKey,
+                debtId: targetDebtId,
+                principalAmount: resetEntry.actualAmount,
+                interestAmount: 0,
+                totalApplied: resetEntry.actualAmount,
+                active: false,
+              }),
+              updatedAt,
+            });
+          }
+        });
       }
     }
   }
@@ -1844,54 +2037,46 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     closingMonthKey: string,
     result: CloseMonthResult
   ): Promise<void> {
-    const batch = writeBatch(this.db);
-    const updatedAt = new Date().toISOString();
+    await this.commitUserDataMutationBatch(
+      uid,
+      (batch, updatedAt) => {
+        const snapshotRef = doc(this.db, 'users', uid, 'monthSnapshots', closingMonthKey);
+        batch.set(snapshotRef, {
+          ...serializeMonthSnapshotForFirestore(result.snapshot),
+          updatedAt,
+        });
 
-    const snapshotRef = doc(this.db, 'users', uid, 'monthSnapshots', closingMonthKey);
-    batch.set(snapshotRef, {
-      ...serializeMonthSnapshotForFirestore(result.snapshot),
-      updatedAt,
-    });
+        for (const nextDebt of result.nextMonthDebts) {
+          const debtRef = doc(this.db, 'users', uid, 'debts', nextDebt.id);
+          batch.set(debtRef, {
+            ...serializeDebtForFirestore(nextDebt),
+            updatedAt,
+          });
+        }
 
-    for (const nextDebt of result.nextMonthDebts) {
-      const debtRef = doc(this.db, 'users', uid, 'debts', nextDebt.id);
-      batch.set(debtRef, {
-        ...serializeDebtForFirestore(nextDebt),
-        updatedAt,
-      });
-    }
+        for (const nextBucket of result.nextMonthSavingsBuckets) {
+          const bucketRef = doc(this.db, 'users', uid, 'savingsBuckets', nextBucket.id);
+          batch.set(bucketRef, {
+            ...serializeSavingsBucketForFirestore({
+              ...nextBucket,
+              monthKey: result.nextMonthKey,
+            }),
+            updatedAt,
+          });
+        }
 
-    for (const nextBucket of result.nextMonthSavingsBuckets) {
-      const bucketRef = doc(this.db, 'users', uid, 'savingsBuckets', nextBucket.id);
-      batch.set(bucketRef, {
-        ...serializeSavingsBucketForFirestore({
-          ...nextBucket,
-          monthKey: result.nextMonthKey,
-        }),
-        updatedAt,
-      });
-    }
-
-    for (const nextEntry of result.nextMonthEntries) {
-      const entryRef = doc(this.db, 'users', uid, 'entries', nextEntry.id);
-      batch.set(entryRef, {
-        ...serializeMonthEntryForFirestore(nextEntry),
-        updatedAt,
-      });
-    }
-
-    const userDocRef = doc(this.db, 'users', uid);
-    batch.set(
-      userDocRef,
-      {
-        uid,
-        activeMonthKey: result.nextMonthKey,
-        updatedAt,
+        for (const nextEntry of result.nextMonthEntries) {
+          const entryRef = doc(this.db, 'users', uid, 'entries', nextEntry.id);
+          batch.set(entryRef, {
+            ...serializeMonthEntryForFirestore(nextEntry),
+            updatedAt,
+          });
+        }
       },
-      { merge: true }
+      {
+        activeMonthKey: result.nextMonthKey,
+      }
     );
-
-    await batch.commit();
   }
 
   async saveOrUpdateEntry(
@@ -1900,23 +2085,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     linkedConcept?: Concept,
     debtPayments?: DebtPayment[]
   ): Promise<void> {
-    const batch = writeBatch(this.db);
-    const updatedAt = new Date().toISOString();
-
-    const entryRef = doc(this.db, 'users', uid, 'entries', entry.id);
-    batch.set(entryRef, {
-      ...serializeMonthEntryForFirestore(entry),
-      updatedAt,
-    });
-
-    if (linkedConcept) {
-      const conceptRef = doc(this.db, 'users', uid, 'concepts', linkedConcept.id);
-      batch.set(conceptRef, {
-        ...serializeConceptForFirestore(linkedConcept),
-        updatedAt,
-      });
-    }
-
+    let existingPaymentsToDelete: Array<ReturnType<typeof doc>> = [];
     if (debtPayments) {
       try {
         const existingPaymentsSnap = await getDocs(
@@ -1925,24 +2094,43 @@ export class FirestoreBudgetRepository implements BudgetRepository {
             where('entryId', '==', entry.id)
           )
         );
-        for (const docSnap of existingPaymentsSnap.docs) {
-          if (!debtPayments.some((dp) => dp.id === docSnap.id)) {
-            batch.delete(docSnap.ref);
-          }
-        }
+        existingPaymentsToDelete = existingPaymentsSnap.docs
+          .filter((docSnap) => !debtPayments.some((dp) => dp.id === docSnap.id))
+          .map((docSnap) => docSnap.ref);
       } catch {
         // Non-fatal if index not yet available
       }
-      for (const dp of debtPayments) {
-        const dpRef = doc(this.db, 'users', uid, 'debtPayments', dp.id);
-        batch.set(dpRef, {
-          ...serializeDebtPaymentForFirestore(dp),
+    }
+
+    await this.commitUserDataMutationBatch(uid, (batch, updatedAt) => {
+      const entryRef = doc(this.db, 'users', uid, 'entries', entry.id);
+      batch.set(entryRef, {
+        ...serializeMonthEntryForFirestore(entry),
+        updatedAt,
+      });
+
+      if (linkedConcept) {
+        const conceptRef = doc(this.db, 'users', uid, 'concepts', linkedConcept.id);
+        batch.set(conceptRef, {
+          ...serializeConceptForFirestore(linkedConcept),
           updatedAt,
         });
       }
-    }
 
-    await batch.commit();
+      for (const staleRef of existingPaymentsToDelete) {
+        batch.delete(staleRef);
+      }
+
+      if (debtPayments) {
+        for (const dp of debtPayments) {
+          const dpRef = doc(this.db, 'users', uid, 'debtPayments', dp.id);
+          batch.set(dpRef, {
+            ...serializeDebtPaymentForFirestore(dp),
+            updatedAt,
+          });
+        }
+      }
+    });
   }
 
   async saveCustomConceptAndEntry(
@@ -1951,39 +2139,33 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     entry: MonthEntry,
     debtPayments?: DebtPayment[]
   ): Promise<void> {
-    const batch = writeBatch(this.db);
-    const updatedAt = new Date().toISOString();
+    await this.commitUserDataMutationBatch(uid, (batch, updatedAt) => {
+      const conceptRef = doc(this.db, 'users', uid, 'concepts', concept.id);
+      batch.set(conceptRef, {
+        ...serializeConceptForFirestore(concept),
+        updatedAt,
+      });
 
-    const conceptRef = doc(this.db, 'users', uid, 'concepts', concept.id);
-    batch.set(conceptRef, {
-      ...serializeConceptForFirestore(concept),
-      updatedAt,
-    });
+      const entryRef = doc(this.db, 'users', uid, 'entries', entry.id);
+      batch.set(entryRef, {
+        ...serializeMonthEntryForFirestore(entry),
+        updatedAt,
+      });
 
-    const entryRef = doc(this.db, 'users', uid, 'entries', entry.id);
-    batch.set(entryRef, {
-      ...serializeMonthEntryForFirestore(entry),
-      updatedAt,
-    });
-
-    if (debtPayments && debtPayments.length > 0) {
-      for (const dp of debtPayments) {
-        const dpRef = doc(this.db, 'users', uid, 'debtPayments', dp.id);
-        batch.set(dpRef, {
-          ...serializeDebtPaymentForFirestore(dp),
-          updatedAt,
-        });
+      if (debtPayments && debtPayments.length > 0) {
+        for (const dp of debtPayments) {
+          const dpRef = doc(this.db, 'users', uid, 'debtPayments', dp.id);
+          batch.set(dpRef, {
+            ...serializeDebtPaymentForFirestore(dp),
+            updatedAt,
+          });
+        }
       }
-    }
-
-    await batch.commit();
+    });
   }
 
   async deleteEntryCompletely(uid: string, entryId: string): Promise<void> {
-    const batch = writeBatch(this.db);
-    const entryRef = doc(this.db, 'users', uid, 'entries', entryId);
-    batch.delete(entryRef);
-
+    let paymentRefsToDelete: Array<ReturnType<typeof doc>> = [];
     try {
       const paymentsSnap = await getDocs(
         query(
@@ -1991,14 +2173,18 @@ export class FirestoreBudgetRepository implements BudgetRepository {
           where('entryId', '==', entryId)
         )
       );
-      for (const snap of paymentsSnap.docs) {
-        batch.delete(snap.ref);
-      }
+      paymentRefsToDelete = paymentsSnap.docs.map((snap) => snap.ref);
     } catch {
       // Non-fatal if index not yet propagated
     }
 
-    await batch.commit();
+    await this.commitUserDataMutationBatch(uid, (batch) => {
+      const entryRef = doc(this.db, 'users', uid, 'entries', entryId);
+      batch.delete(entryRef);
+      for (const ref of paymentRefsToDelete) {
+        batch.delete(ref);
+      }
+    });
   }
 
   private async restoreBalancesFromSnapshotIfPresent(
@@ -2009,11 +2195,8 @@ export class FirestoreBudgetRepository implements BudgetRepository {
   ): Promise<void> {
     try {
       const snapshotRef = doc(this.db, 'users', uid, 'monthSnapshots', targetMonthKey);
-      const snapshotSnap = await getDoc(snapshotRef);
-      if (!snapshotSnap.exists()) return;
-
-      const parsedSnap = parseMonthSnapshotFromFirestore(snapshotSnap.data());
-      const [conceptsSnap, entriesSnap, debtsSnap, bucketsSnap] = await Promise.all([
+      const [snapshotSnap, conceptsSnap, entriesSnap, debtsSnap, bucketsSnap] = await Promise.all([
+        getDoc(snapshotRef),
         getDocs(collection(this.db, 'users', uid, 'concepts')),
         getDocs(
           query(
@@ -2024,6 +2207,9 @@ export class FirestoreBudgetRepository implements BudgetRepository {
         getDocs(collection(this.db, 'users', uid, 'debts')),
         getDocs(collection(this.db, 'users', uid, 'savingsBuckets')),
       ]);
+      if (!snapshotSnap.exists()) return;
+
+      const parsedSnap = parseMonthSnapshotFromFirestore(snapshotSnap.data());
 
       const concepts = safeParseList(conceptsSnap.docs, parseConceptFromFirestore);
       const entries = safeParseList(entriesSnap.docs, parseMonthEntryFromFirestore);
@@ -2059,25 +2245,29 @@ export class FirestoreBudgetRepository implements BudgetRepository {
   }
 
   async reopenMonthInCloud(uid: string, monthKey: string): Promise<void> {
-    const batch = writeBatch(this.db);
-    const updatedAt = new Date().toISOString();
+    const tempBatchOps: Array<(batch: ReturnType<typeof writeBatch>, updatedAt: string) => void> = [];
+    const proxyBatch = {
+      set: (ref: ReturnType<typeof doc>, data: Record<string, unknown>) => {
+        tempBatchOps.push((b) => b.set(ref, data));
+      },
+    } as unknown as ReturnType<typeof writeBatch>;
 
-    await this.restoreBalancesFromSnapshotIfPresent(uid, monthKey, batch, updatedAt);
+    const previewUpdatedAt = new Date().toISOString();
+    await this.restoreBalancesFromSnapshotIfPresent(uid, monthKey, proxyBatch, previewUpdatedAt);
 
-    const snapshotRef = doc(this.db, 'users', uid, 'monthSnapshots', monthKey);
-    batch.delete(snapshotRef);
-
-    const userDocRef = doc(this.db, 'users', uid);
-    batch.set(
-      userDocRef,
+    await this.commitUserDataMutationBatch(
+      uid,
+      (batch, updatedAt) => {
+        for (const op of tempBatchOps) {
+          op(batch, updatedAt);
+        }
+        const snapshotRef = doc(this.db, 'users', uid, 'monthSnapshots', monthKey);
+        batch.delete(snapshotRef);
+      },
       {
         activeMonthKey: monthKey,
-        updatedAt,
-      },
-      { merge: true }
+      }
     );
-
-    await batch.commit();
   }
 
   async deleteMonthInCloud(
@@ -2085,17 +2275,22 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     monthKey: string,
     fallbackMonthKey: string
   ): Promise<void> {
-    const batch = writeBatch(this.db);
-    const updatedAt = new Date().toISOString();
+    const tempBatchOps: Array<(batch: ReturnType<typeof writeBatch>, updatedAt: string) => void> = [];
+    const proxyBatch = {
+      set: (ref: ReturnType<typeof doc>, data: Record<string, unknown>) => {
+        tempBatchOps.push((b) => b.set(ref, data));
+      },
+    } as unknown as ReturnType<typeof writeBatch>;
 
-    await this.restoreBalancesFromSnapshotIfPresent(uid, fallbackMonthKey, batch, updatedAt);
+    const previewUpdatedAt = new Date().toISOString();
+    await this.restoreBalancesFromSnapshotIfPresent(
+      uid,
+      fallbackMonthKey,
+      proxyBatch,
+      previewUpdatedAt
+    );
 
-    const snapshotRef = doc(this.db, 'users', uid, 'monthSnapshots', monthKey);
-    batch.delete(snapshotRef);
-
-    const fallbackSnapshotRef = doc(this.db, 'users', uid, 'monthSnapshots', fallbackMonthKey);
-    batch.delete(fallbackSnapshotRef);
-
+    let refsToDelete: Array<ReturnType<typeof doc>> = [];
     try {
       const [entriesSnap, paymentsSnap] = await Promise.all([
         getDocs(
@@ -2111,62 +2306,76 @@ export class FirestoreBudgetRepository implements BudgetRepository {
           )
         ),
       ]);
-
-      for (const d of entriesSnap.docs) {
-        batch.delete(d.ref);
-      }
-      for (const d of paymentsSnap.docs) {
-        batch.delete(d.ref);
-      }
+      refsToDelete = [
+        ...entriesSnap.docs.map((d) => d.ref),
+        ...paymentsSnap.docs.map((d) => d.ref),
+      ];
     } catch {
       // Fallback
     }
 
-    const userDocRef = doc(this.db, 'users', uid);
-    batch.set(
-      userDocRef,
+    await this.commitUserDataMutationBatch(
+      uid,
+      (batch, updatedAt) => {
+        for (const op of tempBatchOps) {
+          op(batch, updatedAt);
+        }
+        const snapshotRef = doc(this.db, 'users', uid, 'monthSnapshots', monthKey);
+        batch.delete(snapshotRef);
+
+        const fallbackSnapshotRef = doc(this.db, 'users', uid, 'monthSnapshots', fallbackMonthKey);
+        batch.delete(fallbackSnapshotRef);
+
+        for (const ref of refsToDelete) {
+          batch.delete(ref);
+        }
+      },
       {
         activeMonthKey: fallbackMonthKey,
-        updatedAt,
-      },
-      { merge: true }
+      }
     );
-
-    await batch.commit();
   }
 
   async saveConcept(uid: string, concept: Concept): Promise<void> {
-    const conceptRef = doc(this.db, 'users', uid, 'concepts', concept.id);
-    await setDoc(
-      conceptRef,
-      {
-        ...serializeConceptForFirestore(concept),
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
+    await this.commitUserDataMutationBatch(uid, (batch, updatedAt) => {
+      const conceptRef = doc(this.db, 'users', uid, 'concepts', concept.id);
+      batch.set(
+        conceptRef,
+        {
+          ...serializeConceptForFirestore(concept),
+          updatedAt,
+        },
+        { merge: true }
+      );
+    });
   }
 
   async deleteConcept(uid: string, conceptId: string): Promise<void> {
-    const conceptRef = doc(this.db, 'users', uid, 'concepts', conceptId);
-    await deleteDoc(conceptRef);
+    await this.commitUserDataMutationBatch(uid, (batch) => {
+      const conceptRef = doc(this.db, 'users', uid, 'concepts', conceptId);
+      batch.delete(conceptRef);
+    });
   }
 
   async saveDebt(uid: string, debt: Debt): Promise<void> {
-    const debtRef = doc(this.db, 'users', uid, 'debts', debt.id);
-    await setDoc(
-      debtRef,
-      {
-        ...serializeDebtForFirestore(debt),
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
+    await this.commitUserDataMutationBatch(uid, (batch, updatedAt) => {
+      const debtRef = doc(this.db, 'users', uid, 'debts', debt.id);
+      batch.set(
+        debtRef,
+        {
+          ...serializeDebtForFirestore(debt),
+          updatedAt,
+        },
+        { merge: true }
+      );
+    });
   }
 
   async deleteDebt(uid: string, debtId: string): Promise<void> {
-    const debtRef = doc(this.db, 'users', uid, 'debts', debtId);
-    await deleteDoc(debtRef);
+    await this.commitUserDataMutationBatch(uid, (batch) => {
+      const debtRef = doc(this.db, 'users', uid, 'debts', debtId);
+      batch.delete(debtRef);
+    });
   }
 
   async saveSavingsBucket(
@@ -2177,135 +2386,130 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     bucketName?: string
   ): Promise<void> {
     // Document ID must equal bucketId to satisfy firestore.rules (`data.id == bucketId`)
-    const bucketRef = doc(this.db, 'users', uid, 'savingsBuckets', bucketId);
     const defaultName =
       bucketId === 'moto'
         ? 'Fondo Moto'
         : bucketId === 'savings'
           ? 'Fondo Ahorros'
           : bucketId;
-    await setDoc(
-      bucketRef,
-      {
-        id: bucketId,
-        name: bucketName ?? defaultName,
-        openingBalance: Math.max(0, Math.round(openingBalanceCop)),
-        monthKey,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
+    await this.commitUserDataMutationBatch(uid, (batch, updatedAt) => {
+      const bucketRef = doc(this.db, 'users', uid, 'savingsBuckets', bucketId);
+      batch.set(
+        bucketRef,
+        {
+          id: bucketId,
+          name: bucketName ?? defaultName,
+          openingBalance: Math.max(0, Math.round(openingBalanceCop)),
+          monthKey,
+          updatedAt,
+        },
+        { merge: true }
+      );
+    });
   }
 
   async deleteSavingsBucket(uid: string, bucketId: string): Promise<void> {
-    const bucketRef = doc(this.db, 'users', uid, 'savingsBuckets', bucketId);
-    await deleteDoc(bucketRef);
+    await this.commitUserDataMutationBatch(uid, (batch) => {
+      const bucketRef = doc(this.db, 'users', uid, 'savingsBuckets', bucketId);
+      batch.delete(bucketRef);
+    });
   }
 
   async saveProvisionPlan(uid: string, plan: IdealMotoPlan): Promise<void> {
-    const planRef = doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal');
-    await setDoc(
-      planRef,
-      {
-        id: 'moto_ideal',
-        ...serializeIdealMotoPlanForFirestore(plan),
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
+    await this.commitUserDataMutationBatch(uid, (batch, updatedAt) => {
+      const planRef = doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal');
+      batch.set(
+        planRef,
+        {
+          id: 'moto_ideal',
+          ...serializeIdealMotoPlanForFirestore(plan),
+          updatedAt,
+        },
+        { merge: true }
+      );
+    });
   }
 
   async saveInitialAccountSetup(
     uid: string,
     payload: InitialAccountSetupPayload
   ): Promise<void> {
-    const batch = writeBatch(this.db);
-    const updatedAt = new Date().toISOString();
+    await this.commitUserDataMutationBatch(
+      uid,
+      (batch, updatedAt) => {
+        for (const concept of payload.concepts) {
+          const ref = doc(this.db, 'users', uid, 'concepts', concept.id);
+          batch.set(ref, {
+            ...serializeConceptForFirestore(concept),
+            updatedAt,
+          });
+        }
 
-    for (const concept of payload.concepts) {
-      const ref = doc(this.db, 'users', uid, 'concepts', concept.id);
-      batch.set(ref, {
-        ...serializeConceptForFirestore(concept),
-        updatedAt,
-      });
-    }
+        for (const entry of payload.entries) {
+          const ref = doc(this.db, 'users', uid, 'entries', entry.id);
+          batch.set(ref, {
+            ...serializeMonthEntryForFirestore(entry),
+            updatedAt,
+          });
+        }
 
-    for (const entry of payload.entries) {
-      const ref = doc(this.db, 'users', uid, 'entries', entry.id);
-      batch.set(ref, {
-        ...serializeMonthEntryForFirestore(entry),
-        updatedAt,
-      });
-    }
+        for (const debt of payload.debts) {
+          const ref = doc(this.db, 'users', uid, 'debts', debt.id);
+          batch.set(ref, {
+            ...serializeDebtForFirestore(debt),
+            updatedAt,
+          });
+        }
 
-    for (const debt of payload.debts) {
-      const ref = doc(this.db, 'users', uid, 'debts', debt.id);
-      batch.set(ref, {
-        ...serializeDebtForFirestore(debt),
-        updatedAt,
-      });
-    }
+        for (const payment of payload.debtPayments) {
+          const ref = doc(this.db, 'users', uid, 'debtPayments', payment.id);
+          batch.set(ref, {
+            ...serializeDebtPaymentForFirestore(payment),
+            updatedAt,
+          });
+        }
 
-    for (const payment of payload.debtPayments) {
-      const ref = doc(this.db, 'users', uid, 'debtPayments', payment.id);
-      batch.set(ref, {
-        ...serializeDebtPaymentForFirestore(payment),
-        updatedAt,
-      });
-    }
+        const buckets = ensureStandardSavingsBuckets(payload.savingsBuckets, 0, 0);
+        const configuredBucketIds = new Set(buckets.map((b) => b.id));
+        if (!configuredBucketIds.has('moto')) {
+          batch.delete(doc(this.db, 'users', uid, 'savingsBuckets', 'moto'));
+        }
+        if (!configuredBucketIds.has('savings')) {
+          batch.delete(doc(this.db, 'users', uid, 'savingsBuckets', 'savings'));
+        }
+        for (const bucket of buckets) {
+          const ref = doc(this.db, 'users', uid, 'savingsBuckets', bucket.id);
+          batch.set(ref, {
+            ...serializeSavingsBucketForFirestore({
+              ...bucket,
+              monthKey: payload.monthKey,
+            }),
+            updatedAt,
+          });
+        }
 
-    const buckets = ensureStandardSavingsBuckets(payload.savingsBuckets, 0, 0);
-    const configuredBucketIds = new Set(buckets.map((b) => b.id));
-    if (!configuredBucketIds.has('moto')) {
-      batch.delete(doc(this.db, 'users', uid, 'savingsBuckets', 'moto'));
-    }
-    if (!configuredBucketIds.has('savings')) {
-      batch.delete(doc(this.db, 'users', uid, 'savingsBuckets', 'savings'));
-    }
-    for (const bucket of buckets) {
-      const ref = doc(this.db, 'users', uid, 'savingsBuckets', bucket.id);
-      batch.set(ref, {
-        ...serializeSavingsBucketForFirestore({
-          ...bucket,
-          monthKey: payload.monthKey,
-        }),
-        updatedAt,
-      });
-    }
-
-    const planRef = doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal');
-    batch.set(planRef, {
-      id: 'moto_ideal',
-      ...serializeIdealMotoPlanForFirestore(payload.provisionPlan),
-      updatedAt,
-    });
-
-    const userDocRef = doc(this.db, 'users', uid);
-    batch.set(
-      userDocRef,
+        const planRef = doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal');
+        batch.set(planRef, {
+          id: 'moto_ideal',
+          ...serializeIdealMotoPlanForFirestore(payload.provisionPlan),
+          updatedAt,
+        });
+      },
       {
-        uid,
         activeMonthKey: payload.monthKey,
         onboardingCompleted: true,
         accountResetByUser: false,
-        updatedAt,
-      },
-      { merge: true }
+      }
     );
-
-    await batch.commit();
   }
 
   async saveActiveMonthKey(uid: string, monthKey: string): Promise<void> {
-    const userDocRef = doc(this.db, 'users', uid);
-    await setDoc(
-      userDocRef,
+    await this.commitUserDataMutationBatch(
+      uid,
+      () => {},
       {
-        uid,
         activeMonthKey: monthKey,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
+      }
     );
   }
 
@@ -2330,37 +2534,29 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     const chunkSize = 400;
     for (let i = 0; i < allDocRefs.length; i += chunkSize) {
       const chunk = allDocRefs.slice(i, i + chunkSize);
-      const batch = writeBatch(this.db);
-      for (const ref of chunk) {
-        batch.delete(ref);
-      }
-      await batch.commit();
+      await this.commitUserDataMutationBatch(uid, (batch) => {
+        for (const ref of chunk) {
+          batch.delete(ref);
+        }
+      });
     }
 
-    const updatedAt = new Date().toISOString();
-    const setupBatch = writeBatch(this.db);
-
-    const planRef = doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal');
-    setupBatch.set(planRef, {
-      id: 'moto_ideal',
-      ...serializeIdealMotoPlanForFirestore(EMPTY_PROVISION_PLAN),
-      updatedAt,
-    });
-
-    const userDocRef = doc(this.db, 'users', uid);
-    setupBatch.set(
-      userDocRef,
+    await this.commitUserDataMutationBatch(
+      uid,
+      (setupBatch, updatedAt) => {
+        const planRef = doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal');
+        setupBatch.set(planRef, {
+          id: 'moto_ideal',
+          ...serializeIdealMotoPlanForFirestore(EMPTY_PROVISION_PLAN),
+          updatedAt,
+        });
+      },
       {
-        uid,
         activeMonthKey: newStartMonthKey,
         seededOctober2026: false,
         onboardingCompleted: false,
         accountResetByUser: true,
-        updatedAt,
-      },
-      { merge: true }
+      }
     );
-
-    await setupBatch.commit();
   }
 }

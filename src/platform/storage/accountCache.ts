@@ -15,6 +15,7 @@ import type { FullCloudAccountData } from '../../data/repositories/budgetReposit
 import { persistentStorage } from './persistentStorageAdapter';
 
 export const ACCOUNT_CACHE_SCHEMA_VERSION = 2;
+export const ACCOUNT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 const LEGACY_ACCOUNT_CACHE_PREFIX_V1 = 'bflow.account.cache.v1.';
 const ACCOUNT_CACHE_PREFIX = 'bflow.account.cache.v2.';
@@ -23,6 +24,7 @@ export interface PersistedAccountEnvelope {
   schemaVersion: number;
   uid: string;
   savedAt: string;
+  dataRevision?: string;
   data: FullCloudAccountData;
 }
 
@@ -92,23 +94,106 @@ export function isEquivalentCloudAccount(
 }
 
 let pendingSaveTimer: ReturnType<typeof setTimeout> | null = null;
-let pendingSaveEntry: { uid: string; data: FullCloudAccountData } | null = null;
+let pendingSaveEntry: { uid: string; data: FullCloudAccountData; dataRevision?: string } | null = null;
+
+function readValidatedEnvelope(uid: string): PersistedAccountEnvelope | null {
+  if (!uid) return null;
+  try {
+    const raw = persistentStorage.getItem<unknown>(getAccountCacheKey(uid));
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+
+    const candidate = raw as Partial<PersistedAccountEnvelope>;
+    const hasValidRevision =
+      candidate.dataRevision === undefined ||
+      (typeof candidate.dataRevision === 'string' && candidate.dataRevision.length > 0);
+    const hasValidEnvelope =
+      candidate.schemaVersion === ACCOUNT_CACHE_SCHEMA_VERSION &&
+      typeof candidate.uid === 'string' &&
+      candidate.uid === uid &&
+      typeof candidate.savedAt === 'string' &&
+      candidate.savedAt.length > 0 &&
+      hasValidRevision &&
+      isValidFullCloudAccountData(candidate.data);
+
+    if (!hasValidEnvelope) {
+      persistentStorage.removeItem(getAccountCacheKey(uid));
+      return null;
+    }
+
+    return candidate as PersistedAccountEnvelope;
+  } catch {
+    return null;
+  }
+}
+
+export function isCacheFreshWithin24Hours(savedAt: string | undefined, nowMs = Date.now()): boolean {
+  if (!savedAt || typeof savedAt !== 'string') return false;
+  const parsedMs = Date.parse(savedAt);
+  if (Number.isNaN(parsedMs)) return false;
+  return nowMs - parsedMs >= 0 && nowMs - parsedMs < ACCOUNT_CACHE_MAX_AGE_MS;
+}
 
 export function savePersistedAccount(
   uid: string,
   data: FullCloudAccountData,
-  savedAt: string = new Date().toISOString()
+  savedAt: string = new Date().toISOString(),
+  dataRevision?: string
 ): void {
   if (!uid) return;
   try {
+    const existingEnvelope = readValidatedEnvelope(uid);
+    const resolvedRevision =
+      dataRevision ?? data.dataRevision ?? existingEnvelope?.dataRevision;
+    const cleanData: FullCloudAccountData = {
+      ...data,
+      ...(resolvedRevision ? { dataRevision: resolvedRevision } : {}),
+    };
     const envelope: PersistedAccountEnvelope = {
       schemaVersion: ACCOUNT_CACHE_SCHEMA_VERSION,
       uid,
       savedAt,
-      data,
+      ...(resolvedRevision ? { dataRevision: resolvedRevision } : {}),
+      data: cleanData,
     };
     persistentStorage.setItem(getAccountCacheKey(uid), envelope);
     persistentStorage.removeItem(getLegacyAccountCacheKeyV1(uid));
+  } catch {
+    // Gracefully handle storage errors
+  }
+}
+
+/**
+ * Updates the stored `dataRevision` (and `savedAt` timestamp) in the local cache envelope
+ * whenever a client write succeeds, keeping the local cache revision aligned with `users/{uid}.dataRevision`.
+ */
+export function updatePersistedAccountRevision(
+  uid: string,
+  dataRevision: string,
+  savedAt: string = new Date().toISOString()
+): void {
+  if (!uid || !dataRevision) return;
+  try {
+    if (pendingSaveEntry && pendingSaveEntry.uid === uid) {
+      pendingSaveEntry = {
+        ...pendingSaveEntry,
+        dataRevision,
+        data: { ...pendingSaveEntry.data, dataRevision },
+      };
+    }
+    const existingEnvelope = readValidatedEnvelope(uid);
+    if (!existingEnvelope) return;
+    const updatedEnvelope: PersistedAccountEnvelope = {
+      ...existingEnvelope,
+      savedAt,
+      dataRevision,
+      data: {
+        ...existingEnvelope.data,
+        dataRevision,
+      },
+    };
+    persistentStorage.setItem(getAccountCacheKey(uid), updatedEnvelope);
   } catch {
     // Gracefully handle storage errors
   }
@@ -121,10 +206,16 @@ export function savePersistedAccount(
 export function schedulePersistedAccountSave(
   uid: string,
   data: FullCloudAccountData,
-  delayMs = 300
+  delayMs = 300,
+  dataRevision?: string
 ): void {
   if (!uid) return;
-  pendingSaveEntry = { uid, data };
+  const inheritedRevision = dataRevision ?? data.dataRevision ?? pendingSaveEntry?.dataRevision;
+  pendingSaveEntry = {
+    uid,
+    data,
+    ...(inheritedRevision ? { dataRevision: inheritedRevision } : {}),
+  };
 
   if (pendingSaveTimer !== null) {
     clearTimeout(pendingSaveTimer);
@@ -135,7 +226,7 @@ export function schedulePersistedAccountSave(
     if (pendingSaveEntry && pendingSaveEntry.uid === uid) {
       const toSave = pendingSaveEntry;
       pendingSaveEntry = null;
-      savePersistedAccount(toSave.uid, toSave.data);
+      savePersistedAccount(toSave.uid, toSave.data, new Date().toISOString(), toSave.dataRevision);
     }
   }, delayMs);
 }
@@ -152,7 +243,7 @@ export function flushPendingPersistedAccount(): void {
   if (pendingSaveEntry) {
     const toSave = pendingSaveEntry;
     pendingSaveEntry = null;
-    savePersistedAccount(toSave.uid, toSave.data);
+    savePersistedAccount(toSave.uid, toSave.data, new Date().toISOString(), toSave.dataRevision);
   }
 }
 
@@ -166,41 +257,22 @@ export function cancelPendingPersistedAccountSave(uid?: string): void {
   }
 }
 
-export function loadPersistedAccount(uid: string): FullCloudAccountData | null {
+export function loadPersistedAccountEnvelope(uid: string): PersistedAccountEnvelope | null {
   if (!uid) return null;
   try {
-    // Flush any pending save for this user first
     if (pendingSaveEntry && pendingSaveEntry.uid === uid) {
       flushPendingPersistedAccount();
     }
-
-    // Opportunistically purge any leftover v1 entry for this user
     persistentStorage.removeItem(getLegacyAccountCacheKeyV1(uid));
-
-    const raw = persistentStorage.getItem<unknown>(getAccountCacheKey(uid));
-    if (!raw || typeof raw !== 'object') {
-      return null;
-    }
-
-    const candidate = raw as Partial<PersistedAccountEnvelope>;
-    const hasValidEnvelope =
-      candidate.schemaVersion === ACCOUNT_CACHE_SCHEMA_VERSION &&
-      typeof candidate.uid === 'string' &&
-      candidate.uid === uid &&
-      typeof candidate.savedAt === 'string' &&
-      candidate.savedAt.length > 0 &&
-      isValidFullCloudAccountData(candidate.data);
-
-    if (!hasValidEnvelope) {
-      persistentStorage.removeItem(getAccountCacheKey(uid));
-      return null;
-    }
-
-    return candidate.data as FullCloudAccountData;
+    return readValidatedEnvelope(uid);
   } catch {
-    // Fallback on corrupt cache
     return null;
   }
+}
+
+export function loadPersistedAccount(uid: string): FullCloudAccountData | null {
+  const envelope = loadPersistedAccountEnvelope(uid);
+  return envelope ? envelope.data : null;
 }
 
 export function clearPersistedAccount(uid: string): void {

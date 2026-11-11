@@ -385,11 +385,11 @@ describe('Reduce Motion', () => {
   });
   afterEach(() => {
     jest.useRealTimers();
-    jest.restoreAllMocks();
   });
 
   it('draws the final bars without an entrance', async () => {
-    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
+    // Once: React Native's own mock answers the following calls, so nothing needs restoring.
+    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValueOnce(true);
     render(
       wrap(<BarChart testID="flow" categories={MONTHS} categoryTitles={MONTH_TITLES} series={FLOW_SERIES} />)
     );
@@ -400,6 +400,9 @@ describe('Reduce Motion', () => {
     layoutPlot('flow');
     expect(barHeight('flow-bar-received-1')).toBeCloseTo(168 - 10, 0);
     expect(frameRequests).not.toHaveBeenCalled();
+    // Restored here, while this test's fake clock is active: restoring it after the switch
+    // back to real timers would leave a stale fake requestAnimationFrame for later tests.
+    frameRequests.mockRestore();
   });
 });
 
@@ -423,6 +426,13 @@ describe('chart parts', () => {
 });
 
 describe('selection and visible window (review fixes)', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   const SIX = ['Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov'];
   const SIX_TITLES = ['Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre'];
   const SIX_SERIES = [{ id: 'net', label: 'Neto', color: '#2EBD85', values: [1, 2, 3, 4, 5, 6] }];
@@ -479,7 +489,6 @@ describe('selection and visible window (review fixes)', () => {
   });
 
   it('shows only the recent months that fit a full touch target on a narrow phone', () => {
-    jest.useFakeTimers();
     render(
       wrap(
         <BarChart
@@ -501,7 +510,6 @@ describe('selection and visible window (review fixes)', () => {
     expect(screen.getByTestId('narrow-readout')).toHaveTextContent(/Noviembre.*Nota 5/);
     fireEvent.press(screen.getByTestId('narrow-point-0'));
     expect(screen.getByTestId('narrow-readout')).toHaveTextContent(/Agosto.*Nota 2/);
-    jest.useRealTimers();
   });
 
   it('keeps the estimate and the month it starts from in a narrow line chart', () => {
@@ -545,5 +553,52 @@ describe('selection and visible window (review fixes)', () => {
     expect(hidden('split-center-value')).toHaveTextContent('$ 450.000');
     fireEvent(row, 'blur', {});
     expect(hidden('split-center-value')).toHaveTextContent('$ 450.000');
+  });
+});
+
+describe('lighter charts', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('can hide the legend when the readout already names every color', () => {
+    render(
+      wrap(
+        <BarChart
+          testID="flow"
+          categories={MONTHS}
+          categoryTitles={MONTH_TITLES}
+          series={FLOW_SERIES}
+          showLegend={false}
+        />
+      )
+    );
+    expect(screen.queryByTestId('flow-legend')).toBeNull();
+    expect(screen.getByTestId('flow-readout')).toHaveTextContent(/Recibido/);
+  });
+
+  it.each(PLATFORM_SKIN_IDS)('shows a single series as the month and its amount only (%s)', (skin) => {
+    render(
+      wrap(
+        <LineChart
+          testID="net"
+          categories={MONTHS}
+          categoryTitles={MONTH_TITLES}
+          series={[{ id: 'net', label: 'Flujo neto', color: '#2EBD85', values: [500_000, 1_080_000] }]}
+          readout="value"
+          showLegend={false}
+        />,
+        skin
+      )
+    );
+    expect(screen.getByTestId('net-readout')).toHaveTextContent('Octubre 2026$ 1.080.000');
+    expect(screen.queryByTestId('net-legend')).toBeNull();
+    // Screen readers still hear which figure it is.
+    expect(screen.getByTestId('net-point-0').props.accessibilityLabel).toBe(
+      'Septiembre 2026: Flujo neto $ 500.000'
+    );
   });
 });

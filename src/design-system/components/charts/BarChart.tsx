@@ -29,6 +29,7 @@ import {
   useChartSelection,
   useChartWindow,
   type ChartLegendItem,
+  type ChartReadoutVariant,
   type ChartSeries,
 } from './ChartParts';
 import { bandCenter, buildValueScale, valueToY, type PlotBox, type ValueScale } from './chartScale';
@@ -50,6 +51,10 @@ export interface BarChartProps {
   referenceLine?: BarChartReferenceLine;
   /** Extra line of the readout for a category (a gap, a delta). */
   describeNote?: (index: number) => string | undefined;
+  /** False hides the legend, for charts whose readout already names every color. */
+  showLegend?: boolean;
+  /** 'value' shows only the amount, for a chart with a single series. */
+  readout?: ChartReadoutVariant;
   plotHeight?: number;
   testID: string;
 }
@@ -200,6 +205,8 @@ export function BarChart({
   layout = 'grouped',
   referenceLine,
   describeNote: allNotes,
+  showLegend = true,
+  readout = 'rows',
   plotHeight = DEFAULT_PLOT_HEIGHT_PT,
   testID,
 }: BarChartProps): React.JSX.Element {
@@ -251,6 +258,7 @@ export function BarChart({
           value: item.values[activeIndex] ?? 0,
         }))}
         note={describeNote?.(activeIndex)}
+        variant={readout}
       />
 
       <View style={{ height: plotHeight }} onLayout={handleLayout} testID={`${testID}-plot`}>
@@ -295,7 +303,7 @@ export function BarChart({
 
       <ChartCategoryLabels labels={categories} activeIndex={activeIndex} />
 
-      <ChartLegend items={legend} testID={`${testID}-legend`} />
+      {showLegend ? <ChartLegend items={legend} testID={`${testID}-legend`} /> : null}
     </View>
   );
 }

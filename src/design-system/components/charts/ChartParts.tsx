@@ -110,10 +110,18 @@ export interface ChartReadoutRow {
   value: number;
 }
 
+/**
+ * - 'rows': each series with its color, name and amount (several series).
+ * - 'value': only the amount of the first series, larger, for a chart whose title already
+ *   names its single series ("Balance mensual").
+ */
+export type ChartReadoutVariant = 'rows' | 'value';
+
 export interface ChartReadoutProps {
   title: string;
   rows: readonly ChartReadoutRow[];
   note?: string;
+  variant?: ChartReadoutVariant;
   testID?: string;
 }
 
@@ -121,28 +129,43 @@ export interface ChartReadoutProps {
  * Figures of the chosen point. Not a live region: hovering would announce every move, and a
  * screen reader already reads the same figures from the focused column.
  */
-export function ChartReadout({ title, rows, note, testID }: ChartReadoutProps): React.JSX.Element {
+export function ChartReadout({
+  title,
+  rows,
+  note,
+  variant = 'rows',
+  testID,
+}: ChartReadoutProps): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
+  const first = rows[0];
   return (
     <View testID={testID} style={{ gap: spacing.xxs }}>
       <AppText variant="caption" color={colors.text.secondary}>
         {title}
       </AppText>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: spacing.md, rowGap: spacing.xxs }}>
-        {rows.map((row) => (
-          <View key={row.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-            <View
-              style={{ width: 8, height: 8, borderRadius: radius.pill, backgroundColor: row.color }}
-            />
-            <AppText variant="micro" color={colors.text.secondary}>
-              {row.label}
-            </AppText>
-            <AppText variant="callout" tabularNums color={colors.text.primary}>
-              {formatCurrency(row.value)}
-            </AppText>
-          </View>
-        ))}
-      </View>
+      {variant === 'value' ? (
+        <AppText variant="title2" tabularNums color={colors.text.primary}>
+          {formatCurrency(first?.value ?? 0)}
+        </AppText>
+      ) : (
+        <View
+          style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: spacing.md, rowGap: spacing.xxs }}
+        >
+          {rows.map((row) => (
+            <View key={row.id} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+              <View
+                style={{ width: 8, height: 8, borderRadius: radius.pill, backgroundColor: row.color }}
+              />
+              <AppText variant="micro" color={colors.text.secondary}>
+                {row.label}
+              </AppText>
+              <AppText variant="callout" tabularNums color={colors.text.primary}>
+                {formatCurrency(row.value)}
+              </AppText>
+            </View>
+          ))}
+        </View>
+      )}
       {note ? (
         <AppText variant="micro" color={colors.text.muted}>
           {note}

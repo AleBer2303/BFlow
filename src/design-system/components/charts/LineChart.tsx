@@ -25,6 +25,7 @@ import {
   useChartSelection,
   useChartWindow,
   type ChartLegendItem,
+  type ChartReadoutVariant,
   type ChartSeries,
 } from './ChartParts';
 import {
@@ -50,6 +51,10 @@ export interface LineChartProps {
   /** Label of the projection in the legend. */
   projectionLabel?: string;
   describeNote?: (index: number) => string | undefined;
+  /** False hides the legend, for charts whose readout already names every color. */
+  showLegend?: boolean;
+  /** 'value' shows only the amount, for a chart with a single series. */
+  readout?: ChartReadoutVariant;
   plotHeight?: number;
   testID: string;
 }
@@ -196,6 +201,8 @@ export function LineChart({
   projectedFromIndex,
   projectionLabel,
   describeNote: allNotes,
+  showLegend = true,
+  readout = 'rows',
   plotHeight = DEFAULT_PLOT_HEIGHT_PT,
   testID,
 }: LineChartProps): React.JSX.Element {
@@ -254,6 +261,7 @@ export function LineChart({
           value: item.values[activeIndex] ?? 0,
         }))}
         note={describeNote?.(activeIndex)}
+        variant={readout}
       />
 
       <View style={{ height: plotHeight }} onLayout={handleLayout} testID={`${testID}-plot`}>
@@ -299,7 +307,7 @@ export function LineChart({
 
       <ChartCategoryLabels labels={categories} activeIndex={activeIndex} />
 
-      <ChartLegend items={legend} testID={`${testID}-legend`} />
+      {showLegend ? <ChartLegend items={legend} testID={`${testID}-legend`} /> : null}
     </View>
   );
 }

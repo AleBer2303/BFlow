@@ -266,3 +266,76 @@ export function ChartCategoryLabels({
     </View>
   );
 }
+
+export interface ChartSegmentOption<T extends string> {
+  id: T;
+  label: string;
+}
+
+export interface ChartSegmentedControlProps<T extends string> {
+  options: readonly ChartSegmentOption<T>[];
+  value: T;
+  onChange: (value: T) => void;
+  accessibilityLabel: string;
+  testID: string;
+}
+
+/** Switches what a chart compares (expenses or incomes) without leaving the card. */
+export function ChartSegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+  accessibilityLabel,
+  testID,
+}: ChartSegmentedControlProps<T>): React.JSX.Element {
+  const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
+  return (
+    <View
+      testID={testID}
+      accessibilityRole="tablist"
+      accessibilityLabel={accessibilityLabel}
+      style={{
+        flexDirection: 'row',
+        alignSelf: 'flex-start',
+        padding: spacing.xxs,
+        gap: spacing.xxs,
+        borderRadius: radius.pill,
+        backgroundColor: colors.glass.surfaceTint,
+        borderWidth: 1,
+        borderColor: colors.glass.subtleBorder,
+      }}
+    >
+      {options.map((option) => {
+        const isSelected = option.id === value;
+        return (
+          <AppPressable
+            key={option.id}
+            testID={`${testID}-${option.id}`}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isSelected }}
+            onPress={() => {
+              if (!isSelected) {
+                hapticService.selection();
+                onChange(option.id);
+              }
+            }}
+            style={{
+              minHeight: minTouchTarget - spacing.xs * 2,
+              paddingHorizontal: spacing.md,
+              justifyContent: 'center',
+              borderRadius: radius.pill,
+              backgroundColor: isSelected ? colors.accent.container : 'transparent',
+            }}
+          >
+            <AppText
+              variant="caption"
+              color={isSelected ? colors.accent.onContainer : colors.text.secondary}
+            >
+              {option.label}
+            </AppText>
+          </AppPressable>
+        );
+      })}
+    </View>
+  );
+}

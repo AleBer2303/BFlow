@@ -15,7 +15,16 @@ case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) IS_WIN=1 ;; esac
 is_link() {
   local path="$1"
   if [ "$IS_WIN" = 1 ]; then
-    cmd //c "dir /AL /B $(dirname "$path")" 2>/dev/null | tr -d '\r' | grep -qxF "$(basename "$path")"
+    local win_path
+    win_path="$(cygpath -w "$PWD/$path" 2>/dev/null || echo "$path")"
+    if command -v powershell.exe >/dev/null 2>&1; then
+      powershell.exe -NoProfile -NonInteractive -Command \
+        "if ((Get-Item -LiteralPath '$win_path' -Force -ErrorAction SilentlyContinue).LinkType) { exit 0 } else { exit 1 }" >/dev/null 2>&1
+    else
+      local win_dir
+      win_dir="$(cygpath -w "$PWD/$(dirname "$path")" 2>/dev/null || dirname "$path")"
+      cmd //c dir //AL //B "$win_dir" 2>/dev/null | tr -d '\r' | grep -qxF "$(basename "$path")"
+    fi
   else
     [ -L "$path" ]
   fi
@@ -35,7 +44,15 @@ link() {
     fi
   fi
   if [ "$IS_WIN" = 1 ]; then
-    cmd //c "mklink /J \"$(cygpath -w "$PWD/$path")\" \"$(cygpath -w "$PWD/$target")\"" >/dev/null
+    local win_path win_target
+    win_path="$(cygpath -w "$PWD/$path")"
+    win_target="$(cygpath -w "$PWD/$target")"
+    if command -v powershell.exe >/dev/null 2>&1; then
+      powershell.exe -NoProfile -NonInteractive -Command \
+        "try { \$ErrorActionPreference = 'Stop'; New-Item -ItemType Junction -Path '$win_path' -Target '$win_target' -Force | Out-Null } catch { Write-Error \$_.Exception.Message; exit 1 }"
+    else
+      cmd //c mklink //J "$win_path" "$win_target" >/dev/null
+    fi
   else
     ln -s "../$target" "$path"
   fi

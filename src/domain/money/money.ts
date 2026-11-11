@@ -60,15 +60,15 @@ export function formatCurrencyCompact(amount: number, symbol = '$'): string {
   return isNegative ? `-${formatted}` : formatted;
 }
 
-/**
- * Parses a formatted currency string like "$ 1.080.000", "$1,080,000", or "1080000" into a safe integer.
- */
 /** A difference always carries its sign: "+$ 120.000", "-$ 80.000", "$ 0". */
 export function formatSignedCurrency(amount: number, options?: CurrencyFormatOptions): string {
   const formatted = formatCurrency(amount, options);
   return amount > 0 ? `+${formatted}` : formatted;
 }
 
+/**
+ * Parses a formatted currency string like "$ 1.080.000", "$1,080,000", or "1080000" into a safe integer.
+ */
 export function parseCurrencyInteger(input: string | number): number {
   if (typeof input === 'number') {
     return assertSafeMoneyInteger(input, 'parseCurrencyInteger');

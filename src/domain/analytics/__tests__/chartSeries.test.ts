@@ -206,6 +206,29 @@ describe('buildMonthlyHistory', () => {
     });
   });
 
+  it('computes the active month live even when it is closed, so it agrees with the cards', () => {
+    const input = closedOctoberInput();
+    // Back to October from the history, then a pending expense is paid after the close.
+    const edited = input.entries.map((entry) =>
+      entry.id === '2026-10_exp_smart_fit'
+        ? { ...entry, status: 'completed' as const, actualAmount: entry.plannedAmount }
+        : entry
+    );
+    const history = buildMonthlyHistory({ ...input, activeMonthKey: '2026-10', entries: edited });
+    const live = calculateMonthlyBudgetSummary(edited, '2026-10');
+
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({
+      monthKey: '2026-10',
+      isClosed: true,
+      paidExpenses: live.paidExpenses,
+      netCashFlow: live.netCashFlow,
+    });
+    expect(history[0]?.paidExpenses).toBe(3_020_000);
+    // The snapshot still holds the figures frozen at the close.
+    expect(input.closedSnapshots['2026-10']?.budget.paidExpenses).toBe(2_920_000);
+  });
+
   it('falls back to the legacy moto balance and default bucket names', () => {
     const input = closedOctoberInput();
     const snapshot = input.closedSnapshots['2026-10'] as MonthSnapshot;

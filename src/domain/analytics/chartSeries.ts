@@ -184,8 +184,12 @@ function buildPointFromSnapshot(
 }
 
 /**
- * One point per month of the window, oldest first. Closed months read their snapshot;
- * open months are computed exactly like the tabs compute the active month.
+ * One point per month of the window, oldest first.
+ * - Earlier closed months read their snapshot: the frozen balances that rolled over.
+ * - The active month is always computed live, exactly like the tabs compute it, even when
+ *   it is closed: a closed month can still be edited from the history, and the charts must
+ *   then agree with the cards shown next to them.
+ * - Open months are computed live as well.
  */
 export function buildMonthlyHistory(input: MonthlyHistoryInput): MonthlyHistoryPoint[] {
   const window = resolveHistoryWindow(input.monthKeys, input.activeMonthKey, input.maxMonths);
@@ -204,7 +208,8 @@ export function buildMonthlyHistory(input: MonthlyHistoryInput): MonthlyHistoryP
     const reserveContribution = savings.reserve.paidContributionsThisMonth;
 
     const snapshot = input.closedSnapshots[monthKey];
-    if (snapshot) {
+    const isActive = monthKey === input.activeMonthKey;
+    if (snapshot && !isActive) {
       return buildPointFromSnapshot(snapshot, buckets, reserveContribution);
     }
 
@@ -219,7 +224,7 @@ export function buildMonthlyHistory(input: MonthlyHistoryInput): MonthlyHistoryP
 
     return {
       monthKey,
-      isClosed: false,
+      isClosed: Boolean(snapshot),
       plannedIncome: budget.plannedIncome,
       receivedIncome: budget.receivedIncome,
       plannedExpenses: budget.plannedExpenses,

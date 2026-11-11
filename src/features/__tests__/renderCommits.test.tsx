@@ -26,6 +26,23 @@ function mockBump(id: string): void {
   counts[id] = (counts[id] ?? 0) + 1;
 }
 
+type MockRenderFn = (props: Record<string, unknown>) => React.ReactElement;
+
+/**
+ * Counts executions of a component's own body. If the component is a React.memo, the memo
+ * stays in front, so a bail-out is not counted (a Profiler would count it).
+ */
+function mockCountBody(id: string, component: unknown): unknown {
+  const ReactLib = jest.requireActual<typeof import('react')>('react');
+  const memoized = component as { type?: MockRenderFn; compare?: (a: object, b: object) => boolean };
+  const body: MockRenderFn = typeof component === 'function' ? (component as MockRenderFn) : memoized.type!;
+  const Counted: MockRenderFn = (props) => {
+    mockBump(id);
+    return body(props);
+  };
+  return typeof component === 'function' ? Counted : ReactLib.memo(Counted, memoized.compare);
+}
+
 /** Replaces `exportName` with the same component wrapped in a Profiler named `id`. */
 function mockProfiled(id: string, actual: Record<string, unknown>, exportName: string) {
   const ReactLib = jest.requireActual<typeof import('react')>('react');
@@ -97,7 +114,8 @@ jest.mock('../../design-system', () => {
     mockBump('textInput');
     return ReactLib.createElement(OriginalInput, { ...props, ref });
   });
-  return { ...actual, AppPressable, AppTextInput };
+  const FloatingLiquidGlassDock = mockCountBody('dock', actual.FloatingLiquidGlassDock);
+  return { ...actual, AppPressable, AppTextInput, FloatingLiquidGlassDock };
 });
 
 const VIEW_IDS = ['summary', 'checklist', 'debts', 'savings', 'analytics', 'account'] as const;
@@ -210,5 +228,9 @@ describe('Fase 5: renders por acción', () => {
     expect(report.toggle_one_row?.row).toBe(1);
     // R-17: typing in the add form never re-renders the rows.
     expect(report.type_5_chars_in_add_form?.row ?? 0).toBe(0);
+
+    // R-21: a shell re-render (pending badge) re-renders neither the inputs nor the dock.
+    expect(report.pending_count_change_with_form_open?.checklist ?? 0).toBe(0);
+    expect(report.pending_count_change_with_form_open?.dock ?? 0).toBe(0);
   });
 });

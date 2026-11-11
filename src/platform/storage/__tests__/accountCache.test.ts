@@ -2,10 +2,13 @@ import type { FullCloudAccountData } from '../../../data/repositories/budgetRepo
 import {
   ACCOUNT_CACHE_SCHEMA_VERSION,
   clearPersistedAccount,
+  flushPendingPersistedAccount,
   getAccountCacheKey,
   getLegacyAccountCacheKeyV1,
+  isEquivalentCloudAccount,
   loadPersistedAccount,
   savePersistedAccount,
+  schedulePersistedAccountSave,
   type PersistedAccountEnvelope,
 } from '../accountCache';
 import {
@@ -179,5 +182,63 @@ describe('accountCache', () => {
     expect(loadPersistedAccount(uid)).toBeNull();
     expect(disk.has(getAccountCacheKey(uid))).toBe(false);
     expect(disk.has(getLegacyAccountCacheKeyV1(uid))).toBe(false);
+  });
+
+  it('correctly compares equivalent and non-equivalent cloud account payloads (R-18)', () => {
+    expect(isEquivalentCloudAccount(mockAccount, mockAccount)).toBe(true);
+    expect(isEquivalentCloudAccount(mockAccount, { ...mockAccount })).toBe(true);
+
+    // Mismatched monthKey
+    expect(isEquivalentCloudAccount(mockAccount, { ...mockAccount, activeMonthKey: '2026-11' })).toBe(false);
+
+    // Mismatched concepts
+    const withConcepts: FullCloudAccountData = {
+      ...mockAccount,
+      concepts: [
+        {
+          id: 'c1',
+          name: 'Sueldo',
+          type: 'income',
+          group: 'fixed',
+          defaultAmount: 5000000,
+          recurrence: { kind: 'monthly' },
+          allowMultiplePerMonth: false,
+          archived: false,
+          order: 1,
+        },
+      ],
+    };
+    expect(isEquivalentCloudAccount(mockAccount, withConcepts)).toBe(false);
+  });
+
+  it('debounces rapid saves and immediately flushes with flushPendingPersistedAccount (R-06)', async () => {
+    jest.useFakeTimers();
+    try {
+      schedulePersistedAccountSave(uid, mockAccount, 200);
+      expect(disk.has(getAccountCacheKey(uid))).toBe(false);
+
+      // Fast forward less than delay
+      jest.advanceTimersByTime(100);
+      expect(disk.has(getAccountCacheKey(uid))).toBe(false);
+
+      // Immediate flush writes right away
+      flushPendingPersistedAccount();
+      expect(disk.has(getAccountCacheKey(uid))).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('cancels pending debounced saves on clearPersistedAccount', () => {
+    jest.useFakeTimers();
+    try {
+      schedulePersistedAccountSave(uid, mockAccount, 200);
+      clearPersistedAccount(uid);
+
+      jest.advanceTimersByTime(300);
+      expect(disk.has(getAccountCacheKey(uid))).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

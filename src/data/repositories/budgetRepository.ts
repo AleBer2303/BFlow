@@ -965,7 +965,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     // Extra safety check: if concepts already exist in Firestore for the owner, never overwrite them.
     const existingConceptsSnap = await getDocs(collection(this.db, 'users', uid, 'concepts'));
     if (existingConceptsSnap.docs.length > 0) {
-      await setDoc(
+      void setDoc(
         userDocRef,
         {
           uid,
@@ -975,7 +975,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
           updatedAt: new Date().toISOString(),
         },
         { merge: true }
-      );
+      ).catch(() => {});
       return { seeded: false, monthKey: existingActive };
     }
 
@@ -1225,7 +1225,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
             updatedAt: new Date().toISOString(),
           });
         }
-        await healBatch.commit();
+        void healBatch.commit().catch(() => {});
       } catch {
         // Non-fatal if offline; in-memory state is already healed
       }
@@ -1354,7 +1354,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
 
     if (savedActiveMonthKey !== activeMonthKey || shouldMarkOnboardingDoneInCloud) {
       try {
-        await setDoc(
+        void setDoc(
           doc(this.db, 'users', uid),
           {
             uid,
@@ -1365,7 +1365,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
             updatedAt: new Date().toISOString(),
           },
           { merge: true }
-        );
+        ).catch(() => {});
       } catch {
         // Non-fatal if offline
       }

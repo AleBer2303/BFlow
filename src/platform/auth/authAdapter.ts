@@ -117,8 +117,11 @@ async function syncUserProfileDocument(
 
   let existingData: Record<string, unknown> = {};
   try {
-    const snap = await getDoc(userRef);
-    if (snap.exists()) {
+    const snap = await Promise.race([
+      getDoc(userRef),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500)),
+    ]);
+    if (snap && snap.exists()) {
       existingData = snap.data() as Record<string, unknown>;
     }
   } catch {
@@ -178,11 +181,10 @@ async function syncUserProfileDocument(
     updatedAt: nowIso,
   });
 
-  try {
-    await setDoc(userRef, profilePayload, { merge: true });
-  } catch {
+  // Asynchronously synchronize user document in background; never block returning the authenticated session
+  void setDoc(userRef, profilePayload, { merge: true }).catch(() => {
     // Non-fatal if offline; local cache handles queuing
-  }
+  });
 
   const authUser: BFlowAuthUser = {
     uid: firebaseUser.uid,
@@ -336,7 +338,7 @@ export function subscribeToAuthUser(
 ): () => void {
   try {
     const auth = getFirebaseAuth();
-    return onAuthStateChanged(auth, async (firebaseUser) => {
+    return onAuthStateChanged(auth, (firebaseUser) => {
       if (!firebaseUser) {
         savePersistedSession(null);
         listener(null);
@@ -345,9 +347,36 @@ export function subscribeToAuthUser(
       const persisted = loadPersistedSession();
       if (persisted && persisted.uid === firebaseUser.uid) {
         listener(persisted);
+      } else {
+        const isOwner = isOwnerCanonicalEmail(firebaseUser.email);
+        const fastUser: BFlowAuthUser = {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          displayName:
+            firebaseUser.displayName ||
+            firebaseUser.email?.split('@')[0] ||
+            'Usuario BFlow',
+          authProvider:
+            firebaseUser.providerData[0]?.providerId === 'google.com'
+              ? 'google.com'
+              : 'password',
+          activeMonthKey: isOwner
+            ? '2026-10'
+            : `${toBogotaMonthKey().slice(0, 4)}-01`,
+          provider: 'firebase',
+        };
+        savePersistedSession(fastUser);
+        listener(fastUser);
       }
-      const syncedUser = await syncUserProfileDocument(firebaseUser);
-      listener(syncedUser);
+
+      // Run profile document sync strictly in background without blocking listener
+      void syncUserProfileDocument(firebaseUser)
+        .then((syncedUser) => {
+          listener(syncedUser);
+        })
+        .catch(() => {
+          // Non-fatal if offline
+        });
     });
   } catch {
     listener(loadPersistedSession());

@@ -688,4 +688,64 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       persistentStorage.clear();
     }
   });
+
+  it('delivers user immediately even if setDoc never resolves (hanging promise simulated, R-04)', async () => {
+    let capturedAuthCallback: ((user: unknown) => void) | null = null;
+    const fakeAuth = {};
+    const mockOnAuthStateChanged = jest.fn((_auth, cb) => {
+      capturedAuthCallback = cb;
+      return () => {};
+    });
+
+    jest.isolateModules(() => {
+      jest.doMock('firebase/auth', () => ({
+        onAuthStateChanged: mockOnAuthStateChanged,
+      }));
+      jest.doMock('firebase/firestore', () => ({
+        doc: jest.fn(() => ({})),
+        getDoc: jest.fn(async () => ({ exists: () => false })),
+        setDoc: jest.fn(() => new Promise(() => {})), // Never resolves
+      }));
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const adapter = require('../../../platform/auth/authAdapter.ts') as typeof authAdapter;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const firebaseConfig = require('../../../data/firebase/firebaseConfig.ts') as {
+        getFirebaseAuth: () => unknown;
+      };
+      jest.spyOn(firebaseConfig, 'getFirebaseAuth').mockReturnValue(fakeAuth);
+
+      const receivedUsers: Array<BFlowAuthUser | null> = [];
+      adapter.subscribeToAuthUser((u) => {
+        receivedUsers.push(u);
+      });
+
+      expect(mockOnAuthStateChanged).toHaveBeenCalled();
+      expect(capturedAuthCallback).not.toBeNull();
+
+      // Simulate Firebase Auth reporting user while setDoc hangs
+      act(() => {
+        capturedAuthCallback!({
+          uid: 'uid_fast_immediate',
+          email: 'abernalg2303@gmail.com',
+          displayName: 'Alejandro',
+          providerData: [],
+        });
+      });
+
+      // User must be delivered immediately despite hanging setDoc
+      expect(receivedUsers.length).toBeGreaterThanOrEqual(1);
+      expect(receivedUsers[0]?.uid).toBe('uid_fast_immediate');
+    });
+  });
+
+  it('does not sync widget before account is hydrated (R-19)', async () => {
+    // Unhydrated clean store state
+    act(() => {
+      useBudgetStore.setState({ isAccountHydrated: false });
+    });
+
+    const res = await useBudgetStore.getState().syncActiveWidget();
+    expect(res.synced).toBe(false);
+  });
 });

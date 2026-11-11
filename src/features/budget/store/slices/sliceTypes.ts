@@ -40,6 +40,7 @@ import { isDemoModeEnabled } from '../../../../platform/mode/demoMode';
 import {
   loadPersistedAccount,
   savePersistedAccount,
+  schedulePersistedAccountSave,
 } from '../../../../platform/storage/accountCache';
 import {
   buildWidgetSnapshotV1,
@@ -346,7 +347,7 @@ export function persistHydratedAccountSnapshot(state: BudgetStoreState): void {
   if (!state.isAccountHydrated) {
     return;
   }
-  savePersistedAccount(uid, {
+  schedulePersistedAccountSave(uid, {
     activeMonthKey: state.activeMonthKey,
     availableMonths: state.availableMonths,
     concepts: state.concepts,
@@ -361,6 +362,13 @@ export function persistHydratedAccountSnapshot(state: BudgetStoreState): void {
 }
 
 export function triggerWidgetSync(state: BudgetStoreState): Promise<WidgetSyncResult> {
+  if (!state.isAccountHydrated) {
+    return Promise.resolve({
+      synced: false,
+      mode: 'mode-a-preview' as const,
+      appGroupId: 'group.com.bflow.app',
+    });
+  }
   persistHydratedAccountSnapshot(state);
   try {
     const monthDebts = state.debtsByMonth[state.activeMonthKey] ?? [];

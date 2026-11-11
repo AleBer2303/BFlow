@@ -121,4 +121,34 @@ describe('platform/widgets — WidgetSnapshotV1 Contract & Dynamic App Group Ada
     expect(preview?.checklistCompleted).toBe(6);
     expect(preview?.checklistTotal).toBe(12);
   });
+
+  it('skips redundant writes when snapshot content is unchanged even if updatedAtIso differs (R-19)', async () => {
+    const seed = buildOctober2026SeedPayload();
+    const snapshot1 = buildWidgetSnapshotV1({
+      monthKey: '2026-10',
+      concepts: seed.concepts,
+      entries: seed.entries,
+      debts: seed.debts,
+      debtPayments: seed.debtPayments,
+      savingsBuckets: seed.savingsBuckets,
+      updatedAtIso: '2026-10-28T12:00:00.000Z',
+    });
+
+    const res1 = await syncWidgetSnapshotNative(snapshot1);
+    expect(res1.synced).toBe(true);
+
+    const snapshot2 = buildWidgetSnapshotV1({
+      monthKey: '2026-10',
+      concepts: seed.concepts,
+      entries: seed.entries,
+      debts: seed.debts,
+      debtPayments: seed.debtPayments,
+      savingsBuckets: seed.savingsBuckets,
+      updatedAtIso: '2026-10-28T12:05:00.000Z', // Different timestamp
+    });
+
+    const res2 = await syncWidgetSnapshotNative(snapshot2);
+    expect(res2.synced).toBe(true);
+    expect(res2.skippedRedundantWrite).toBe(true);
+  });
 });

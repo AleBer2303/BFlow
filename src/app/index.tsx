@@ -49,10 +49,14 @@ import {
   requestPasswordResetCode,
 } from '../platform/auth/verificationCodeService';
 import { isDemoModeEnabled } from '../platform/mode/demoMode';
+import { markPerf } from '../platform/perf/perfMarks';
 import {
   clearPersistedAccount,
+  flushPendingPersistedAccount,
+  isEquivalentCloudAccount,
   loadPersistedAccount,
   savePersistedAccount,
+  schedulePersistedAccountSave,
 } from '../platform/storage/accountCache';
 
 export default function PhaseOneHomeScreen(): React.JSX.Element {
@@ -130,6 +134,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
       const cached = loadPersistedAccount(user.uid);
       if (cached) {
         applyFullCloudAccount(cached);
+        markPerf('cache_applied');
       }
 
       setSyncStatus('Cargando tu presupuesto e historial...', true);
@@ -137,14 +142,22 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         const repo = new FirestoreBudgetRepository();
         const fullAccount = await repo.loadFullCloudAccount(user.uid, user.email, options);
         const currentUid = useBudgetStore.getState().authUser?.uid;
-        if (currentUid && currentUid !== user.uid) {
+        if (!currentUid || currentUid !== user.uid) {
           return;
         }
         savePersistedAccount(user.uid, fullAccount);
-        applyFullCloudAccount(fullAccount);
+        if (!isEquivalentCloudAccount(cached, fullAccount)) {
+          applyFullCloudAccount(fullAccount);
+          markPerf('cloud_applied');
+        }
         setSyncStatus('Sincronizado', false);
+        markPerf('sync_completed');
       } catch {
-        setSyncStatus('', false);
+        const hasLocalData = loadPersistedAccount(user.uid) !== null;
+        setSyncStatus(
+          hasLocalData ? 'Modo sin conexión' : 'No fue posible conectar con el servidor',
+          false
+        );
       } finally {
         syncInFlightRef.current.delete(user.uid);
       }
@@ -153,6 +166,10 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     syncInFlightRef.current.set(user.uid, runSync);
     return runSync;
   };
+
+  useEffect(() => {
+    markPerf('first_render');
+  }, []);
 
   // Automatic session restoration listener in live runtime.
   // The local showcase (demo) mode never talks to Firebase, so it keeps its seeded session.
@@ -176,7 +193,49 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Real-time WidgetKit synchronization: triggers on mount and whenever user leaves app / switches to background
+  // Debounced auto-save of store mutations to local encrypted persistent storage (R-06)
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'test') {
+      return;
+    }
+    let prevExtract: string | null = null;
+    const unsubscribe = useBudgetStore.subscribe((state) => {
+      const uid = state.authUser?.uid;
+      if (!uid || uid === 'local-owner' || uid === 'local-demo' || !state.isAccountHydrated) {
+        return;
+      }
+      const currentExtract = JSON.stringify([
+        state.activeMonthKey,
+        state.availableMonths,
+        state.concepts,
+        state.entries,
+        state.debtsByMonth,
+        state.debtPayments,
+        state.savingsBucketsByMonth,
+        state.idealMotoPlan,
+        state.closedSnapshots,
+        state.needsOnboarding,
+      ]);
+      if (currentExtract !== prevExtract) {
+        prevExtract = currentExtract;
+        schedulePersistedAccountSave(uid, {
+          activeMonthKey: state.activeMonthKey,
+          availableMonths: state.availableMonths,
+          concepts: state.concepts,
+          entries: state.entries,
+          debtsByMonth: state.debtsByMonth,
+          debtPayments: state.debtPayments,
+          savingsBucketsByMonth: state.savingsBucketsByMonth,
+          provisionPlan: state.idealMotoPlan,
+          closedSnapshots: state.closedSnapshots,
+          needsOnboarding: state.needsOnboarding,
+        });
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Real-time WidgetKit synchronization & Cache flush: triggers on mount and whenever user leaves app / switches to background
   useEffect(() => {
     if (process.env.NODE_ENV === 'test') {
       return;
@@ -185,12 +244,14 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
 
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
+        flushPendingPersistedAccount();
         void syncActiveWidget();
       }
     });
 
     return () => {
       subscription.remove();
+      flushPendingPersistedAccount();
     };
   }, [syncActiveWidget]);
 

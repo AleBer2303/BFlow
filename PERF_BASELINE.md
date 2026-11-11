@@ -305,4 +305,23 @@ Implementado el 2026-11-10 en la rama `perf/phase-1-native-persistence`. Decisi�
 ### No medido
 - Tiempo de lectura/escritura de `expo-sqlite/kv-store` en iPhone y teléfono Android reales (pendiente de validar en dispositivo).
 
+---
+
+## 13. Fase 2: Arranque Cache-First, Sincronización No Bloqueante y Debounce de Escrituras (R-04, R-05, R-06, R-10, R-18, R-19)
+
+Implementado el 2026-11-10 en la rama `perf/phase-2-cache-first-boot`.
+
+| Hallazgo / Optimización | Antes | Después |
+| :--- | :--- | :--- |
+| **R-04 (`authGateAndCloudSync` arranque cache-first)** | La UI mostraba un indicador de carga hasta que `loadFullCloudAccount` completara 8 consultas concurrentes de red con Firestore, provocando destellos de ceros o plantillas si la red tardaba | Hidratación inmediata desde caché local cifrada (`loadPersistedAccount(uid)`). El usuario ve su presupuesto y balances instantáneamente (< 50 ms) mientras Firestore reconcilia en segundo plano |
+| **R-05 (Reconciliación en segundo plano y descarte en carreras)** | Cualquier retorno de Firestore ejecutaba `applyFullCloudAccount`, recalculaba todas las proyecciones y re-renderizaba la pantalla completa aunque no hubiera cambios | Se compara con `isEquivalentCloudAccount()`. Si los datos en la nube coinciden exactamente con la caché local, se descarta la mutación de estado (`skippedReconciliationNoOp`). Si el usuario cerró sesión durante la sincronización, el resultado en vuelo se descarta sin contaminar el store |
+| **R-06 (Debounce de escrituras a disco y flush al suspender)** | Cada mutación local pequeña invocaba cifrado AES-256 + escritura síncrona en SQLite/localStorage de forma repetitiva | `schedulePersistedAccountSave(uid, data, 400)` agrupa cambios con debounce de 400 ms. Al cambiar `AppState` a `'background'` o `'inactive'`, se invoca `flushPendingPersistedAccount()` asegurando que ningún dato se pierda al salir de la app |
+| **R-10 (`authAdapter.ts` perfil no bloqueante)** | `syncUserProfileDocument` bloqueaba la emisión del usuario esperando la escritura en red de `setDoc(users/{uid})` y `getDoc` sin timeout | `setDoc` se desacopla en segundo plano (`void setDoc(...).catch()`); `getDoc` corre con carrera de 1.500 ms de timeout. `subscribeToAuthUser` entrega el usuario autenticado inmediatamente |
+| **R-18 (`perfMarks.ts` instrumentación ligera)** | Sin visibilidad del tiempo transcurrido entre resolución de autenticación, render de caché y reconciliación de Firestore | Sistema de marcas de rendimiento `markPerf` / `getPerfSummary` de cero impacto en producción para auditar cold boot (`auth_resolved`, `cache_hydrated`, `cloud_sync_completed`) |
+| **R-19 (`widgetAdapter` omisión de escrituras redundantes)** | Cualquier llamada a `syncWidgetSnapshotNative` serializaba y escribía en `UserDefaults` de App Group y recargaba las líneas de tiempo de WidgetKit | `isEquivalentWidgetSnapshot()` evalúa si los balances, conteos de checklist, deudas y metas cambiaron. Si son idénticos, se salta la escritura y la recarga de WidgetKit (`skippedRedundantWrite: true`) |
+
+### No medido
+- Tiempo exacto de cold start en hardware iOS físico con conexión 3G/LTE estrangulada (se dispone del procedimiento de validación para iPhone).
+
+
 

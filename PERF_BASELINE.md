@@ -436,4 +436,9 @@ No cambian ni el comportamiento visual ni los testID, y no se añadió virtualiz
 ### No medido
 
 - Tiempo de render y FPS en iPhone y Android (Hermes, modo release). Los conteos de Jest muestran cuánto trabajo se evita, no cuántos milisegundos.
-- Piel Android y Web en este test: corre con la piel iOS. `WebTabBar` y `WebAppHeader` no se memoizaron porque reciben objetos que cambian en cada render.
+
+### Por piel (iOS, Android y Web)
+
+El test corre una vez por piel (`skin="ios" | "android" | "web"`, ancho de Jest 750 px). En las tres, los cambios de `syncMessage` dan 0 commits en las pestañas de datos, marcar una fila renderiza 1 fila y escribir en el formulario 0 filas.
+
+Con el contador de escrituras pendientes, iOS y Android ya daban 0 renders de navegación. En Web, `WebTabBar` y `WebAppHeader` se renderizaban 1 vez cada uno porque recibían objetos nuevos en cada render. Se corrigió memoizando `useResponsiveLayout` y el objeto `navigation` del shell, y envolviendo ambos componentes en `React.memo`: ahora dan **0**.

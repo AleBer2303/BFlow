@@ -145,7 +145,7 @@ function HeaderWord({ tab, isSelected, height, onSelect }: HeaderWordProps): Rea
   );
 }
 
-export function WebAppHeader({
+export const WebAppHeader = React.memo(function WebAppHeader({
   layout,
   contextLabel,
   navigation,
@@ -229,13 +229,13 @@ export function WebAppHeader({
       </View>
     </View>
   );
-}
+});
 
 export interface WebTabBarProps extends WorkspaceNavigationProps {
   layout: ResponsiveLayout;
 }
 
-export function WebTabBar({
+export const WebTabBar = React.memo(function WebTabBar({
   activeTab,
   onSelectTab,
   layout,
@@ -310,4 +310,4 @@ export function WebTabBar({
       })}
     </View>
   );
-}
+});

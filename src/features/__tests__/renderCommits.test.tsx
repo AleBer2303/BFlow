@@ -114,11 +114,20 @@ jest.mock('../../design-system', () => {
     mockBump('textInput');
     return ReactLib.createElement(OriginalInput, { ...props, ref });
   });
-  const FloatingLiquidGlassDock = mockCountBody('dock', actual.FloatingLiquidGlassDock);
-  return { ...actual, AppPressable, AppTextInput, FloatingLiquidGlassDock };
+  // Navigation of each skin: iOS dock, Android navigation bar, Web tab bar and header.
+  return {
+    ...actual,
+    AppPressable,
+    AppTextInput,
+    FloatingLiquidGlassDock: mockCountBody('nav', actual.FloatingLiquidGlassDock),
+    MaterialNavigationBar: mockCountBody('nav', actual.MaterialNavigationBar),
+    WebTabBar: mockCountBody('nav', actual.WebTabBar),
+    WebAppHeader: mockCountBody('webHeader', actual.WebAppHeader),
+  };
 });
 
-const VIEW_IDS = ['summary', 'checklist', 'debts', 'savings', 'analytics', 'account'] as const;
+const SKINS = ['ios', 'android', 'web'] as const;
+const VIEW_IDS =['summary', 'checklist', 'debts', 'savings', 'analytics', 'account'] as const;
 
 function takeCounts(): Counts {
   const counts = mockCounts();
@@ -136,12 +145,12 @@ describe('Fase 5: renders por acción', () => {
     takeCounts();
   });
 
-  it('mide los renders de cada acción de la sección 2.3', async () => {
+  it.each(SKINS)('mide los renders de cada acción de la sección 2.3 (piel %s)', async (skin) => {
     const report: Record<string, Counts> = {};
     let rootCommits = 0;
 
     render(
-      <BFlowThemeProvider initialMode="dark">
+      <BFlowThemeProvider initialMode="dark" skin={skin}>
         <React.Profiler id="root" onRender={() => (rootCommits += 1)}>
           <PhaseOneHomeScreen />
         </React.Profiler>
@@ -212,7 +221,7 @@ describe('Fase 5: renders por acción', () => {
     report.pending_count_change_with_form_open = { ...takeCounts(), root: rootCommits };
 
     if (process.env.BFLOW_RENDER_REPORT === '1') {
-      process.stdout.write(`\nRENDER_REPORT=${JSON.stringify(report)}\n`);
+      process.stdout.write(`\nRENDER_REPORT_${skin}=${JSON.stringify(report)}\n`);
     }
 
     expect(report.mount?.root).toBeGreaterThan(0);
@@ -229,8 +238,9 @@ describe('Fase 5: renders por acción', () => {
     // R-17: typing in the add form never re-renders the rows.
     expect(report.type_5_chars_in_add_form?.row ?? 0).toBe(0);
 
-    // R-21: a shell re-render (pending badge) re-renders neither the inputs nor the dock.
+    // R-21: a shell re-render (pending badge) re-renders neither the inputs nor the navigation.
     expect(report.pending_count_change_with_form_open?.checklist ?? 0).toBe(0);
-    expect(report.pending_count_change_with_form_open?.dock ?? 0).toBe(0);
+    expect(report.pending_count_change_with_form_open?.nav ?? 0).toBe(0);
+    expect(report.pending_count_change_with_form_open?.webHeader ?? 0).toBe(0);
   });
 });

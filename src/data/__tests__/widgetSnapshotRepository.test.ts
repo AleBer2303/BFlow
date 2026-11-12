@@ -16,6 +16,7 @@ import {
   cancelCloudWidgetSnapshotWrite,
   flushCloudWidgetSnapshotWrite,
   scheduleCloudWidgetSnapshotWrite,
+  setCloudWidgetSyncEnabled,
   WIDGET_CLOUD_WRITE_DEBOUNCE_MS,
 } from '../repositories/widgetSnapshotRepository';
 
@@ -44,10 +45,19 @@ describe('widgetSnapshotRepository — documento users/{uid}/widgetSnapshots/cur
     mockSetDoc.mockResolvedValue(undefined);
     mockDoc.mockClear();
     cancelCloudWidgetSnapshotWrite();
+    setCloudWidgetSyncEnabled(true);
   });
 
   afterEach(() => {
+    setCloudWidgetSyncEnabled(false);
     jest.useRealTimers();
+  });
+
+  it('en Jest está apagado por defecto: no programa ninguna escritura', async () => {
+    setCloudWidgetSyncEnabled(false);
+    scheduleCloudWidgetSnapshotWrite('uid_a', snapshot());
+    await jest.advanceTimersByTimeAsync(WIDGET_CLOUD_WRITE_DEBOUNCE_MS);
+    expect(mockSetDoc).not.toHaveBeenCalled();
   });
 
   it('arma el documento con el payload serializado y la hora del servidor', () => {

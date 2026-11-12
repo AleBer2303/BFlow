@@ -59,6 +59,17 @@ interface PendingWrite {
   snapshot: WidgetSnapshotV2;
 }
 
+/**
+ * En tests, los usuarios `uid_cloud_test_*` cuentan como reales y dispararían un `setDoc`
+ * de verdad (conexión de red fuera del test). Apagado por defecto en Jest; los tests de este
+ * módulo lo encienden con `setCloudWidgetSyncEnabled(true)`.
+ */
+let cloudSyncEnabled = process.env.NODE_ENV !== 'test';
+
+export function setCloudWidgetSyncEnabled(enabled: boolean): void {
+  cloudSyncEnabled = enabled;
+}
+
 let pending: PendingWrite | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let lastWritten: { uid: string; key: string } | null = null;
@@ -87,6 +98,7 @@ async function runPendingWrite(): Promise<void> {
  * omite si el contenido ya está escrito para ese usuario.
  */
 export function scheduleCloudWidgetSnapshotWrite(uid: string, snapshot: WidgetSnapshotV2): void {
+  if (!cloudSyncEnabled) return;
   if (pending && pending.uid !== uid) {
     // Cambio de cuenta: lo pendiente era de otra sesión.
     pending = null;

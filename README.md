@@ -207,18 +207,18 @@ users/{uid}
 
 ## 📱 Widgets Nativos de iOS 26 (WidgetKit)
 
-Ubicados en [`targets/widgets/`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/targets/widgets/) y compilados mediante `@bacons/apple-targets`:
+Widgets de iOS en [`targets/widgets/`](targets/widgets/) (SwiftUI, compilados con `@bacons/apple-targets`) y de Android en [`modules/bflow-widgets/`](modules/bflow-widgets/) (módulo Expo local con RemoteViews y WorkManager). Decisión completa en el [ADR 0021](docs/decisions/0021-home-screen-widgets-ios-android.md).
 
-| Familia de Widget | Contenido Visual |
-| :--- | :--- |
-| **`systemSmall`** | Flujo neto destacado con color condicional, mes activo y contador de progreso del checklist (`6/12`). |
-| **`systemMedium`** | Flujo neto en tarjeta hero izquierda; desglose de ingresos, gastos y pendientes a la derecha con mini barras. |
-| **`systemLarge`** | Resumen financiero completo superior + lista de ítems pendientes del checklist con monto y fecha estimada. |
-| **`accessoryCircular`** | Medidor circular (Gauge) para pantalla de bloqueo con progreso del checklist del mes. |
-| **`accessoryRectangular`** | Resumen horizontal para pantalla de bloqueo con Flujo Neto, ítems listos y gastos pendientes. |
-| **`accessoryInline`** | Línea compacta de texto para la cabecera del reloj de la pantalla de bloqueo. |
+| Widget | iOS | Android | Contenido |
+| :--- | :--- | :--- | :--- |
+| Flujo neto | small + pantalla de bloqueo | 2×2 | Flujo neto del mes con signo, checklist x de y |
+| Resumen | medium | 4×2 | Recibido, pagado, por pagar y mini gráfico de 6 meses |
+| Pendientes | large | 4×4 | Checklist de pendientes con montos |
+| Deudas | small, medium, circular | 3×2 | Restante, % pagado y cierre estimado |
+| Ahorros | small, medium | 2×2 / 3×2 | Total y bolsillos |
 
-- **Contrato Tipado `WidgetSnapshotV1`:** Comunicación desacoplada mediante un payload JSON normalizado, compatible tanto con `UserDefaults` (App Groups) como con persistencia local de respaldo.
+- **Contrato tipado `WidgetSnapshotV2`** (`src/platform/widgets/widgetSnapshot.ts`), calculado solo en TypeScript.
+- **Sincronización:** al instante con los cambios del mismo teléfono; los cambios de otro dispositivo llegan desde `users/{uid}/widgetSnapshots/current` cada ~15 min o con el botón «Actualizar» (sin push: requeriría cuentas de pago).
 
 ---
 

@@ -45,9 +45,11 @@ import {
 import {
   getPendingOfflineWritesCount,
 } from '../../../../platform/storage/offlineWriteQueue';
+import { scheduleCloudWidgetSnapshotWrite } from '../../../../data/repositories/widgetSnapshotRepository';
 import {
-  buildWidgetSnapshotV1,
-  syncWidgetSnapshotNative,
+  buildWidgetSnapshot,
+  resolveWidgetMonthKey,
+  syncWidgetSnapshot,
   type WidgetSyncResult,
 } from '../../../../platform/widgets';
 
@@ -381,17 +383,23 @@ export function triggerWidgetSync(state: BudgetStoreState): Promise<WidgetSyncRe
   }
   persistHydratedAccountSnapshot(state);
   try {
-    const monthDebts = state.debtsByMonth[state.activeMonthKey] ?? [];
-    const monthSavings = state.savingsBucketsByMonth[state.activeMonthKey] ?? [];
-    const snapshot = buildWidgetSnapshotV1({
-      monthKey: state.activeMonthKey,
+    const snapshot = buildWidgetSnapshot({
+      monthKeys: state.availableMonths,
+      monthKey: resolveWidgetMonthKey(state.availableMonths, state.activeMonthKey),
       concepts: state.concepts,
       entries: state.entries,
-      debts: monthDebts,
       debtPayments: state.debtPayments,
-      savingsBuckets: monthSavings,
+      debtsByMonth: state.debtsByMonth,
+      savingsBucketsByMonth: state.savingsBucketsByMonth,
+      closedSnapshots: state.closedSnapshots,
     });
-    return syncWidgetSnapshotNative(snapshot);
+    // Otros dispositivos ven el cambio en sus widgets sin abrir la app (ADR 0021). Mientras se
+    // carga la nube, el estado puede venir de una caché vieja: no se sube para no pisar un
+    // snapshot más nuevo de otro dispositivo; syncUserCloudAccount lo sube al terminar.
+    if (isRealAuthUser(state.authUser) && !state.isSyncing) {
+      scheduleCloudWidgetSnapshotWrite(state.authUser.uid, snapshot);
+    }
+    return syncWidgetSnapshot(snapshot);
   } catch {
     return Promise.resolve({
       synced: false,

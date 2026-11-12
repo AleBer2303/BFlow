@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget "Ahorros" (3x2): total, reserva, ahorro y "Otros" con los nombres del snapshot. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@android:id/background"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:background="@drawable/bflow_widget_background"
+  android:clipToOutline="true">
+
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:paddingStart="@dimen/bflow_widget_padding"
+    android:paddingTop="8dp"
+    android:paddingEnd="@dimen/bflow_widget_padding"
+    android:paddingBottom="@dimen/bflow_widget_padding">
+
+    <include layout="@layout/bflow_widget_header" />
+
+    <LinearLayout
+      android:id="@+id/bflow_widget_content"
+      android:layout_width="match_parent"
+      android:layout_height="0dp"
+      android:layout_weight="1"
+      android:orientation="vertical">
+      <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="@string/bflow_widget_savings_total"
+        android:textColor="@color/bflow_widget_text_muted"
+        android:textSize="12sp" />
+      <TextView
+        android:id="@+id/savings_total"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:autoSizeMaxTextSize="24sp"
+        android:autoSizeMinTextSize="12sp"
+        android:autoSizeStepGranularity="1sp"
+        android:autoSizeTextType="uniform"
+        android:fontFamily="sans-serif-medium"
+        android:fontFeatureSettings="tnum"
+        android:gravity="center_vertical|start"
+        android:maxLines="1"
+        android:text="@string/bflow_widget_placeholder"
+        android:textColor="@color/bflow_widget_savings"
+        android:textSize="24sp" />
+      <LinearLayout
+        android:id="@+id/savings_reserve_row"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/bflow_widget_pending_row_height"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+        <TextView
+          android:id="@+id/savings_reserve_name"
+          android:layout_width="0dp"
+          android:layout_height="wrap_content"
+          android:layout_weight="1"
+          android:ellipsize="end"
+          android:maxLines="1"
+          android:textColor="@color/bflow_widget_text_primary"
+          android:textSize="13sp" />
+        <TextView
+          android:id="@+id/savings_reserve_value"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:layout_marginStart="8dp"
+          android:fontFeatureSettings="tnum"
+          android:maxLines="1"
+          android:text="@string/bflow_widget_placeholder"
+          android:textColor="@color/bflow_widget_text_primary"
+          android:textSize="13sp" />
+      </LinearLayout>
+      <LinearLayout
+        android:id="@+id/savings_savings_row"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/bflow_widget_pending_row_height"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+        <TextView
+          android:id="@+id/savings_savings_name"
+          android:layout_width="0dp"
+          android:layout_height="wrap_content"
+          android:layout_weight="1"
+          android:ellipsize="end"
+          android:maxLines="1"
+          android:textColor="@color/bflow_widget_text_primary"
+          android:textSize="13sp" />
+        <TextView
+          android:id="@+id/savings_savings_value"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:layout_marginStart="8dp"
+          android:fontFeatureSettings="tnum"
+          android:maxLines="1"
+          android:text="@string/bflow_widget_placeholder"
+          android:textColor="@color/bflow_widget_text_primary"
+          android:textSize="13sp" />
+      </LinearLayout>
+      <LinearLayout
+        android:id="@+id/savings_other_row"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/bflow_widget_pending_row_height"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
+        <TextView
+          android:id="@+id/savings_other_name"
+          android:layout_width="0dp"
+          android:layout_height="wrap_content"
+          android:layout_weight="1"
+          android:ellipsize="end"
+          android:maxLines="1"
+          android:text="@string/bflow_widget_savings_other"
+          android:textColor="@color/bflow_widget_text_primary"
+          android:textSize="13sp" />
+        <TextView
+          android:id="@+id/savings_other_value"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:layout_marginStart="8dp"
+          android:fontFeatureSettings="tnum"
+          android:maxLines="1"
+          android:text="@string/bflow_widget_placeholder"
+          android:textColor="@color/bflow_widget_text_primary"
+          android:textSize="13sp" />
+      </LinearLayout>
+    </LinearLayout>
+
+    <include layout="@layout/bflow_widget_empty" />
+  </LinearLayout>
+
+  <include layout="@layout/bflow_widget_refresh_button" />
+</FrameLayout>

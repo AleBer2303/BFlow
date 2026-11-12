@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Vista previa del selector en Android < 12: solo la estructura del widget, sin datos. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  android:width="110dp"
+  android:height="110dp"
+  android:viewportWidth="110"
+  android:viewportHeight="110">
+  <path
+    android:fillColor="@color/bflow_widget_background"
+    android:pathData="M16,0 H94 A16,16 0 0 1 110,16 V94 A16,16 0 0 1 94,110 H16 A16,16 0 0 1 0,94 V16 A16,16 0 0 1 16,0 Z" />
+  <path android:fillColor="@color/bflow_widget_text_muted" android:pathData="M16,18 h48 v6 h-48 Z" />
+  <path android:fillColor="@color/bflow_widget_income" android:pathData="M16,44 h78 v14 h-78 Z" />
+  <path android:fillColor="@color/bflow_widget_text_secondary" android:pathData="M16,70 h40 v6 h-40 Z" />
+  <path android:fillColor="@color/bflow_widget_text_muted" android:pathData="M16,86 h60 v6 h-60 Z" />
+</vector>

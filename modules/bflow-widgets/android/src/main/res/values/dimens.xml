@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Radio del fondo antes de Android 12 (en 12+ lo da el sistema, ver values-v31). -->
+  <dimen name="bflow_widget_radius">16dp</dimen>
+  <dimen name="bflow_widget_padding">16dp</dimen>
+  <!-- Objetivo tactil del boton "Actualizar": 48 dp (AGENTS.md §7.3). -->
+  <dimen name="bflow_widget_touch_target">48dp</dimen>
+  <dimen name="bflow_widget_header_height">40dp</dimen>
+  <dimen name="bflow_widget_pending_row_height">28dp</dimen>
+</resources>

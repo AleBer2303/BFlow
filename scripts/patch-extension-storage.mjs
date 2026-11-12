@@ -1,10 +1,14 @@
 /**
  * scripts/patch-extension-storage.mjs
  *
- * Ensures @bacons/apple-targets ExtensionStorageModule.swift writes WidgetSnapshotV1
- * both to shared App Group container files (containerURL(forSecurityApplicationGroupIdentifier:))
- * AND to UserDefaults(suiteName:) across dynamic iloader bundle IDs, then forces
- * WidgetCenter.shared.reloadAllTimelines().
+ * Reemplaza ExtensionStorageModule.swift de @bacons/apple-targets para el App Group dinámico
+ * (sufijos de iloader) y fuerza WidgetCenter.shared.reloadAllTimelines().
+ *
+ * - setSecureFile(key, value, group) -> Bool (ADR 0021): escribe SOLO `<container>/<key>.json`
+ *   en los grupos accesibles, atómico, con completeFileProtectionUntilFirstUserAuthentication
+ *   y excluido del backup. Sin UserDefaults. Lo usan las credenciales y el snapshot V2.
+ * - remove(key, group): borra UserDefaults y el archivo `<key>.json` de cada grupo.
+ * - setString / setObject / setArray / setInt: comportamiento heredado (UserDefaults + archivo).
  */
 
 import fs from 'node:fs';
@@ -52,8 +56,40 @@ public class ExtensionStorageModule: Module {
         try? data.write(to: fileUrl, options: [.atomic])
     }
 
+    /// Archivo protegido del App Group (ADR 0021): solo grupos con contenedor accesible,
+    /// escritura atómica, protección hasta el primer desbloqueo (el widget lee con el teléfono
+    /// bloqueado) y excluido del backup. Nunca toca UserDefaults.
+    private static func writeSecureFile(key: String, data: Data, group: String) -> Bool {
+        guard let containerUrl = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group) else {
+            return false
+        }
+        var fileUrl = containerUrl.appendingPathComponent("\\(key).json")
+        do {
+            try data.write(to: fileUrl, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            try fileUrl.setResourceValues(values)
+            return true
+        } catch {
+            return false
+        }
+    }
+
     public func definition() -> ModuleDefinition {
         Name("ExtensionStorage")
+
+        // Credenciales y snapshot del widget: solo archivo protegido, fuera de UserDefaults y
+        // del backup. Devuelve true si se escribió en al menos un App Group accesible.
+        Function("setSecureFile") { (key: String, value: String, group: String?) -> Bool in
+            let data = Data(value.utf8)
+            var wroteAny = false
+            for suite in Self.candidateAppGroups(explicitGroup: group) {
+                if Self.writeSecureFile(key: key, data: data, group: suite) {
+                    wroteAny = true
+                }
+            }
+            return wroteAny
+        }
 
         Function("remove") { (forKey: String, suiteName: String?) in
             for suite in Self.candidateAppGroups(explicitGroup: suiteName) {
@@ -173,5 +209,5 @@ public class ExtensionStorageModule: Module {
 
 if (fs.existsSync(targetFile)) {
   fs.writeFileSync(targetFile, patchedSwiftSource, 'utf8');
-  console.log('[patch-extension-storage] Patched ExtensionStorageModule.swift for real-time App Group file + UserDefaults sync.');
+  console.log('[patch-extension-storage] Patched ExtensionStorageModule.swift (App Group dinámico + setSecureFile).');
 }

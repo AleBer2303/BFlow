@@ -157,11 +157,13 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
     // 1. Instant offline cold-start: rehydrate from local cache if available
     const initialEnvelope = loadPersistedAccountEnvelope(user.uid);
     const cached = initialEnvelope?.data ?? null;
+    // isSyncing antes de aplicar la caché: así triggerWidgetSync no sube a la nube un
+    // snapshot de widget calculado con datos posiblemente viejos (ADR 0021).
+    set({ syncMessage: 'Cargando tu presupuesto e historial...', isSyncing: true });
     if (cached) {
       get().applyFullCloudAccount(cached);
     }
 
-    set({ syncMessage: 'Cargando tu presupuesto e historial...', isSyncing: true });
     try {
       const repo = new FirestoreBudgetRepository();
 
@@ -172,6 +174,7 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
       // R-09: If pending offline writes remain, DO NOT overwrite local state with outdated cloud data
       if (hasPendingOfflineWrites(user.uid)) {
         set({ syncMessage: 'Cambios locales pendientes por sincronizar', isSyncing: false });
+        triggerWidgetSync(get());
         return;
       }
 
@@ -190,6 +193,7 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
       }
       if (hasPendingOfflineWrites(user.uid)) {
         set({ syncMessage: 'Cambios locales pendientes por sincronizar', isSyncing: false });
+        triggerWidgetSync(get());
         return;
       }
       savePersistedAccount(
@@ -202,6 +206,7 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
         get().applyFullCloudAccount(fullAccount);
       }
       set({ syncMessage: 'Sincronizado', isSyncing: false });
+      triggerWidgetSync(get());
     } catch {
       const hasLocalData = loadPersistedAccount(user.uid) !== null;
       set({

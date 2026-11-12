@@ -67,7 +67,7 @@ La documentación en BFlow es tratada con el mismo nivel de exigencia, revisión
 Todo documento técnico generado o modificado debe encajar en una de las cuatro tipologías del marco Diátaxis:
 - **Tutorial (Aprendizaje):** Guías paso a paso para que un desarrollador nuevo pase de cero a un entorno funcional en Windows 11 / Expo Go / iloader.
 - **How-To Guide (Tareas):** Instrucciones orientadas a objetivos concretos (ej. "Cómo firmar un Release con iloader", "Cómo agregar un nuevo concepto con persistencia en Firestore").
-- **Reference (Información Estructurada):** Esquemas de datos Firestore, tokens de `DESIGN.md`, contratos `WidgetSnapshotV1`, tablas de variables de entorno y catálogo semilla.
+- **Reference (Información Estructurada):** Esquemas de datos Firestore, tokens de `DESIGN.md`, contratos `WidgetSnapshotV2`, tablas de variables de entorno y catálogo semilla.
 - **Explanation (Comprensión y Razonamiento):** Registros de Decisión de Arquitectura (`docs/decisions/` ADRs) y justificaciones de diseño contable.
 
 ### 5.2. Criterios Obligatorios para Redactar un Nuevo ADR (`docs/decisions/`)

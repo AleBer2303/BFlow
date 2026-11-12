@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cabecera comun: titulo y hora de actualizacion. Deja libre la esquina superior derecha
+  (marginEnd) para el boton "Actualizar" de 48 dp, que se dibuja encima en el FrameLayout raiz.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="@dimen/bflow_widget_header_height"
+  android:layout_marginEnd="32dp"
+  android:gravity="center_vertical"
+  android:orientation="vertical">
+
+  <TextView
+    android:id="@+id/bflow_widget_title"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:ellipsize="end"
+    android:fontFamily="sans-serif-medium"
+    android:maxLines="1"
+    android:textColor="@color/bflow_widget_text_secondary"
+    android:textSize="13sp" />
+
+  <TextView
+    android:id="@+id/bflow_widget_updated"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:ellipsize="end"
+    android:fontFeatureSettings="tnum"
+    android:maxLines="1"
+    android:textColor="@color/bflow_widget_text_muted"
+    android:textSize="12sp"
+    android:visibility="gone" />
+</LinearLayout>

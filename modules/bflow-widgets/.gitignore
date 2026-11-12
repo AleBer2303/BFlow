@@ -1,0 +1,4 @@
+# Salidas de Gradle del modulo local (el android/ de la app ya esta ignorado en la raiz).
+android/build/
+android/.gradle/
+android/.cxx/

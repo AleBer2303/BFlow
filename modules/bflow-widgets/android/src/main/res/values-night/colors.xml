@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tokens de la piel Android en modo oscuro: androidPalettes.dark de src/design-system/tokens.ts. -->
+<resources>
+  <color name="bflow_widget_background">#101411</color>
+  <color name="bflow_widget_surface">#1A201C</color>
+  <color name="bflow_widget_surface_elevated">#232925</color>
+  <color name="bflow_widget_outline">#404943</color>
+
+  <color name="bflow_widget_text_primary">#E0E4DD</color>
+  <color name="bflow_widget_text_secondary">#C0C9BF</color>
+  <color name="bflow_widget_text_muted">#939C92</color>
+
+  <color name="bflow_widget_accent">#8CD5B4</color>
+
+  <color name="bflow_widget_income">#2EBD85</color>
+  <color name="bflow_widget_expense">#E57373</color>
+  <color name="bflow_widget_pending">#E5A84B</color>
+  <color name="bflow_widget_debt">#D9824C</color>
+  <color name="bflow_widget_savings">#AD93EA</color>
+  <color name="bflow_widget_reserve">#6FA4F0</color>
+  <color name="bflow_widget_completed">#2EBD85</color>
+
+  <color name="bflow_widget_track">#404943</color>
+</resources>

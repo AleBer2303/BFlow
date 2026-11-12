@@ -1,0 +1,47 @@
+// Modulo Expo local de BFlow: widgets de Android (Fase 7, ADR 0021).
+//
+// Se compila desde fuentes (no hay AAR precompilado ni bloque `publication` en
+// expo-module.config.json), asi que se enlaza contra el `expo-modules-core` instalado y no
+// puede desalinearse del runtime que vigila el ADR 0019. Usa la API clasica de modulos
+// (`expo.modules.kotlin.modules.Module` + `ModuleDefinition`), que el SDK 58 sigue registrando
+// por la lista `android.modules` de expo-module.config.json; no activa `expoModule { v2 }`.
+//
+// compileSdk y minSdk los fija `expo-module-gradle-plugin` con los de la app (catalogo de
+// React Native 0.88: compileSdk 37, minSdk 24).
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.bflow'
+version = '0.1.0'
+
+expoModule {
+  // Modulo privado de la app: no se publica en ningun repositorio Maven.
+  canBePublished = false
+}
+
+android {
+  namespace "com.bflow.widgets"
+  defaultConfig {
+    versionCode 1
+    versionName '0.1.0'
+    // Reglas R8 que viajan con el modulo al release de la app (ADR 0013).
+    consumerProguardFiles 'consumer-rules.pro'
+  }
+  testOptions {
+    unitTests {
+      // Los tests JVM solo ejercitan Kotlin puro (parser y formato); org.json llega por
+      // testImplementation porque el de android.jar es un stub.
+      returnDefaultValues = true
+    }
+  }
+}
+
+dependencies {
+  // WorkManager estable (minSdk 23, minCompileSdk 35): refresco periodico y boton "Actualizar".
+  implementation 'androidx.work:work-runtime-ktx:2.11.2'
+
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.json:json:20250517'
+}

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Tokens de la piel Android (Material 3) en modo claro: androidPalettes.light de
+  src/design-system/tokens.ts. Si cambian alli, se cambian aqui (DESIGN.md §10, ADR 0021).
+-->
+<resources>
+  <!-- Superficies: background.primary / glass.surfaceTint / glass.surfaceElevatedTint. -->
+  <color name="bflow_widget_background">#F6FBF4</color>
+  <color name="bflow_widget_surface">#EAF0E9</color>
+  <color name="bflow_widget_surface_elevated">#E2E9E1</color>
+  <color name="bflow_widget_outline">#C0C9BF</color>
+
+  <!-- Texto: text.primary / text.secondary / text.muted. -->
+  <color name="bflow_widget_text_primary">#171D19</color>
+  <color name="bflow_widget_text_secondary">#404943</color>
+  <color name="bflow_widget_text_muted">#566058</color>
+
+  <!-- Acento: accent.primary. -->
+  <color name="bflow_widget_accent">#1B6B51</color>
+
+  <!-- Semanticos (accent.* del encargo = semantic.* de tokens.ts). -->
+  <color name="bflow_widget_income">#0F6B4A</color>
+  <color name="bflow_widget_expense">#A83232</color>
+  <color name="bflow_widget_pending">#8F5206</color>
+  <color name="bflow_widget_debt">#92440F</color>
+  <color name="bflow_widget_savings">#5F3DA6</color>
+  <color name="bflow_widget_reserve">#245F9F</color>
+  <color name="bflow_widget_completed">#0F6B4A</color>
+
+  <!-- Pista de las barras de progreso (outline del tema). -->
+  <color name="bflow_widget_track">#C0C9BF</color>
+</resources>

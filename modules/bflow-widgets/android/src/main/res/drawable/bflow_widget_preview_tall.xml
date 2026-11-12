@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Vista previa del selector en Android < 12: solo la estructura del widget, sin datos. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  android:width="250dp"
+  android:height="250dp"
+  android:viewportWidth="250"
+  android:viewportHeight="250">
+  <path
+    android:fillColor="@color/bflow_widget_background"
+    android:pathData="M16,0 H234 A16,16 0 0 1 250,16 V234 A16,16 0 0 1 234,250 H16 A16,16 0 0 1 0,234 V16 A16,16 0 0 1 16,0 Z" />
+  <path android:fillColor="@color/bflow_widget_text_muted" android:pathData="M16,18 h90 v6 h-90 Z" />
+  <path android:fillColor="@color/bflow_widget_expense" android:pathData="M16,40 h100 v10 h-100 Z" />
+  <path android:fillColor="@color/bflow_widget_income" android:pathData="M134,40 h100 v10 h-100 Z" />
+  <path android:fillColor="@color/bflow_widget_track" android:pathData="M16,66 h218 v6 h-218 Z" />
+  <path android:fillColor="@color/bflow_widget_text_secondary" android:pathData="M16,92 h160 v8 h-160 Z" />
+  <path android:fillColor="@color/bflow_widget_text_secondary" android:pathData="M16,118 h140 v8 h-140 Z" />
+  <path android:fillColor="@color/bflow_widget_text_secondary" android:pathData="M16,144 h170 v8 h-170 Z" />
+  <path android:fillColor="@color/bflow_widget_text_secondary" android:pathData="M16,170 h120 v8 h-120 Z" />
+  <path android:fillColor="@color/bflow_widget_text_secondary" android:pathData="M16,196 h150 v8 h-150 Z" />
+</vector>

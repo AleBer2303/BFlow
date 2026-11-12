@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fondo opaco de la piel Android (sin translucidez ni blur: AGENTS.md §7.2). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+  <solid android:color="@color/bflow_widget_background" />
+  <corners android:radius="@dimen/bflow_widget_radius" />
+</shape>

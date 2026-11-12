@@ -434,6 +434,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
             ...previousState,
             syncMessage: 'No se pudo guardar la configuración inicial en la nube.',
           });
+          triggerWidgetSync(get());
         } else {
           set({
             syncMessage: 'Configuración guardada localmente. Se sincronizará al conectar.',
@@ -510,6 +511,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
           ...previousState,
           syncMessage: 'El reseteo total de la cuenta requiere conexión a internet.',
         });
+        triggerWidgetSync(get());
       }
     }
   },

@@ -36,3 +36,6 @@ Thumbs.db
 .claude/skills
 .claude/commands
 .claude/settings.local.json
+
+# Generado por @bacons/apple-targets en cada prebuild a partir de expo-target.config.js
+targets/widgets/Assets.xcassets/

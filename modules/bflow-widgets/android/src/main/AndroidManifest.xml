@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!-- El worker lee users/{uid}/widgetSnapshots/current por REST cuando la app esta cerrada. -->
+  <uses-permission android:name="android.permission.INTERNET" />
+
+  <application>
+    <!--
+      Proveedores de widgets. exported="false": solo el sistema (AppWidgetService) y la propia
+      app (boton "Actualizar") les envian broadcasts.
+    -->
+    <receiver
+      android:name="com.bflow.widgets.widget.NetFlowWidgetProvider"
+      android:exported="false"
+      android:label="@string/bflow_widget_netflow_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/bflow_widget_netflow_info" />
+    </receiver>
+
+    <receiver
+      android:name="com.bflow.widgets.widget.SummaryWidgetProvider"
+      android:exported="false"
+      android:label="@string/bflow_widget_summary_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/bflow_widget_summary_info" />
+    </receiver>
+
+    <receiver
+      android:name="com.bflow.widgets.widget.PendingWidgetProvider"
+      android:exported="false"
+      android:label="@string/bflow_widget_pending_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/bflow_widget_pending_info" />
+    </receiver>
+
+    <receiver
+      android:name="com.bflow.widgets.widget.DebtWidgetProvider"
+      android:exported="false"
+      android:label="@string/bflow_widget_debt_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/bflow_widget_debt_info" />
+    </receiver>
+
+    <receiver
+      android:name="com.bflow.widgets.widget.SavingsWidgetProvider"
+      android:exported="false"
+      android:label="@string/bflow_widget_savings_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/bflow_widget_savings_info" />
+    </receiver>
+  </application>
+</manifest>

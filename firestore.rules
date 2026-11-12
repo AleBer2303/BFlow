@@ -31,6 +31,10 @@ rules_version = '2';
 // 6. Collection: /users/{uid}/savingsBuckets/{bucketId}
 // 7. Collection: /users/{uid}/provisionPlans/{planId}
 // 8. Collection: /users/{uid}/monthSnapshots/{snapshotId}
+// 9. Document:   /users/{uid}/widgetSnapshots/current (ADR 0021)
+//    Caché derivada que leen los widgets de iOS y Android por REST.
+//    Fields: schemaVersion (int == 2), monthKey (YYYY-MM),
+//            payload (string JSON WidgetSnapshotV2, 2..16000 chars), updatedAt (== request.time)
 // ===============================================================
 
 service cloud.firestore {
@@ -418,6 +422,18 @@ service cloud.firestore {
     // User Scope: /users/{uid} and Subcollections
     // ===============================================================
 
+    function isValidWidgetSnapshot(data, snapshotId) {
+      return snapshotId == 'current' &&
+        hasRequiredFields(data, ['schemaVersion', 'monthKey', 'payload', 'updatedAt']) &&
+        hasOnlyAllowedFields(data, ['schemaVersion', 'monthKey', 'payload', 'updatedAt']) &&
+        data.schemaVersion == 2 &&
+        isValidMonthKey(data.monthKey) &&
+        data.payload is string &&
+        data.payload.size() >= 2 &&
+        data.payload.size() <= 16000 &&
+        data.updatedAt == request.time;
+    }
+
     match /users/{uid} {
       allow read: if isOwner(uid);
       allow create: if isOwner(uid) && isValidUserProfile(request.resource.data, uid);
@@ -494,6 +510,13 @@ service cloud.firestore {
         allow update: if isOwner(uid) &&
           isValidMonthSnapshot(request.resource.data, snapshotId) &&
           request.resource.data.monthKey == resource.data.monthKey;
+        allow delete: if isOwner(uid);
+      }
+
+      match /widgetSnapshots/{snapshotId} {
+        allow read: if isOwner(uid);
+        allow create, update: if isOwner(uid) &&
+          isValidWidgetSnapshot(request.resource.data, snapshotId);
         allow delete: if isOwner(uid);
       }
     }

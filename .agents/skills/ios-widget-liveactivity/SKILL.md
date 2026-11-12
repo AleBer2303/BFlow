@@ -1,44 +1,37 @@
 ---
 name: ios-widget-liveactivity
 description: >-
-  Guides development of the unified iOS WidgetKit + ActivityKit (Dynamic Island /
-  Live Activity) target in Mode B and the safe no-op/preview adapter in Mode A
-  (Expo Go). Use when editing targets/widgets/ or src/platform/widgets/.
+  Guides development of BFlow's home-screen widgets: the unified iOS WidgetKit +
+  ActivityKit target (targets/widgets), the Android widgets module
+  (modules/bflow-widgets) and the WidgetSnapshotV2 contract and adapters in
+  src/platform/widgets/. Use when editing any of those paths.
 ---
 
-# iOS Widgets & Live Activity (`ios-widget-liveactivity`)
+# Widgets iOS / Android y Live Activity (`ios-widget-liveactivity`)
 
-## 1. Critical Apple Free Account Rule (Max 2 App IDs)
-- **ALL** 6 widgets (Small Net Flow, Medium Summary, Large Pending Checklist, Debt Progress, Savings Total, Lock Screen) AND the `ActivityConfiguration` for the Dynamic Island **MUST** live inside a **SINGLE** Xcode extension target (`targets/widgets`).
-- Never create separate targets for Live Activity and Widgets, as a free Apple ID allows only 10 App IDs per rolling 7 days.
+Decisión completa: `docs/decisions/0021-home-screen-widgets-ios-android.md`.
 
-## 2. Typed Contract (`WidgetSnapshotV1`)
-All data transferred from React Native to the iOS extension uses `WidgetSnapshotV1` validated by Zod:
-```ts
-export interface WidgetSnapshotV1 {
-  schemaVersion: 1;
-  updatedAtIso: string;
-  monthKey: string; // "2026-10"
-  netCashFlowCop: number; // 1_080_000
-  receivedIncomeCop: number; // 4_000_000
-  paidExpensesCop: number; // 2_920_000
-  pendingExpensesCop: number; // 450_000
-  checklistCompleted: number; // 6
-  checklistTotal: number; // 12
-  totalDebtCop: number; // 6_200_000
-  openingDebtCop: number; // 8_000_000
-  motoSavingsCop: number; // 2_300_000
-  generalSavingsCop: number; // 2_080_000
-  totalSavingsCop: number; // 4_380_000
-  topPendingItems: Array<{
-    id: string;
-    name: string;
-    amountCop: number;
-    type: 'income' | 'expense';
-  }>;
-}
-```
+## 1. Regla de la cuenta Apple gratuita (máx. 2 App IDs)
+- **Todos** los widgets (`BFlowNetFlowWidget`, `BFlowSummaryWidget`, `BFlowPendingWidget`, `BFlowDebtWidget`, `BFlowSavingsWidget`) y cualquier `ActivityConfiguration` futura de la Isla Dinámica viven en **un único** target de extensión (`targets/widgets`, un solo `WidgetBundle`).
+- Nunca crear targets separados: una cuenta gratuita permite 10 App IDs cada 7 días.
 
-## 3. Dynamic App Group & Fallback
-- Resolve the App Group dynamically from `Bundle.main.bundleIdentifier` (`group.<main_bundle_id>`) so sideloaders (`iloader`) that append team suffixes do not break `UserDefaults(suiteName:)`.
-- `ActivityKit` updates (`Activity.request` / `Activity.update`) pass `ContentState` directly in-process and work even if `App Groups` are unavailable on a free profile.
+## 2. Contrato tipado `WidgetSnapshotV2`
+- Fuente de verdad: `src/platform/widgets/widgetSnapshot.ts` (Zod `.strict()`, `buildWidgetSnapshot`, que reutiliza `buildMonthlyHistory`).
+- Solo TypeScript calcula; Swift (`targets/widgets/WidgetSnapshotModels.swift`) y Kotlin (`modules/bflow-widgets/android/src/main/java/com/bflow/widgets/model/WidgetSnapshot.kt`) decodifican y pintan.
+- **Un campo nuevo se añade en los tres en el mismo cambio**, con tests (Jest y JVM).
+- Montos enteros (`Number.isSafeInteger` / `Int` / `Long`). El mes del widget es el mes en curso (`resolveWidgetMonthKey`), no la pestaña abierta.
+- Valores dorados (octubre 2026): flujo neto 1.080.000, recibido 4.000.000, pagado 2.920.000, por pagar 450.000, checklist 6/12, deuda 6.200.000, total ahorros 4.380.000.
+
+## 3. Sincronización
+- **Mismo dispositivo, al instante:** `triggerWidgetSync` → `syncWidgetSnapshot` (iOS: `ExtensionStorage` en el App Group + `reloadAllTimelines`; Android: `BFlowWidgets.setSnapshot`).
+- **Otros dispositivos:** el store sube `users/{uid}/widgetSnapshots/current` (`widgetSnapshotRepository.ts`, debounce 1,5 s). Los widgets lo leen por REST con el refresh token que entrega `widgetAuthBridge` (`bflow_widget_auth_v1`), cada ~15 min o con «Actualizar». Gana el `updatedAtIso` más reciente.
+- **Cerrar sesión:** `clearWidgetData()` borra snapshot y credenciales. Nunca mostrar datos de ejemplo: el estado vacío es «Abre BFlow para ver tu mes».
+
+## 4. App Group dinámico
+- Resolver el App Group desde `Bundle.main.bundleIdentifier` (`group.<bundle id principal>`) para soportar los sufijos de `iloader`. El adaptador JS escribe en el dinámico y en `group.com.bflow.app`.
+- `ActivityKit` (`Activity.request` / `.update`) pasa el `ContentState` en proceso y funciona sin App Group.
+
+## 5. Android
+- Módulo Expo local (API clásica `Module`, compilado desde fuentes, ADR 0019), RemoteViews XML (no Glance) y WorkManager. No editar `android/` a mano.
+- Colores de `androidPalettes`; en Android 12+, colores dinámicos del sistema para fondo y texto. R8: `consumer-rules.pro` del módulo.
+- Tests: `cd android && ./gradlew :bflow-widgets:testDebugUnitTest`.

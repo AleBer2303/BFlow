@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Widget "netflow". updatePeriodMillis="0": el sistema no lo despierta; el refresco desde la nube
+  lo lleva WorkManager (WidgetSyncScheduler) y la app repinta al instante con setSnapshot.
+  previewLayout (Android 12+) es el propio layout sin datos; previewImage cubre versiones previas.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+  android:description="@string/bflow_widget_netflow_description"
+  android:initialLayout="@layout/bflow_widget_netflow"
+  android:minWidth="110dp"
+  android:minHeight="110dp"
+  android:minResizeWidth="110dp"
+  android:minResizeHeight="110dp"
+  android:previewImage="@drawable/bflow_widget_preview_small"
+  android:previewLayout="@layout/bflow_widget_netflow"
+  android:resizeMode="horizontal|vertical"
+  android:targetCellWidth="2"
+  android:targetCellHeight="2"
+  android:updatePeriodMillis="0"
+  android:widgetCategory="home_screen" />

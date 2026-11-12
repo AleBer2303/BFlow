@@ -1,6 +1,11 @@
 import React, { useCallback, useDeferredValue, useEffect, useState } from 'react';
+import * as Linking from 'expo-linking';
 import { AppState } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
+import {
+  cancelCloudWidgetSnapshotWrite,
+  flushCloudWidgetSnapshotWrite,
+} from '../data/repositories/widgetSnapshotRepository';
 import { hapticService, type HapticType } from '../design-system';
 import { formatMonthKeyLabelEs } from '../domain';
 import { AnalyticsTab } from '../features/analytics/components/AnalyticsTab';
@@ -33,6 +38,11 @@ import {
   flushPendingPersistedAccount,
   schedulePersistedAccountSave,
 } from '../platform/storage/accountCache';
+import {
+  clearWidgetData,
+  parseWidgetDeepLinkTab,
+  subscribeWidgetAuthBridge,
+} from '../platform/widgets';
 
 const triggerHaptic = (type: HapticType) => {
   hapticService.trigger(type);
@@ -155,6 +165,28 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     return () => unsubscribe();
   }, [syncUserCloudAccount]);
 
+  // Credenciales de los widgets nativos: les permiten refrescarse desde Firestore con la app
+  // cerrada (ADR 0021). El modo vitrina no usa Firebase.
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'test' || isDemoModeEnabled()) {
+      return;
+    }
+    return subscribeWidgetAuthBridge();
+  }, []);
+
+  // Tocar un widget abre la app en su pestaña: bflow://?tab=checklist
+  useEffect(() => {
+    const openTabFromUrl = (url: string | null) => {
+      const tab = parseWidgetDeepLinkTab(url);
+      if (tab) {
+        useBudgetStore.getState().setActiveTab(tab);
+      }
+    };
+    void Linking.getInitialURL().then(openTabFromUrl).catch(() => undefined);
+    const subscription = Linking.addEventListener('url', ({ url }) => openTabFromUrl(url));
+    return () => subscription.remove();
+  }, []);
+
   // Debounced auto-save of store mutations to local encrypted persistent storage (R-06)
   useEffect(() => {
     if (process.env.NODE_ENV === 'test') {
@@ -207,7 +239,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
         flushPendingPersistedAccount();
-        void syncActiveWidget();
+        void syncActiveWidget().then(() => flushCloudWidgetSnapshotWrite());
       } else if (nextAppState === 'active') {
         void flushOfflineWrites();
       }
@@ -318,7 +350,16 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
 
   const handleSignOut = useCallback(async () => {
     const outgoingUid = useBudgetStore.getState().authUser?.uid;
+    // Lo pendiente de la cuenta saliente se sube antes de perder la sesión; luego los widgets
+    // de este dispositivo se vacían para no seguir mostrando sus cifras.
+    // Sin red, setDoc no resuelve: se espera como mucho 2 s (es una caché derivada).
+    await Promise.race([
+      flushCloudWidgetSnapshotWrite(),
+      new Promise<void>((resolve) => setTimeout(resolve, 2_000)),
+    ]);
+    cancelCloudWidgetSnapshotWrite();
     await signOutCurrentUser();
+    clearWidgetData();
     if (outgoingUid) {
       clearPersistedAccount(outgoingUid);
     }

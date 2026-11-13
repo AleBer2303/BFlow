@@ -15,6 +15,7 @@ export * from './components/WorkspaceNavIcons';
 export * from './components/FloatingLiquidGlassDock';
 export * from './components/navigation/workspaceTabs';
 export * from './components/navigation/WebNavigation';
+export * from './components/AdaptiveSelectField';
 export * from './components/IosWheelPickerModal';
 export * from './components/KeyboardAwareScrollView';
 export * from './components/AppTextInput';

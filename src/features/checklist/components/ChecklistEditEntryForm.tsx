@@ -19,7 +19,13 @@ import {
   MIN_TOUCH_TARGET_PT,
   useBFlowTheme,
 } from '../../../design-system';
-import type { Concept, Debt, MonthEntry, SavingsBucket } from '../../../domain';
+import {
+  formatGroupedIntegerInput,
+  type Concept,
+  type Debt,
+  type MonthEntry,
+  type SavingsBucket,
+} from '../../../domain';
 import type { EditEntryUpdates } from '../../budget/store/useBudgetStore';
 
 export interface ChecklistEditEntryFormProps {
@@ -49,7 +55,9 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
   const { colors, spacing, radius } = useBFlowTheme();
   const [editNameInput, setEditNameInput] = useState(() => entry?.conceptName ?? '');
   const [editAmountInput, setEditAmountInput] = useState(() =>
-    entry ? String(entry.actualAmount > 0 ? entry.actualAmount : entry.plannedAmount) : ''
+    entry
+      ? formatGroupedIntegerInput(entry.actualAmount > 0 ? entry.actualAmount : entry.plannedAmount)
+      : ''
   );
   const [editNoteInput, setEditNoteInput] = useState(() => entry?.note ?? '');
   const [editTargetDebtId, setEditTargetDebtId] = useState<string | null>(() =>
@@ -179,7 +187,7 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
             testID="edit-entry-amount-input"
             value={editAmountInput}
             onChangeText={setEditAmountInput}
-            keyboardType="numeric"
+            keyboardType="number-pad"
             placeholder="0"
             style={{
               textAlign: 'center',

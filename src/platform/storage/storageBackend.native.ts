@@ -13,13 +13,55 @@
  */
 
 import * as SecureStore from 'expo-secure-store';
-import { Storage } from 'expo-sqlite/kv-store';
+import { getOptionalSqliteKvStore, type OptionalSqliteKvStore } from './sqliteKvStore';
 
 export interface RawStorageBackend {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
   removeItem(key: string): void;
   clear(): void;
+}
+
+const memoryFallbackStore = new Map<string, string>();
+
+function getSyncSqliteStore(): OptionalSqliteKvStore | null {
+  const store = getOptionalSqliteKvStore();
+  return store && typeof store.getItemSync === 'function' ? store : null;
+}
+
+function readFallbackKv(key: string): string | null {
+  const sqlite = getSyncSqliteStore();
+  if (sqlite) {
+    return sqlite.getItemSync(key);
+  }
+  return memoryFallbackStore.get(key) ?? null;
+}
+
+function writeFallbackKv(key: string, value: string): void {
+  const sqlite = getSyncSqliteStore();
+  if (sqlite) {
+    sqlite.setItemSync(key, value);
+    return;
+  }
+  memoryFallbackStore.set(key, value);
+}
+
+function removeFallbackKv(key: string): void {
+  const sqlite = getSyncSqliteStore();
+  if (sqlite) {
+    sqlite.removeItemSync(key);
+    return;
+  }
+  memoryFallbackStore.delete(key);
+}
+
+function clearFallbackKv(): void {
+  const sqlite = getSyncSqliteStore();
+  if (sqlite) {
+    sqlite.clearSync();
+    return;
+  }
+  memoryFallbackStore.clear();
 }
 
 const DEVICE_SECRET_TOKEN_KEY = 'bflow.security.device_token.v1';
@@ -76,16 +118,16 @@ export const storageBackend: RawStorageBackend = {
         // Fallback to SQLite if SecureStore throws
       }
 
-      // Check SQLite fallback (or legacy pre-ADR-0016 entry) and migrate to SecureStore if small enough
+      // Check SQLite (or in-memory fallback) and migrate to SecureStore if small enough
       try {
-        const fallbackVal = Storage.getItemSync(key);
+        const fallbackVal = readFallbackKv(key);
         if (fallbackVal !== null && fallbackVal.length > 0) {
           if (fallbackVal.length <= SECURE_STORE_MAX_SAFE_BYTES) {
             try {
               SecureStore.setItem(safeKey, fallbackVal, SECURE_STORE_OPTIONS);
-              Storage.removeItemSync(key);
+              removeFallbackKv(key);
             } catch {
-              // Keep in SQLite if SecureStore write fails
+              // Keep in fallback store if SecureStore write fails
             }
           }
           return fallbackVal;
@@ -97,7 +139,7 @@ export const storageBackend: RawStorageBackend = {
     }
 
     try {
-      return Storage.getItemSync(key);
+      return readFallbackKv(key);
     } catch {
       return null;
     }
@@ -110,20 +152,20 @@ export const storageBackend: RawStorageBackend = {
       try {
         SecureStore.setItem(safeKey, value, SECURE_STORE_OPTIONS);
         try {
-          Storage.removeItemSync(key);
+          removeFallbackKv(key);
         } catch {
           // Ignore cleanup error
         }
         return;
       } catch {
-        // Fallback to SQLite if SecureStore write fails
+        // Fallback to SQLite/memory if SecureStore write fails
       }
     }
 
     try {
-      Storage.setItemSync(key, value);
+      writeFallbackKv(key, value);
     } catch {
-      // Ignore SQLite I/O error
+      // Ignore fallback I/O error
     }
   },
 
@@ -132,9 +174,9 @@ export const storageBackend: RawStorageBackend = {
       deleteFromSecureStoreSyncAndAsync(key);
     }
     try {
-      Storage.removeItemSync(key);
+      removeFallbackKv(key);
     } catch {
-      // Ignore SQLite I/O error
+      // Ignore fallback I/O error
     }
   },
 
@@ -143,9 +185,9 @@ export const storageBackend: RawStorageBackend = {
       deleteFromSecureStoreSyncAndAsync(safeKey);
     }
     try {
-      Storage.clearSync();
+      clearFallbackKv();
     } catch {
-      // Ignore SQLite I/O error
+      // Ignore fallback I/O error
     }
   },
 };

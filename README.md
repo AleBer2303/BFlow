@@ -231,7 +231,7 @@ BFlow/
 │   └── workflows/                # CI/CD (ci.yml, build-ios.yml, build-android.yml, e2e.yml, release.yml)
 ├── assets/                       # Iconos y splash screens de la aplicación
 ├── docs/
-│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0024)
+│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0025)
 │   ├── guides/                   # Guías operativas (firma con iloader, validación multiplataforma)
 │   └── Improvements/             # Guías de auditoría de rendimiento
 ├── fixtures/                     # Datos dorados de prueba (october-2026.json)
@@ -263,7 +263,7 @@ BFlow/
 │   │   └── savings/              # Fondos de ahorro y proyecciones
 │   ├── features/                 # Pantallas y componentes por dominio funcional
 │   │   ├── analytics/            # Cierre de mes, historial y sección «Gráficos»
-│   │   ├── auth/                 # Login, registro, perfil y recuperación
+│   │   ├── auth/                 # Login, registro, verificación de correo, perfil y recuperación
 │   │   ├── budget/               # Resumen mensual y modal de agregar movimiento
 │   │   ├── checklist/            # Lista de movimientos y filtros
 │   │   ├── debts/                # Amortización de deudas, abonos y gráfico de evolución
@@ -272,11 +272,10 @@ BFlow/
 │   │   ├── shell/                # WorkspaceShell: cabecera, columna y navegación de cada piel
 │   │   └── summary/              # Resumen y curva del mes: three.js (iOS), SVG animado (Android, Web y respaldo de iOS)
 │   └── platform/                 # Adaptadores Modo A vs Modo B
-│       ├── auth/                 # Adaptador de autenticación y códigos de 6 dígitos
+│       ├── auth/                 # Adaptador de autenticación y correos de cuenta de Firebase Auth (verificación, contraseña, cambio de correo; ADR 0025)
 │       ├── glass/                # GlassSurface: vidrio (iOS), tonal (Android), plano (Web)
 │       ├── haptics/              # Servicio unificado de vibración háptica
 │       ├── insets/               # Áreas seguras (borde a borde en Android)
-│       ├── mail/                 # Integración de correos transaccionales vía Resend API
 │       ├── mode/                 # Detección de entorno (runtimeMode.ts) y modo vitrina (demoMode.ts)
 │       ├── storage/              # Persistencia KV síncrona cifrada (AES-256 + HMAC-SHA256, expo-secure-store + expo-sqlite/kv-store en iOS/Android, localStorage cifrado en Web) y caché v2
 │       ├── system/               # Fondo de la ventana nativa / documento HTML según el tema
@@ -416,25 +415,6 @@ Como parte de la evaluación técnica exhaustiva requerida antes de un lanzamien
    - *Falta:* Integración de Sentry Expo o Firebase Crashlytics para capturar excepciones no controladas en dispositivos de usuarios finales.
 6. **Cumplimiento Legal de Tiendas (Política de Privacidad y Borrado de Cuenta):**
    - *Falta:* Publicar `PRIVACY_POLICY.md` en web pública y habilitar la eliminación completa del usuario en Firebase Auth conforme a la directriz 5.1.1(v) de Apple.
-
----
-
-## 🔑 Variables de Entorno
-
-Configurables en el archivo `.env` local (basado en `.env.example`):
-
-| Variable | Descripción | Valor Predeterminado / Ejemplo |
-| :--- | :--- | :--- |
-| `EXPO_PUBLIC_FIREBASE_API_KEY` | Llave pública de Firebase Web Client | `AIzaSy...` (Proyecto `bflow-deaeb`) |
-| `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN` | Dominio de autenticación de Firebase | `bflow-deaeb.firebaseapp.com` |
-| `EXPO_PUBLIC_FIREBASE_PROJECT_ID` | Identificador de proyecto Firebase | `bflow-deaeb` |
-| `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET` | Bucket de almacenamiento | `bflow-deaeb.firebasestorage.app` |
-| `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`| Sender ID para mensajería | `1021469032737` |
-| `EXPO_PUBLIC_FIREBASE_APP_ID` | App ID asignado en Firebase Console | `1:1021469032737:web:8656ad9e4871ddb6ffce73` |
-| `EXPO_PUBLIC_RESEND_API_KEY` | API Key de Resend para correos reales | Opcional (si falta, simula en consola en desarrollo) |
-| `EXPO_PUBLIC_RESEND_FROM_EMAIL` | Dirección remitente autorizada en Resend| `BFlow <onboarding@resend.dev>` |
-| `EXPO_PUBLIC_LOCAL_CIPHER_PEPPER` | Semilla/palabra secreta de aplicación combinada con el token de 256 bits de `expo-secure-store` para derivar la llave AES-256 local (ADR 0016) | Opcional (incluye semilla criptográfica integrada por defecto) |
-| `EXPO_PUBLIC_BFLOW_DEMO` | Modo vitrina local: sesión demo con el seed, sin Firebase, y `?skin=` / `?theme=` en la URL | Vacío (lo activa `npm run web:demo`). **Nunca** definirlo en builds reales |
 
 ---
 

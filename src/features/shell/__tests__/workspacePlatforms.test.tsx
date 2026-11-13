@@ -11,7 +11,12 @@ import { BlurView } from 'expo-blur';
 import { GLView } from 'expo-gl';
 import React from 'react';
 import { Dimensions, ScrollView, StyleSheet, type ViewStyle } from 'react-native';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import PhaseOneHomeScreen from '../../../app/index';
+import {
+  DOCK_BOTTOM_OFFSET,
+  DOCK_CAPSULE_HEIGHT,
+} from '../../../design-system/components/FloatingLiquidGlassDock';
 import { BFlowThemeProvider } from '../../../design-system/theme/ThemeContext';
 import {
   PLATFORM_SKIN_IDS,
@@ -182,6 +187,14 @@ describe('iOS skin · Liquid Glass frame', () => {
     expect(screen.queryByTestId('web-app-header')).toBeNull();
   });
 
+  it('keeps iOS scroll bottom clearance unchanged', () => {
+    renderApp('ios');
+
+    expect(styleOf('liquid-glass-tab-bar-anchor').bottom).toBe(DOCK_BOTTOM_OFFSET.ios);
+    const scrollContent = screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle;
+    expect(StyleSheet.flatten(scrollContent).paddingBottom).toBe(84);
+  });
+
   it('caps the content column and keeps the dock within its maximum width on a tablet', () => {
     setWindowSize(1024, 768);
     renderApp('ios');
@@ -218,12 +231,39 @@ describe('Android skin · Material 3 frame', () => {
     }
   });
 
-  it('leaves room at the end of the content for the floating dock', () => {
+  it('leaves breathing room at the end of every Android screen above the floating dock', () => {
     renderApp('android');
 
-    expect(styleOf('liquid-glass-tab-bar-anchor').position).toBe('absolute');
+    const anchorStyle = styleOf('liquid-glass-tab-bar-anchor');
+    expect(anchorStyle.position).toBe('absolute');
+    expect(anchorStyle.bottom).toBe(DOCK_BOTTOM_OFFSET.android);
+
+    const dockTopEdge = DOCK_BOTTOM_OFFSET.android + DOCK_CAPSULE_HEIGHT;
+    for (const [tab] of WORKSPACE_VIEWS) {
+      fireEvent.press(screen.getByTestId(`workspace-tab-${tab}`));
+      const scrollContent = screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle;
+      const paddingBottom = StyleSheet.flatten(scrollContent).paddingBottom as number;
+      expect(paddingBottom - dockTopEdge).toBeGreaterThanOrEqual(16);
+      expect(paddingBottom).toBe(96);
+    }
+  });
+
+  it('preserves the breathing room above the Android dock when the system gesture bar adds bottom inset', () => {
+    render(
+      <SafeAreaInsetsContext.Provider value={{ top: 24, right: 0, bottom: 24, left: 0 }}>
+        <BFlowThemeProvider skin="android" initialMode="dark">
+          <PhaseOneHomeScreen />
+        </BFlowThemeProvider>
+      </SafeAreaInsetsContext.Provider>
+    );
+
+    const anchorBottom = styleOf('liquid-glass-tab-bar-anchor').bottom as number;
+    const dockTopEdge = anchorBottom + DOCK_CAPSULE_HEIGHT;
     const scrollContent = screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle;
-    expect(StyleSheet.flatten(scrollContent).paddingBottom).toBeGreaterThanOrEqual(76);
+    const paddingBottom = StyleSheet.flatten(scrollContent).paddingBottom as number;
+
+    expect(anchorBottom).toBe(DOCK_BOTTOM_OFFSET.android + 24);
+    expect(paddingBottom - dockTopEdge).toBe(18);
   });
 
   it('draws the month curve with animated vectors and never mounts a GL surface', () => {

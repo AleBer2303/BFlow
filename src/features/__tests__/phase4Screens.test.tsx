@@ -51,8 +51,13 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     expect(screen.queryByTestId('available-concept-chip-exp_otro')).toBeNull();
 
     // Register Seguro TR SURA ($ 130.000) directly via inputs and submit
-    fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Seguro TR SURA');
-    fireEvent.changeText(screen.getByTestId('movement-amount-input'), '130000');
+    const conceptNameInput = screen.getByTestId('custom-concept-name-input');
+    const movementAmountInput = screen.getByTestId('movement-amount-input');
+    expect(conceptNameInput.props.autoCapitalize).toBe('sentences');
+    expect(movementAmountInput.props.keyboardType).toBe('number-pad');
+    fireEvent.changeText(conceptNameInput, 'Seguro TR SURA');
+    fireEvent.changeText(movementAmountInput, '130000');
+    expect(screen.getByTestId('movement-amount-input').props.value).toBe('130.000');
     fireEvent.press(screen.getByTestId('submit-movement-button'));
 
     // Modal closes and paid expenses increase from $ 2.920.000 to $ 3.050.000
@@ -150,13 +155,13 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     fireEvent.press(screen.getByTestId('bucket-action-edit-button'));
     fireEvent.press(screen.getByTestId('edit-savings-bucket-moto'));
     expect(screen.getByTestId('edit-savings-bucket-card')).toBeTruthy();
-    expect(screen.getByTestId('edit-bucket-balance-input').props.value).toBe('1600000');
+    expect(screen.getByTestId('edit-bucket-balance-input').props.value).toBe('1.600.000');
     fireEvent.press(screen.getByTestId('save-edit-bucket-button'));
     expect(screen.queryByTestId('edit-savings-bucket-card')).toBeNull();
 
     fireEvent.press(screen.getByTestId('bucket-action-edit-button'));
     fireEvent.press(screen.getByTestId('edit-savings-bucket-savings'));
-    expect(screen.getByTestId('edit-bucket-balance-input').props.value).toBe('1000000');
+    expect(screen.getByTestId('edit-bucket-balance-input').props.value).toBe('1.000.000');
     fireEvent.press(screen.getByTestId('save-edit-bucket-button'));
     expect(screen.queryByTestId('edit-savings-bucket-card')).toBeNull();
   });

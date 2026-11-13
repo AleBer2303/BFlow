@@ -271,6 +271,7 @@ Fallback arquitectural idéntico visualmente mediante `expo-blur`:
 4. **`AppTextInput` + `KeyboardAwareScrollView`:**
    - Auto-scroll inteligente: los inputs ubicados en la mitad superior de la pantalla no sufren saltos innecesarios.
    - Los inputs ocultos por el teclado se desplazan con una holgura limpia de 24pt sin generar vacíos gigantes.
+   - Teclado y formato universal en iOS y Android: los campos de texto abren con mayúscula inicial activa (`autoCapitalize="sentences"`, salvo correo/contraseña/numéricos) y los campos numéricos enteros abren directamente el teclado numérico (`number-pad` / `inputMode="numeric"`) con separación automática de miles por puntos (`1.000`, `100.000`, `1.000.000`).
 5. **Curva del mes (`MonthlyCurveSection`):**
    - Sustituye en Resumen a la lista del checklist y a las tarjetas `Control Deudas` y `Control Ahorros`. Una cifra en `heroCurrency`, una línea luminosa sobre una cuadrícula de puntos y un selector de cinco métricas: **Flujo, Ingresos, Gastos, Ahorros y Deudas**. Ver [ADR 0008](docs/decisions/0008-monthly-curve-replaces-tubes.md).
    - Se dibuja una serie a la vez, con su propia escala desde cero. La línea sólida llega hasta hoy y la punteada proyecta el cierre si se completa lo pendiente. Deudas solo baja con abonos reales.
@@ -336,23 +337,25 @@ El único color de acción de cada piel: selección de navegación, foco y botó
 
 | Token | iOS oscuro / claro | Android oscuro / claro | Web oscuro / claro |
 | :--- | :--- | :--- | :--- |
-| `accent.primary` | `#388AF6` / `#245F9F` | `#8CD5B4` / `#1B6B51` | `#256F82` / `#256F82` |
-| `accent.onPrimary` | `#0D0F12` / `#FFFFFF` | `#003827` / `#FFFFFF` | `#FFFFFF` / `#FFFFFF` |
-| `accent.container` | `rgba(79,143,234,0.16)` / `rgba(36,95,159,0.14)` | `#1F4F3E` / `#CDE9DB` | `rgba(95,179,198,0.16)` / `rgba(37,111,130,0.14)` |
-| `accent.text` | `#5C9DF2` / `#245F9F` | `#8CD5B4` / `#1B6B51` | `#5FB3C6` / `#1D5F70` |
+| `accent.primary` | `#388AF6` / `#245F9F` | `#388AF6` / `#245F9F` | `#256F82` / `#256F82` |
+| `accent.onPrimary` | `#0D0F12` / `#FFFFFF` | `#0D0F12` / `#FFFFFF` | `#FFFFFF` / `#FFFFFF` |
+| `accent.container` | `rgba(79,143,234,0.16)` / `rgba(36,95,159,0.14)` | `rgba(79,143,234,0.16)` / `rgba(36,95,159,0.14)` | `rgba(95,179,198,0.16)` / `rgba(37,111,130,0.14)` |
+| `accent.text` | `#5C9DF2` / `#245F9F` | `#5C9DF2` / `#245F9F` | `#5FB3C6` / `#1D5F70` |
 
 ### 10.3 Piel Android (Material 3)
 
+Comparte los colores de la piel iOS (oscuro y claro) sobre superficies tonales **opacas** (`surfaceTint` y `surfaceElevatedTint` equivalen al vidrio de iOS aplanado sobre `background.primary`, sin `BlurView` ni translucidez).
+
 | Token | Oscuro | Claro |
 | :--- | :--- | :--- |
-| `background.primary` | `#101411` | `#F6FBF4` |
-| `background.secondary` | `#181D19` | `#EFF5EE` |
-| `background.elevated` | `#1E2420` | `#E9EFE8` |
-| `glass.surfaceTint` (contenedor) | `#1A201C` | `#EAF0E9` |
-| `glass.surfaceElevatedTint` | `#232925` | `#E2E9E1` |
-| `text.primary / secondary / muted` | `#E0E4DD` / `#C0C9BF` / `#939C92` | `#171D19` / `#404943` / `#566058` |
+| `background.primary` | `#0D0F12` | `#E7E6E0` |
+| `background.secondary` | `#14171C` | `#DCDBD3` |
+| `background.elevated` | `#1B1F26` | `#EFECE3` |
+| `glass.surfaceTint` (contenedor) | `#15181E` | `#EEEAE0` |
+| `glass.surfaceElevatedTint` | `#1D222B` | `#F7F4EC` |
+| `text.primary / secondary / muted` | `#F4F5F7` / `#9BA3AF` / `#7A8291` | `#12151B` / `#4E5562` / `#565E6E` |
 
-Contraste medido (primario / secundario / atenuado): sobre la página **14,4 / 10,9 / 6,6** (oscuro) y **16,3 / 8,9 / 6,2** (claro); sobre tarjeta **12,9 / 9,7 / 5,8** y **14,8 / 8,1 / 5,7**. Texto sobre el acento: **7,7** y **6,4**.
+Contraste medido (primario / secundario / atenuado): sobre la página **17,6 / 7,5 / 5,0** (oscuro) y **14,6 / 6,0 / 5,2** (claro); sobre tarjeta **16,3 / 7,0 / 4,6** y **15,2 / 6,2 / 5,4**. Texto sobre el acento: **5,6** y **6,5**.
 
 Escala tipográfica (Roboto del sistema, sin `fontFamily` forzada):
 
@@ -368,7 +371,7 @@ Escala tipográfica (Roboto del sistema, sin `fontFamily` forzada):
 | `caption` | 12 / 16 | 500 | 0,5 | Label medium |
 | `micro` | 11 / 16 | 500 | 0,5 | Label small |
 
-Componentes: dock flotante (el de iOS, ADR 0024), cápsula opaca de `glass.surfaceElevatedTint` con línea `glass.specularBorder`, a 16 dp del borde inferior más `insets.bottom`; pestañas de 54 dp de alto (objetivo táctil de 48 dp); selección con una píldora plana de `accent.container` e icono y etiqueta en `accent.primary` (contraste con la píldora: **5,5** en oscuro y **5,0** en claro). El contenido reserva 76 dp más `insets.bottom` al final del scroll.
+Componentes: dock flotante (el de iOS, ADR 0024), cápsula opaca de `glass.surfaceElevatedTint` con línea `glass.specularBorder`, a 16 dp del borde inferior más `insets.bottom`; pestañas de 54 dp de alto (objetivo táctil de 48 dp, cápsula total de 62 dp); selección con una píldora plana de `accent.container` e icono y etiqueta en `accent.primary` (contraste con la píldora: **3,7** en oscuro y **4,8** en claro). El contenido reserva 96 dp más `insets.bottom` al final del scroll (18 dp de aire libre por encima del dock).
 
 ### 10.4 Piel Web (sistema `design-taste-frontend`)
 
@@ -424,8 +427,8 @@ Reglas propias de la Web:
 | :--- | :--- |
 | iOS oscuro | `#4F8FEA` `#2BB3A6` `#E5A84B` `#E07A9A` `#9D7FE6` `#9CC45A` |
 | iOS claro | `#245F9F` `#0F7A70` `#8F5206` `#A8345F` `#5F3DA6` `#5A6E12` |
-| Android oscuro | `#6FA4F0` `#4FC3B5` `#E5A84B` `#E88AA6` `#AD93EA` `#A5CB66` |
-| Android claro | `#245F9F` `#0B6E66` `#8F5206` `#A8345F` `#5F3DA6` `#556A10` |
+| Android oscuro | `#4F8FEA` `#2BB3A6` `#E5A84B` `#E07A9A` `#9D7FE6` `#9CC45A` |
+| Android claro | `#245F9F` `#0F7A70` `#8F5206` `#A8345F` `#5F3DA6` `#5A6E12` |
 | Web oscuro | `#6FA4F0` `#5FB3C6` `#E5A84B` `#E08FB8` `#A5CB66` `#C2B89A` |
 | Web claro | `#1F5590` `#0E6B5E` `#7A4504` `#8A3A66` `#4C5E0E` `#5E574C` |
 

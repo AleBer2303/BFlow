@@ -87,6 +87,30 @@ export function parseCurrencyInteger(input: string | number): number {
 }
 
 /**
+ * Formats an integer numeric input string with thousands dot separators
+ * ("1000" -> "1.000", "100000" -> "100.000", "1000000" -> "1.000.000")
+ * while keeping empty input as "".
+ */
+export function formatGroupedIntegerInput(input: string | number): string {
+  let rawDigits: string;
+  if (typeof input === 'number') {
+    if (!Number.isFinite(input) || input < 0) {
+      return '';
+    }
+    rawDigits = String(Math.trunc(input));
+  } else {
+    rawDigits = input.replace(/[^0-9]/g, '');
+  }
+
+  if (!rawDigits) {
+    return '';
+  }
+
+  const normalized = rawDigits.replace(/^0+(?=\d)/, '');
+  return normalized.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+/**
  * Backward-compatible aliases
  */
 export const formatCop = formatCurrency;

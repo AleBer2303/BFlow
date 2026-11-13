@@ -32,7 +32,7 @@
 - **Base de Datos:** Google Cloud Firestore JS SDK `^11.10.0`.
 - **Proyecto Firebase:** `bflow-deaeb`.
 - **Región Cloud Firestore:** `nam5` (`us-central`).
-- **Autenticación:** Firebase Auth (Email/Contraseña) + Servicio de Verificación de 6 dígitos vía Resend API.
+- **Autenticación:** Firebase Auth (Email/Contraseña). Los correos de verificación, restablecimiento de contraseña y cambio de correo los envía Firebase Auth (ADR 0025; antes, códigos de 6 dígitos vía Resend API).
 - **Modelo de Datos:** Multi-inquilino aislado bajo `users/{uid}/...` (colecciones: `concepts`, `entries`, `debts`, `debtPayments`, `savingsBuckets`, `provisionPlans`, `monthSnapshots`).
 
 ### Librerías Clave & Estado

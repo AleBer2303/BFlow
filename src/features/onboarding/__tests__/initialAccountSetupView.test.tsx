@@ -1,6 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
+import { LayoutAnimation } from 'react-native';
 import { BFlowThemeProvider } from '../../../design-system/theme/ThemeContext';
+import { formatMonthKeyLabelEs, toAppMonthKey } from '../../../domain';
 import { InitialAccountSetupView } from '../components/InitialAccountSetupView';
 
 describe('InitialAccountSetupView (Onboarding / Account Reset Wizard)', () => {
@@ -124,9 +126,12 @@ describe('InitialAccountSetupView (Onboarding / Account Reset Wizard)', () => {
 
     // 2. Add debt via accordion
     fireEvent.press(screen.getByTestId('onboarding-toggle-add-debt'));
+    expect(screen.getByTestId('onboarding-debt-name-input').props.autoCapitalize).toBe('sentences');
+    expect(screen.getByTestId('onboarding-debt-balance-input').props.keyboardType).toBe('number-pad');
     fireEvent.changeText(screen.getByTestId('onboarding-debt-name-input'), 'Crédito Moto');
     fireEvent.changeText(screen.getByTestId('onboarding-debt-lender-input'), 'Bancolombia');
     fireEvent.changeText(screen.getByTestId('onboarding-debt-balance-input'), '2000000');
+    expect(screen.getByTestId('onboarding-debt-balance-input').props.value).toBe('2.000.000');
     fireEvent.changeText(screen.getByTestId('onboarding-debt-installment-input'), '200000');
     fireEvent.press(screen.getByTestId('onboarding-add-debt-button'));
     expect(screen.getByText('Crédito Moto (Bancolombia)')).toBeTruthy();
@@ -188,5 +193,135 @@ describe('InitialAccountSetupView (Onboarding / Account Reset Wizard)', () => {
     expect(config.provisions[0].name).toBe('SOAT 2027');
     expect(config.provisions[0].amountCop).toBe(650000);
     expect(config.provisions[0].periodMonths).toBe(12);
+  });
+
+  it.each(['ios', 'android', 'web'] as const)(
+    'hides every add toggle button immediately without delete fade-out when opening forms on %s skin',
+    (skin) => {
+      const configureSpy = jest.spyOn(LayoutAnimation, 'configureNext').mockImplementation(() => {});
+
+      render(
+        <BFlowThemeProvider initialMode="dark" skin={skin}>
+          <InitialAccountSetupView defaultMonthKey="2026-10" onCompleteSetup={jest.fn()} />
+        </BFlowThemeProvider>
+      );
+
+      const sections = [
+        {
+          toggleId: 'onboarding-toggle-add-bucket',
+          inputId: 'onboarding-new-bucket-name-input',
+          cancelId: 'onboarding-cancel-add-bucket',
+        },
+        {
+          toggleId: 'onboarding-toggle-add-debt',
+          inputId: 'onboarding-debt-name-input',
+          cancelId: 'onboarding-cancel-add-debt',
+        },
+        {
+          toggleId: 'onboarding-toggle-add-income',
+          inputId: 'onboarding-income-name-input',
+          cancelId: 'onboarding-cancel-add-income',
+        },
+        {
+          toggleId: 'onboarding-toggle-add-expense',
+          inputId: 'onboarding-expense-name-input',
+          cancelId: 'onboarding-cancel-add-expense',
+        },
+        {
+          toggleId: 'onboarding-toggle-add-provision',
+          inputId: 'onboarding-provision-name-input',
+          cancelId: 'onboarding-cancel-add-provision',
+        },
+      ] as const;
+
+      for (const section of sections) {
+        configureSpy.mockClear();
+        fireEvent.press(screen.getByTestId(section.toggleId));
+
+        expect(screen.queryByTestId(section.toggleId)).toBeNull();
+        expect(screen.getByTestId(section.inputId)).toBeTruthy();
+
+        for (const call of configureSpy.mock.calls) {
+          expect(call[0].delete).toBeUndefined();
+        }
+
+        fireEvent.press(screen.getByTestId(section.cancelId));
+        expect(screen.getByTestId(section.toggleId)).toBeTruthy();
+        expect(screen.queryByTestId(section.inputId)).toBeNull();
+      }
+
+      configureSpy.mockRestore();
+    }
+  );
+
+  it('defaults year and month to the current month in America/Bogota when defaultMonthKey is omitted', () => {
+    const currentMk = toAppMonthKey();
+    const expectedLabel = formatMonthKeyLabelEs(currentMk);
+    const mockComplete = jest.fn();
+
+    render(
+      <BFlowThemeProvider initialMode="dark">
+        <InitialAccountSetupView onCompleteSetup={mockComplete} />
+      </BFlowThemeProvider>
+    );
+
+    expect(screen.getByTestId('onboarding-year-input')).toHaveTextContent(currentMk.slice(0, 4));
+    expect(screen.getByTestId('complete-initial-setup-button')).toHaveTextContent(
+      `Guardar e Iniciar ${expectedLabel}`
+    );
+
+    fireEvent.press(screen.getByTestId('complete-initial-setup-button'));
+    expect(mockComplete).toHaveBeenCalledWith(
+      expect.objectContaining({
+        monthKey: currentMk,
+      })
+    );
+  });
+
+  it.each(['ios', 'android'] as const)(
+    'updates year and month via bottom-anchored wheel modal on %s skin',
+    (skin) => {
+      render(
+        <BFlowThemeProvider initialMode="dark" skin={skin}>
+          <InitialAccountSetupView defaultMonthKey="2026-03" onCompleteSetup={jest.fn()} />
+        </BFlowThemeProvider>
+      );
+
+      fireEvent.press(screen.getByTestId('onboarding-month-dropdown-trigger'));
+      expect(screen.getByTestId('onboarding-month-picker-container').props.style).toEqual(
+        expect.objectContaining({ justifyContent: 'flex-end' })
+      );
+      expect(screen.getByTestId('onboarding-month-picker-carousel-area')).toBeTruthy();
+      fireEvent.press(screen.getByTestId('onboarding-month-picker-option-11'));
+      fireEvent.press(screen.getByTestId('onboarding-month-picker-confirm'));
+
+      expect(screen.getByTestId('complete-initial-setup-button')).toHaveTextContent(
+        'Guardar e Iniciar Noviembre 2026'
+      );
+    }
+  );
+
+  it('updates year and month via anchored dropdown menu without wheel modal on web skin', () => {
+    const currentYear = String(new Date().getFullYear());
+    const previousYear = String(Number(currentYear) - 1);
+
+    render(
+      <BFlowThemeProvider initialMode="light" skin="web">
+        <InitialAccountSetupView defaultMonthKey={`${currentYear}-03`} onCompleteSetup={jest.fn()} />
+      </BFlowThemeProvider>
+    );
+
+    fireEvent.press(screen.getByTestId('onboarding-year-dropdown-trigger'));
+    expect(screen.queryByTestId('onboarding-year-picker-carousel-area')).toBeNull();
+    expect(screen.queryByTestId('onboarding-year-picker-confirm')).toBeNull();
+    fireEvent.press(screen.getByTestId(`onboarding-year-picker-option-${previousYear}`));
+    expect(screen.getByTestId('onboarding-year-input')).toHaveTextContent(previousYear);
+
+    fireEvent.press(screen.getByTestId('onboarding-month-dropdown-trigger'));
+    expect(screen.queryByTestId('onboarding-month-picker-carousel-area')).toBeNull();
+    fireEvent.press(screen.getByTestId('onboarding-month-picker-option-10'));
+    expect(screen.getByTestId('complete-initial-setup-button')).toHaveTextContent(
+      `Guardar e Iniciar Octubre ${previousYear}`
+    );
   });
 });

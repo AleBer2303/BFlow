@@ -5,7 +5,8 @@
  * iOS and Android show the centered card; the web skin shows a header and a split hero
  * (copy beside the form) built to `.agents/skills/design-taste-frontend`:
  * - Supports Sign-In (`email` + `password`), Personal Account Registration (`displayName`, `phone`,
- *   `financialGoal`, `email`, `password`), and Password Recovery with Firebase
+ *   `financialGoal`, `email`, `password`), and Password Recovery through the reset link that
+ *   Firebase Authentication emails (ADR 0025)
  * - Includes password visibility toggle while typing
  * - Zero hardcoded hex values; uses semantic tokens from `useBFlowTheme()` and >= 44pt touch targets
  */
@@ -30,10 +31,6 @@ import {
   useResponsiveLayout,
 } from '../../../design-system';
 import type { RegisterPersonalAccountInput } from '../../../platform/auth/authAdapter';
-import {
-  confirmPasswordResetWithCode as defaultConfirmPasswordReset,
-  requestPasswordResetCode as defaultRequestPasswordResetCode,
-} from '../../../platform/auth/verificationCodeService';
 
 export type AuthFormMode = 'login' | 'register' | 'recover';
 
@@ -57,13 +54,8 @@ export interface AuthScreenProps {
   statusMessage: string | null;
   onSignInWithEmail: (email: string, password: string) => Promise<void>;
   onRegisterPersonalAccount: (input: RegisterPersonalAccountInput) => Promise<void>;
+  /** Envía el enlace de restablecimiento. Rechaza con un mensaje para el usuario si falla. */
   onSendPasswordRecovery: (email: string) => Promise<void>;
-  onRequestPasswordResetCode?: (email: string) => Promise<void>;
-  onConfirmPasswordResetWithCode?: (
-    email: string,
-    code: string,
-    newPassword: string
-  ) => Promise<void>;
 }
 
 export function AuthScreen({
@@ -74,16 +66,12 @@ export function AuthScreen({
   onSignInWithEmail,
   onRegisterPersonalAccount,
   onSendPasswordRecovery,
-  onRequestPasswordResetCode,
-  onConfirmPasswordResetWithCode,
 }: AuthScreenProps): React.JSX.Element {
   const { colors, spacing, radius, skin } = useBFlowTheme();
   const layout = useResponsiveLayout();
   const primaryAction = usePrimaryActionLook();
 
   const [formMode, setFormMode] = useState<AuthFormMode>(initialMode);
-  const [recoverStep, setRecoverStep] = useState<'request' | 'verify'>('request');
-  const [recoveryCode, setRecoveryCode] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [phone, setPhone] = useState('');
   const [financialGoal, setFinancialGoal] = useState(
@@ -99,97 +87,34 @@ export function AuthScreen({
 
   const switchMode = (nextMode: AuthFormMode) => {
     setFormMode(nextMode);
-    setRecoverStep('request');
-    setRecoveryCode('');
     setLocalValidationError(null);
     setInternalRecoverySuccess(null);
-  };
-
-  const handleResendRecoveryCode = async () => {
-    if (!email.trim().includes('@')) return;
-    setLocalValidationError(null);
-    try {
-      if (onRequestPasswordResetCode) {
-        await onRequestPasswordResetCode(email.trim());
-      } else {
-        await defaultRequestPasswordResetCode(email.trim());
-      }
-      setInternalRecoverySuccess(
-        `Código de 6 dígitos reenviado exitosamente a ${email.trim()}.`
-      );
-    } catch (err) {
-      setLocalValidationError(
-        err instanceof Error ? err.message : 'Error al reenviar el código de verificación.'
-      );
-    }
   };
 
   const handlePrimarySubmit = async () => {
     setLocalValidationError(null);
 
     if (formMode === 'recover') {
-      if (recoverStep === 'request') {
-        if (!email.trim().includes('@')) {
-          setLocalValidationError(
-            'Escribe el correo electrónico con el que registraste tu cuenta.'
-          );
-          return;
-        }
-
-        try {
-          if (onRequestPasswordResetCode) {
-            await onRequestPasswordResetCode(email.trim());
-          } else {
-            try {
-              await defaultRequestPasswordResetCode(email.trim());
-            } catch {
-              await onSendPasswordRecovery(email.trim());
-            }
-          }
-          setRecoverStep('verify');
-          setInternalRecoverySuccess(
-            `Hemos enviado el código de 6 dígitos a ${email.trim()}. Ingrésalo a continuación junto con tu nueva contraseña.`
-          );
-        } catch (err) {
-          setLocalValidationError(
-            err instanceof Error ? err.message : 'Error al solicitar el código de verificación.'
-          );
-        }
-        return;
-      }
-
-      // recoverStep === 'verify'
-      if (recoveryCode.trim().length < 6) {
-        setLocalValidationError('Escribe o pega el código o enlace recibido en tu correo.');
-        return;
-      }
-      if (password.length < 6) {
-        setLocalValidationError('Usa una contraseña de al menos 6 caracteres.');
-        return;
-      }
-      if (password !== confirmPassword) {
-        setLocalValidationError('Las dos contraseñas no coinciden. Verifícalas e intenta de nuevo.');
+      const recoveryEmail = email.trim();
+      if (!recoveryEmail.includes('@')) {
+        setLocalValidationError('Escribe el correo electrónico con el que registraste tu cuenta.');
         return;
       }
 
       try {
-        if (onConfirmPasswordResetWithCode) {
-          await onConfirmPasswordResetWithCode(email.trim(), recoveryCode.trim(), password);
-        } else {
-          await defaultConfirmPasswordReset(email.trim(), recoveryCode.trim(), password);
-        }
-
+        await onSendPasswordRecovery(recoveryEmail);
+        // Firebase no revela si el correo tiene cuenta: el mensaje tampoco lo afirma.
         setInternalRecoverySuccess(
-          '✓ Contraseña actualizada exitosamente. Ya puedes entrar con tu nueva clave.'
+          `Si ${recoveryEmail} tiene una cuenta en BFlow, recibirás un enlace para definir una nueva contraseña. Revisa también el correo no deseado.`
         );
         setFormMode('login');
-        setRecoverStep('request');
         setPassword('');
         setConfirmPassword('');
-        setRecoveryCode('');
       } catch (err) {
         setLocalValidationError(
-          err instanceof Error ? err.message : 'Error al actualizar la contraseña.'
+          err instanceof Error
+            ? err.message
+            : 'No fue posible enviar el enlace para restablecer la contraseña.'
         );
       }
       return;
@@ -294,15 +219,17 @@ export function AuthScreen({
               ? 'Entra a tu cuenta personal'
               : formMode === 'register'
                 ? 'Registra tus datos personales'
-                : recoverStep === 'request'
-                  ? 'Recupera el acceso a tu cuenta'
-                  : 'Restablecer contraseña'}
+                : 'Recupera el acceso a tu cuenta'}
           </AppText>
           {formMode === 'recover' ? (
             <AppText variant="caption" color={colors.text.secondary}>
-              {recoverStep === 'request'
-                ? 'Escribe tu correo electrónico para enviarte un código de verificación de 6 dígitos.'
-                : 'Ingresa el código de 6 dígitos enviado a tu correo y define tu nueva contraseña para cambiarla en la app.'}
+              Escribe tu correo electrónico y te enviaremos un enlace para definir una nueva
+              contraseña.
+            </AppText>
+          ) : null}
+          {formMode === 'register' ? (
+            <AppText variant="caption" color={colors.text.secondary}>
+              Al crear la cuenta te enviaremos un enlace para verificar tu correo.
             </AppText>
           ) : null}
         </View>
@@ -318,7 +245,7 @@ export function AuthScreen({
                 testID="auth-name-input"
                 value={displayName}
                 onChangeText={setDisplayName}
-                placeholder="Ej. Alejandro Bernal Garnica"
+                placeholder="Ej. Juan David"
                 autoCapitalize="words"
               />
             </View>
@@ -366,32 +293,12 @@ export function AuthScreen({
           />
         </View>
 
-        {/* Verification Code or Email Link Field (Recovery Step: Verify) */}
-        {formMode === 'recover' && recoverStep === 'verify' ? (
-          <View style={{ gap: spacing.xxs }}>
-            <AppText variant="caption" color={colors.text.secondary}>
-              Código de verificación o enlace del correo
-            </AppText>
-            <AppTextInput
-              testID="auth-recovery-code-input"
-              value={recoveryCode}
-              onChangeText={setRecoveryCode}
-              placeholder="Ej: 123456 o pega el código/enlace"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <AppText variant="micro" color={colors.text.muted}>
-              Ingresa el código de 6 dígitos enviado por correo para actualizar tu contraseña inmediatamente en Firebase.
-            </AppText>
-          </View>
-        ) : null}
-
         {/* Password Fields with Visibility Toggle */}
-        {formMode !== 'recover' || recoverStep === 'verify' ? (
+        {formMode !== 'recover' ? (
           <View style={{ gap: spacing.sm }}>
             <View style={{ gap: spacing.xxs }}>
               <AppText variant="caption" color={colors.text.secondary}>
-                {formMode === 'recover' ? 'Nueva contraseña' : 'Contraseña'}
+                Contraseña
               </AppText>
               <View
                 style={{
@@ -410,11 +317,8 @@ export function AuthScreen({
                   onChangeText={setPassword}
                   placeholder="Mínimo 6 caracteres"
                   secureTextEntry={!showPassword}
-                  autoComplete={
-                    formMode === 'register' || formMode === 'recover'
-                      ? 'new-password'
-                      : 'current-password'
-                  }
+                  autoCapitalize="none"
+                  autoComplete={formMode === 'register' ? 'new-password' : 'current-password'}
                   style={{
                     flex: 1,
                     backgroundColor: 'transparent',
@@ -445,12 +349,10 @@ export function AuthScreen({
               </View>
             </View>
 
-            {formMode === 'register' || (formMode === 'recover' && recoverStep === 'verify') ? (
+            {formMode === 'register' ? (
               <View style={{ gap: spacing.xxs }}>
                 <AppText variant="caption" color={colors.text.secondary}>
-                  {formMode === 'recover'
-                    ? 'Confirmar nueva contraseña'
-                    : 'Confirmar contraseña'}
+                  Confirmar contraseña
                 </AppText>
                 <View
                   style={{
@@ -467,12 +369,9 @@ export function AuthScreen({
                     testID="auth-confirm-password-input"
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
-                    placeholder={
-                      formMode === 'recover'
-                        ? 'Repite tu nueva contraseña'
-                        : 'Repite tu contraseña'
-                    }
+                    placeholder="Repite tu contraseña"
                     secureTextEntry={!showConfirmPassword}
+                    autoCapitalize="none"
                     style={{
                       flex: 1,
                       backgroundColor: 'transparent',
@@ -535,10 +434,8 @@ export function AuthScreen({
               : formMode === 'login'
                 ? 'Entrar a mi presupuesto'
                 : formMode === 'register'
-                  ? 'Crear mi cuenta y sincronizar'
-                  : recoverStep === 'request'
-                    ? 'Enviar código de verificación'
-                    : 'Restablecer y cambiar contraseña'}
+                  ? 'Crear mi cuenta'
+                  : 'Enviar enlace de restablecimiento'}
           </AppText>
         </AppPressable>
 
@@ -564,25 +461,6 @@ export function AuthScreen({
           </View>
         ) : (
           <View style={{ gap: spacing.xs, marginTop: spacing.xs }}>
-            {recoverStep === 'verify' ? (
-              <AppPressable
-                testID="auth-recovery-resend-button"
-                accessibilityRole="button"
-                accessibilityLabel="Reenviar código de verificación"
-                onPress={handleResendRecoveryCode}
-                style={{
-                  minHeight: MIN_TOUCH_TARGET_PT,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  paddingVertical: spacing.xs,
-                }}
-              >
-                <AppText variant="caption" color={colors.text.secondary}>
-                  Reenviar código de verificación
-                </AppText>
-              </AppPressable>
-            ) : null}
-
             <AppPressable
               testID="auth-back-to-login-button"
               accessibilityRole="button"

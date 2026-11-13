@@ -25,7 +25,10 @@ import {
   type SavingsBucket,
 } from '../../../../domain';
 import {
+  PROFILE_DISPLAY_NAME_MAX_LENGTH,
+  PROFILE_FINANCIAL_GOAL_MAX_LENGTH,
   savePersistedSession,
+  syncAuthDisplayName,
   type BFlowAuthUser,
 } from '../../../../platform/auth/authAdapter';
 import { isDemoModeEnabled } from '../../../../platform/mode/demoMode';
@@ -35,6 +38,7 @@ import {
 } from '../../../../platform/storage/accountCache';
 import {
   clearOfflineWriteQueue,
+  executeOptimisticCloudWrite,
   isPermanentCloudError,
 } from '../../../../platform/storage/offlineWriteQueue';
 import {
@@ -100,17 +104,55 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
 
   updateAuthUserProfile: async (updates) => {
     const current = get().authUser;
-    if (!current) return;
-    const updatedUser: BFlowAuthUser = {
-      ...current,
-      ...(updates.displayName !== undefined
-        ? { displayName: updates.displayName.trim() || current.displayName }
-        : {}),
-      ...(updates.email !== undefined ? { email: updates.email.trim() || current.email } : {}),
-      ...(updates.financialGoal !== undefined ? { financialGoal: updates.financialGoal.trim() } : {}),
+    if (!current) return 'local';
+
+    const displayName =
+      updates.displayName?.trim().slice(0, PROFILE_DISPLAY_NAME_MAX_LENGTH) ||
+      current.displayName ||
+      '';
+    const financialGoal =
+      updates.financialGoal !== undefined
+        ? updates.financialGoal.trim().slice(0, PROFILE_FINANCIAL_GOAL_MAX_LENGTH)
+        : current.financialGoal ?? '';
+
+    const applyProfile = (profile: { displayName: string | null; financialGoal?: string }) => {
+      // Se aplica sobre la sesión vigente: el correo o su verificación pudieron cambiar.
+      const latest = get().authUser;
+      if (!latest || latest.uid !== current.uid) return;
+      const nextUser: BFlowAuthUser = {
+        ...latest,
+        displayName: profile.displayName,
+        financialGoal: profile.financialGoal,
+      };
+      savePersistedSession(nextUser);
+      set({ authUser: nextUser });
     };
-    savePersistedSession(updatedUser);
-    set({ authUser: updatedUser });
+
+    applyProfile({ displayName, financialGoal });
+
+    if (!isRealAuthUser(current)) {
+      return 'local';
+    }
+
+    const uid = current.uid;
+    const profile = { displayName, financialGoal };
+    const { status } = await executeOptimisticCloudWrite({
+      uid,
+      operation: { type: 'save_user_profile', payload: profile },
+      performCloudWrite: async () => {
+        await new FirestoreBudgetRepository().saveUserProfile(uid, profile);
+      },
+      rollback: () => {
+        applyProfile({ displayName: current.displayName, financialGoal: current.financialGoal });
+      },
+      friendlyErrorMessage: 'No se pudo guardar tu perfil en la nube.',
+      setStoreState: set,
+    });
+
+    if (status === 'synced') {
+      void syncAuthDisplayName(displayName);
+    }
+    return status;
   },
 
   clearWorkspaceSession: () => {

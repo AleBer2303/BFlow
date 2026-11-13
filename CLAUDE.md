@@ -74,6 +74,13 @@ src/app/index.tsx  ──(hooks/props)──>  features/*/components
   - Errores y avisos de formulario: `FormMessage` (sacude, vibra con `error` y se anuncia). Confirmaciones destructivas: `confirmDestructive` de `src/platform/dialogs/`, no `Alert.alert` (en Web no hace nada).
   - Háptica: una por acción, en `onPress`; `warning` para eliminar.
 
+- **Correos de cuenta (ADR 0025):** los envía Firebase Authentication con sus plantillas; no hay Resend ni códigos de 6 dígitos.
+  - `src/platform/auth/accountEmailActions.ts`: `sendPasswordResetLink`, `sendVerificationEmail`, `requestEmailChange` (reautentica y usa `verifyBeforeUpdateEmail`) y `refreshAccountIdentity` (`reload`).
+  - El registro envía la verificación y `index.tsx` muestra `EmailVerificationScreen` mientras `requiresEmailVerification(authUser)` sea cierto. Solo se exige a cuentas con contraseña creadas desde `EMAIL_VERIFICATION_ENFORCED_SINCE_MS`.
+  - El correo de la cuenta nunca se edita en el store: cambia cuando el usuario abre el enlace, y Firebase cierra entonces la sesión.
+  - En tests, espiar `accountEmailActions` (`jest.spyOn`); un usuario con `provider: 'firebase'`, `emailVerified: false` y `emailVerificationRequired: true` activa la puerta.
+  - Ningún correo real se ha enviado ni abierto desde este entorno.
+
 - **Gráficos (Fase 6, ADR 0020):** `src/design-system/components/charts/` (`BarChart`, `LineChart` y `DonutChart` con `react-native-svg`, animados por `chartTransition.ts`), con datos de `src/domain/analytics/chartSeries.ts`:
   - Un mes cerrado anterior al activo lee su snapshot. El mes activo, aunque esté cerrado, y los meses abiertos se calculan en vivo, igual que las tarjetas.
   - La ventana es de 6 meses hasta el mes activo. Cada gráfico muestra los que caben con el objetivo táctil completo por columna (`useChartWindow`).

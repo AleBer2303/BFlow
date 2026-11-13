@@ -3,7 +3,9 @@
  *
  * Complete Authentication & User Profile Persistence Service for BFlow:
  * - Supports Registration with personal profile data (`displayName`, `phone`, `financialGoal`, `email`, `password`)
- * - Supports Email/Password Sign-In, Google Sign-In (`GoogleAuthProvider`), and Password Reset
+ * - Supports Email/Password Sign-In and Google Sign-In (`GoogleAuthProvider`)
+ * - Sends the Firebase Auth verification email on registration and tracks `emailVerified` (ADR 0025).
+ *   Password reset and email change live in `accountEmailActions.ts`
  * - Persists user profile and session metadata in Cloud Firestore (`/users/{uid}`)
  * - Persists active session locally (`localStorage` on Web + memory cache) and subscribes to Firebase `onAuthStateChanged`
  */
@@ -13,7 +15,7 @@ import {
   browserLocalPersistence,
   createUserWithEmailAndPassword,
   onAuthStateChanged,
-  sendPasswordResetEmail,
+  sendEmailVerification,
   setPersistence,
   signInWithCredential,
   signInWithEmailAndPassword,
@@ -44,6 +46,13 @@ export interface BFlowAuthUser {
   createdAt?: string;
   lastLoginAt?: string;
   activeMonthKey?: string;
+  /**
+   * Estado del correo en Firebase Auth. Queda sin definir en sesiones locales y en las
+   * guardadas antes del ADR 0025.
+   */
+  emailVerified?: boolean;
+  /** La cuenta no entra al presupuesto hasta verificar su correo (ADR 0025). */
+  emailVerificationRequired?: boolean;
   provider: 'firebase' | 'local-demo';
 }
 
@@ -64,6 +73,20 @@ export const DEMO_OWNER_USER: BFlowAuthUser = {
   authProvider: 'local',
   provider: 'local-demo',
 };
+
+/** Idioma de los correos que envía Firebase Auth (verificación, contraseña, cambio de correo). */
+export const ACCOUNT_EMAIL_LANGUAGE = 'es';
+
+/**
+ * Las cuentas creadas desde esta fecha deben verificar su correo antes de entrar (ADR 0025).
+ * Las anteriores quedan exentas para no dejarlas fuera; pueden verificarlo desde Cuenta.
+ * Con `0` la verificación pasa a ser obligatoria para todas las cuentas con contraseña.
+ */
+export const EMAIL_VERIFICATION_ENFORCED_SINCE_MS = Date.parse('2026-11-13T00:00:00-05:00');
+
+/** Longitudes máximas del perfil; coinciden con `isValidUserProfile` de `firestore.rules`. */
+export const PROFILE_DISPLAY_NAME_MAX_LENGTH = 120;
+export const PROFILE_FINANCIAL_GOAL_MAX_LENGTH = 240;
 
 const SESSION_STORAGE_KEY = 'bflow.auth.session.v1';
 const LAST_LOGIN_THROTTLE_MS = 24 * 60 * 60 * 1000;
@@ -103,6 +126,70 @@ export function loadPersistedSession(): BFlowAuthUser | null {
     // Ignore storage parse errors
   }
   return null;
+}
+
+/** Lo que se lee del usuario de Firebase para resolver la identidad de la sesión. */
+export interface FirebaseIdentitySource {
+  email: string | null;
+  emailVerified?: boolean;
+  providerData?: ReadonlyArray<{ providerId: string }>;
+  metadata?: { creationTime?: string };
+}
+
+function resolveAuthProvider(firebaseUser: FirebaseIdentitySource): 'password' | 'google.com' {
+  return firebaseUser.providerData?.[0]?.providerId === 'google.com' ? 'google.com' : 'password';
+}
+
+/**
+ * Estado de verificación del correo. Solo las cuentas con contraseña nuevas (recién
+ * registradas o creadas desde `EMAIL_VERIFICATION_ENFORCED_SINCE_MS`) están obligadas.
+ */
+export function resolveEmailVerificationState(
+  firebaseUser: FirebaseIdentitySource,
+  options?: { isNewRegistration?: boolean }
+): Required<Pick<BFlowAuthUser, 'emailVerified' | 'emailVerificationRequired'>> {
+  const emailVerified = firebaseUser.emailVerified === true;
+  const createdAtMs = Date.parse(firebaseUser.metadata?.creationTime ?? '');
+  const isEnforcedAccount =
+    options?.isNewRegistration === true ||
+    (!Number.isNaN(createdAtMs) && createdAtMs >= EMAIL_VERIFICATION_ENFORCED_SINCE_MS);
+  return {
+    emailVerified,
+    emailVerificationRequired:
+      !emailVerified && resolveAuthProvider(firebaseUser) === 'password' && isEnforcedAccount,
+  };
+}
+
+/** `true` mientras la cuenta deba verificar su correo antes de entrar al presupuesto. */
+export function requiresEmailVerification(user: BFlowAuthUser | null): boolean {
+  return (
+    user?.provider === 'firebase' &&
+    user.emailVerificationRequired === true &&
+    user.emailVerified !== true
+  );
+}
+
+/**
+ * Copia en la sesión lo que solo Firebase Auth sabe: el correo vigente (cambia al confirmar
+ * un cambio de correo) y su estado de verificación.
+ */
+export function withFirebaseIdentity(
+  sessionUser: BFlowAuthUser,
+  firebaseUser: FirebaseIdentitySource
+): BFlowAuthUser {
+  return {
+    ...sessionUser,
+    email: firebaseUser.email ?? sessionUser.email,
+    ...resolveEmailVerificationState(firebaseUser),
+  };
+}
+
+function hasIdentityChanged(previous: BFlowAuthUser, next: BFlowAuthUser): boolean {
+  return (
+    previous.email !== next.email ||
+    previous.emailVerified !== next.emailVerified ||
+    previous.emailVerificationRequired !== next.emailVerificationRequired
+  );
 }
 
 async function ensureWebAuthPersistence(): Promise<void> {
@@ -152,7 +239,11 @@ async function syncUserProfileDocument(
     // R-12: If the session was already synced within the last 24h on this device and has no explicit overrides,
     // skip both the redundant getDoc(users/{uid}) read and the setDoc(lastLoginAt) write on boot/listener.
     if (canReusePersistedProfile && persisted) {
-      return persisted;
+      const current = withFirebaseIdentity(persisted, firebaseUser);
+      if (hasIdentityChanged(persisted, current)) {
+        savePersistedSession(current);
+      }
+      return current;
     }
 
     let db: ReturnType<typeof getFirebaseDb> | null = null;
@@ -199,14 +290,15 @@ async function syncUserProfileDocument(
       (typeof existingData.phone === 'string' ? existingData.phone : undefined) ||
       persisted?.phone;
 
+    // Una meta vacía en Firestore es una meta borrada: no se rescata la de la sesión guardada.
     const resolvedGoal =
       overrides?.financialGoal?.trim() ||
-      (typeof existingData.financialGoal === 'string' ? existingData.financialGoal : undefined) ||
-      persisted?.financialGoal;
+      (typeof existingData.financialGoal === 'string'
+        ? existingData.financialGoal
+        : persisted?.financialGoal);
 
     const resolvedProvider: 'password' | 'google.com' =
-      overrides?.authProvider ??
-      (firebaseUser.providerData[0]?.providerId === 'google.com' ? 'google.com' : 'password');
+      overrides?.authProvider ?? resolveAuthProvider(firebaseUser);
 
     const createdAt =
       typeof existingData.createdAt === 'string'
@@ -235,8 +327,12 @@ async function syncUserProfileDocument(
     const isLastLoginFresh = isWithinLast24Hours(previousLastLoginAt, nowMs);
     const effectiveLastLoginAt = isLastLoginFresh && previousLastLoginAt ? previousLastLoginAt : nowIso;
 
+    // Tras confirmar un cambio de correo, el perfil en Firestore conserva el anterior.
+    const isProfileEmailStale =
+      typeof existingData.email === 'string' && existingData.email !== firebaseUser.email;
+
     const shouldWriteProfileDoc =
-      hasExplicitOverrides || !isLastLoginFresh || !hasValidExistingMonth;
+      hasExplicitOverrides || !isLastLoginFresh || !hasValidExistingMonth || isProfileEmailStale;
 
     if (shouldWriteProfileDoc && userRef) {
       const profilePayload = stripUndefinedFields({
@@ -268,6 +364,9 @@ async function syncUserProfileDocument(
       createdAt,
       lastLoginAt: effectiveLastLoginAt,
       activeMonthKey,
+      ...resolveEmailVerificationState(firebaseUser, {
+        isNewRegistration: overrides?.isNewRegistration,
+      }),
       provider: 'firebase',
     };
 
@@ -308,6 +407,15 @@ export function formatAuthError(err: unknown, fallbackMessage: string): string {
   if (msg.includes('auth/too-many-requests')) {
     return 'Demasiados intentos fallidos. Por seguridad, espera un momento antes de reintentar.';
   }
+  if (msg.includes('auth/requires-recent-login')) {
+    return 'Por seguridad, cierra sesión, vuelve a entrar y repite la acción.';
+  }
+  if (msg.includes('auth/user-token-expired')) {
+    return 'Tu sesión venció. Inicia sesión de nuevo.';
+  }
+  if (msg.includes('auth/operation-not-allowed')) {
+    return 'Esta acción no está habilitada en el proyecto de Firebase.';
+  }
   return msg || fallbackMessage;
 }
 
@@ -340,12 +448,20 @@ export async function registerWithPersonalProfile(
 
   await ensureWebAuthPersistence();
   const auth = getFirebaseAuth();
+  auth.languageCode = ACCOUNT_EMAIL_LANGUAGE;
   const credential = await createUserWithEmailAndPassword(auth, trimmedEmail, input.password);
 
   try {
     await updateProfile(credential.user, { displayName: trimmedName });
   } catch {
     // Continue even if profile update is skipped
+  }
+
+  // Firebase Auth envía el correo de verificación con su plantilla (ADR 0025).
+  try {
+    await sendEmailVerification(credential.user);
+  } catch {
+    // La pantalla de verificación permite reenviarlo.
   }
 
   return syncUserProfileDocument(credential.user, {
@@ -355,6 +471,21 @@ export async function registerWithPersonalProfile(
     authProvider: 'password',
     isNewRegistration: true,
   });
+}
+
+/**
+ * Copia el nombre al perfil de Firebase Auth, que es el que ve un dispositivo nuevo antes de
+ * leer `users/{uid}`. Firestore es la fuente de verdad; si esto falla no se informa.
+ */
+export async function syncAuthDisplayName(displayName: string): Promise<void> {
+  try {
+    const user = getFirebaseAuth().currentUser;
+    if (user && user.displayName !== displayName) {
+      await updateProfile(user, { displayName });
+    }
+  } catch {
+    // El nombre ya quedó en Firestore.
+  }
 }
 
 export async function registerWithEmail(email: string, password: string): Promise<BFlowAuthUser> {
@@ -388,15 +519,6 @@ export async function signInWithGoogle(idToken?: string): Promise<BFlowAuthUser>
   );
 }
 
-export async function sendPasswordRecoveryEmail(email: string): Promise<void> {
-  const trimmedEmail = email.trim().toLowerCase();
-  if (!trimmedEmail.includes('@')) {
-    throw new Error('Escribe el correo electrónico de tu cuenta para enviarte el enlace.');
-  }
-  const auth = getFirebaseAuth();
-  await sendPasswordResetEmail(auth, trimmedEmail);
-}
-
 export async function signOutCurrentUser(): Promise<void> {
   const persistedUser = loadPersistedSession();
   savePersistedSession(null);
@@ -428,7 +550,11 @@ export function subscribeToAuthUser(
       }
       const persisted = loadPersistedSession();
       if (persisted && persisted.uid === firebaseUser.uid) {
-        listener(persisted);
+        const current = withFirebaseIdentity(persisted, firebaseUser);
+        if (hasIdentityChanged(persisted, current)) {
+          savePersistedSession(current);
+        }
+        listener(current);
       } else {
         const isOwner = isOwnerCanonicalEmail(firebaseUser.email);
         const fastUser: BFlowAuthUser = {
@@ -438,13 +564,11 @@ export function subscribeToAuthUser(
             firebaseUser.displayName ||
             firebaseUser.email?.split('@')[0] ||
             'Usuario BFlow',
-          authProvider:
-            firebaseUser.providerData[0]?.providerId === 'google.com'
-              ? 'google.com'
-              : 'password',
+          authProvider: resolveAuthProvider(firebaseUser),
           activeMonthKey: isOwner
             ? '2026-10'
             : `${toBogotaMonthKey().slice(0, 4)}-01`,
+          ...resolveEmailVerificationState(firebaseUser),
           provider: 'firebase',
         };
         savePersistedSession(fastUser);

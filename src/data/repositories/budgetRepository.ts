@@ -221,6 +221,7 @@ export interface BudgetRepository {
   saveProvisionPlan(uid: string, plan: IdealMotoPlan): Promise<void>;
   saveInitialAccountSetup(uid: string, payload: InitialAccountSetupPayload): Promise<void>;
   saveActiveMonthKey(uid: string, monthKey: string): Promise<void>;
+  saveUserProfile(uid: string, profile: UserProfileFields): Promise<void>;
   resetFullAccountInCloud(uid: string, newStartMonthKey: string): Promise<void>;
   reopenMonthInCloud(uid: string, monthKey: string): Promise<void>;
   deleteMonthInCloud(uid: string, monthKey: string, fallbackMonthKey: string): Promise<void>;
@@ -230,6 +231,13 @@ export interface BudgetRepository {
     closingMonthKey: string,
     result: CloseMonthResult
   ): Promise<void>;
+}
+
+/** Campos del perfil que el usuario edita en Cuenta → Actualizar datos (`users/{uid}`). */
+export interface UserProfileFields {
+  displayName: string;
+  /** Vacío borra la meta. */
+  financialGoal: string;
 }
 
 function reconstructClosedMonthBalances(
@@ -335,6 +343,7 @@ export class InMemoryBudgetRepository implements BudgetRepository {
   private resetUsers = new Set<string>();
   private onboardedUsers = new Set<string>();
   private activeMonthByUser = new Map<string, string>();
+  private profilesByUser = new Map<string, UserProfileFields>();
 
   constructor(autoSeedDefaultUser = true) {
     const seed = buildOctober2026SeedPayload();
@@ -891,6 +900,15 @@ export class InMemoryBudgetRepository implements BudgetRepository {
 
   async saveActiveMonthKey(uid: string, monthKey: string): Promise<void> {
     this.activeMonthByUser.set(uid, monthKey);
+  }
+
+  async saveUserProfile(uid: string, profile: UserProfileFields): Promise<void> {
+    this.profilesByUser.set(uid, { ...profile });
+  }
+
+  /** Perfil guardado con `saveUserProfile` (solo para pruebas). */
+  getUserProfile(uid: string): UserProfileFields | undefined {
+    return this.profilesByUser.get(uid);
   }
 
   async resetFullAccountInCloud(uid: string, newStartMonthKey: string): Promise<void> {
@@ -2509,6 +2527,18 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       () => {},
       {
         activeMonthKey: monthKey,
+      }
+    );
+  }
+
+  /** Guarda el nombre y la meta en `users/{uid}`, por la misma vía que el resto (ADR 0018). */
+  async saveUserProfile(uid: string, profile: UserProfileFields): Promise<void> {
+    await this.commitUserDataMutationBatch(
+      uid,
+      () => {},
+      {
+        displayName: profile.displayName,
+        financialGoal: profile.financialGoal,
       }
     );
   }

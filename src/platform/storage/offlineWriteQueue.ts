@@ -36,7 +36,8 @@ export type QueuedWriteType =
   | 'delete_savings_bucket'
   | 'persist_month_close'
   | 'reopen_month'
-  | 'delete_month';
+  | 'delete_month'
+  | 'save_user_profile';
 
 export interface QueuedWriteOperation {
   id: string;
@@ -152,6 +153,8 @@ function getOperationTargetKey(type: QueuedWriteType, payload: Record<string, un
     case 'reopen_month':
     case 'delete_month':
       return `month_${payload.monthKey as string}`;
+    case 'save_user_profile':
+      return 'user_profile';
     default:
       return null;
   }
@@ -448,6 +451,13 @@ async function executeQueuedOperation(
 
     case 'delete_month':
       await repo.deleteMonthInCloud(uid, p.monthKey as string, p.fallbackMonth as string);
+      break;
+
+    case 'save_user_profile':
+      await repo.saveUserProfile(uid, {
+        displayName: p.displayName as string,
+        financialGoal: p.financialGoal as string,
+      });
       break;
 
     default:

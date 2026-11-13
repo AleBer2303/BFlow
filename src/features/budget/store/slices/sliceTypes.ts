@@ -137,16 +137,23 @@ export interface InitialOnboardingConfigInput {
   }>;
 }
 
+export type ProfileSaveStatus = 'synced' | 'queued' | 'rejected' | 'local';
+
 export interface AuthSlice {
   authUser: BFlowAuthUser | null;
   needsOnboarding: boolean;
 
   setAuthUser: (user: BFlowAuthUser | null) => void;
+  /**
+   * Guarda el nombre y la meta en la sesión y en `users/{uid}`. Sin red el cambio queda en
+   * cola (`queued`); si el servidor lo rechaza se revierte (`rejected`). Las sesiones locales
+   * resuelven `local`. El correo no se edita aquí: cambia solo con el enlace de Firebase Auth
+   * (ADR 0025).
+   */
   updateAuthUserProfile: (updates: {
     displayName?: string;
-    email?: string;
     financialGoal?: string;
-  }) => Promise<void>;
+  }) => Promise<ProfileSaveStatus>;
   clearWorkspaceSession: () => void;
   requireAuthenticationGate: () => void;
   setNeedsOnboarding: (needsOnboarding: boolean) => void;

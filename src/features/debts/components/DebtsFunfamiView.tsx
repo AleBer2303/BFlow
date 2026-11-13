@@ -32,6 +32,7 @@ import {
 import { confirmDestructive } from '../../../platform/dialogs/confirmDestructive';
 import {
   formatCurrency,
+  formatGroupedIntegerInput,
   formatMonthKeyLabelEs,
   type DebtInterestRateType,
   type DebtSummaryResult,
@@ -157,7 +158,7 @@ export function DebtsFunfamiView({
     setEditingDebtId(debt.debtId);
     setFormName(debt.name);
     setFormLender(debt.lender);
-    setFormOpeningBalance(String(debt.openingBalance));
+    setFormOpeningBalance(formatGroupedIntegerInput(debt.openingBalance));
     setFormInterestRateType(rateType);
     setFormInterestRate(
       rateType === 'annual' && debt.annualInterestRate !== undefined
@@ -168,7 +169,7 @@ export function DebtsFunfamiView({
     );
     setFormMonthlyInstallment(
       debt.monthlyInstallment !== undefined && debt.monthlyInstallment > 0
-        ? String(debt.monthlyInstallment)
+        ? formatGroupedIntegerInput(debt.monthlyInstallment)
         : ''
     );
     setFormError(null);
@@ -457,8 +458,8 @@ export function DebtsFunfamiView({
                 testID="debt-form-amount-input"
                 value={formOpeningBalance}
                 onChangeText={setFormOpeningBalance}
-                keyboardType="numeric"
-                placeholder="Ej. 2500000"
+                keyboardType="number-pad"
+                placeholder="Ej. 2.500.000"
               />
             </View>
 
@@ -527,8 +528,8 @@ export function DebtsFunfamiView({
                 testID="debt-form-installment-input"
                 value={formMonthlyInstallment}
                 onChangeText={setFormMonthlyInstallment}
-                keyboardType="numeric"
-                placeholder="Ej. 500000"
+                keyboardType="number-pad"
+                placeholder="Ej. 500.000"
               />
             </View>
 

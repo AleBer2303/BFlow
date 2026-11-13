@@ -17,9 +17,11 @@
  */
 
 import React, { useMemo } from 'react';
-import { Platform, View } from 'react-native';
+import { View } from 'react-native';
 import {
   AppText,
+  DOCK_BOTTOM_OFFSET,
+  DOCK_CAPSULE_HEIGHT,
   FloatingLiquidGlassDock,
   KeyboardAwareScrollView,
   ThemeToggleIconButton,
@@ -45,7 +47,12 @@ export interface WorkspaceShellProps {
 }
 
 /** Space the floating dock covers at the bottom of the scroll content. */
-const DOCK_CLEARANCE = Platform.OS === 'ios' ? 84 : 76;
+const IOS_DOCK_CLEARANCE = 84;
+// Android draws edge-to-edge and does not add ScrollView safe-area insets automatically:
+// reserve the dock footprint (offset + capsule height) plus a compact gap above it.
+const ANDROID_DOCK_BREATHING_GAP = 18;
+const ANDROID_DOCK_CLEARANCE =
+  DOCK_BOTTOM_OFFSET.android + DOCK_CAPSULE_HEIGHT + ANDROID_DOCK_BREATHING_GAP;
 const ANDROID_TOP_APP_BAR_HEIGHT = 64;
 const NAVIGATION_TEST_ID = 'liquid-glass-tab-bar';
 
@@ -79,8 +86,9 @@ export function WorkspaceShell({
 
   const contentGap = isWeb && layout.sizeClass !== 'compact' ? spacing.xl : spacing.md;
   const paddingTop = isWeb ? (layout.isWide ? spacing.xxxl : spacing.xxl) : spacing.xl;
+  const dockClearance = isAndroid ? ANDROID_DOCK_CLEARANCE : IOS_DOCK_CLEARANCE;
   const paddingBottom =
-    (showsDock ? DOCK_CLEARANCE : isWeb ? spacing.huge : spacing.xl) + bottomSystemInset;
+    (showsDock ? dockClearance : isWeb ? spacing.huge : spacing.xl) + bottomSystemInset;
 
   return (
     <View testID="workspace-shell" style={{ flex: 1, backgroundColor: colors.background.primary }}>

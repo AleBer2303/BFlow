@@ -11,6 +11,7 @@ import { formatMonthKeyLabelEs } from '../domain';
 import { AnalyticsTab } from '../features/analytics/components/AnalyticsTab';
 import { AccountTab, type AccountTabProps } from '../features/auth/components/AccountTab';
 import { AuthScreen, type AuthScreenProps } from '../features/auth/components/AuthScreen';
+import { EmailVerificationScreen } from '../features/auth/components/EmailVerificationScreen';
 import {
   havePersistedAccountFieldsChanged,
   type PersistedAccountFields,
@@ -23,18 +24,22 @@ import { SavingsTab } from '../features/savings/components/SavingsTab';
 import { WorkspaceShell } from '../features/shell/components/WorkspaceShell';
 import { SummaryTab } from '../features/summary/components/SummaryTab';
 import {
+  hasPendingEmailChange,
+  refreshAccountIdentity,
+  requestEmailChange,
+  sendPasswordResetLink,
+  sendVerificationEmail,
+} from '../platform/auth/accountEmailActions';
+import {
   formatAuthError,
   registerWithPersonalProfile,
+  requiresEmailVerification,
   signInWithEmail,
   signOutCurrentUser,
   subscribeToAuthUser,
   type BFlowAuthUser,
   type RegisterPersonalAccountInput,
 } from '../platform/auth/authAdapter';
-import {
-  confirmPasswordResetWithCode,
-  requestPasswordResetCode,
-} from '../platform/auth/verificationCodeService';
 import { isDemoModeEnabled } from '../platform/mode/demoMode';
 import { markPerf } from '../platform/perf/perfMarks';
 import {
@@ -51,6 +56,18 @@ import {
 const triggerHaptic = (type: HapticType) => {
   hapticService.trigger(type);
 };
+
+/**
+ * Correo de la cuenta de Firebase con sesión iniciada. Las sesiones locales (modo vitrina,
+ * tests) no tienen cuenta en Firebase Auth, así que no pueden pedir correos.
+ */
+function requireFirebaseAccountEmail(): string {
+  const user = useBudgetStore.getState().authUser;
+  if (!user || user.provider !== 'firebase' || !user.email) {
+    throw new Error('Esta acción solo está disponible con una cuenta real de BFlow.');
+  }
+  return user.email;
+}
 
 type AuthGateScreenProps = Omit<AuthScreenProps, 'isSubmitting' | 'statusMessage'> & {
   isAwaitingInitialHydration: boolean;
@@ -234,6 +251,17 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         void syncActiveWidget().then(() => flushCloudWidgetSnapshotWrite());
       } else if (nextAppState === 'active') {
         void flushOfflineWrites();
+        // Tras pedir un cambio de correo, al volver se comprueba si ya se confirmó: Firebase
+        // revoca la sesión y el SDK la cierra, sin esperar a que venza el token.
+        if (hasPendingEmailChange()) {
+          void refreshAccountIdentity()
+            .then((refreshed) => {
+              if (refreshed) {
+                useBudgetStore.getState().setAuthUser(refreshed);
+              }
+            })
+            .catch(() => undefined);
+        }
       }
     });
 
@@ -283,62 +311,51 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     [syncUserCloudAccount]
   );
 
+  // Recuperación desde el inicio de sesión: Firebase Auth envía el enlace (ADR 0025).
+  // La pantalla muestra el resultado; aquí solo se refleja el progreso.
   const handleSendPasswordRecovery = useCallback(async (email: string) => {
     const { setSyncStatus } = useBudgetStore.getState();
     setAuthErrorMessage(null);
     setAuthStatusMessage(null);
-    setSyncStatus('Enviando código de verificación...', true);
+    setSyncStatus('Enviando enlace de restablecimiento...', true);
     try {
-      const res = await requestPasswordResetCode(email);
-      setAuthStatusMessage(res.message);
-      setSyncStatus('Código de verificación enviado.', false);
+      await sendPasswordResetLink(email);
+      setSyncStatus('Enlace de restablecimiento enviado.', false);
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : 'No fue posible enviar el código de recuperación.';
-      setAuthErrorMessage(msg);
+      const msg = formatAuthError(
+        err,
+        'No fue posible enviar el enlace para restablecer la contraseña.'
+      );
       setSyncStatus(msg, false);
+      throw new Error(msg);
     }
   }, []);
 
-  const handleRequestPasswordResetCode = useCallback(async (email: string) => {
-    const { setSyncStatus } = useBudgetStore.getState();
-    setAuthErrorMessage(null);
-    setAuthStatusMessage(null);
-    setSyncStatus('Enviando código de verificación de 6 dígitos...', true);
+  const handleResendVerificationEmail = useCallback(async () => {
+    triggerHaptic('light');
     try {
-      const res = await requestPasswordResetCode(email);
-      setAuthStatusMessage(res.message);
-      setSyncStatus('Código enviado a tu correo.', false);
+      await sendVerificationEmail();
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : 'No fue posible enviar el código de verificación.';
-      setAuthErrorMessage(msg);
-      setSyncStatus(msg, false);
-      throw err;
+      throw new Error(formatAuthError(err, 'No fue posible enviar el correo de verificación.'));
     }
   }, []);
 
-  const handleConfirmPasswordResetWithCode = useCallback(
-    async (email: string, code: string, newPassword: string) => {
-      const { setSyncStatus } = useBudgetStore.getState();
-      setAuthErrorMessage(null);
-      setAuthStatusMessage(null);
-      setSyncStatus('Actualizando contraseña internamente...', true);
-      try {
-        const res = await confirmPasswordResetWithCode(email, code, newPassword);
-        setAuthStatusMessage(res.message);
-        setSyncStatus('Contraseña actualizada correctamente.', false);
-        triggerHaptic('success');
-      } catch (err) {
-        const msg =
-          err instanceof Error ? err.message : 'No fue posible actualizar la contraseña.';
-        setAuthErrorMessage(msg);
-        setSyncStatus(msg, false);
-        throw err;
+  const handleCheckEmailVerification = useCallback(async (): Promise<boolean> => {
+    try {
+      const refreshed = await refreshAccountIdentity();
+      if (!refreshed) {
+        return false;
       }
-    },
-    []
-  );
+      useBudgetStore.getState().setAuthUser(refreshed);
+      const isVerified = !requiresEmailVerification(refreshed);
+      if (isVerified) {
+        triggerHaptic('success');
+      }
+      return isVerified;
+    } catch (err) {
+      throw new Error(formatAuthError(err, 'No fue posible comprobar la verificación.'));
+    }
+  }, []);
 
   const handleSignOut = useCallback(async () => {
     const outgoingUid = useBudgetStore.getState().authUser?.uid;
@@ -371,27 +388,50 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
 
   const handleUpdateProfile = useCallback<NonNullable<AccountTabProps['onUpdateProfile']>>(
     async (updates) => {
-      await useBudgetStore.getState().updateAuthUserProfile(updates);
+      const status = await useBudgetStore.getState().updateAuthUserProfile(updates);
+      if (status === 'rejected') {
+        // El store ya revirtió el cambio; el formulario muestra el motivo.
+        throw new Error('No se pudo guardar tu perfil en la nube. Inténtalo de nuevo.');
+      }
       triggerHaptic('success');
+      return status === 'queued' ? 'queued' : 'saved';
     },
     []
   );
 
-  const handleAccountSendPasswordReset = useCallback(
-    async (email: string) => {
+  const handleAccountSendPasswordReset = useCallback(async () => {
+    triggerHaptic('light');
+    try {
+      await sendPasswordResetLink(requireFirebaseAccountEmail());
+    } catch (err) {
+      throw new Error(
+        formatAuthError(err, 'No fue posible enviar el enlace para restablecer la contraseña.')
+      );
+    }
+  }, []);
+
+  const handleAccountRequestEmailChange = useCallback(
+    async (newEmail: string, currentPassword: string) => {
       triggerHaptic('light');
-      await handleSendPasswordRecovery(email);
+      try {
+        requireFirebaseAccountEmail();
+        await requestEmailChange(newEmail, currentPassword);
+      } catch (err) {
+        throw new Error(formatAuthError(err, 'No fue posible pedir el cambio de correo.'));
+      }
     },
-    [handleSendPasswordRecovery]
+    []
   );
 
-  const handleAccountRequestPasswordResetCode = useCallback(
-    async (email: string) => {
-      triggerHaptic('light');
-      await handleRequestPasswordResetCode(email);
-    },
-    [handleRequestPasswordResetCode]
-  );
+  const handleAccountSendEmailVerification = useCallback(async () => {
+    triggerHaptic('light');
+    try {
+      requireFirebaseAccountEmail();
+      await sendVerificationEmail();
+    } catch (err) {
+      throw new Error(formatAuthError(err, 'No fue posible enviar el correo de verificación.'));
+    }
+  }, []);
 
   const handleResetFullAccount = useCallback(() => {
     triggerHaptic('warning');
@@ -407,6 +447,19 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
   const isAwaitingInitialHydration =
     Boolean(authUser) && !isAccountHydrated && !needsOnboarding;
 
+  // PUERTA DE VERIFICACIÓN (ADR 0025): la cuenta recién creada no entra al presupuesto hasta
+  // abrir el enlace que envía Firebase Auth. La sincronización inicial sigue en segundo plano.
+  if (authUser && requiresEmailVerification(authUser)) {
+    return (
+      <EmailVerificationScreen
+        email={authUser.email}
+        onResendVerification={handleResendVerificationEmail}
+        onCheckVerification={handleCheckEmailVerification}
+        onSignOut={handleSignOut}
+      />
+    );
+  }
+
   // AUTHENTICATION GATE: If no authenticated user session is active (or initial cloud hydration is in flight without local cache), render AuthScreen first
   if (!authUser || isAwaitingInitialHydration) {
     return (
@@ -417,8 +470,6 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         onSignInWithEmail={handleSignInWithEmail}
         onRegisterPersonalAccount={handleRegisterPersonalAccount}
         onSendPasswordRecovery={handleSendPasswordRecovery}
-        onRequestPasswordResetCode={handleRequestPasswordResetCode}
-        onConfirmPasswordResetWithCode={handleConfirmPasswordResetWithCode}
       />
     );
   }
@@ -452,8 +503,8 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
               onManualSync={handleManualSync}
               onUpdateProfile={handleUpdateProfile}
               onSendPasswordReset={handleAccountSendPasswordReset}
-              onRequestPasswordResetCode={handleAccountRequestPasswordResetCode}
-              onConfirmPasswordResetWithCode={handleConfirmPasswordResetWithCode}
+              onRequestEmailChange={handleAccountRequestEmailChange}
+              onSendEmailVerification={handleAccountSendEmailVerification}
               onResetFullAccount={handleResetFullAccount}
             />
           ) : null}

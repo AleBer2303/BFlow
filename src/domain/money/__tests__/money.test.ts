@@ -4,6 +4,7 @@ import {
   formatCop,
   formatCurrency,
   formatCurrencyCompact,
+  formatGroupedIntegerInput,
   formatSignedCurrency,
   parseCopInteger,
   parseCurrencyInteger,
@@ -70,5 +71,24 @@ describe('formatSignedCurrency', () => {
 
   it('refuses decimals like every money formatter', () => {
     expect(() => formatSignedCurrency(1.5)).toThrow();
+  });
+});
+
+describe('formatGroupedIntegerInput', () => {
+  it('formats integer strings and numbers with thousands dots for live inputs', () => {
+    expect(formatGroupedIntegerInput('')).toBe('');
+    expect(formatGroupedIntegerInput('abc')).toBe('');
+    expect(formatGroupedIntegerInput('0')).toBe('0');
+    expect(formatGroupedIntegerInput('000')).toBe('0');
+    expect(formatGroupedIntegerInput('01000')).toBe('1.000');
+    expect(formatGroupedIntegerInput('999')).toBe('999');
+    expect(formatGroupedIntegerInput('1000')).toBe('1.000');
+    expect(formatGroupedIntegerInput('100000')).toBe('100.000');
+    expect(formatGroupedIntegerInput('1000000')).toBe('1.000.000');
+    expect(formatGroupedIntegerInput('1.080.000')).toBe('1.080.000');
+    expect(formatGroupedIntegerInput('$ 1.080.000')).toBe('1.080.000');
+    expect(formatGroupedIntegerInput(1_000_000)).toBe('1.000.000');
+    expect(formatGroupedIntegerInput(-100)).toBe('');
+    expect(formatGroupedIntegerInput(Number.NaN)).toBe('');
   });
 });

@@ -29,6 +29,7 @@ import {
 } from '../../../design-system';
 import {
   formatCurrency,
+  formatGroupedIntegerInput,
   type IdealMotoPlan,
   type MonthlySavingsSummary,
   type MotoIdealComparisonSummary,
@@ -356,7 +357,7 @@ export function SavingsAndMotoIdealView({
     setEditingBucketId(bucketId);
     setEditingBucketLabel(name);
     setEditBucketNameInput(name);
-    setEditBucketBalanceInput(String(openingBalance));
+    setEditBucketBalanceInput(formatGroupedIntegerInput(openingBalance));
     setBalanceError(null);
   };
 
@@ -454,8 +455,8 @@ export function SavingsAndMotoIdealView({
     setProvisionActionMode(null);
     setEditingProvisionId(item.id);
     setProvisionName(item.name);
-    setProvisionAmount(String(item.amount));
-    setProvisionMonths(String(item.periodMonths));
+    setProvisionAmount(formatGroupedIntegerInput(item.amount));
+    setProvisionMonths(formatGroupedIntegerInput(item.periodMonths));
     setProvisionKind(item.kind);
     setProvisionNotes(item.notes ?? '');
     setProvisionError(null);
@@ -616,8 +617,8 @@ export function SavingsAndMotoIdealView({
                   testID="new-bucket-balance-input"
                   value={newBucketBalance}
                   onChangeText={setNewBucketBalance}
-                  keyboardType="numeric"
-                  placeholder="Saldo actual o del mes anterior (ej. 500000)"
+                  keyboardType="number-pad"
+                  placeholder="Saldo actual o del mes anterior (ej. 500.000)"
                 />
 
                 <FormMessage message={newBucketError} />
@@ -665,7 +666,7 @@ export function SavingsAndMotoIdealView({
                   testID="edit-bucket-balance-input"
                   value={editBucketBalanceInput}
                   onChangeText={setEditBucketBalanceInput}
-                  keyboardType="numeric"
+                  keyboardType="number-pad"
                   placeholder="0"
                 />
 
@@ -976,15 +977,15 @@ export function SavingsAndMotoIdealView({
                   testID="provision-amount-input"
                   value={provisionAmount}
                   onChangeText={setProvisionAmount}
-                  keyboardType="numeric"
-                  placeholder="Costo total del ciclo (ej. 690000)"
+                  keyboardType="number-pad"
+                  placeholder="Costo total del ciclo (ej. 690.000)"
                 />
 
                 <AppTextInput
                   testID="provision-months-input"
                   value={provisionMonths}
                   onChangeText={setProvisionMonths}
-                  keyboardType="numeric"
+                  keyboardType="number-pad"
                   placeholder="Periodo en meses (ej. 1 mensual, 12 anual)"
                 />
 

@@ -224,7 +224,7 @@ export const ChecklistAddMovementForm = React.memo(function ChecklistAddMovement
             testID="movement-amount-input"
             value={amountInput}
             onChangeText={setAmountInput}
-            keyboardType="numeric"
+            keyboardType="number-pad"
             placeholder="0"
             style={{
               textAlign: 'center',

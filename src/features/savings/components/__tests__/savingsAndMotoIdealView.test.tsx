@@ -231,7 +231,9 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) =>
     expect(screen.queryByTestId('edit-savings-bucket-moto')).toBeNull();
     expect(screen.getByTestId('edit-savings-bucket-card')).toBeTruthy();
     expect(screen.getByTestId('edit-bucket-name-input').props.value).toBe('Fondo Viaje');
-    expect(screen.getByTestId('edit-bucket-balance-input').props.value).toBe('500000');
+    expect(screen.getByTestId('edit-bucket-name-input').props.autoCapitalize).toBe('sentences');
+    expect(screen.getByTestId('edit-bucket-balance-input').props.keyboardType).toBe('number-pad');
+    expect(screen.getByTestId('edit-bucket-balance-input').props.value).toBe('500.000');
 
     // Cancel closes the single-fund form without calling onUpdateOpeningBalance.
     fireEvent.press(screen.getByTestId('cancel-edit-bucket-button'));

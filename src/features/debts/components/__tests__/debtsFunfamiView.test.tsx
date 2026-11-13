@@ -130,6 +130,12 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView on %s skin', (skin) => {
     expect(screen.queryByTestId('debt-edit-debt_cb300f_moto')).toBeNull();
     expect(screen.getByTestId('debt-form-modal')).toBeTruthy();
     expect(screen.getByTestId('debt-form-name-input').props.value).toBe('Moto CB300F');
+    expect(screen.getByTestId('debt-form-name-input').props.autoCapitalize).toBe('sentences');
+    expect(screen.getByTestId('debt-form-amount-input').props.keyboardType).toBe('number-pad');
+    expect(screen.getByTestId('debt-form-amount-input').props.value).toBe('2.600.000');
+    expect(screen.getByTestId('debt-form-installment-input').props.keyboardType).toBe('number-pad');
+    expect(screen.getByTestId('debt-form-installment-input').props.value).toBe('500.000');
+    expect(screen.getByTestId('debt-form-interest-rate-input').props.keyboardType).toBe('decimal-pad');
 
     fireEvent.changeText(screen.getByTestId('debt-form-name-input'), 'Moto CB300F 2027');
     fireEvent.press(screen.getByTestId('debt-form-submit-button'));

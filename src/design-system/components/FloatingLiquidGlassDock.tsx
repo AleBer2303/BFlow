@@ -3,7 +3,6 @@ import {
   Animated,
   Dimensions,
   PanResponder,
-  Platform,
   Pressable,
   View,
   type GestureResponderEvent,
@@ -45,6 +44,17 @@ export const DOCK_TABS: ReadonlyArray<DockTabConfig> = WORKSPACE_TABS;
 export const DOCK_PADDING_H = 6;
 export const DOCK_MAX_WIDTH = 580;
 export const LENS_MARGIN_H = 2;
+const DOCK_TAB_HEIGHT = 54;
+const DOCK_SURFACE_PADDING_V = 3;
+const DOCK_SURFACE_BORDER = 1;
+/** Total outer height of the floating dock capsule (tabs + vertical padding + hairline border). */
+export const DOCK_CAPSULE_HEIGHT =
+  DOCK_TAB_HEIGHT + (DOCK_SURFACE_PADDING_V + DOCK_SURFACE_BORDER) * 2;
+/** Distance from the bottom edge (plus `bottomInset`) where the dock rests per native skin. */
+export const DOCK_BOTTOM_OFFSET = {
+  ios: 24,
+  android: 16,
+} as const;
 
 /**
  * Maps an absolute screen X coordinate to the corresponding dock tab index.
@@ -637,6 +647,9 @@ export const FloatingLiquidGlassDock = React.memo(function FloatingLiquidGlassDo
           shade: 'rgba(36, 95, 159, 0.04)',
         };
 
+  const anchorBottomOffset =
+    skinSpec.id === 'ios' ? DOCK_BOTTOM_OFFSET.ios : DOCK_BOTTOM_OFFSET.android;
+
   return (
     // Full-width anchor: an absolutely positioned view with left/right AND maxWidth pins to the
     // left edge, so the dock is centered by its parent instead (tablets, landscape, browsers).
@@ -645,7 +658,7 @@ export const FloatingLiquidGlassDock = React.memo(function FloatingLiquidGlassDo
       pointerEvents="box-none"
       style={{
         position: 'absolute',
-        bottom: (Platform.OS === 'ios' ? 24 : 16) + bottomInset,
+        bottom: anchorBottomOffset + bottomInset,
         left: spacing.sm,
         right: spacing.sm,
         alignItems: 'center',
@@ -675,12 +688,12 @@ export const FloatingLiquidGlassDock = React.memo(function FloatingLiquidGlassDo
         style={{
           borderRadius: radius.pill,
           borderCurve: 'continuous',
-          paddingVertical: 3,
+          paddingVertical: DOCK_SURFACE_PADDING_V,
           paddingHorizontal: 0,
           overflow: 'hidden',
           backgroundColor: dockBackground,
           borderColor: dockBorder,
-          borderWidth: 1,
+          borderWidth: DOCK_SURFACE_BORDER,
         }}
       >
         {/* iOS 26 Liquid Glass Lens Glider (Clean Symmetrical Specular Squircle) */}
@@ -805,7 +818,7 @@ export const FloatingLiquidGlassDock = React.memo(function FloatingLiquidGlassDo
                 onPress={() => handleSelectIndex(idx)}
                 style={{
                   flex: 1,
-                  height: 54,
+                  height: DOCK_TAB_HEIGHT,
                   minHeight: skinSpec.minTouchTarget,
                   justifyContent: 'center',
                   alignItems: 'center',

@@ -433,6 +433,7 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
         'saveProvisionPlan',
         'saveInitialAccountSetup',
         'saveActiveMonthKey',
+        'saveUserProfile',
         'resetFullAccountInCloud',
       ];
 

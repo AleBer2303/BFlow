@@ -25,7 +25,18 @@ import {
   PROFILE_FINANCIAL_GOAL_MAX_LENGTH,
   type BFlowAuthUser,
 } from '../../../platform/auth/authAdapter';
+import {
+  PASSWORD_LOCKOUT_MS,
+  formatWaitTime,
+  getAuthAttemptStatus,
+  getCooldownRemainingMs,
+  startCooldown,
+} from '../../../platform/auth/authRateLimiter';
 import { useSafeInsets } from '../../../platform/insets/useSafeInsets';
+import { useCountdown } from '../hooks/useCountdown';
+
+/** Shown while the email change is locked; the button carries the time left. */
+const EMAIL_CHANGE_LOCKED_NOTICE = `Demasiados intentos fallidos. Por seguridad, el cambio de correo queda bloqueado ${formatWaitTime(PASSWORD_LOCKOUT_MS)} en este dispositivo. Si olvidaste tu contraseña, restablécela desde la tarjeta Contraseña.`;
 
 /** Edition shown beside the version: the material of the running platform skin. */
 const APP_EDITION_LABEL: Record<PlatformSkinId, string> = {
@@ -103,6 +114,19 @@ export function AccountProfileWorkspaceView({
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
   const [isPasswordBusy, setIsPasswordBusy] = useState(false);
 
+  // Límites de uso (ADR 0026): espera entre correos y entre sincronizaciones, y bloqueo
+  // tras cinco contraseñas equivocadas al cambiar el correo.
+  const syncCooldown = useCountdown(() => getCooldownRemainingMs('manual_sync'));
+  const verificationCooldown = useCountdown(() => getCooldownRemainingMs('verification_email'));
+  const passwordResetCooldown = useCountdown(() => getCooldownRemainingMs('password_reset_email'));
+  const emailChangeLockout = useCountdown(
+    () => getAuthAttemptStatus('reauth_email_change').retryAfterMs
+  );
+  const isSyncWaiting = syncCooldown.secondsLeft > 0;
+  const isVerificationWaiting = verificationCooldown.secondsLeft > 0;
+  const isPasswordResetWaiting = passwordResetCooldown.secondsLeft > 0;
+  const isEmailChangeLocked = emailChangeLockout.secondsLeft > 0;
+
   const isPasswordAccount = authUser.authProvider !== 'google.com';
 
   const secondaryButtonStyle = {
@@ -163,6 +187,8 @@ export function AccountProfileWorkspaceView({
     setIsEmailBusy(true);
     try {
       await onSendEmailVerification();
+      startCooldown('verification_email');
+      verificationCooldown.refresh();
       setEmailSuccess(
         `Enviamos un enlace de verificación a ${authUser.email ?? 'tu correo'}. Ábrelo para verificarlo.`
       );
@@ -203,12 +229,25 @@ export function AccountProfileWorkspaceView({
       setNewEmail('');
       setCurrentPassword('');
     } catch (err) {
+      // Si este fallo bloqueó la acción, el aviso de bloqueo sustituye al mensaje.
       setEmailError(
-        err instanceof Error ? err.message : 'No fue posible pedir el cambio de correo.'
+        getAuthAttemptStatus('reauth_email_change').isLocked
+          ? null
+          : err instanceof Error
+            ? err.message
+            : 'No fue posible pedir el cambio de correo.'
       );
     } finally {
+      emailChangeLockout.refresh();
       setIsEmailBusy(false);
     }
+  };
+
+  const handleManualSync = () => {
+    if (!onManualSync) return;
+    onManualSync();
+    startCooldown('manual_sync');
+    syncCooldown.refresh();
   };
 
   const handleSendPasswordReset = async () => {
@@ -218,6 +257,8 @@ export function AccountProfileWorkspaceView({
     setIsPasswordBusy(true);
     try {
       await onSendPasswordReset();
+      startCooldown('password_reset_email');
+      passwordResetCooldown.refresh();
       setPasswordSuccess(
         `Enviamos a ${authUser.email ?? 'tu correo'} un enlace para definir una nueva contraseña. Revisa también el correo no deseado.`
       );
@@ -306,10 +347,15 @@ export function AccountProfileWorkspaceView({
 
             {onManualSync ? (
               <AppPressable
+                testID="manual-sync-button"
                 accessibilityRole="button"
-                accessibilityLabel="Sincronizar ahora"
-                onPress={onManualSync}
-                disabled={isSyncing}
+                accessibilityLabel={
+                  isSyncWaiting
+                    ? `Podrás sincronizar de nuevo en ${syncCooldown.secondsLeft} segundos`
+                    : 'Sincronizar ahora'
+                }
+                onPress={handleManualSync}
+                disabled={isSyncing || isSyncWaiting}
                 style={{
                   minHeight: 40,
                   borderRadius: radius.pill,
@@ -321,7 +367,11 @@ export function AccountProfileWorkspaceView({
                 }}
               >
                 <AppText variant="caption" color={colors.text.primary}>
-                  {isSyncing ? 'Sincronizando datos...' : 'Sincronizar datos ahora'}
+                  {isSyncing
+                    ? 'Sincronizando datos...'
+                    : isSyncWaiting
+                      ? `Podrás sincronizar de nuevo en ${syncCooldown.secondsLeft} s`
+                      : 'Sincronizar datos ahora'}
                 </AppText>
               </AppPressable>
             ) : null}
@@ -642,18 +692,23 @@ export function AccountProfileWorkspaceView({
                   </View>
 
                   <FormMessage message={emailSuccess} tone="success" testID="email-success-banner" />
-                  <FormMessage message={emailError} testID="email-error-banner" />
+                  <FormMessage
+                    message={isEmailChangeLocked ? EMAIL_CHANGE_LOCKED_NOTICE : emailError}
+                    testID="email-error-banner"
+                  />
 
                   {authUser.emailVerified === false ? (
                     <AppPressable
                       testID="send-email-verification-button"
                       accessibilityRole="button"
-                      disabled={isEmailBusy}
+                      disabled={isEmailBusy || isVerificationWaiting}
                       onPress={handleSendEmailVerification}
                       style={secondaryButtonStyle}
                     >
                       <AppText variant="caption" color={colors.text.primary} style={{ fontWeight: '600' }}>
-                        Enviar correo de verificación
+                        {isVerificationWaiting
+                          ? `Podrás reenviarlo en ${verificationCooldown.secondsLeft} s`
+                          : 'Enviar correo de verificación'}
                       </AppText>
                     </AppPressable>
                   ) : null}
@@ -729,12 +784,16 @@ export function AccountProfileWorkspaceView({
                       <AppPressable
                         testID="request-email-change-button"
                         accessibilityRole="button"
-                        disabled={isEmailBusy}
+                        disabled={isEmailBusy || isEmailChangeLocked}
                         onPress={handleRequestEmailChange}
                         style={{ ...secondaryButtonStyle, marginTop: spacing.xxs }}
                       >
                         <AppText variant="caption" color={colors.text.primary} style={{ fontWeight: '600' }}>
-                          {isEmailBusy ? 'Enviando enlace...' : 'Enviar enlace de confirmación'}
+                          {isEmailBusy
+                            ? 'Enviando enlace...'
+                            : isEmailChangeLocked
+                              ? `Podrás intentarlo en ${formatWaitTime(emailChangeLockout.secondsLeft * 1000)}`
+                              : 'Enviar enlace de confirmación'}
                         </AppText>
                       </AppPressable>
                     </View>
@@ -765,12 +824,16 @@ export function AccountProfileWorkspaceView({
                     <AppPressable
                       testID="send-password-reset-button"
                       accessibilityRole="button"
-                      disabled={isPasswordBusy}
+                      disabled={isPasswordBusy || isPasswordResetWaiting}
                       onPress={handleSendPasswordReset}
                       style={secondaryButtonStyle}
                     >
                       <AppText variant="caption" color={colors.text.primary} style={{ fontWeight: '600' }}>
-                        {isPasswordBusy ? 'Enviando enlace...' : 'Restablecer contraseña'}
+                        {isPasswordBusy
+                          ? 'Enviando enlace...'
+                          : isPasswordResetWaiting
+                            ? `Podrás pedir otro enlace en ${passwordResetCooldown.secondsLeft} s`
+                            : 'Restablecer contraseña'}
                       </AppText>
                     </AppPressable>
                   </View>

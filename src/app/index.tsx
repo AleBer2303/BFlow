@@ -40,6 +40,11 @@ import {
   type BFlowAuthUser,
   type RegisterPersonalAccountInput,
 } from '../platform/auth/authAdapter';
+import {
+  getCooldownRemainingMs,
+  isAuthLockoutError,
+  startCooldown,
+} from '../platform/auth/authRateLimiter';
 import { isDemoModeEnabled } from '../platform/mode/demoMode';
 import { markPerf } from '../platform/perf/perfMarks';
 import {
@@ -136,6 +141,8 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
   const activeMonthLabel = formatMonthKeyLabelEs(activeMonthKey);
 
   const syncInFlightRef = React.useRef<Map<string, Promise<void>>>(new Map());
+  // Cuenta creada en esta sesión cuyo presupuesto se prepara al verificar el correo.
+  const registrationAwaitingVerificationRef = React.useRef<string | null>(null);
 
   const syncUserCloudAccount = useCallback(
     async (
@@ -172,13 +179,16 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
       return;
     }
     const { authUser: initialUser, setAuthUser } = useBudgetStore.getState();
-    if (initialUser) {
+    // Una cuenta sin verificar no lee ni escribe el presupuesto en Firestore (ADR 0026).
+    if (initialUser && !requiresEmailVerification(initialUser)) {
       void syncUserCloudAccount(initialUser);
     }
     const unsubscribe = subscribeToAuthUser((restoredUser) => {
       if (restoredUser) {
         setAuthUser(restoredUser);
-        void syncUserCloudAccount(restoredUser);
+        if (!requiresEmailVerification(restoredUser)) {
+          void syncUserCloudAccount(restoredUser);
+        }
       } else {
         setAuthUser(null);
       }
@@ -281,10 +291,16 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         const user = await signInWithEmail(email, password);
         setAuthUser(user);
         triggerHaptic('success');
+        if (requiresEmailVerification(user)) {
+          // La puerta de verificación decide cuándo se carga el presupuesto.
+          setSyncStatus('Verifica tu correo para entrar a tu presupuesto.', false);
+          return;
+        }
         await syncUserCloudAccount(user, { isRegistration: false });
       } catch (err) {
         const msg = formatAuthError(err, 'No fue posible iniciar sesión.');
-        setAuthErrorMessage(msg);
+        // Bloqueado por intentos: la pantalla muestra su propio aviso con la cuenta atrás.
+        setAuthErrorMessage(isAuthLockoutError(err) ? null : msg);
         setSyncStatus(msg, false);
       }
     },
@@ -301,6 +317,11 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         const user = await registerWithPersonalProfile(input);
         setAuthUser(user);
         triggerHaptic('success');
+        if (requiresEmailVerification(user)) {
+          registrationAwaitingVerificationRef.current = user.uid;
+          setSyncStatus('Cuenta creada. Verifica tu correo para entrar a tu presupuesto.', false);
+          return;
+        }
         await syncUserCloudAccount(user, { isRegistration: true });
       } catch (err) {
         const msg = formatAuthError(err, 'No fue posible crear tu cuenta.');
@@ -350,12 +371,17 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
       const isVerified = !requiresEmailVerification(refreshed);
       if (isVerified) {
         triggerHaptic('success');
+        // El presupuesto se carga ahora. Solo la cuenta creada en esta sesión abre el
+        // asistente inicial; en las demás lo decide lo que ya haya en Firestore.
+        const isNewRegistration = registrationAwaitingVerificationRef.current === refreshed.uid;
+        registrationAwaitingVerificationRef.current = null;
+        void syncUserCloudAccount(refreshed, isNewRegistration ? { isRegistration: true } : undefined);
       }
       return isVerified;
     } catch (err) {
       throw new Error(formatAuthError(err, 'No fue posible comprobar la verificación.'));
     }
-  }, []);
+  }, [syncUserCloudAccount]);
 
   const handleSignOut = useCallback(async () => {
     const outgoingUid = useBudgetStore.getState().authUser?.uid;
@@ -382,6 +408,9 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
   const handleManualSync = useCallback(() => {
     const currentUser = useBudgetStore.getState().authUser;
     if (!currentUser) return;
+    // Una sincronización completa relee toda la cuenta: no se repite hasta pasar la espera.
+    if (getCooldownRemainingMs('manual_sync') > 0) return;
+    startCooldown('manual_sync');
     triggerHaptic('light');
     void syncUserCloudAccount(currentUser, { forceFullSync: true });
   }, [syncUserCloudAccount]);
@@ -448,7 +477,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     Boolean(authUser) && !isAccountHydrated && !needsOnboarding;
 
   // PUERTA DE VERIFICACIÓN (ADR 0025): la cuenta recién creada no entra al presupuesto hasta
-  // abrir el enlace que envía Firebase Auth. La sincronización inicial sigue en segundo plano.
+  // abrir el enlace que envía Firebase Auth, y su presupuesto no se sincroniza hasta entonces.
   if (authUser && requiresEmailVerification(authUser)) {
     return (
       <EmailVerificationScreen

@@ -10,3 +10,4 @@ export * from './moto-ideal/motoIdealCalculator';
 export * from './month-close/monthClose';
 export * from './overview/monthlyCurve';
 export * from './analytics/chartSeries';
+export * from './auth/passwordPolicy';

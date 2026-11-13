@@ -25,6 +25,7 @@ import {
   withFirebaseIdentity,
   type BFlowAuthUser,
 } from './authAdapter';
+import { assertCooldownElapsed, runPasswordAttempt, startCooldown } from './authRateLimiter';
 
 const NO_ACTIVE_SESSION_MESSAGE = 'Inicia sesión de nuevo para continuar.';
 
@@ -41,19 +42,18 @@ function getAuthForAccountEmails(): Auth {
   return auth;
 }
 
-function hasAuthErrorCode(err: unknown, codes: readonly string[]): boolean {
-  const code = (err as { code?: unknown } | null)?.code;
-  const message = err instanceof Error ? err.message : '';
-  return codes.some((candidate) => code === candidate || message.includes(candidate));
-}
-
-/** Envía el enlace para definir una nueva contraseña. Sirve con y sin sesión iniciada. */
+/**
+ * Envía el enlace para definir una nueva contraseña. Sirve con y sin sesión iniciada.
+ * No se puede pedir otro hasta que pase la espera entre correos (ADR 0026).
+ */
 export async function sendPasswordResetLink(email: string): Promise<void> {
   const normalized = normalizeEmail(email);
   if (!normalized.includes('@')) {
     throw new Error('Escribe el correo electrónico de tu cuenta para enviarte el enlace.');
   }
+  assertCooldownElapsed('password_reset_email');
   await sendPasswordResetEmail(getAuthForAccountEmails(), normalized);
+  startCooldown('password_reset_email');
 }
 
 /** Envía (o reenvía) el correo de verificación a la cuenta con sesión iniciada. */
@@ -62,7 +62,9 @@ export async function sendVerificationEmail(): Promise<void> {
   if (!user) {
     throw new Error(NO_ACTIVE_SESSION_MESSAGE);
   }
+  assertCooldownElapsed('verification_email');
   await sendEmailVerification(user);
+  startCooldown('verification_email');
 }
 
 /**
@@ -87,17 +89,11 @@ export async function requestEmailChange(newEmail: string, currentPassword: stri
     throw new Error('Ese ya es el correo de tu cuenta.');
   }
 
-  try {
-    await reauthenticateWithCredential(
-      user,
-      EmailAuthProvider.credential(user.email, currentPassword)
-    );
-  } catch (err) {
-    if (hasAuthErrorCode(err, ['auth/invalid-credential', 'auth/wrong-password'])) {
-      throw new Error('La contraseña actual no es correcta.');
-    }
-    throw err;
-  }
+  const accountEmail = user.email;
+  // Cinco contraseñas equivocadas seguidas bloquean el cambio 15 minutos (ADR 0026).
+  await runPasswordAttempt('reauth_email_change', 'La contraseña actual no es correcta.', () =>
+    reauthenticateWithCredential(user, EmailAuthProvider.credential(accountEmail, currentPassword))
+  );
 
   await verifyBeforeUpdateEmail(user, normalized);
   pendingEmailChange = normalized;

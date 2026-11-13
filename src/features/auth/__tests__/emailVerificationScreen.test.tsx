@@ -6,6 +6,10 @@ import {
   EmailVerificationScreen,
   type EmailVerificationScreenProps,
 } from '../components/EmailVerificationScreen';
+import {
+  __resetAuthRateLimiterForTests,
+  startCooldown,
+} from '../../../platform/auth/authRateLimiter';
 
 type Skin = 'ios' | 'android' | 'web';
 
@@ -25,6 +29,10 @@ function renderScreen(props: Partial<EmailVerificationScreenProps> = {}, skin?: 
 }
 
 describe('EmailVerificationScreen (ADR 0025)', () => {
+  beforeEach(() => {
+    __resetAuthRateLimiterForTests();
+  });
+
   it.each(['ios', 'android', 'web'] as const)(
     'shows the address and the three actions on the %s skin',
     async (skin) => {
@@ -111,6 +119,78 @@ describe('EmailVerificationScreen (ADR 0025)', () => {
     expect(screen.getByTestId('email-verification-status-banner')).toHaveTextContent(
       'Enviamos un nuevo enlace de verificación a nueva.cuenta@correo.com.'
     );
+  });
+
+  describe('wait between verification emails (ADR 0026)', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    function elapse(milliseconds: number) {
+      act(() => {
+        jest.advanceTimersByTime(milliseconds);
+      });
+    }
+
+    it.each(['ios', 'android', 'web'] as const)(
+      'disables the resend for 60 s and counts down on the button (%s)',
+      async (skin) => {
+        const handlers = renderScreen({}, skin);
+        const resend = () => screen.getByTestId('email-verification-resend-button');
+        expect(resend()).toHaveTextContent('Reenviar correo de verificación');
+
+        await act(async () => {
+          fireEvent.press(resend());
+        });
+        expect(handlers.onResendVerification).toHaveBeenCalledTimes(1);
+        expect(resend()).toBeDisabled();
+        expect(resend()).toHaveTextContent('Podrás reenviarlo en 60 s');
+
+        elapse(1_000);
+        expect(resend()).toHaveTextContent('Podrás reenviarlo en 59 s');
+
+        // A press while waiting sends nothing.
+        await act(async () => {
+          fireEvent.press(resend());
+        });
+        expect(handlers.onResendVerification).toHaveBeenCalledTimes(1);
+
+        elapse(59_000);
+        expect(resend()).not.toBeDisabled();
+        expect(resend()).toHaveTextContent('Reenviar correo de verificación');
+
+        await act(async () => {
+          fireEvent.press(resend());
+        });
+        expect(handlers.onResendVerification).toHaveBeenCalledTimes(2);
+      }
+    );
+
+    it('starts waiting when the registration has just sent the email', () => {
+      startCooldown('verification_email');
+      renderScreen();
+
+      expect(screen.getByTestId('email-verification-resend-button')).toBeDisabled();
+      expect(screen.getByTestId('email-verification-resend-button')).toHaveTextContent(
+        'Podrás reenviarlo en 60 s'
+      );
+      // Checking the verification is never held back.
+      expect(screen.getByTestId('email-verification-check-button')).not.toBeDisabled();
+    });
+
+    it('does not start the wait when the resend fails', async () => {
+      renderScreen({ onResendVerification: jest.fn().mockRejectedValue(new Error('Sin red.')) });
+
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('email-verification-resend-button'));
+      });
+
+      expect(screen.getByTestId('email-verification-resend-button')).not.toBeDisabled();
+      expect(screen.getByTestId('email-verification-error-banner')).toHaveTextContent('Sin red.');
+    });
   });
 
   it('checks again by itself when the app returns to the foreground, without showing errors', async () => {

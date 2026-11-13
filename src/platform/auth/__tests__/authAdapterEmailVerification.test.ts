@@ -192,7 +192,7 @@ describe('authAdapter: verificación del correo con Firebase Authentication (ADR
     const registration = {
       displayName: 'Cuenta Nueva',
       email: ' Nueva@Correo.com ',
-      password: 'secreto123',
+      password: 'Secreto123!',
     };
 
     it('sends the Firebase verification email in Spanish and returns the account as pending', async () => {
@@ -204,7 +204,7 @@ describe('authAdapter: verificación del correo con Firebase Authentication (ADR
       expect(createUserWithEmailAndPassword).toHaveBeenCalledWith(
         fakeAuth,
         'nueva@correo.com',
-        'secreto123'
+        'Secreto123!'
       );
       expect(fakeAuth.languageCode).toBe('es');
       expect(sendEmailVerification).toHaveBeenCalledWith(firebaseUser);

@@ -21,6 +21,12 @@ import {
   savePersistedSession,
   type BFlowAuthUser,
 } from '../authAdapter';
+import {
+  AUTH_COOLDOWN_MS,
+  getAuthAttemptStatus,
+  getCooldownRemainingMs,
+  isAuthLockoutError,
+} from '../authRateLimiter';
 
 jest.mock('../../../data/firebase/firebaseConfig', () => ({
   ...jest.requireActual('../../../data/firebase/firebaseConfig'),
@@ -185,7 +191,7 @@ describe('accountEmailActions: correos de cuenta con Firebase Authentication (AD
       );
 
       await expect(requestEmailChange('nuevo@correo.com', 'claveMala')).rejects.toThrow(
-        'La contraseña actual no es correcta.'
+        'La contraseña actual no es correcta. Te quedan 4 intentos antes de un bloqueo de 15 min.'
       );
       expect(verifyBeforeUpdateEmail).not.toHaveBeenCalled();
       expect(hasPendingEmailChange()).toBe(false);
@@ -298,6 +304,114 @@ describe('accountEmailActions: correos de cuenta con Firebase Authentication (AD
       );
 
       await expect(refreshAccountIdentity()).rejects.toThrow('auth/user-token-expired');
+    });
+  });
+
+  describe('usage limits (ADR 0026)', () => {
+    const wrongPassword = () =>
+      Object.assign(new Error('Firebase: Error (auth/invalid-credential).'), {
+        code: 'auth/invalid-credential',
+      });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('does not send a second reset link until 60 s have passed', async () => {
+      jest.useFakeTimers();
+      useAuth(null);
+
+      await sendPasswordResetLink('cuenta@correo.com');
+      expect(getCooldownRemainingMs('password_reset_email')).toBe(
+        AUTH_COOLDOWN_MS.password_reset_email
+      );
+
+      jest.advanceTimersByTime(18_000);
+      await expect(sendPasswordResetLink('otra@correo.com')).rejects.toThrow(
+        'Espera 42 s antes de volver a intentarlo.'
+      );
+      expect(sendPasswordResetEmail).toHaveBeenCalledTimes(1);
+
+      jest.advanceTimersByTime(42_000);
+      await sendPasswordResetLink('otra@correo.com');
+      expect(sendPasswordResetEmail).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not start the wait when Firebase could not send the reset link', async () => {
+      useAuth(null);
+      (sendPasswordResetEmail as jest.Mock).mockRejectedValueOnce(
+        new Error('Firebase: Error (auth/network-request-failed).')
+      );
+
+      await expect(sendPasswordResetLink('cuenta@correo.com')).rejects.toThrow(
+        'auth/network-request-failed'
+      );
+      expect(getCooldownRemainingMs('password_reset_email')).toBe(0);
+      await sendPasswordResetLink('cuenta@correo.com');
+      expect(sendPasswordResetEmail).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not resend the verification email until 60 s have passed', async () => {
+      jest.useFakeTimers();
+      useAuth(buildFirebaseUser());
+
+      await sendVerificationEmail();
+      await expect(sendVerificationEmail()).rejects.toThrow(
+        'Espera 1 min antes de volver a intentarlo.'
+      );
+      expect(sendEmailVerification).toHaveBeenCalledTimes(1);
+      // The reset link has its own wait.
+      await sendPasswordResetLink('cuenta@correo.com');
+
+      jest.advanceTimersByTime(60_000);
+      await sendVerificationEmail();
+      expect(sendEmailVerification).toHaveBeenCalledTimes(2);
+    });
+
+    it('locks the email change for 15 minutes on the fifth wrong current password', async () => {
+      useAuth(buildFirebaseUser());
+      (reauthenticateWithCredential as jest.Mock).mockImplementation(() =>
+        Promise.reject(wrongPassword())
+      );
+      const attempt = () =>
+        requestEmailChange('nuevo@correo.com', 'claveMala').catch((err: unknown) => err);
+
+      const messages: string[] = [];
+      for (let index = 0; index < 4; index += 1) {
+        messages.push(((await attempt()) as Error).message);
+      }
+      expect(messages[0]).toBe(
+        'La contraseña actual no es correcta. Te quedan 4 intentos antes de un bloqueo de 15 min.'
+      );
+      expect(messages[3]).toBe(
+        'La contraseña actual no es correcta. Te queda 1 intento antes de un bloqueo de 15 min.'
+      );
+
+      const fifth = await attempt();
+      expect(isAuthLockoutError(fifth)).toBe(true);
+      expect((fifth as Error).message).toContain('Podrás intentarlo de nuevo en 15 min');
+
+      // Locked: the right password is not even sent to Firebase.
+      (reauthenticateWithCredential as jest.Mock).mockClear();
+      (reauthenticateWithCredential as jest.Mock).mockResolvedValue({});
+      expect(isAuthLockoutError(await attempt())).toBe(true);
+      expect(reauthenticateWithCredential).not.toHaveBeenCalled();
+      expect(verifyBeforeUpdateEmail).not.toHaveBeenCalled();
+      // Signing in has its own count.
+      expect(getAuthAttemptStatus('login_password').isLocked).toBe(false);
+    });
+
+    it('starts the count again once the current password is right', async () => {
+      useAuth(buildFirebaseUser());
+      (reauthenticateWithCredential as jest.Mock).mockRejectedValueOnce(wrongPassword());
+      await expect(requestEmailChange('nuevo@correo.com', 'claveMala')).rejects.toThrow(
+        /Te quedan 4 intentos/
+      );
+
+      await requestEmailChange('nuevo@correo.com', 'claveBuena');
+
+      expect(getAuthAttemptStatus('reauth_email_change').remainingAttempts).toBe(5);
+      expect(hasPendingEmailChange()).toBe(true);
     });
   });
 });

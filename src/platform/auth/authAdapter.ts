@@ -29,8 +29,10 @@ import { Platform } from 'react-native';
 import { getFirebaseAuth, getFirebaseDb } from '../../data/firebase/firebaseConfig';
 import { stripUndefinedFields } from '../../data/mappers/firestoreSchemas';
 import { isOwnerCanonicalEmail } from '../../data/repositories/budgetRepository';
+import { describeUnmetPasswordRule } from '../../domain/auth/passwordPolicy';
 import { toBogotaMonthKey } from '../../domain/date/monthKey';
 import { clearPersistedAccount } from '../storage/accountCache';
+import { runPasswordAttempt, startCooldown } from './authRateLimiter';
 import {
   persistentStorage,
   rotateDeviceSecretToken,
@@ -398,8 +400,11 @@ export function formatAuthError(err: unknown, fallbackMessage: string): string {
   if (msg.includes('auth/invalid-email')) {
     return 'El formato del correo electrónico no es válido.';
   }
-  if (msg.includes('auth/weak-password')) {
-    return 'La contraseña es muy débil. Debe tener al menos 6 caracteres.';
+  if (
+    msg.includes('auth/weak-password') ||
+    msg.includes('auth/password-does-not-meet-requirements')
+  ) {
+    return 'La contraseña no cumple los requisitos de seguridad. Revisa la lista e intenta de nuevo.';
   }
   if (msg.includes('auth/network-request-failed')) {
     return 'Error de conexión. Revisa tu internet e intenta nuevamente.';
@@ -426,7 +431,12 @@ export async function signInWithEmail(email: string, password: string): Promise<
   }
   await ensureWebAuthPersistence();
   const auth = getFirebaseAuth();
-  const credential = await signInWithEmailAndPassword(auth, trimmedEmail, password);
+  // Cinco contraseñas equivocadas seguidas bloquean el acceso 15 minutos (ADR 0026).
+  const credential = await runPasswordAttempt(
+    'login_password',
+    'Correo o contraseña incorrectos.',
+    () => signInWithEmailAndPassword(auth, trimmedEmail, password)
+  );
   return syncUserProfileDocument(credential.user, { authProvider: 'password' });
 }
 
@@ -442,8 +452,9 @@ export async function registerWithPersonalProfile(
   if (!trimmedEmail.includes('@')) {
     throw new Error('Escribe un correo electrónico válido.');
   }
-  if (input.password.length < 6) {
-    throw new Error('La contraseña debe tener al menos 6 caracteres.');
+  const unmetPasswordRule = describeUnmetPasswordRule(input.password);
+  if (unmetPasswordRule) {
+    throw new Error(unmetPasswordRule);
   }
 
   await ensureWebAuthPersistence();
@@ -460,6 +471,8 @@ export async function registerWithPersonalProfile(
   // Firebase Auth envía el correo de verificación con su plantilla (ADR 0025).
   try {
     await sendEmailVerification(credential.user);
+    // El correo acaba de salir: reenviarlo espera lo mismo que cualquier otro envío.
+    startCooldown('verification_email');
   } catch {
     // La pantalla de verificación permite reenviarlo.
   }

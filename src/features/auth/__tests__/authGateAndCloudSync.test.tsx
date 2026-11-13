@@ -9,6 +9,7 @@ import { BFlowThemeProvider } from '../../../design-system/theme/ThemeContext';
 import { formatMonthKeyLabelEs, toAppMonthKey } from '../../../domain';
 import * as accountEmailActions from '../../../platform/auth/accountEmailActions';
 import * as authAdapter from '../../../platform/auth/authAdapter';
+import { __resetAuthRateLimiterForTests } from '../../../platform/auth/authRateLimiter';
 import {
   loadPersistedSession,
   savePersistedSession,
@@ -89,7 +90,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     fireEvent.changeText(screen.getByTestId('auth-name-input'), 'Alejandro Bernal Garnica');
     fireEvent.changeText(screen.getByTestId('auth-phone-input'), '+57 300 123 4567');
     fireEvent.changeText(screen.getByTestId('auth-email-input'), 'abernalg2303@gmail.com');
-    fireEvent.changeText(screen.getByTestId('auth-password-input'), 'secreto123');
+    fireEvent.changeText(screen.getByTestId('auth-password-input'), 'Secreto123!');
     fireEvent.changeText(screen.getByTestId('auth-confirm-password-input'), 'otraClave');
 
     fireEvent.press(screen.getByTestId('auth-primary-submit-button'));
@@ -504,6 +505,9 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       const resendSpy = jest
         .spyOn(accountEmailActions, 'sendVerificationEmail')
         .mockResolvedValue(undefined);
+      const loadSpy = jest
+        .spyOn(FirestoreBudgetRepository.prototype, 'loadFullCloudAccount')
+        .mockRejectedValue(new Error('sin conexión'));
 
       try {
         act(() => {
@@ -532,6 +536,8 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
         expect(screen.getByTestId('email-verification-error-banner')).toHaveTextContent(
           /aún no aparece verificado/i
         );
+        // An unverified account never reads its budget from Firestore (ADR 0026)
+        expect(loadSpy).not.toHaveBeenCalled();
 
         // The verification email can be sent again
         await act(async () => {
@@ -554,9 +560,12 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
         expect(screen.queryByTestId('email-verification-screen')).toBeNull();
         expect(screen.getByTestId('workspace-tab-summary')).toBeTruthy();
         expect(useBudgetStore.getState().authUser?.emailVerified).toBe(true);
+        // Verified: the budget is loaded now, once
+        expect(loadSpy).toHaveBeenCalledTimes(1);
       } finally {
         refreshSpy.mockRestore();
         resendSpy.mockRestore();
+        loadSpy.mockRestore();
       }
     });
 
@@ -718,7 +727,9 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       expect(changeSpy).toHaveBeenCalledWith('otro.correo@correo.com', 'claveActual1');
       view.unmount();
 
-      // A local session (showcase mode, demo owner) has no Firebase account to email
+      // A local session (showcase mode, demo owner) has no Firebase account to email.
+      // The wait between reset emails belongs to the device: it is over by now.
+      __resetAuthRateLimiterForTests();
       resetSpy.mockClear();
       act(() => {
         useBudgetStore.getState().setAuthUser(authAdapter.DEMO_OWNER_USER);

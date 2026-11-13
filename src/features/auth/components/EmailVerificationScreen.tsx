@@ -21,6 +21,8 @@ import {
   usePrimaryActionLook,
   useResponsiveLayout,
 } from '../../../design-system';
+import { getCooldownRemainingMs, startCooldown } from '../../../platform/auth/authRateLimiter';
+import { useCountdown } from '../hooks/useCountdown';
 
 const VERIFICATION_CARD_MAX_WIDTH_PT = 460;
 
@@ -46,6 +48,9 @@ export function EmailVerificationScreen({
   const [busyAction, setBusyAction] = useState<'check' | 'resend' | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  // El correo del registro acaba de salir: reenviarlo espera como cualquier otro (ADR 0026).
+  const resendCooldown = useCountdown(() => getCooldownRemainingMs('verification_email'));
+  const isResendWaiting = resendCooldown.secondsLeft > 0;
 
   const isMountedRef = useRef(true);
   const isCheckingRef = useRef(false);
@@ -104,7 +109,9 @@ export function EmailVerificationScreen({
     setStatusMessage(null);
     try {
       await onResendVerification();
+      startCooldown('verification_email');
       if (isMountedRef.current) {
+        resendCooldown.refresh();
         setStatusMessage(`Enviamos un nuevo enlace de verificación a ${email ?? 'tu correo'}.`);
       }
     } catch (err) {
@@ -171,7 +178,7 @@ export function EmailVerificationScreen({
         <AppPressable
           testID="email-verification-resend-button"
           accessibilityRole="button"
-          disabled={isBusy}
+          disabled={isBusy || isResendWaiting}
           onPress={handleResend}
           style={{
             minHeight: MIN_TOUCH_TARGET_PT,
@@ -186,7 +193,11 @@ export function EmailVerificationScreen({
           }}
         >
           <AppText variant="caption" color={colors.text.primary} style={{ fontWeight: '600' }}>
-            {busyAction === 'resend' ? 'Enviando correo...' : 'Reenviar correo de verificación'}
+            {busyAction === 'resend'
+              ? 'Enviando correo...'
+              : isResendWaiting
+                ? `Podrás reenviarlo en ${resendCooldown.secondsLeft} s`
+                : 'Reenviar correo de verificación'}
           </AppText>
         </AppPressable>
 

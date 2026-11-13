@@ -30,9 +30,26 @@ import {
   usePrimaryActionLook,
   useResponsiveLayout,
 } from '../../../design-system';
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  describeUnmetPasswordRule,
+  evaluatePasswordPolicy,
+} from '../../../domain';
 import type { RegisterPersonalAccountInput } from '../../../platform/auth/authAdapter';
+import {
+  PASSWORD_LOCKOUT_MS,
+  formatWaitTime,
+  getAuthAttemptStatus,
+  getCooldownRemainingMs,
+  startCooldown,
+} from '../../../platform/auth/authRateLimiter';
+import { useCountdown } from '../hooks/useCountdown';
 
 export type AuthFormMode = 'login' | 'register' | 'recover';
+
+/** Shown while the sign-in is locked; the button carries the time left. */
+const LOGIN_LOCKED_NOTICE = `Demasiados intentos fallidos. Por seguridad, el inicio de sesión con contraseña queda bloqueado ${formatWaitTime(PASSWORD_LOCKOUT_MS)} en este dispositivo. Si olvidaste tu contraseña, restablécela por correo.`;
 
 const AUTH_CARD_MAX_WIDTH_PT = 460;
 const WEB_HERO_FLEX = 7;
@@ -85,6 +102,13 @@ export function AuthScreen({
   const [localValidationError, setLocalValidationError] = useState<string | null>(null);
   const [internalRecoverySuccess, setInternalRecoverySuccess] = useState<string | null>(null);
 
+  // ADR 0026: five wrong passwords lock the sign-in, and a reset link waits before the next.
+  const loginLockout = useCountdown(() => getAuthAttemptStatus('login_password').retryAfterMs);
+  const recoveryCooldown = useCountdown(() => getCooldownRemainingMs('password_reset_email'));
+  const isLoginLocked = formMode === 'login' && loginLockout.secondsLeft > 0;
+  const isRecoveryWaiting = formMode === 'recover' && recoveryCooldown.secondsLeft > 0;
+  const passwordRules = evaluatePasswordPolicy(password);
+
   const switchMode = (nextMode: AuthFormMode) => {
     setFormMode(nextMode);
     setLocalValidationError(null);
@@ -103,6 +127,8 @@ export function AuthScreen({
 
       try {
         await onSendPasswordRecovery(recoveryEmail);
+        startCooldown('password_reset_email');
+        recoveryCooldown.refresh();
         // Firebase no revela si el correo tiene cuenta: el mensaje tampoco lo afirma.
         setInternalRecoverySuccess(
           `Si ${recoveryEmail} tiene una cuenta en BFlow, recibirás un enlace para definir una nueva contraseña. Revisa también el correo no deseado.`
@@ -129,8 +155,9 @@ export function AuthScreen({
         setLocalValidationError('Escribe un correo electrónico válido.');
         return;
       }
-      if (password.length < 6) {
-        setLocalValidationError('Usa una contraseña de al menos 6 caracteres.');
+      const unmetPasswordRule = describeUnmetPasswordRule(password);
+      if (unmetPasswordRule) {
+        setLocalValidationError(unmetPasswordRule);
         return;
       }
       if (password !== confirmPassword) {
@@ -154,9 +181,10 @@ export function AuthScreen({
       return;
     }
     await onSignInWithEmail(email.trim(), password);
+    loginLockout.refresh();
   };
 
-  const activeError = localValidationError ?? errorMessage;
+  const activeError = isLoginLocked ? LOGIN_LOCKED_NOTICE : localValidationError ?? errorMessage;
   const activeStatusMessage = internalRecoverySuccess ?? statusMessage;
 
   const authCard = (
@@ -315,10 +343,15 @@ export function AuthScreen({
                   testID="auth-password-input"
                   value={password}
                   onChangeText={setPassword}
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder={
+                    formMode === 'register'
+                      ? `Mínimo ${PASSWORD_MIN_LENGTH} caracteres`
+                      : 'Tu contraseña'
+                  }
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                   autoComplete={formMode === 'register' ? 'new-password' : 'current-password'}
+                  maxLength={formMode === 'register' ? PASSWORD_MAX_LENGTH : undefined}
                   style={{
                     flex: 1,
                     backgroundColor: 'transparent',
@@ -348,6 +381,35 @@ export function AuthScreen({
                 </AppPressable>
               </View>
             </View>
+
+            {/* Each rule of the password policy, marked as the user types (ADR 0026). */}
+            {formMode === 'register' ? (
+              <View testID="auth-password-rules" style={{ gap: spacing.xxs }}>
+                {passwordRules.map((rule) => (
+                  <View
+                    key={rule.id}
+                    testID={`auth-password-rule-${rule.id}`}
+                    accessible
+                    accessibilityLabel={`${rule.isMet ? 'Cumplido' : 'Pendiente'}: ${rule.label}`}
+                    style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.xs }}
+                  >
+                    <AppText
+                      variant="caption"
+                      color={rule.isMet ? colors.semantic.completed : colors.text.muted}
+                    >
+                      {rule.isMet ? '✓' : '○'}
+                    </AppText>
+                    <AppText
+                      variant="caption"
+                      color={rule.isMet ? colors.text.primary : colors.text.secondary}
+                      style={{ flexShrink: 1 }}
+                    >
+                      {rule.label}
+                    </AppText>
+                  </View>
+                ))}
+              </View>
+            ) : null}
 
             {formMode === 'register' ? (
               <View style={{ gap: spacing.xxs }}>
@@ -416,7 +478,7 @@ export function AuthScreen({
         <AppPressable
           testID="auth-primary-submit-button"
           accessibilityRole="button"
-          disabled={isSubmitting}
+          disabled={isSubmitting || isLoginLocked || isRecoveryWaiting}
           onPress={handlePrimarySubmit}
           style={{
             minHeight: MIN_TOUCH_TARGET_PT,
@@ -431,11 +493,15 @@ export function AuthScreen({
           <AppText variant="headline" color={primaryAction.labelColor ?? colors.text.primary}>
             {isSubmitting
               ? 'Sincronizando tu cuenta...'
-              : formMode === 'login'
-                ? 'Entrar a mi presupuesto'
-                : formMode === 'register'
-                  ? 'Crear mi cuenta'
-                  : 'Enviar enlace de restablecimiento'}
+              : isLoginLocked
+                ? `Podrás intentarlo en ${formatWaitTime(loginLockout.secondsLeft * 1000)}`
+                : isRecoveryWaiting
+                  ? `Podrás pedir otro enlace en ${recoveryCooldown.secondsLeft} s`
+                  : formMode === 'login'
+                    ? 'Entrar a mi presupuesto'
+                    : formMode === 'register'
+                      ? 'Crear mi cuenta'
+                      : 'Enviar enlace de restablecimiento'}
           </AppText>
         </AppPressable>
 

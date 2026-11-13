@@ -85,6 +85,14 @@ src/app/index.tsx  ──(hooks/props)──>  features/*/components
   - En tests, espiar `accountEmailActions` (`jest.spyOn`); un usuario con `provider: 'firebase'`, `emailVerified: false` y `emailVerificationRequired: true` activa la puerta.
   - Ningún correo real se ha enviado ni abierto desde este entorno.
 
+- **Seguridad de la cuenta (ADR 0026, `docs/guides/firebase-auth-hardening-guide.md`):**
+  - `src/domain/auth/passwordPolicy.ts`: política del registro (8 a 128 caracteres, mayúscula, minúscula, número, carácter especial del conjunto de Firebase, sin espacios en los extremos). Iniciar sesión no la aplica.
+  - `src/platform/auth/authRateLimiter.ts`: 5 contraseñas equivocadas bloquean 15 min el inicio de sesión o el cambio de correo (`runPasswordAttempt`); esperas de 60 s entre correos de cuenta y de 30 s entre sincronizaciones manuales. Estado cifrado en `persistentStorage`; es un freno en el cliente, no sustituye a Firebase ni a App Check.
+  - Las pantallas muestran la cuenta atrás con `features/auth/hooks/useCountdown.ts`. El aviso de bloqueo es un texto fijo y el tiempo va en el botón: `FormMessage` vibra y se anuncia cada vez que cambia su mensaje.
+  - `index.tsx` no sincroniza el presupuesto mientras `requiresEmailVerification(authUser)` sea cierto; lo hace al confirmarse la verificación.
+  - En tests, el estado del limitador vive en memoria: reiniciarlo en `beforeEach` con `__resetAuthRateLimiterForTests()` o `persistentStorage.clear()`. Las contraseñas de registro de los tests deben cumplir la política.
+  - `firestore.rules` no exige correo verificado (dejaría fuera a las cuentas anteriores, ADR 0026 §2.5) y App Check no está integrado.
+
 - **Gráficos (Fase 6, ADR 0020):** `src/design-system/components/charts/` (`BarChart`, `LineChart` y `DonutChart` con `react-native-svg`, animados por `chartTransition.ts`), con datos de `src/domain/analytics/chartSeries.ts`:
   - Un mes cerrado anterior al activo lee su snapshot. El mes activo, aunque esté cerrado, y los meses abiertos se calculan en vivo, igual que las tarjetas.
   - La ventana es de 6 meses hasta el mes activo. Cada gráfico muestra los que caben con el objetivo táctil completo por columna (`useChartWindow`).

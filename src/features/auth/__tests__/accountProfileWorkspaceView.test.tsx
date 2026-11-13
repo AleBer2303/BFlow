@@ -3,6 +3,10 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { BFlowThemeProvider } from '../../../design-system/theme/ThemeContext';
 import { AccountProfileWorkspaceView } from '../components/AccountProfileWorkspaceView';
 import type { BFlowAuthUser } from '../../../platform/auth/authAdapter';
+import {
+  __resetAuthRateLimiterForTests,
+  recordFailedAuthAttempt,
+} from '../../../platform/auth/authRateLimiter';
 
 describe('AccountProfileWorkspaceView', () => {
   const mockUser: BFlowAuthUser = {
@@ -15,6 +19,10 @@ describe('AccountProfileWorkspaceView', () => {
     activeMonthKey: '2026-10',
     provider: 'local-demo',
   };
+
+  beforeEach(() => {
+    __resetAuthRateLimiterForTests();
+  });
 
   it('renders user details, initials monogram, and financial goal', () => {
     const onSignOut = jest.fn();
@@ -358,6 +366,175 @@ describe('AccountProfileWorkspaceView', () => {
 
         expect(onRequestEmailChange).toHaveBeenCalledWith('otro@bflow.app', 'claveActual123');
         expect(onSendPasswordReset).toHaveBeenCalledTimes(1);
+      }
+    );
+  });
+
+  describe('usage limits (ADR 0026)', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    function elapse(milliseconds: number) {
+      act(() => {
+        jest.advanceTimersByTime(milliseconds);
+      });
+    }
+
+    function renderAccount(
+      props: Partial<React.ComponentProps<typeof AccountProfileWorkspaceView>> = {},
+      skin?: 'ios' | 'android' | 'web'
+    ) {
+      return render(
+        <BFlowThemeProvider initialMode="dark" skin={skin}>
+          <AccountProfileWorkspaceView
+            authUser={mockUser}
+            syncStatusMessage="En línea"
+            isSyncing={false}
+            onSignOut={jest.fn()}
+            {...props}
+          />
+        </BFlowThemeProvider>
+      );
+    }
+
+    it.each(['ios', 'android', 'web'] as const)(
+      'waits 30 s between manual syncs and counts down on the button (%s)',
+      (skin) => {
+        const onManualSync = jest.fn();
+        renderAccount({ onManualSync }, skin);
+        const sync = () => screen.getByTestId('manual-sync-button');
+        expect(sync()).toHaveTextContent('Sincronizar datos ahora');
+
+        fireEvent.press(sync());
+        expect(onManualSync).toHaveBeenCalledTimes(1);
+        expect(sync()).toBeDisabled();
+        expect(sync()).toHaveTextContent('Podrás sincronizar de nuevo en 30 s');
+
+        fireEvent.press(sync());
+        expect(onManualSync).toHaveBeenCalledTimes(1);
+
+        elapse(10_000);
+        expect(sync()).toHaveTextContent('Podrás sincronizar de nuevo en 20 s');
+
+        elapse(20_000);
+        expect(sync()).not.toBeDisabled();
+        fireEvent.press(sync());
+        expect(onManualSync).toHaveBeenCalledTimes(2);
+      }
+    );
+
+    it('keeps the sync wait after leaving the Account tab and coming back', () => {
+      const onManualSync = jest.fn();
+      const view = renderAccount({ onManualSync });
+      fireEvent.press(screen.getByTestId('manual-sync-button'));
+      view.unmount();
+
+      elapse(5_000);
+      renderAccount({ onManualSync });
+      expect(screen.getByTestId('manual-sync-button')).toBeDisabled();
+      expect(screen.getByTestId('manual-sync-button')).toHaveTextContent(
+        'Podrás sincronizar de nuevo en 25 s'
+      );
+    });
+
+    it.each(['ios', 'android', 'web'] as const)(
+      'waits 60 s between password reset links and between verification emails (%s)',
+      async (skin) => {
+        const onSendPasswordReset = jest.fn();
+        const onSendEmailVerification = jest.fn();
+        renderAccount(
+          {
+            authUser: { ...mockUser, emailVerified: false },
+            onSendPasswordReset,
+            onSendEmailVerification,
+          },
+          skin
+        );
+        fireEvent.press(screen.getByTestId('open-profile-settings-button'));
+        const reset = () => screen.getByTestId('send-password-reset-button');
+        const verify = () => screen.getByTestId('send-email-verification-button');
+
+        await act(async () => {
+          fireEvent.press(reset());
+        });
+        expect(reset()).toBeDisabled();
+        expect(reset()).toHaveTextContent('Podrás pedir otro enlace en 60 s');
+        // Each email has its own wait.
+        expect(verify()).not.toBeDisabled();
+
+        elapse(20_000);
+        await act(async () => {
+          fireEvent.press(verify());
+        });
+        expect(verify()).toBeDisabled();
+        expect(verify()).toHaveTextContent('Podrás reenviarlo en 60 s');
+        expect(reset()).toHaveTextContent('Podrás pedir otro enlace en 40 s');
+
+        await act(async () => {
+          fireEvent.press(reset());
+          fireEvent.press(verify());
+        });
+        expect(onSendPasswordReset).toHaveBeenCalledTimes(1);
+        expect(onSendEmailVerification).toHaveBeenCalledTimes(1);
+
+        elapse(40_000);
+        expect(reset()).not.toBeDisabled();
+        expect(reset()).toHaveTextContent('Restablecer contraseña');
+        expect(verify()).toHaveTextContent('Podrás reenviarlo en 20 s');
+      }
+    );
+
+    it.each(['ios', 'android', 'web'] as const)(
+      'locks the email change after the fifth wrong password and offers the reset (%s)',
+      async (skin) => {
+        const wrongPassword = 'La contraseña actual no es correcta. Te quedan 4 intentos antes de un bloqueo de 15 min.';
+        // What the platform does: every rejected password is counted on the device.
+        const onRequestEmailChange = jest.fn(async () => {
+          recordFailedAuthAttempt('reauth_email_change');
+          throw new Error(wrongPassword);
+        });
+        renderAccount({ onRequestEmailChange }, skin);
+        fireEvent.press(screen.getByTestId('open-profile-settings-button'));
+        const submit = () => screen.getByTestId('request-email-change-button');
+        const attempt = async () => {
+          fireEvent.changeText(screen.getByTestId('change-email-input'), 'nuevo@bflow.app');
+          fireEvent.changeText(screen.getByTestId('change-email-password-input'), 'claveMala');
+          await act(async () => {
+            fireEvent.press(submit());
+          });
+        };
+
+        await attempt();
+        expect(screen.getByTestId('email-error-banner')).toHaveTextContent(wrongPassword);
+        expect(submit()).not.toBeDisabled();
+
+        await attempt();
+        await attempt();
+        await attempt();
+        await attempt();
+        expect(onRequestEmailChange).toHaveBeenCalledTimes(5);
+        expect(submit()).toBeDisabled();
+        expect(submit()).toHaveTextContent('Podrás intentarlo en 15 min');
+        expect(screen.getByTestId('email-error-banner')).toHaveTextContent(
+          /el cambio de correo queda bloqueado 15 min en este dispositivo.*restablécela desde la tarjeta Contraseña/
+        );
+        // The way out stays available.
+        expect(screen.getByTestId('send-password-reset-button')).not.toBeDisabled();
+
+        elapse(61_000);
+        expect(submit()).toHaveTextContent('Podrás intentarlo en 13 min 59 s');
+
+        await attempt();
+        expect(onRequestEmailChange).toHaveBeenCalledTimes(5);
+
+        elapse(14 * 60_000);
+        expect(submit()).not.toBeDisabled();
+        expect(submit()).toHaveTextContent('Enviar enlace de confirmación');
+        expect(screen.queryByTestId('email-error-banner')).toBeNull();
       }
     );
   });

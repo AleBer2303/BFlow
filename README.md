@@ -231,8 +231,8 @@ BFlow/
 │   └── workflows/                # CI/CD (ci.yml, build-ios.yml, build-android.yml, e2e.yml, release.yml)
 ├── assets/                       # Iconos y splash screens de la aplicación
 ├── docs/
-│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0025)
-│   ├── guides/                   # Guías operativas (firma con iloader, validación multiplataforma)
+│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0026)
+│   ├── guides/                   # Guías operativas (firma con iloader, validación multiplataforma, seguridad de Firebase Auth)
 │   └── Improvements/             # Guías de auditoría de rendimiento
 ├── fixtures/                     # Datos dorados de prueba (october-2026.json)
 ├── scripts/                      # Scripts de utilidad (linting, guardias CI, start-demo.mjs del modo vitrina)
@@ -250,7 +250,7 @@ BFlow/
 │   │   ├── layout/               # Contrato responsive (useResponsiveLayout) y ancho de cifras
 │   │   ├── platform/             # Resolución de la piel y preferencia de Reducir Movimiento
 │   │   └── theme/                # BFlowThemeProvider / useBFlowTheme
-│   ├── domain/                   # 100% PURO: Fórmulas matemáticas, checklist, deudas, ahorros
+│   ├── domain/                   # 100% PURO: Fórmulas matemáticas, checklist, deudas, ahorros, política de contraseñas
 │   │   ├── analytics/            # Series de los gráficos: historial de 6 meses, distribución, comparativa
 │   │   ├── budget/               # Cálculos de ingresos, gastos y flujos netos
 │   │   ├── checklist/            # Reglas de disponibilidad, progreso y autogeneración
@@ -263,7 +263,7 @@ BFlow/
 │   │   └── savings/              # Fondos de ahorro y proyecciones
 │   ├── features/                 # Pantallas y componentes por dominio funcional
 │   │   ├── analytics/            # Cierre de mes, historial y sección «Gráficos»
-│   │   ├── auth/                 # Login, registro, verificación de correo, perfil y recuperación
+│   │   ├── auth/                 # Login, registro con política de contraseñas, verificación de correo, perfil y recuperación
 │   │   ├── budget/               # Resumen mensual y modal de agregar movimiento
 │   │   ├── checklist/            # Lista de movimientos y filtros
 │   │   ├── debts/                # Amortización de deudas, abonos y gráfico de evolución
@@ -272,7 +272,7 @@ BFlow/
 │   │   ├── shell/                # WorkspaceShell: cabecera, columna y navegación de cada piel
 │   │   └── summary/              # Resumen y curva del mes: three.js (iOS), SVG animado (Android, Web y respaldo de iOS)
 │   └── platform/                 # Adaptadores Modo A vs Modo B
-│       ├── auth/                 # Adaptador de autenticación y correos de cuenta de Firebase Auth (verificación, contraseña, cambio de correo; ADR 0025)
+│       ├── auth/                 # Adaptador de autenticación y correos de cuenta de Firebase Auth (verificación, contraseña, cambio de correo; ADR 0025) y límites de uso: 5 intentos de contraseña y esperas entre envíos (ADR 0026)
 │       ├── glass/                # GlassSurface: vidrio (iOS), tonal (Android), plano (Web)
 │       ├── haptics/              # Servicio unificado de vibración háptica
 │       ├── insets/               # Áreas seguras (borde a borde en Android)

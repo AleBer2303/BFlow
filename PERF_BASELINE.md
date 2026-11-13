@@ -214,7 +214,7 @@ Medición del 2026-11-13 en Windows 11, 12 núcleos lógicos, Node del equipo, r
 
 | Medida | Antes | Después |
 | :--- | :---: | :---: |
-| `npm test`, caché de transformación caliente | 82,7 s y 61,9 s (2 muestras) | 52,2 s, 52,9 s y 41,8 s (3 muestras) |
+| `npm test`, caché de transformación caliente | 82,7 s y 61,9 s (2 muestras) | mediana 49,6 s; de 41,8 s a 69,7 s (8 muestras) |
 | `npm test -- --coverage --ci`, caché caliente | sin medir | 53,8 s |
 | Primera ejecución con la caché vacía (`.jest-cache` nuevo) | sin medir | 82,7 s sin cobertura; 91,9 s con cobertura |
 | `vectorCurve.test.tsx` dentro de la suite completa | 78,4 s y 58,6 s | 16,8 s (6 workers); 2,7 s (4 workers) |
@@ -244,7 +244,32 @@ El tiempo total no cambia con el número de workers: cada suite tarda más cuant
 
 **Descartado con evidencia.** La auditoría pedía cortar en tests los bucles `requestAnimationFrame` de `useChartTransition`. Una sonda sobre `requestAnimationFrame` contó **0 llamadas** con timers reales en `workspacePlatforms`, `savingsAndMotoIdealView`, `debtsFunfamiView`, `chartsFlow`, `renderCommits`, `phase4Screens` y `designSystem`: en RNTL los gráficos no reciben `onLayout`, `enabled` es falso y el bucle no arranca. No se cambió `useChartTransition.ts`.
 
-**Pendiente.** La suite más lenta es ahora `workspacePlatforms.test.tsx` (27 s a 50 s según los workers). La suma de los tiempos de las suites es varias veces la suma de sus tests: la mayor parte es cargar React Native y la app en cada suite. Las demás suites con timers falsos y `requestAnimationFrame` (`charts.test.tsx` y las de gráficos) siguen a 1.000 cuadros por segundo simulado; juntas suman pocos segundos.
+**Pendiente.** Las demás suites con timers falsos y `requestAnimationFrame` (`charts.test.tsx` y las de gráficos) siguen a 1.000 cuadros por segundo simulado; juntas suman pocos segundos.
+
+### 06 / Por qué `workspacePlatforms.test.tsx` es ahora la suite más lenta
+
+Tras el apartado 05 es la suite más larga (27 s a 50 s según los workers). Se perfiló el 2026-11-13 con `node --cpu-prof` y Jest en un solo proceso. **No se cambió código: la causa está fuera del repositorio.**
+
+| Medida | Valor |
+| :--- | :---: |
+| La suite sola: tiempo total / suma de sus 54 tests | 28,4 s / 10,9 s |
+| Tiempo del proceso en llamadas al sistema de archivos | 63 % (23,2 s de 36,6 s) |
+| `open` al leer el código fuente de cada módulo (`jest-runtime`, `readFile`) | 8,6 s |
+| Leer la caché de transformación (`.jest-cache`) | 0,2 s |
+| React y `react-test-renderer` | 3,7 s |
+| Módulos que carga `app/index` (138 de `react-native`, 110 de `react-native-svg`, 133 propios) | 555 |
+| Módulos cargados antes de cada archivo de test (96 de `lodash`, del preset de `jest-expo`) | 164 |
+
+**Causa.** Abrir por primera vez un archivo `.js` tarda entre 5,6 ms y 12,6 ms en este equipo; la misma copia sin extensión, 0,10 ms, y una segunda apertura, de 0,1 ms a 0,5 ms. Es el análisis en acceso de la protección del equipo sobre los `.js`. Su caché dura poco: un proceso lanzado justo después abre los mismos archivos a 0,58 ms, y unos minutos más tarde vuelven a costar 7 ms. Jest lee el código fuente de cada módulo para calcular la clave de caché, así que cada ejecución paga ese análisis en frío.
+
+**Consecuencias.**
+
+- El coste no es de `workspacePlatforms`: lo paga la primera suite pesada de cada worker. En un mismo proceso, la primera suite tiene 17,5 s de sobrecarga y las dos siguientes (`phase4Screens`, `renderCommits`) 2,6 s y 1,5 s. Jest lanza primero las suites más largas, así que cada worker empieza por una.
+- Explica que el tiempo total no cambie con 4, 6, 8 u 11 workers (apartado 05).
+- `--workerThreads` no ayuda: 5 pares alternados dieron 42,6 s a 50,9 s con hilos (mediana 45,9 s) y 44,0 s a 69,7 s con procesos (mediana 47,0 s). No se adopta: es experimental y la diferencia cabe en el ruido.
+- Recortar el grafo de módulos no compensa: `react-native` y `react-native-svg` son necesarios para montar la app.
+
+**Lo que sí lo reduciría, fuera del repositorio.** Excluir la carpeta del proyecto (o `node_modules`) del análisis en acceso. Es un ajuste de seguridad del equipo y lo decide su propietario o el área de TI. **No se probó ni se midió.** En GitHub Actions (Linux) este coste no existe; allí los tiempos no están medidos.
 
 
 ---

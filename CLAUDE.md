@@ -17,6 +17,8 @@ npm run typecheck              # tsc --noEmit (strict + noUncheckedIndexedAccess
 npm run lint                   # NO es ESLint: scripts/lint-check.mjs (ver "Reglas que aplica el lint")
 npm test                       # jest --watchAll=false (preset jest-expo)
 npm test -- --coverage --ci    # igual que CI
+npm run test:domain            # solo src/domain (lógica contable)
+npm run test:changed           # solo los tests afectados por los cambios sin confirmar (jest --onlyChanged)
 npx jest src/domain/debts                       # un directorio/archivo
 npx jest path/to/file.test.ts -t "nombre del test"   # un solo test
 npm run test:phase0            # paridad del fixture dorado (node --test scripts/verify-phase0-fixture.test.mjs)
@@ -30,6 +32,8 @@ Antes de dar algo por terminado: `typecheck`, `lint` y `npm test` en 0 errores (
 Notas de tests:
 - Solo se descubren archivos `**/__tests__/**/*.test.[jt]s?(x)`; un `*.test.ts` fuera de `__tests__/` no corre.
 - La cobertura solo se mide sobre `src/domain/`. `jest.config.js` aplica umbral global 80%, pero la regla del proyecto (AGENTS.md) exige ≥ 90% en sentencias y líneas.
+- `jest.config.js` fija `maxWorkers: '50%'` y guarda la caché de transformación en `.jest-cache/` (ignorado en git); la primera ejecución tras borrarla tarda casi el doble.
+- Con `jest.useFakeTimers()`, el `requestAnimationFrame` de React Native (`setTimeout(…, 0)`) dispara un cuadro por milisegundo simulado. Un test que avance segundos de una animación por cuadros debe fijar su cadencia, como `installFrameClock` en `features/summary/__tests__/vectorCurve.test.tsx` (`PERF_BASELINE.md` §8, 05).
 - `scripts/extract-excel-fixture.mjs` (`npm run extract:excel`) necesita `docs/reference/Control_Ingresos_y_gastos_mensuales.xlsx`, que **no está en el repo**; CI valida solo los JSON ya generados en `fixtures/`. No regenerar los fixtures sin ese Excel.
 - E2E (ADR 0023): `e2e/flows/*.yaml` son flujos de Maestro sobre un APK en modo vitrina que `e2e.yml` compila solo para eso y nunca publica. No se han ejecutado todavía en un emulador ni en GitHub. `scripts/workflow-guards.test.mjs` falla si un flujo usa un `testID` que no existe en `src/`: al renombrar un `testID`, actualiza el flujo.
 

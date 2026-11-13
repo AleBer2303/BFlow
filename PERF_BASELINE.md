@@ -208,6 +208,44 @@ Para reproducir estas mediciones en cualquier momento en la rama `perf/baseline-
 - **Suite de Pruebas:** `[X] Correctas`. 21 test suites y 123 tests pasando al 100% en 10.6 segundos.
 - **Decisión Final:** `[X] Conservar`. Todos los cambios demostraron mejoras medibles, respetaron las invariantes contables y no introdujeron complejidad innecesaria.
 
+### 05 / Tiempo de la suite de Jest (Auditoría de producción, Fase 5)
+
+Medición del 2026-11-13 en Windows 11, 12 núcleos lógicos, Node del equipo, rama `audit/production-adjustments`. 71 suites y 894 tests antes y después. El tiempo es el `Time:` que informa Jest; entre ejecuciones idénticas varía ±10 s en este equipo.
+
+| Medida | Antes | Después |
+| :--- | :---: | :---: |
+| `npm test`, caché de transformación caliente | 82,7 s y 61,9 s (2 muestras) | 52,2 s, 52,9 s y 41,8 s (3 muestras) |
+| `npm test -- --coverage --ci`, caché caliente | sin medir | 53,8 s |
+| Primera ejecución con la caché vacía (`.jest-cache` nuevo) | sin medir | 82,7 s sin cobertura; 91,9 s con cobertura |
+| `vectorCurve.test.tsx` dentro de la suite completa | 78,4 s y 58,6 s | 16,8 s (6 workers); 2,7 s (4 workers) |
+| `vectorCurve.test.tsx`, suma de sus 27 tests | 54,5 s | menos de 1 s |
+| Cuadros que avanza `VectorCurveAnimator` en esa suite | 84.270 | 746 |
+| Commits de React del escenario en esa suite | 50 | 62 |
+| Cobertura de `src/domain/` | sin medir | 98,89 % sentencias, 98,94 % líneas |
+
+**Causa.** La suite de la curva era la más lenta y marcaba el tiempo total. No eran los renders del SVG: dentro de `act` React los agrupa, y el escenario hacía 50 commits en toda la suite. Con `jest.useFakeTimers()`, el `requestAnimationFrame` de pruebas de React Native es `setTimeout(callback, 0)`, y los timers falsos lo disparan una vez por milisegundo simulado: 1.001 cuadros por segundo (medido), cada uno recalculando todas las rutas de la curva. Cada `elapse(10_000)` sobre una curva en movimiento costaba unos 7.200 cuadros.
+
+**Cambios.**
+
+1. `vectorCurve.test.tsx` instala un reloj de cuadros propio (`installFrameClock`): un cuadro cada 16 ms. `fastForward` recorre a 50 ms por cuadro (el máximo que acepta el animador, `CURVE_MAX_FRAME_SECONDS`) los tramos que ningún `expect` mira. `renderRestingStage` parte de una curva en reposo sin reproducir la entrada. Los tiempos de espera salen de `curveMotion.ts`: 7,5 s para la entrada con sus tres pulsos y 1,56 s para un morph o un planeo del marcador. No se quitó ningún test y se añadieron comprobaciones: el marcador sigue en camino un cuadro después del gesto, y el escenario no programa cuadros cuando el marcador llega.
+2. `jest.config.js`: `maxWorkers: '50%'` y `cacheDirectory: '<rootDir>/.jest-cache'` (ignorado en git). La configuración de Jest vive en `jest.config.js`; una sección `"jest"` en `package.json` haría fallar a Jest por configuración duplicada.
+3. `package.json`: `test:domain` (8,3 s según Jest, 93 tests) y `test:changed`.
+
+**Efecto de `maxWorkers`, medido después del cambio 1 con caché caliente.**
+
+| Workers | Tiempo total | Suma de los tiempos de las suites |
+| :---: | :---: | :---: |
+| 4 | 53,1 s | 190 s |
+| 6 (`50%`) | 52,2 s y 52,9 s | 282 s |
+| 8 | 55,1 s | 376 s |
+| 11 (el valor por defecto anterior) | 53,3 s y 53,7 s | 504 s |
+
+El tiempo total no cambia con el número de workers: cada suite tarda más cuantos más compiten. `50%` usa poco más de la mitad de CPU que el valor anterior para el mismo resultado. **No medido en GitHub Actions**, donde `50%` son 2 workers en lugar de 3.
+
+**Descartado con evidencia.** La auditoría pedía cortar en tests los bucles `requestAnimationFrame` de `useChartTransition`. Una sonda sobre `requestAnimationFrame` contó **0 llamadas** con timers reales en `workspacePlatforms`, `savingsAndMotoIdealView`, `debtsFunfamiView`, `chartsFlow`, `renderCommits`, `phase4Screens` y `designSystem`: en RNTL los gráficos no reciben `onLayout`, `enabled` es falso y el bucle no arranca. No se cambió `useChartTransition.ts`.
+
+**Pendiente.** La suite más lenta es ahora `workspacePlatforms.test.tsx` (27 s a 50 s según los workers). La suma de los tiempos de las suites es varias veces la suma de sus tests: la mayor parte es cargar React Native y la app en cada suite. Las demás suites con timers falsos y `requestAnimationFrame` (`charts.test.tsx` y las de gráficos) siguen a 1.000 cuadros por segundo simulado; juntas suman pocos segundos.
+
 
 ---
 

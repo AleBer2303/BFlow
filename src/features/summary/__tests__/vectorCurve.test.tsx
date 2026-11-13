@@ -20,6 +20,13 @@ import {
   type CurveStop,
 } from '../scene/curveGeometry';
 import {
+  CURVE_MAX_FRAME_SECONDS,
+  CURVE_MORPH_SECONDS,
+  CURVE_PULSE_COUNT,
+  CURVE_PULSE_SECONDS,
+  CURVE_REVEAL_SECONDS,
+} from '../scene/curveMotion';
+import {
   VECTOR_GRID_LINE_COUNT,
   VECTOR_PLOT_PADDING_BOTTOM_PT,
   VECTOR_PLOT_PADDING_TOP_PT,
@@ -163,14 +170,75 @@ function renderStage(
   return view;
 }
 
-/** Fake timers drive requestAnimationFrame, one frame every 16 ms. */
+/** One frame of a 60 Hz display. */
+const FRAME_MS = 16;
+/** The longest frame the animator accepts without dropping time. */
+const COARSE_FRAME_MS = CURVE_MAX_FRAME_SECONDS * 1000;
+const MARGIN_MS = 300;
+/** The line and the projection are drawn. */
+const REVEAL_MS = CURVE_REVEAL_SECONDS * 1000 + MARGIN_MS;
+/** The entrance and its pulses are over: nothing moves. */
+const ENTRANCE_REST_MS =
+  (CURVE_REVEAL_SECONDS + CURVE_PULSE_SECONDS * CURVE_PULSE_COUNT) * 1000 + MARGIN_MS;
+/** A morph or a glide has landed and every spring rests. The pulses a morph wakes go on. */
+const MOTION_REST_MS = CURVE_MORPH_SECONDS * 1000 + 1_000;
+
+let frameMs = FRAME_MS;
+
+/**
+ * Fake timers with a frame clock at the cadence of a display. React Native's test
+ * `requestAnimationFrame` is `setTimeout(callback, 0)`, which fake timers fire once per
+ * simulated millisecond: about 1,000 frames a second, each rebuilding every path of the
+ * curve. Here a frame ticks every `frameMs`, so `elapse` steps the frames a 60 Hz display
+ * would draw and `fastForward` skips the stretches no assertion looks at.
+ */
+function installFrameClock() {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    frameMs = FRAME_MS;
+    // React Native's `cancelAnimationFrame` is `clearTimeout`, so it cancels these frames too.
+    jest
+      .spyOn(globalThis, 'requestAnimationFrame')
+      .mockImplementation(
+        (callback) => setTimeout(() => callback(jest.now()), frameMs) as unknown as number
+      );
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+  });
+}
+
+/** Steps the animation frame by frame, as a display would. */
 function elapse(milliseconds: number) {
   act(() => {
     jest.advanceTimersByTime(milliseconds);
   });
 }
 
-const SETTLE_MS = 10_000;
+/** Reaches a later state in coarse frames, for stretches no assertion looks at. */
+function fastForward(milliseconds: number) {
+  frameMs = COARSE_FRAME_MS;
+  elapse(milliseconds);
+  frameMs = FRAME_MS;
+}
+
+/**
+ * A stage at rest that never played the entrance: Reduce Motion settles it on layout, then
+ * motion comes back, so what the test does next (scrub, morph, month change) animates.
+ */
+function renderRestingStage(
+  onScrub: (stop: CurveStop | null) => void,
+  curve: MonthlyCurve = CURVE,
+  metricId: 'flow' | 'debt' = 'flow',
+  options: { interaction?: 'pointer' | 'touch' } = {}
+) {
+  const view = renderStage(onScrub, curve, metricId, { ...options, reducedMotion: true });
+  view.rerender(stageElement(onScrub, curve, metricId, options));
+  elapse(FRAME_MS);
+  return view;
+}
 
 function pointerAt(day: number) {
   fireEvent(screen.getByTestId('monthly-curve-vector-stage'), 'pointerMove', {
@@ -186,13 +254,7 @@ function pressKey(key: string) {
 }
 
 describe('MonthlyCurveVectorStage', () => {
-  beforeEach(() => {
-    jest.useFakeTimers();
-  });
-
-  afterEach(() => {
-    jest.useRealTimers();
-  });
+  installFrameClock();
 
   it('draws nothing before layout, then draws the line in up to today and the projection', () => {
     render(stageElement(jest.fn()));
@@ -207,7 +269,7 @@ describe('MonthlyCurveVectorStage', () => {
     expect(screen.queryByTestId('monthly-curve-vector-projection')).toBeNull();
     expect(screen.queryByTestId('monthly-curve-vector-marker')).toBeNull();
 
-    elapse(SETTLE_MS);
+    elapse(REVEAL_MS - 400);
     const fullLine = screen.getByTestId('monthly-curve-vector-line').props.d as string;
     expect(fullLine.length).toBeGreaterThan(partialLine.length);
     expect(fullLine).toBe(buildVectorCurveGeometry(CURVE, 'flow', WIDTH, HEIGHT)?.linePath);
@@ -223,7 +285,11 @@ describe('MonthlyCurveVectorStage', () => {
     elapse(1_700);
     expect(screen.getByTestId('monthly-curve-vector-pulse')).toBeTruthy();
 
-    elapse(SETTLE_MS);
+    // Still pulsing just before the last ring fades.
+    fastForward(ENTRANCE_REST_MS - 2 * MARGIN_MS - 1_700);
+    expect(screen.getByTestId('monthly-curve-vector-pulse')).toBeTruthy();
+
+    elapse(2 * MARGIN_MS);
     expect(screen.queryByTestId('monthly-curve-vector-pulse')).toBeNull();
     expect(jest.getTimerCount()).toBe(0);
   });
@@ -243,15 +309,18 @@ describe('MonthlyCurveVectorStage', () => {
   });
 
   it('morphs to another metric and lands on its exact shape and color', () => {
-    const view = renderStage(jest.fn());
-    elapse(SETTLE_MS);
+    const view = renderRestingStage(jest.fn());
+    const flowLine = buildVectorCurveGeometry(CURVE, 'flow', WIDTH, HEIGHT)?.linePath;
+    expect(screen.getByTestId('monthly-curve-vector-line').props.d).toBe(flowLine);
 
     view.rerender(stageElement(jest.fn(), CURVE, 'debt'));
     elapse(200);
     const debtLine = buildVectorCurveGeometry(CURVE, 'debt', WIDTH, HEIGHT)?.linePath;
+    // Halfway through the morph the shape is neither the old metric nor the new one.
+    expect(screen.getByTestId('monthly-curve-vector-line').props.d).not.toBe(flowLine);
     expect(screen.getByTestId('monthly-curve-vector-line').props.d).not.toBe(debtLine);
 
-    elapse(SETTLE_MS);
+    fastForward(MOTION_REST_MS);
     expect(screen.getByTestId('monthly-curve-vector-line').props.d).toBe(debtLine);
     const debtColor = palettesBySkin.web.light.semantic.debt;
     expect(screen.getByTestId('monthly-curve-vector-line').props.stroke).toEqual(
@@ -260,8 +329,7 @@ describe('MonthlyCurveVectorStage', () => {
   });
 
   it('uses the metric color of the web palette and omits the projection on a closed month', () => {
-    renderStage(jest.fn(), CLOSED_CURVE, 'debt');
-    elapse(SETTLE_MS);
+    renderRestingStage(jest.fn(), CLOSED_CURVE, 'debt');
 
     // react-native-svg stores colors as ARGB integers.
     const debtColor = palettesBySkin.web.light.semantic.debt;
@@ -273,8 +341,9 @@ describe('MonthlyCurveVectorStage', () => {
 
   it('walks the month with the pointer, dims what follows and returns to today on leave', () => {
     const onScrub = jest.fn();
-    renderStage(onScrub);
-    elapse(SETTLE_MS);
+    renderRestingStage(onScrub);
+    const today = resolveVectorStopPoint(CURVE, 'flow', CURVE.cutoffDay, WIDTH, HEIGHT);
+    expect(screen.getByTestId('monthly-curve-vector-marker').props.cx).toBeCloseTo(today.x, 0);
 
     pointerAt(21);
     expect(onScrub).toHaveBeenLastCalledWith(21);
@@ -284,12 +353,19 @@ describe('MonthlyCurveVectorStage', () => {
     pointerAt(21);
     expect(onScrub).toHaveBeenCalledTimes(1);
 
-    // The marker glides to the chosen day.
-    elapse(SETTLE_MS);
+    // The marker glides to the chosen day: one frame in, it is still on its way.
     const day21 = resolveVectorStopPoint(CURVE, 'flow', 21, WIDTH, HEIGHT);
+    elapse(FRAME_MS);
+    const gliding = screen.getByTestId('monthly-curve-vector-marker').props.cx as number;
+    expect(gliding).toBeLessThan(today.x);
+    expect(gliding).toBeGreaterThan(day21.x + 1);
+
+    fastForward(MOTION_REST_MS);
     const marker = screen.getByTestId('monthly-curve-vector-marker');
     expect(marker.props.cx).toBeCloseTo(day21.x, 0);
     expect(marker.props.cy).toBeCloseTo(day21.y, 0);
+    // A scrubbed marker does not pulse, so the stage rests and schedules no frames.
+    expect(jest.getTimerCount()).toBe(0);
 
     pointerAt(31);
     expect(onScrub).toHaveBeenLastCalledWith('close');
@@ -344,8 +420,8 @@ describe('MonthlyCurveVectorStage', () => {
 
   it('forgets its stop and replays the entrance when the month changes', () => {
     const onScrub = jest.fn();
-    const view = renderStage(onScrub);
-    elapse(SETTLE_MS);
+    const view = renderRestingStage(onScrub);
+    expect(screen.getByTestId('monthly-curve-vector-line')).toBeTruthy();
     pointerAt(21);
 
     view.rerender(stageElement(onScrub, buildTestCurve({ monthKey: '2026-11', cutoffDay: 9 })));
@@ -357,14 +433,13 @@ describe('MonthlyCurveVectorStage', () => {
       text: 'Flujo neto · Hoy, 9 nov: $ 0',
     });
 
-    elapse(SETTLE_MS);
+    fastForward(REVEAL_MS);
     expect(screen.getByTestId('monthly-curve-vector-line')).toBeTruthy();
   });
 
   it('scrubs by touch from the first contact and stays hidden from screen readers on phones', () => {
     const onScrub = jest.fn();
-    renderStage(onScrub, CURVE, 'flow', { interaction: 'touch' });
-    elapse(SETTLE_MS);
+    renderRestingStage(onScrub, CURVE, 'flow', { interaction: 'touch' });
 
     expect(screen.queryByTestId('monthly-curve-vector-stage')).toBeNull();
     const stage = screen.getByTestId('monthly-curve-vector-stage', { includeHiddenElements: true });
@@ -421,13 +496,7 @@ describe('clampCurveStop', () => {
 });
 
 describe('MonthlyCurveSection stage per skin', () => {
-  beforeEach(() => {
-    jest.useFakeTimers();
-  });
-
-  afterEach(() => {
-    jest.useRealTimers();
-  });
+  installFrameClock();
 
   function renderSection(skin: PlatformSkinId, layout: 'stacked' | 'split' = 'stacked') {
     return render(
@@ -475,7 +544,7 @@ describe('MonthlyCurveSection stage per skin', () => {
     expect(line().length).toBeGreaterThan(partialLine.length);
     expect(screen.getByTestId('monthly-curve-vector-pulse', hidden)).toBeTruthy();
 
-    elapse(SETTLE_MS);
+    fastForward(ENTRANCE_REST_MS - 1_700);
     const flowLine = buildVectorCurveGeometry(CURVE, 'flow', WIDTH, HEIGHT)?.linePath;
     expect(line()).toBe(flowLine);
     expect(screen.queryByTestId('monthly-curve-vector-pulse', hidden)).toBeNull();
@@ -488,7 +557,7 @@ describe('MonthlyCurveSection stage per skin', () => {
     expect(line()).not.toBe(debtLine);
     expect(screen.getByTestId('monthly-curve-vector-pulse', hidden)).toBeTruthy();
 
-    elapse(SETTLE_MS);
+    fastForward(MOTION_REST_MS);
     expect(line()).toBe(debtLine);
     expect(screen.getByTestId('monthly-curve-amount')).toHaveTextContent('$ 6.200.000');
   });
@@ -496,7 +565,7 @@ describe('MonthlyCurveSection stage per skin', () => {
   it('walks the month by touch on Android and keeps the readout in step', () => {
     renderSection('android');
     layoutStage();
-    elapse(SETTLE_MS);
+    fastForward(REVEAL_MS);
 
     const stage = screen.getByTestId('monthly-curve-vector-stage', hidden);
     const x = curveXForDay(21, 31, WIDTH);

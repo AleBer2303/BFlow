@@ -18,6 +18,7 @@ expo-env.d.ts
 
 # Testing & coverage
 coverage/
+.jest-cache/
 
 # Environment variables & secrets (NEVER commit)
 .env

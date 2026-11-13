@@ -326,6 +326,8 @@ BFlow/
    npm run typecheck       # Verificación estricta de TypeScript (0 errores)
    npm run lint            # Linting y chequeo de arquitectura
    npm test                # Suite de tests unitarios, de integración y funcionales por plataforma
+   npm run test:domain     # Solo la lógica contable de src/domain
+   npm run test:changed    # Solo los tests afectados por los cambios sin confirmar
    ```
 
 5. **Iniciar el servidor de desarrollo:**

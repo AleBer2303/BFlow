@@ -519,6 +519,17 @@ export function buildOctober2026SeedWorkspaceState(authUser: BFlowAuthUser | nul
   };
 }
 
+let storeInitialState: ReturnType<typeof buildInitialState> | null = null;
+
+/**
+ * The state the store is created with, built once. Every slice reads its fields from it:
+ * building it per slice loaded, decrypted and parsed the cached account seven times at launch.
+ */
+export function getStoreInitialState(): ReturnType<typeof buildInitialState> {
+  storeInitialState ??= buildInitialState();
+  return storeInitialState;
+}
+
 export function buildInitialState(authUserOverride?: BFlowAuthUser | null) {
   const resolvedUser =
     authUserOverride !== undefined ? authUserOverride : resolveDefaultInitialAuthUser();

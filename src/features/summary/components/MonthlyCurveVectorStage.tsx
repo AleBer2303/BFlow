@@ -273,6 +273,7 @@ export default function MonthlyCurveVectorStage({
         onLayout={handleLayout}
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
+        aria-hidden
         {...panResponder.panHandlers}
       >
         {drawing}
@@ -291,6 +292,7 @@ export default function MonthlyCurveVectorStage({
       accessibilityRole="adjustable"
       accessibilityLabel="Curva del mes. Usa las flechas izquierda y derecha para recorrerla día a día."
       accessibilityValue={{ text: `${readout.label}: ${formatCurrency(readout.amount)}` }}
+      aria-valuetext={`${readout.label}: ${formatCurrency(readout.amount)}`}
       onKeyDown={handleKeyDown}
       onPointerMove={handlePointer}
       onPointerDown={handlePointer}

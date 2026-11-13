@@ -14,7 +14,7 @@ export type ThemeMode = 'dark' | 'light';
 /**
  * Visual identity per platform ("piel"). Same product, data and flows; different material:
  * - ios:     Apple Liquid Glass (translucent blur, floating dock, spring physics).
- * - android: Material 3 (opaque tonal surfaces, anchored navigation bar, ripples). No glass.
+ * - android: Material 3 (opaque tonal surfaces, anchored navigation bar). No glass, no ripple.
  * - web:     flat editorial system dealt with the design-taste-frontend skill (ADR 0011).
  */
 export type PlatformSkinId = 'ios' | 'android' | 'web';
@@ -23,7 +23,11 @@ export const PLATFORM_SKIN_IDS: readonly PlatformSkinId[] = ['ios', 'android', '
 
 export type SurfaceMaterial = 'liquid-glass' | 'tonal' | 'flat';
 export type NavigationPattern = 'floating-dock' | 'navigation-bar' | 'adaptive-header';
-export type PressFeedback = 'spring' | 'ripple' | 'step';
+/**
+ * How a control answers the finger: `spring` sinks and springs back (iOS), `sink` does the
+ * same on a timed curve with no overshoot (Android), `step` is hover and press steps (Web).
+ */
+export type PressFeedback = 'spring' | 'sink' | 'step';
 /** Cómo se dibuja la curva del mes: escena three.js sobre `expo-gl` o vectores animados (SVG). */
 export type CurveStage = 'scene-3d' | 'vector';
 
@@ -59,7 +63,7 @@ export const platformSkins: Record<PlatformSkinId, PlatformSkinSpec> = {
     label: 'Android · Material 3',
     surfaceMaterial: 'tonal',
     navigation: 'navigation-bar',
-    pressFeedback: 'ripple',
+    pressFeedback: 'sink',
     minTouchTarget: 48,
     curveStage: 'vector',
   },
@@ -649,6 +653,12 @@ export const webMotion = {
   pressScale: 0.985,
 } as const;
 
+/** Touch press (iOS and Android): the control sinks and dims under the finger. */
+export const pressSinkMotion = {
+  scale: 0.97,
+  dimOpacity: 0.82,
+} as const;
+
 export const springConfigs = {
   snappy: {
     damping: 20,
@@ -678,3 +688,92 @@ export const springConfigs = {
     mass: 0.9,
   },
 } as const;
+
+/**
+ * Motion scale shared by the three skins (transitions.dev tokens, DESIGN.md §6.4). A value is
+ * picked by what the motion DOES (its usage), never by the nearest number.
+ */
+export const motionDuration = {
+  /** Offset between items that enter one after another. */
+  stagger: 40,
+  /** Intent delay and one segment of an error shake. */
+  micro: 80,
+  /** Dialog or menu closing, text swapping in place. */
+  quick: 150,
+  /** Dialog or menu opening, icon swap, sliding tabs, screen change. */
+  fast: 250,
+  /** Panel or toast closing. */
+  medium: 350,
+  /** Panel opening, loaded content replacing its placeholder. */
+  slow: 400,
+  /** One-off emphasis: success check, badge appearing. */
+  emphasis: 500,
+} as const;
+
+export type MotionDurationId = keyof typeof motionDuration;
+
+/** Travel in points. It shrinks with frequency and grows with ceremony. */
+export const motionDistance = {
+  /** Text swapping in place. */
+  micro: 4,
+  /** Small segment of an error shake. */
+  small: 6,
+  /** Screen change and large segment of an error shake. */
+  base: 8,
+  /** Stacked lines of text entering. */
+  medium: 12,
+  /** Toast or sheet rising from an edge. */
+  large: 30,
+} as const;
+
+/** The scale a surface animates FROM (or presses down to); it always settles at 1. */
+export const motionScale = {
+  dialog: 0.96,
+  menu: 0.97,
+  hint: 0.98,
+} as const;
+
+/** Items past this index enter with the last staggered offset, so a long list is never late. */
+export const MOTION_STAGGER_MAX_ITEMS = 6;
+
+/** Reduce Motion: no travel or scale, a short opacity change only (DESIGN.md §6.2). */
+export const REDUCED_MOTION_DURATION_MS = 140;
+
+export type CubicBezier = readonly [number, number, number, number];
+
+export interface SkinMotion {
+  /** A surface entering, moving or resizing. */
+  enter: CubicBezier;
+  /** A surface leaving. */
+  exit: CubicBezier;
+  /** Entrances may overshoot (success check, badge). Never on Android or Web. */
+  allowsOvershoot: boolean;
+  /** How a dialog arrives: rising from the bottom edge or growing in place. */
+  dialogPresentation: 'sheet' | 'dialog';
+}
+
+/**
+ * - ios:     the smooth-out curve, with spring overshoot on celebratory entrances.
+ * - android: Material 3 emphasized decelerate (enter) and accelerate (exit). No overshoot.
+ * - web:     the curve of `webMotion`. No bounce, nothing tied to scroll (AGENTS.md §7.2).
+ */
+export const motionBySkin: Record<PlatformSkinId, SkinMotion> = {
+  ios: {
+    enter: [0.22, 1, 0.36, 1],
+    exit: [0.22, 1, 0.36, 1],
+    allowsOvershoot: true,
+    dialogPresentation: 'sheet',
+  },
+  android: {
+    enter: [0.05, 0.7, 0.1, 1],
+    exit: [0.3, 0, 0.8, 0.15],
+    allowsOvershoot: false,
+    dialogPresentation: 'dialog',
+  },
+  web: {
+    enter: [0.2, 0.8, 0.2, 1],
+    exit: [0.2, 0.8, 0.2, 1],
+    allowsOvershoot: false,
+    dialogPresentation: 'dialog',
+  },
+};

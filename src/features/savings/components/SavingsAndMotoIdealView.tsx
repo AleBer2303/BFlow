@@ -13,6 +13,7 @@ import { View } from 'react-native';
 import {
   AppPressable,
   AppText,
+  FormMessage,
   AppTextInput,
   CurrencyText,
   GlassSurface,
@@ -549,11 +550,7 @@ export function SavingsAndMotoIdealView({
                   placeholder="Saldo actual o del mes anterior (ej. 500000)"
                 />
 
-                {newBucketError ? (
-                  <AppText variant="caption" color={colors.semantic.expense}>
-                    {newBucketError}
-                  </AppText>
-                ) : null}
+                <FormMessage message={newBucketError} />
 
                 <AppPressable
                   testID="submit-new-bucket-button"
@@ -577,7 +574,7 @@ export function SavingsAndMotoIdealView({
           </RevealDown>
 
           {/* Edit Opening Balances & Fund Names Sheet */}
-          {isEditingBalances ? (
+          <RevealDown visible={isEditingBalances}>
             <GlassSurface elevated testID="edit-opening-balances-card">
               <View style={{ gap: spacing.sm }}>
                 <AppText variant="headline">Editar Fondos y Saldos del Mes Anterior</AppText>
@@ -647,11 +644,7 @@ export function SavingsAndMotoIdealView({
                   </View>
                 ))}
 
-                {balanceError ? (
-                  <AppText variant="caption" color={colors.semantic.expense}>
-                    {balanceError}
-                  </AppText>
-                ) : null}
+                <FormMessage message={balanceError} />
 
                 <AppPressable
                   testID="save-opening-balances-button"
@@ -675,7 +668,7 @@ export function SavingsAndMotoIdealView({
                 </AppPressable>
               </View>
             </GlassSurface>
-          ) : null}
+          </RevealDown>
 
         </View>
 
@@ -816,11 +809,7 @@ export function SavingsAndMotoIdealView({
                   placeholder="Nota o fecha objetivo opcional"
                 />
 
-                {provisionError ? (
-                  <AppText variant="micro" color={colors.semantic.expense}>
-                    {provisionError}
-                  </AppText>
-                ) : null}
+                <FormMessage message={provisionError} />
 
                 <View style={{ flexDirection: 'row', gap: spacing.xs, justifyContent: 'flex-end' }}>
                   <AppPressable
@@ -891,6 +880,7 @@ export function SavingsAndMotoIdealView({
                           <AppPressable
                             testID={`edit-provision-${item.id}`}
                             accessibilityRole="button"
+                            accessibilityLabel={`Editar ${item.displayName}`}
                             onPress={() =>
                               handleOpenEditProvision({
                                 id: item.id,
@@ -920,6 +910,7 @@ export function SavingsAndMotoIdealView({
                           <AppPressable
                             testID={`delete-provision-${item.id}`}
                             accessibilityRole="button"
+                            accessibilityLabel={`Eliminar ${item.displayName}`}
                             onPress={() => onDeleteProvisionItem(item.id)}
                             style={{
                               minHeight: 36,
@@ -977,6 +968,7 @@ export function SavingsAndMotoIdealView({
                         <AppPressable
                           testID={`edit-provision-${goal.id}`}
                           accessibilityRole="button"
+                          accessibilityLabel={`Editar ${goal.displayName}`}
                           onPress={() =>
                             handleOpenEditProvision({
                               id: goal.id,
@@ -1006,6 +998,7 @@ export function SavingsAndMotoIdealView({
                         <AppPressable
                           testID={`delete-provision-${goal.id}`}
                           accessibilityRole="button"
+                          accessibilityLabel={`Eliminar ${goal.displayName}`}
                           onPress={() => onDeleteProvisionItem(goal.id)}
                           style={{
                             minHeight: 34,

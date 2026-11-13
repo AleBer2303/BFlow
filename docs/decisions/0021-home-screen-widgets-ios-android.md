@@ -131,8 +131,8 @@ Todos viven en **un único target de extensión iOS**, con un `WidgetBundle` de 
 | Flujo neto | systemSmall, accessoryCircular, accessoryRectangular, accessoryInline | 2×2 | Flujo neto con signo y color, mes, checklist x de y | `summary` (el gauge circular, `checklist`) |
 | Resumen | systemMedium | 4×2 | Recibido, pagado y por pagar, más un mini gráfico de barras de `trend` | `summary` |
 | Pendientes | systemLarge | 4×4 redimensionable | Progreso, por pagar y por recibir, filas de pendientes con montos | `checklist` |
-| Deudas | systemSmall, systemMedium, accessoryCircular | 3×2 | Restante, % pagado desde `debtSinceMonthKey`, abonado este mes y cierre estimado; «Sin deudas» si no hay | `debts` |
-| Ahorros | systemSmall, systemMedium | 2×2 / 3×2 | Total y bolsillos con sus nombres, más «Otros» si hay | `savings` |
+| Deudas | systemSmall, systemMedium, accessoryCircular | 2×2, y diseño mediano desde 220 dp de ancho | Restante, % pagado desde `debtSinceMonthKey`, abonado este mes y cierre estimado; «Sin deudas» si no hay | `debts` |
+| Ahorros | systemSmall, systemMedium | 2×2, y diseño mediano desde 220 dp de ancho | Total y bolsillos con sus nombres, más «Otros» si hay | `savings` |
 
 - **Pantalla de bloqueo:** solo en iOS. Android no tiene un equivalente de widget de bloqueo para teléfonos.
 - **Deep links:** `bflow://?tab=<pestaña>`. `index.tsx` los atiende con `Linking.getInitialURL` y `Linking.addEventListener('url')`, y `parseWidgetDeepLinkTab` solo acepta las cuatro pestañas de widget.
@@ -146,12 +146,15 @@ Todos viven en **un único target de extensión iOS**, con un `WidgetBundle` de 
   - Cifras con `.monospacedDigit()`, `.contentTransition(.numericText())` y `.privacySensitive()`.
   - Gráfico con Swift Charts y botón «Actualizar» con AppIntents. Se añadieron los frameworks `Charts` y `AppIntents`.
   - `targets/widgets/Assets.xcassets/` se genera en cada prebuild y queda en `.gitignore`.
-- **Android (Material 3):**
-  - Colores de `androidPalettes` en `values` y `values-night`.
-  - En Android 12+ (`values-v31`), el fondo, el texto y el acento salen de los colores dinámicos del sistema; ingreso, gasto, deuda y ahorro mantienen sus tokens.
-  - Esquinas `system_app_widget_background_radius`.
-  - Los colores que se eligen en código usan `setColorInt(claro, oscuro)`, y el gráfico se envía como dos `Icon`, para que no se congelen al cambiar de tema.
-  - El Bitmap del gráfico no pasa de 360.000 px. Objetivo táctil de 48 dp.
+- **Android: el mismo diseño que iOS** (decisión del usuario tras ver ambos; sustituye la primera versión Material 3 con colores dinámicos):
+  - Cada widget replica su vista SwiftUI: mismas piezas, orden, textos y signos. `WidgetRenderer.kt` tiene un `bind*` por vista Swift.
+  - Colores: los 11 colorsets `{ light, dark }` de `targets/widgets/expo-target.config.js` en `values` y `values-night`, más la pista de las barras (texto secundario al 22 %). **Sin colores dinámicos del sistema.** Si cambia un token de la piel iOS, se actualizan los dos sitios.
+  - Tipografía: equivalencias en sp de los estilos de iOS (caption2 11, caption 12, subheadline 15, headline 17, title3 20, title2 22), `sans-serif-medium` para semibold y cifras tabulares (`tnum`). El `minimumScaleFactor` se imita con autosize.
+  - Iconos: vectores equivalentes a los SF Symbols usados (flechas del flujo, actualizar, checklist, reloj, etc.).
+  - Deudas y Ahorros cambian entre el diseño pequeño y el mediano según el tamaño: `RemoteViews(Map<SizeF, RemoteViews>)` en Android 12+ y `OPTION_APPWIDGET_MIN_WIDTH` antes.
+  - Esquinas de 22 dp antes de Android 12; en 12+ el launcher recorta con su propio radio. Margen interno de 16 dp.
+  - Los colores elegidos en código usan `setColorInt(claro, oscuro)` y el gráfico se envía como dos `Icon`, para que no se congelen al cambiar de tema. El Bitmap del gráfico no pasa de 360.000 px. Objetivo táctil de 48 dp en «Actualizar».
+  - **Diferencias que no se pueden igualar con RemoteViews:** la hora es exacta («Act. 10:42») en lugar del «hace 3 min» que iOS actualiza solo; la barra de reparto de Ahorros son tramos apilados sin el hueco entre ellos; no hay animación numérica, `privacySensitive`, modo tintado ni widgets de pantalla de bloqueo; y las celdas del launcher suelen ser más altas que en iOS, así que los widgets tienen más aire vertical.
 - **Formato de dinero:** réplica exacta de `formatCurrency` y `formatCurrencyCompact`, incluido el redondeo de `toFixed` en los empates. Se comprobó contra la función real de JS. Los meses van abreviados en español sin depender del locale.
 
 ### 2.8. Android: módulo Expo local, RemoteViews y WorkManager
@@ -201,5 +204,5 @@ Todos viven en **un único target de extensión iOS**, con un `WidgetBundle` de 
 ### Sin verificar
 
 - **iOS:** la compilación en Xcode, los widgets en un iPhone, el AppIntent y Swift Charts en el target, el App Group firmado por `iloader` y el modo tintado/transparente de iOS 26.
-- **Android:** los widgets con datos reales, el worker contra Firestore, el botón «Actualizar», la migración de SharedPreferences, la restauración de un backup, un teléfono físico, Android < 12 y los tamaños 2×2 pequeños.
+- **Android:** el diseño se comprobó en un emulador API 36 con el snapshot dorado inyectado, en claro y oscuro, con los 5 widgets y Deudas/Ahorros en sus dos tamaños; falta verlo con una sesión real (el botón «Actualizar» solo aparece con credenciales), el worker contra Firestore, el botón «Actualizar», la migración de SharedPreferences, la restauración de un backup, un teléfono físico, Android < 12 y los tamaños 2×2 pequeños.
 - El refresco remoto de extremo a extremo en ambas plataformas, y las reglas desplegadas en el proyecto real.

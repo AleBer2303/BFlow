@@ -211,6 +211,7 @@ export default function MonthlyCurveStage({
       onLayout={handleLayout}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
+      aria-hidden
       {...panResponder.panHandlers}
     >
       <GLView

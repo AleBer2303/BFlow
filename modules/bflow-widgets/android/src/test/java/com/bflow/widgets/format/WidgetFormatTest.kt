@@ -82,6 +82,16 @@ class WidgetFormatTest {
   }
 
   @Test
+  fun matchesIosPercentAndSpokenAmounts() {
+    assertEquals("22%", WidgetFormat.percentLabel(1_800_000, 8_000_000))
+    assertEquals("0%", WidgetFormat.percentLabel(0, 0))
+    assertEquals("100%", WidgetFormat.percentLabel(9, 8))
+    assertEquals("1.080.000 pesos", WidgetFormat.spokenAmount(1_080_000))
+    assertEquals("menos 450.000 pesos", WidgetFormat.spokenAmount(-450_000))
+    assertEquals("0 pesos", WidgetFormat.spokenAmount(0))
+  }
+
+  @Test
   fun computesTruncatedProgress() {
     assertEquals(0, WidgetFormat.progressPercent(0, 100))
     assertEquals(0, WidgetFormat.progressPercent(5, 0))

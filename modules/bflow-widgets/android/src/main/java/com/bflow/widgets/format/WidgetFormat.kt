@@ -88,6 +88,15 @@ object WidgetFormat {
     return "Act. $day $month $time"
   }
 
+  /** "45%" sin espacio, como `WidgetFormat.percent` de iOS (truncado, nunca promete de mas). */
+  fun percentLabel(part: Long, whole: Long): String = "${progressPercent(part, whole)}%"
+
+  /** Lectura para TalkBack, igual que `spokenAmount` de iOS: "1.080.000 pesos" / "menos ...". */
+  fun spokenAmount(amount: Long, thousandsSeparator: String = DEFAULT_SEPARATOR): String {
+    val grouped = groupThousands(absDigits(amount), thousandsSeparator)
+    return if (amount < 0) "menos $grouped pesos" else "$grouped pesos"
+  }
+
   /** Porcentaje entero truncado y acotado a 0..100 (nunca promete mas de lo pagado). */
   fun progressPercent(part: Long, whole: Long): Int {
     if (whole <= 0L || part <= 0L) return 0

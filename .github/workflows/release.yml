@@ -1,0 +1,166 @@
+name: Release (bump, tag, GitHub Release, binaries)
+
+# Release de un solo paso (ADR 0023): Actions → Release → Run workflow, eligiendo el bump.
+#
+#   quality-gate → prepare (commit chore(release) + tag vX.Y.Z) → build-ios + build-android
+#   → publish (GitHub Release con notas generadas y los tres binarios)
+#
+# Un push hecho con GITHUB_TOKEN no dispara otros workflows, así que el tag que crea
+# `prepare` NO arranca build-ios.yml ni build-android.yml por su disparador `tags: v*`.
+# Por eso se llaman aquí como workflows reutilizables (`workflow_call`).
+#
+# Este workflow publica binarios reales: nunca define EXPO_PUBLIC_BFLOW_DEMO (AGENTS.md §7.6).
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Tipo de versión (SemVer)
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+        required: true
+      dry_run:
+        description: Ensayo — pasa la puerta de calidad y muestra el plan, sin publicar nada
+        type: boolean
+        default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  quality-gate:
+    name: Quality Gate (fixture, typecheck, lint, tests)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Release only from main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::El release solo se lanza desde main (rama actual: ${GITHUB_REF_NAME})."
+          exit 1
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Verify Golden Fixture Parity (Octubre 2026)
+        run: node --test scripts/verify-phase0-fixture.test.mjs
+
+      - name: Release script and workflow guards
+        run: node --test scripts/release.test.mjs scripts/workflow-guards.test.mjs
+
+      - name: TypeScript strict typecheck
+        run: npm run typecheck
+
+      - name: Lint check
+        run: npm run lint
+
+      - name: Run Jest test suite with domain coverage threshold
+        run: npm test -- --coverage --ci
+
+  prepare:
+    name: Bump version, commit and tag
+    needs: quality-gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - name: Checkout repository (full history and tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Dry run (plan only, nothing is written)
+        if: ${{ inputs.dry_run }}
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: node scripts/release.mjs "$BUMP" --dry-run
+
+      - name: Bump version, commit, tag and push
+        id: release
+        if: ${{ !inputs.dry_run }}
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: node scripts/release.mjs "$BUMP" --push
+
+  build-ios:
+    name: Build unsigned .ipa
+    needs: prepare
+    if: ${{ !inputs.dry_run }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/build-ios.yml
+    with:
+      ref: ${{ needs.prepare.outputs.tag }}
+      skip_quality_gate: true
+
+  build-android:
+    name: Build .apk and .aab
+    needs: prepare
+    if: ${{ !inputs.dry_run }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/build-android.yml
+    with:
+      ref: ${{ needs.prepare.outputs.tag }}
+      skip_quality_gate: true
+
+  publish:
+    name: Publish GitHub Release
+    needs: [prepare, build-ios, build-android]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download binaries built for this tag
+        uses: actions/download-artifact@v4
+        with:
+          pattern: BFlow-*
+          path: dist
+          merge-multiple: true
+
+      - name: List binaries
+        run: ls -lh dist
+
+      - name: Create GitHub Release with generated notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          gh release create "$TAG" \
+            --title "BFlow $TAG" \
+            --generate-notes \
+            --verify-tag \
+            dist/BFlow-unsigned.ipa \
+            dist/BFlow-test.apk \
+            dist/BFlow.aab

@@ -453,3 +453,33 @@ Al tocar Checklist en Android, la barra y el ripple respondían tarde: la pesta�
 | Trabajo total del cambio | 50–114 ms | 47–61 ms |
 
 `renderCommits.test.tsx` comprueba en las tres pieles que el primer commit no monta el Checklist. Pendiente: confirmarlo en un teléfono Android.
+
+---
+
+## 17. Fase 8: guardado, estado inicial del store y código muerto
+
+Cambios de la rama `feature/phase-8-polish`, a partir de un inventario por lectura de código (no de un perfil en dispositivo).
+
+### Cambios
+
+1. **Guardado automático sin serializar la cuenta.** La suscripción de `index.tsx` hacía `JSON.stringify` de toda la cuenta en **cada** cambio del store (también un mensaje de estado o un cambio de pestaña) para saber si había algo que guardar. Ahora `havePersistedAccountFieldsChanged` compara las referencias de los 10 campos guardados (`src/features/budget/store/persistedAccountFields.ts`). El coste deja de crecer con el historial.
+2. **Estado inicial del store construido una vez.** `buildInitialState()` se llamaba 7 veces al crear el store (una en `useBudgetStore.ts` y una por slice). Cada llamada cargaba, descifraba y parseaba la cuenta en caché. Ahora todos leen `getStoreInitialState()`, que lo construye una sola vez.
+3. **`AnalyticsTab`** ya no se suscribe a `concepts`, que no usaba.
+4. **Código muerto:** se eliminó `SummaryAddMovementModal.tsx` (379 líneas) y su test; no lo importaba ninguna pantalla.
+5. **Movimiento:** las piezas nuevas (`Entrance`, resorte de `AppPressable` en iOS, sacudida de `FormMessage`, hoja del selector de rueda) animan solo opacidad y transformaciones con driver nativo. Ver ADR 0022.
+
+### No medido
+
+- **Ninguno de estos cambios se midió** en milisegundos, ni en Jest ni en dispositivo. Lo comprobado es el comportamiento: `persistedAccountFields.test.ts` verifica que un mensaje de estado o un cambio de pestaña no piden guardar, que sustituir cualquiera de los 10 campos sí, y que el estado inicial es un único objeto.
+- El coste de montar en iOS un valor animado por cada `AppPressable`.
+
+### Pendiente, por orden de impacto estimado (sin medir)
+
+1. **Cifrado de la caché en JS puro y síncrono** (`storageCipher.ts`): AES-256-CTR y HMAC-SHA256 sobre toda la cuenta en el hilo de JS, al arrancar y en cada guardado. Medir en Hermes antes de cambiarlo.
+2. **Curva vectorial y gráficos con un `setState` por cuadro** (`MonthlyCurveVectorStage.tsx`, `useChartTransition.ts`): es la curva principal en Android y Web. Requiere Reanimated o props animadas de `react-native-svg`.
+3. **Un `BlurView` por tarjeta en iOS sobre fondo liso** (`GlassSurface.tsx`). Quitarlo cambia el material de la piel iOS y necesita ADR.
+4. **R-20:** volver a Resumen recrea el contexto GL y compila los shaders.
+5. **Snapshot del widget y resúmenes de dominio recalculados en cada mutación** (57 llamadas a `triggerWidgetSync`).
+6. **Animaciones de layout en el hilo de JS:** `RevealDown` (alto) y los botones de fila del Checklist (ancho).
+7. **R-22:** `three` se carga de forma estática al arrancar en nativo.
+8. **Formularios de Ahorros, Deudas y Cuenta** con su estado junto a las listas: cada tecla vuelve a pintar la vista entera.

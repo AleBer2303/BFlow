@@ -14,19 +14,23 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, View } from 'react-native';
+import { Animated, View } from 'react-native';
 import {
   AppPressable,
   AppText,
+  CheckIndicator,
   CurrencyText,
   estimateTextWidth,
   GlassSurface,
   hapticService,
+  IS_MOTION_STATIC,
   MIN_TOUCH_TARGET_PT,
   PencilEditIcon,
+  resolvePresenceSpec,
   ResponsiveColumns,
   RevealDown,
   StatusBadge,
+  toEasing,
   TrashBinIcon,
   useBFlowTheme,
   usePrimaryActionLook,
@@ -100,14 +104,11 @@ interface ChecklistRowItemProps {
   onDelete: (entry: MonthEntry) => void;
 }
 
-const ACTION_REVEAL_IN_MS = 320;
-const ACTION_REVEAL_OUT_MS = 200;
-const ACTION_SLIDE_DISTANCE = 10;
-
 /**
  * Soft reveal for the per-row edit / delete buttons: the slot grows from zero width
  * while the button fades and glides in from the right, so the row never "jumps".
- * Fades back out before unmounting. Animation is skipped under Jest.
+ * Fades back out before unmounting. Timing and travel come from the `control` motion spec.
+ * Animation is skipped under Jest.
  */
 function ActionRevealSlot({
   visible,
@@ -118,7 +119,9 @@ function ActionRevealSlot({
   gap: number;
   children: React.ReactNode;
 }): React.JSX.Element | null {
-  const skipMotion = process.env.NODE_ENV === 'test';
+  const skipMotion = IS_MOTION_STATIC;
+  const { skin, reducedMotion } = useBFlowTheme();
+  const { open, close } = resolvePresenceSpec({ skin, reducedMotion }, 'control');
   const progress = useRef(new Animated.Value(visible ? 1 : 0)).current;
   const [mounted, setMounted] = useState(visible);
 
@@ -128,21 +131,22 @@ function ActionRevealSlot({
       setMounted(true);
       Animated.timing(progress, {
         toValue: 1,
-        duration: ACTION_REVEAL_IN_MS,
-        easing: Easing.out(Easing.cubic),
+        duration: open.durationMs,
+        easing: toEasing(open.easing),
         useNativeDriver: false,
       }).start();
     } else {
       Animated.timing(progress, {
         toValue: 0,
-        duration: ACTION_REVEAL_OUT_MS,
-        easing: Easing.in(Easing.quad),
+        duration: close.durationMs,
+        easing: toEasing(close.easing),
         useNativeDriver: false,
       }).start(({ finished }) => {
         if (finished) setMounted(false);
       });
     }
-  }, [visible, skipMotion, progress]);
+    // The spec only changes with the skin or the Reduce Motion setting, never mid-reveal.
+  }, [visible, skipMotion, progress]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (skipMotion) return visible ? <>{children}</> : null;
   if (!mounted) return null;
@@ -167,10 +171,10 @@ function ActionRevealSlot({
             {
               translateX: progress.interpolate({
                 inputRange: [0, 1],
-                outputRange: [ACTION_SLIDE_DISTANCE, 0],
+                outputRange: [open.distance, 0],
               }),
             },
-            { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) },
+            { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [open.scale, 1] }) },
           ],
         }}
       >
@@ -250,6 +254,7 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
               : colors.glass.subtleBorder,
         }}
       >
+        <CheckIndicator checked={isCompleted} />
         <View style={{ flex: 1, gap: spacing.xxs }}>
           <View
             style={{
@@ -263,7 +268,7 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
               variant="body"
               color={isDeleteMode ? colors.semantic.expense : colors.text.primary}
             >
-              {`${isCompleted ? '✓ ' : ''}${entry.conceptName}`}
+              {entry.conceptName}
             </AppText>
             {linkedBucket ? (
               <StatusBadge label={`→ ${linkedBucket.name}`} status="reserve" />
@@ -337,10 +342,7 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
           testID={`delete-entry-${entry.id}`}
           accessibilityRole="button"
           accessibilityLabel={`Eliminar ${entry.conceptName}`}
-          onPress={() => {
-            hapticService.warning();
-            onDelete(entry);
-          }}
+          onPress={() => onDelete(entry)}
           style={{
             minHeight: MIN_TOUCH_TARGET_PT,
             minWidth: MIN_TOUCH_TARGET_PT,
@@ -506,6 +508,7 @@ export function ChecklistWorkspaceView({
             <StatusBadge
               label={`${completedTotalCount}/${monthEntries.length} completados`}
               status={pendingTotalCount === 0 ? 'completed' : 'pending'}
+              pulseOnChange
             />
           </View>
 
@@ -608,7 +611,7 @@ export function ChecklistWorkspaceView({
       </GlassSurface>
 
       {/* Edit Existing Item Sheet */}
-      {editingEntryId ? (
+      <RevealDown visible={Boolean(editingEntryId)}>
         <ChecklistEditEntryForm
           key={editingEntryId}
           entry={activeEditingEntry}
@@ -618,7 +621,7 @@ export function ChecklistWorkspaceView({
           onEditEntry={onEditEntry}
           onClose={handleCloseEditor}
         />
-      ) : null}
+      </RevealDown>
 
       {/* Screen 04: Liquid Glass Add Movement Form (Clean & Direct, NO repeated items list) */}
       <RevealDown visible={isAddModalOpen}>
@@ -701,7 +704,8 @@ export function ChecklistWorkspaceView({
                   accessibilityRole="button"
                   accessibilityLabel="Eliminar ingresos"
                   onPress={() => {
-                    hapticService.warning();
+                    // Entering the delete mode warns; leaving it is a plain tap.
+                    hapticService.trigger(incomesDeleteMode ? 'light' : 'warning');
                     setIncomesDeleteMode((prev) => !prev);
                     setIncomesEditMode(false);
                   }}
@@ -814,7 +818,7 @@ export function ChecklistWorkspaceView({
                   accessibilityRole="button"
                   accessibilityLabel="Eliminar gastos"
                   onPress={() => {
-                    hapticService.warning();
+                    hapticService.trigger(expensesDeleteMode ? 'light' : 'warning');
                     setExpensesDeleteMode((prev) => !prev);
                     setExpensesEditMode(false);
                   }}

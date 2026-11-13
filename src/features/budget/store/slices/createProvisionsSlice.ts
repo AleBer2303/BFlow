@@ -11,7 +11,7 @@ import {
 import { type ProvisionItemSpec } from '../../../../domain';
 import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
-  buildInitialState,
+  getStoreInitialState,
   isRealAuthUser,
   persistHydratedAccountSnapshot,
   recalculateProvisionPlan,
@@ -20,7 +20,7 @@ import {
 } from './sliceTypes';
 
 export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) => {
-  const initial = buildInitialState();
+  const initial = getStoreInitialState();
   return {
     idealMotoPlan: initial.idealMotoPlan,
 

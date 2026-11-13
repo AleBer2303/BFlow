@@ -2,9 +2,8 @@
  * src/features/checklist/components/ChecklistAddMovementForm.tsx
  *
  * "Nuevo Movimiento" form of the checklist. It owns its field state, so typing re-renders
- * only this form and never the checklist rows (PERFORMANCE_AUDIT_2026-11-09, R-17), the same
- * way SummaryAddMovementModal does. The parent remounts it (new `key`) each time it opens,
- * which starts every field empty.
+ * only this form and never the checklist rows (PERFORMANCE_AUDIT_2026-11-09, R-17). The
+ * parent remounts it (new `key`) each time it opens, which starts every field empty.
  */
 
 import React, { useMemo, useState } from 'react';
@@ -12,6 +11,7 @@ import { View } from 'react-native';
 import {
   AppPressable,
   AppText,
+  FormMessage,
   AppTextInput,
   CurrencyText,
   GlassSurface,
@@ -487,11 +487,7 @@ export const ChecklistAddMovementForm = React.memo(function ChecklistAddMovement
           </View>
         </View>
 
-        {formError ? (
-          <AppText variant="caption" color={colors.semantic.expense}>
-            {formError}
-          </AppText>
-        ) : null}
+        <FormMessage message={formError} />
 
         {/* Submit Button */}
         <AppPressable

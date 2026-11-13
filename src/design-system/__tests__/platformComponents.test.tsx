@@ -215,7 +215,7 @@ describe('AppPressable feedback per skin', () => {
     expect(restingStyle('chip').minHeight).toBe(34);
   });
 
-  it('clips a ripple to the control on Android and reaches 48dp with hit slop', () => {
+  it('paints no ripple on Android and reaches 48dp with hit slop', () => {
     renderWithSkin(
       'android',
       <>
@@ -231,7 +231,9 @@ describe('AppPressable feedback per skin', () => {
       </>
     );
 
-    expect(restingStyle('row').overflow).toBe('hidden');
+    // The native ripple drew a gray box with square corners over rounded controls.
+    expect(screen.getByTestId('row').props.android_ripple).toBeUndefined();
+    expect(restingStyle('row')).toEqual({ padding: 8 });
     expect(screen.getByTestId('row').props.hitSlop).toBe(2);
     expect(screen.getByTestId('chip').props.hitSlop).toEqual({ top: 7, bottom: 7, left: 0, right: 0 });
     // Explicit props always win.

@@ -59,7 +59,7 @@ export const SavingsTab = React.memo(function SavingsTab(): React.JSX.Element {
   );
   const handleDeleteSavingsBucket = useCallback<NonNullable<Props['onDeleteSavingsBucket']>>(
     (bucketId) => {
-      hapticService.trigger('light');
+      hapticService.trigger('warning');
       void actions.deleteSavingsBucket(monthKey, bucketId);
     },
     [actions, monthKey]
@@ -73,7 +73,7 @@ export const SavingsTab = React.memo(function SavingsTab(): React.JSX.Element {
   );
   const handleDeleteProvisionItem = useCallback<NonNullable<Props['onDeleteProvisionItem']>>(
     (itemId) => {
-      hapticService.trigger('light');
+      hapticService.trigger('warning');
       void actions.deleteProvisionItem(itemId);
     },
     [actions]

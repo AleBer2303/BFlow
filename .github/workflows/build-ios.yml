@@ -5,9 +5,21 @@ on:
     branches: [main]
     tags: ['v*']
   workflow_dispatch:
+  # Reutilizado por release.yml (ADR 0023): compila el tag indicado y deja el .ipa como
+  # artefacto; el GitHub Release lo publica release.yml, no este workflow.
+  workflow_call:
+    inputs:
+      ref:
+        description: Tag o commit que se compila (por ejemplo v0.2.0)
+        type: string
+        required: true
+      skip_quality_gate:
+        description: Omite la puerta de calidad cuando quien llama ya la pasó
+        type: boolean
+        default: false
 
 concurrency:
-  group: build-ios-${{ github.ref }}
+  group: build-ios-${{ inputs.ref || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -16,6 +28,7 @@ permissions:
 jobs:
   quality-gate:
     name: Pre-build Quality Gate (Linux)
+    if: ${{ !inputs.skip_quality_gate }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,10 +44,13 @@ jobs:
   build-unsigned-ipa:
     name: Compile Unsigned iOS .ipa on macOS
     needs: quality-gate
+    if: ${{ !cancelled() && (needs.quality-gate.result == 'success' || needs.quality-gate.result == 'skipped') }}
     runs-on: macos-26
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Select Xcode 26+ (Swift 6.2+ required by Expo SDK 58)
         run: |
@@ -105,6 +121,7 @@ jobs:
           retention-days: 30
 
       - name: Compute Release Tag and Title
+        if: ${{ !inputs.ref }}
         id: release_meta
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
@@ -116,6 +133,7 @@ jobs:
           echo "title=BFlow iOS Unsigned .ipa (${TAG})" >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub Release (on main or version tag)
+        if: ${{ !inputs.ref }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_meta.outputs.tag }}

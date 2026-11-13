@@ -1,20 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Widget "savings". updatePeriodMillis="0": el sistema no lo despierta; el refresco desde la nube
-  lo lleva WorkManager (WidgetSyncScheduler) y la app repinta al instante con setSnapshot.
-  previewLayout (Android 12+) es el propio layout sin datos; previewImage cubre versiones previas.
+  Ahorros: 2x2 = systemSmall; al ensancharlo (>= 220 dp) cambia al diseño systemMedium.
+  updatePeriodMillis="0": el refresco desde la nube lo lleva WorkManager (WidgetSyncScheduler) y
+  la app repinta al instante con setSnapshot. previewLayout (Android 12+) es el propio layout
+  sin datos; previewImage cubre versiones anteriores.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
   android:description="@string/bflow_widget_savings_description"
-  android:initialLayout="@layout/bflow_widget_savings"
-  android:minWidth="180dp"
+  android:initialLayout="@layout/bflow_widget_savings_small"
+  android:minWidth="110dp"
   android:minHeight="110dp"
   android:minResizeWidth="110dp"
   android:minResizeHeight="110dp"
-  android:previewImage="@drawable/bflow_widget_preview_medium"
-  android:previewLayout="@layout/bflow_widget_savings"
+  android:previewImage="@drawable/bflow_widget_preview_small"
+  android:previewLayout="@layout/bflow_widget_savings_small"
   android:resizeMode="horizontal|vertical"
-  android:targetCellWidth="3"
+  android:targetCellWidth="2"
   android:targetCellHeight="2"
   android:updatePeriodMillis="0"
   android:widgetCategory="home_screen" />

@@ -163,7 +163,6 @@ const HistoryMonthRowItem = React.memo(function HistoryMonthRowItem({
             testID={`reopen-month-${mk}`}
             accessibilityRole="button"
             accessibilityLabel={`Editar y reabrir mes cerrado ${formatMonthKeyLabelEs(mk)}`}
-            onPressIn={() => hapticService.selection()}
             onPress={() => onReopenClosedMonth?.(mk)}
             style={{
               minHeight: MIN_TOUCH_TARGET_PT,
@@ -191,7 +190,6 @@ const HistoryMonthRowItem = React.memo(function HistoryMonthRowItem({
             testID={`delete-month-${mk}`}
             accessibilityRole="button"
             accessibilityLabel={`Eliminar mes ${formatMonthKeyLabelEs(mk)}`}
-            onPressIn={() => hapticService.warning()}
             onPress={() => onDeleteOrRevertMonth?.(mk)}
             style={{
               minHeight: MIN_TOUCH_TARGET_PT,
@@ -403,7 +401,6 @@ export function AnalyticsAndHistoryView({
               testID="confirm-month-close-button"
               accessibilityRole="button"
               accessibilityLabel={`Confirmar cierre de ${formatMonthKeyLabelEs(activeMonthKey)} y avanzar al siguiente mes`}
-              onPressIn={() => hapticService.success()}
               onPress={onCloseCurrentMonth}
               style={{
                 width: '100%',

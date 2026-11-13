@@ -1,62 +1,84 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Textos de los widgets (espanol). Las cifras llegan ya formateadas por WidgetFormat. -->
+<!--
+  Textos de los widgets: los mismos de targets/widgets/*.swift (ADR 0021). Las cifras llegan ya
+  formateadas por WidgetFormat; las lecturas de TalkBack repiten las de VoiceOver.
+-->
 <resources>
-  <!-- Selector de widgets del launcher. -->
-  <string name="bflow_widget_netflow_label">BFlow · Flujo neto</string>
-  <string name="bflow_widget_summary_label">BFlow · Resumen del mes</string>
-  <string name="bflow_widget_pending_label">BFlow · Pendientes</string>
-  <string name="bflow_widget_debt_label">BFlow · Deudas</string>
-  <string name="bflow_widget_savings_label">BFlow · Ahorros</string>
+  <!-- Selector de widgets (configurationDisplayName / description de iOS). -->
+  <string name="bflow_widget_netflow_label">Flujo del mes</string>
+  <string name="bflow_widget_summary_label">Resumen del mes</string>
+  <string name="bflow_widget_pending_label">Pendientes del mes</string>
+  <string name="bflow_widget_debt_label">Deudas</string>
+  <string name="bflow_widget_savings_label">Ahorros</string>
 
-  <string name="bflow_widget_netflow_description">Flujo neto del mes y avance del checklist.</string>
-  <string name="bflow_widget_summary_description">Recibido, pagado y por pagar, con la tendencia de los últimos meses.</string>
+  <string name="bflow_widget_netflow_description">Tu flujo neto y el avance del checklist.</string>
+  <string name="bflow_widget_summary_description">Ingresos, gastos y tendencia de los últimos meses.</string>
   <string name="bflow_widget_pending_description">Lo que falta por pagar y por recibir este mes.</string>
-  <string name="bflow_widget_debt_description">Deuda restante y cuánto llevas pagado.</string>
-  <string name="bflow_widget_savings_description">Total ahorrado, reserva y ahorro.</string>
+  <string name="bflow_widget_debt_description">Cuánto debes y cuánto llevas pagado.</string>
+  <string name="bflow_widget_savings_description">Tu total ahorrado y cómo se reparte.</string>
 
   <!-- Comunes. -->
+  <string name="bflow_widget_brand">BFlow</string>
   <string name="bflow_widget_empty">Abre BFlow para ver tu mes</string>
-  <string name="bflow_widget_refresh">Actualizar widget</string>
-  <string name="bflow_widget_placeholder">—</string>
+  <string name="bflow_widget_refresh">Actualizar</string>
+  <string name="bflow_widget_month_content_description">Mes: %1$s</string>
+  <string name="bflow_widget_row_content_description">%1$s: %2$s</string>
+
+  <!-- Títulos de cabecera. -->
+  <string name="bflow_widget_netflow_title">Flujo neto</string>
+  <string name="bflow_widget_summary_title">Resumen</string>
+  <string name="bflow_widget_pending_title">Pendientes</string>
+  <string name="bflow_widget_debt_title">Deudas</string>
+  <string name="bflow_widget_savings_title">Ahorros</string>
 
   <!-- Flujo neto. -->
-  <string name="bflow_widget_netflow_title">Flujo neto</string>
-  <string name="bflow_widget_checklist_progress">Checklist %1$d de %2$d</string>
+  <string name="bflow_widget_netflow_available">Disponible</string>
+  <string name="bflow_widget_netflow_deficit">Déficit</string>
+  <string name="bflow_widget_checklist_count">%1$d de %2$d</string>
   <string name="bflow_widget_netflow_content_description">Flujo neto de %1$s: %2$s</string>
+  <string name="bflow_widget_checklist_content_description">Checklist: %1$d de %2$d completados</string>
 
   <!-- Resumen. -->
-  <string name="bflow_widget_summary_title">Resumen</string>
-  <string name="bflow_widget_title_with_month">%1$s · %2$s</string>
   <string name="bflow_widget_received">Recibido</string>
   <string name="bflow_widget_paid">Pagado</string>
   <string name="bflow_widget_to_pay">Por pagar</string>
   <string name="bflow_widget_to_receive">Por recibir</string>
   <string name="bflow_widget_chart_legend_income">Ingresos</string>
   <string name="bflow_widget_chart_legend_expense">Gastos</string>
-  <string name="bflow_widget_chart_point">%1$s: ingresos %2$s, gastos %3$s</string>
-  <string name="bflow_widget_chart_content_description">Ingresos y gastos por mes. %1$s</string>
+  <string name="bflow_widget_summary_net_content_description">Flujo neto del mes: %1$s</string>
+  <string name="bflow_widget_received_content_description">Ingresos recibidos: %1$s</string>
+  <string name="bflow_widget_paid_content_description">Gastos pagados: %1$s</string>
+  <string name="bflow_widget_chart_content_description">Tendencia de ingresos y gastos de %1$s a %2$s</string>
+  <string name="bflow_widget_chart_single_content_description">Tendencia: un mes, %1$s</string>
 
   <!-- Pendientes. -->
-  <string name="bflow_widget_pending_title">Pendientes</string>
-  <string name="bflow_widget_pending_none">Todo al día este mes</string>
-  <string name="bflow_widget_pending_more">+%1$d más en la app</string>
-  <string name="bflow_widget_pending_progress">%1$d de %2$d al día</string>
-  <string name="bflow_widget_pending_income_item">Por recibir: %1$s, %2$s</string>
-  <string name="bflow_widget_pending_expense_item">Por pagar: %1$s, %2$s</string>
+  <string name="bflow_widget_checklist">Checklist</string>
+  <string name="bflow_widget_checklist_completed">%1$d de %2$d completados</string>
+  <string name="bflow_widget_all_done">Todo al día</string>
+  <string name="bflow_widget_all_done_detail">No quedan pendientes este mes.</string>
+  <string name="bflow_widget_pending_more_one">y 1 pendiente más</string>
+  <string name="bflow_widget_pending_more">y %1$d pendientes más</string>
+  <string name="bflow_widget_pending_item_content_description">%1$s: %2$s, %3$s</string>
 
   <!-- Deudas. -->
-  <string name="bflow_widget_debt_title">Deudas</string>
   <string name="bflow_widget_debt_remaining">Deuda restante</string>
+  <string name="bflow_widget_debt_remaining_short">Restante</string>
   <string name="bflow_widget_debt_none">Sin deudas</string>
-  <string name="bflow_widget_debt_none_detail">No tienes deudas abiertas</string>
-  <string name="bflow_widget_debt_progress_since">%1$d %% pagado desde %2$s</string>
-  <string name="bflow_widget_debt_progress">%1$d %% pagado</string>
-  <string name="bflow_widget_debt_paid_this_month">Abonado este mes %1$s</string>
-  <string name="bflow_widget_debt_payoff">Cierre estimado %1$s</string>
+  <string name="bflow_widget_debt_none_detail">No tienes deudas registradas.</string>
+  <string name="bflow_widget_debt_paid_label">Abonado este mes</string>
+  <string name="bflow_widget_debt_payoff_label">Cierre estimado</string>
+  <string name="bflow_widget_debt_since">desde %1$s</string>
+  <string name="bflow_widget_debt_progress">%1$s pagado %2$s</string>
+  <string name="bflow_widget_debt_initial">de %1$s %2$s</string>
+  <string name="bflow_widget_debt_remaining_content_description">Deuda restante: %1$s</string>
+  <string name="bflow_widget_debt_progress_content_description">Pagado %1$s%2$s</string>
+  <string name="bflow_widget_debt_initial_content_description">Deuda inicial: %1$s</string>
+  <string name="bflow_widget_debt_paid_content_description">Abonado este mes: %1$s</string>
+  <string name="bflow_widget_debt_payoff_content_description">Cierre estimado: %1$s</string>
 
   <!-- Ahorros. -->
-  <string name="bflow_widget_savings_title">Ahorros</string>
   <string name="bflow_widget_savings_total">Total ahorrado</string>
+  <string name="bflow_widget_savings_total_short">Total</string>
   <string name="bflow_widget_savings_other">Otros</string>
-  <string name="bflow_widget_row_content_description">%1$s: %2$s</string>
+  <string name="bflow_widget_savings_total_content_description">Total ahorrado: %1$s</string>
 </resources>

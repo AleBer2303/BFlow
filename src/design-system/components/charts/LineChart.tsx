@@ -269,6 +269,7 @@ export function LineChart({
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
+          aria-hidden
           pointerEvents="none"
         >
           <LinePlot

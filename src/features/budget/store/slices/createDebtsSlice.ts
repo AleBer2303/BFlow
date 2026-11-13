@@ -13,7 +13,7 @@ import {
 } from '../../../../domain';
 import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
-  buildInitialState,
+  getStoreInitialState,
   isRealAuthUser,
   triggerWidgetSync,
   type DebtsSlice,
@@ -21,7 +21,7 @@ import {
 } from './sliceTypes';
 
 export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
-  const initial = buildInitialState();
+  const initial = getStoreInitialState();
   return {
     debtsByMonth: initial.debtsByMonth,
     debtPayments: initial.debtPayments,

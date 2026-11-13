@@ -16,20 +16,20 @@
 
 import { create } from 'zustand';
 import {
-  buildInitialState,
   createAuthSlice,
   createBudgetSlice,
   createDebtsSlice,
   createProvisionsSlice,
   createSavingsSlice,
   createSyncSlice,
+  getStoreInitialState,
   type BudgetStoreState,
 } from './slices';
 
 export * from './slices';
 
 export const useBudgetStore = create<BudgetStoreState>((set, get, store) => ({
-  ...buildInitialState(),
+  ...getStoreInitialState(),
   ...createAuthSlice(set, get, store),
   ...createSyncSlice(set, get, store),
   ...createBudgetSlice(set, get, store),

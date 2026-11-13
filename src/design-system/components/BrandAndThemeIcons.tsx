@@ -1,8 +1,10 @@
 import React from 'react';
-import { View } from 'react-native';
+import { Animated, View } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { hapticService } from '../../platform/haptics/hapticService';
+import { useReplayOnChange } from '../motion/useReplayOnChange';
 import { useBFlowTheme } from '../theme/ThemeContext';
+import { motionDuration } from '../tokens';
 import { AppPressable } from './AppPressable';
 
 export interface ThemeToggleIconButtonProps {
@@ -18,6 +20,15 @@ export function ThemeToggleIconButton({
   const { colors, radius, mode, toggleTheme, minTouchTarget, skin } = useBFlowTheme();
   const isDark = mode === 'dark';
   const strokeColor = colors.text.primary;
+  // Icon swap: the new icon turns a quarter and grows into the slot the old one left.
+  const swap = useReplayOnChange(mode, motionDuration.fast);
+  const swapStyle = {
+    opacity: swap,
+    transform: [
+      { rotate: swap.interpolate({ inputRange: [0, 1], outputRange: ['-90deg', '0deg'] }) },
+      { scale: swap.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) },
+    ],
+  };
 
   return (
     <AppPressable
@@ -39,7 +50,7 @@ export function ThemeToggleIconButton({
       }}
     >
       {isDark ? (
-        <View testID="theme-icon-sun">
+        <Animated.View testID="theme-icon-sun" style={swapStyle}>
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
             <Circle
               cx={12}
@@ -57,9 +68,9 @@ export function ThemeToggleIconButton({
             <Line x1={4.93} y1={19.07} x2={6.7} y2={17.3} stroke={strokeColor} strokeWidth={1.8} strokeLinecap="round" />
             <Line x1={17.3} y1={6.7} x2={19.07} y2={4.93} stroke={strokeColor} strokeWidth={1.8} strokeLinecap="round" />
           </Svg>
-        </View>
+        </Animated.View>
       ) : (
-        <View testID="theme-icon-moon">
+        <Animated.View testID="theme-icon-moon" style={swapStyle}>
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
             <Path
               d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
@@ -69,7 +80,7 @@ export function ThemeToggleIconButton({
               strokeLinejoin="round"
             />
           </Svg>
-        </View>
+        </Animated.View>
       )}
     </AppPressable>
   );

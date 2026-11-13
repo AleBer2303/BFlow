@@ -146,13 +146,19 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     ).toBeTruthy();
     expect(screen.getByText('Meta: 2027-08')).toBeTruthy();
 
-    // Adjust opening balance in savings tab
-    fireEvent.press(screen.getByTestId('open-edit-opening-balance-button'));
-    expect(screen.getByTestId('edit-opening-balances-card')).toBeTruthy();
-    expect(screen.getByTestId('moto-opening-balance-input').props.value).toBe('1600000');
-    expect(screen.getByTestId('savings-opening-balance-input').props.value).toBe('1000000');
-    fireEvent.press(screen.getByTestId('save-opening-balances-button'));
-    expect(screen.queryByTestId('edit-opening-balances-card')).toBeNull();
+    // Adjust opening balance individually in savings tab via global Editar Fondo mode
+    fireEvent.press(screen.getByTestId('bucket-action-edit-button'));
+    fireEvent.press(screen.getByTestId('edit-savings-bucket-moto'));
+    expect(screen.getByTestId('edit-savings-bucket-card')).toBeTruthy();
+    expect(screen.getByTestId('edit-bucket-balance-input').props.value).toBe('1600000');
+    fireEvent.press(screen.getByTestId('save-edit-bucket-button'));
+    expect(screen.queryByTestId('edit-savings-bucket-card')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('bucket-action-edit-button'));
+    fireEvent.press(screen.getByTestId('edit-savings-bucket-savings'));
+    expect(screen.getByTestId('edit-bucket-balance-input').props.value).toBe('1000000');
+    fireEvent.press(screen.getByTestId('save-edit-bucket-button'));
+    expect(screen.queryByTestId('edit-savings-bucket-card')).toBeNull();
   });
 
   it('registers a movement and immediately updates summary totals and list', async () => {

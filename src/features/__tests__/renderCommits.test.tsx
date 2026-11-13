@@ -122,13 +122,12 @@ jest.mock('../../design-system', () => {
     mockBump('textInput');
     return ReactLib.createElement(OriginalInput, { ...props, ref });
   });
-  // Navigation of each skin: iOS dock, Android navigation bar, Web tab bar and header.
+  // Navigation of each skin: the dock (iOS and Android), Web tab bar and header.
   return {
     ...actual,
     AppPressable,
     AppTextInput,
     FloatingLiquidGlassDock: mockCountBody('nav', actual.FloatingLiquidGlassDock),
-    MaterialNavigationBar: mockCountBody('nav', actual.MaterialNavigationBar),
     WebTabBar: mockCountBody('nav', actual.WebTabBar),
     WebAppHeader: mockCountBody('webHeader', actual.WebAppHeader),
   };

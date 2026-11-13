@@ -14,7 +14,8 @@ export type ThemeMode = 'dark' | 'light';
 /**
  * Visual identity per platform ("piel"). Same product, data and flows; different material:
  * - ios:     Apple Liquid Glass (translucent blur, floating dock, spring physics).
- * - android: Material 3 (opaque tonal surfaces, anchored navigation bar). No glass, no ripple.
+ * - android: Material 3 (opaque tonal surfaces, the floating dock with a flat selection pill).
+ *            No glass, no ripple.
  * - web:     flat editorial system dealt with the design-taste-frontend skill (ADR 0011).
  */
 export type PlatformSkinId = 'ios' | 'android' | 'web';
@@ -22,7 +23,7 @@ export type PlatformSkinId = 'ios' | 'android' | 'web';
 export const PLATFORM_SKIN_IDS: readonly PlatformSkinId[] = ['ios', 'android', 'web'];
 
 export type SurfaceMaterial = 'liquid-glass' | 'tonal' | 'flat';
-export type NavigationPattern = 'floating-dock' | 'navigation-bar' | 'adaptive-header';
+export type NavigationPattern = 'floating-dock' | 'adaptive-header';
 /**
  * How a control answers the finger: `spring` sinks and springs back (iOS), `sink` does the
  * same on a timed curve with no overshoot (Android), `step` is hover and press steps (Web).
@@ -62,7 +63,7 @@ export const platformSkins: Record<PlatformSkinId, PlatformSkinSpec> = {
     id: 'android',
     label: 'Android · Material 3',
     surfaceMaterial: 'tonal',
-    navigation: 'navigation-bar',
+    navigation: 'floating-dock',
     pressFeedback: 'sink',
     minTouchTarget: 48,
     curveStage: 'vector',
@@ -678,6 +679,12 @@ export const springConfigs = {
   /** Liquid lens settling on a tab: soft, with a barely perceptible overshoot. */
   liquidSettle: {
     damping: 16,
+    stiffness: 170,
+    mass: 1,
+  },
+  /** Flat selection pill of the dock (Android) settling on a tab: no overshoot. */
+  flatSettle: {
+    damping: 28,
     stiffness: 170,
     mass: 1,
   },

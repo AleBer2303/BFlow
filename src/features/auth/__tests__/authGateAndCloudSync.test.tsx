@@ -383,17 +383,19 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     expect(screen.getByTestId('bucket-moto-card')).toBeTruthy();
     expect(screen.getByTestId('bucket-savings-card')).toBeTruthy();
 
-    // Edit Fondo Moto name and balance via Editar Fondos/Ahorros
-    fireEvent.press(screen.getByTestId('open-edit-opening-balance-button'));
-    fireEvent.changeText(screen.getByTestId('moto-bucket-name-input'), 'Fondo Moto Personal');
-    fireEvent.changeText(screen.getByTestId('moto-opening-balance-input'), '2000000');
+    // Edit Fondo Moto name and balance individually via Editar Fondo mode
+    fireEvent.press(screen.getByTestId('bucket-action-edit-button'));
+    fireEvent.press(screen.getByTestId('edit-savings-bucket-moto'));
+    fireEvent.changeText(screen.getByTestId('edit-bucket-name-input'), 'Fondo Moto Personal');
+    fireEvent.changeText(screen.getByTestId('edit-bucket-balance-input'), '2000000');
     await act(async () => {
-      fireEvent.press(screen.getByTestId('save-opening-balances-button'));
+      fireEvent.press(screen.getByTestId('save-edit-bucket-button'));
     });
     // The savings chart legend repeats the bucket name, so read it from the bucket card.
     expect(within(screen.getByTestId('bucket-moto-card')).getByText('Fondo Moto Personal')).toBeTruthy();
 
-    // Delete Fondo Moto and Fondo Ahorros
+    // Delete Fondo Moto and Fondo Ahorros individually via global Eliminar Fondo mode
+    fireEvent.press(screen.getByTestId('bucket-action-delete-button'));
     await act(async () => {
       fireEvent.press(screen.getByTestId('delete-savings-bucket-moto'));
     });

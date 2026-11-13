@@ -40,6 +40,13 @@ export class AppleHapticService {
       return;
     }
     this.lastSelectionTime = now;
+    if (Platform.OS === 'android') {
+      // `selectionAsync` on Android drives the vibrator for 50 ms (full strength on motors
+      // without amplitude control), far stronger than the iOS tick. The system clock tick is
+      // the short, light one, and it follows the user's touch feedback setting.
+      void Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Clock_Tick).catch(() => {});
+      return;
+    }
     void Haptics.selectionAsync().catch(() => {});
   }
 

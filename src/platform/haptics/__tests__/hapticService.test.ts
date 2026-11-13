@@ -6,6 +6,10 @@ jest.mock('expo-haptics', () => ({
   selectionAsync: jest.fn().mockResolvedValue(undefined),
   impactAsync: jest.fn().mockResolvedValue(undefined),
   notificationAsync: jest.fn().mockResolvedValue(undefined),
+  performAndroidHapticsAsync: jest.fn().mockResolvedValue(undefined),
+  AndroidHaptics: {
+    Clock_Tick: 'clock-tick',
+  },
   ImpactFeedbackStyle: {
     Light: 'light',
     Medium: 'medium',
@@ -98,6 +102,33 @@ describe('AppleHapticService (Zero-Delay Fluid Tactile Feedback)', () => {
     expect(Haptics.notificationAsync).toHaveBeenCalledWith('error');
   });
 
+  it('uses the light system tick for selection on Android instead of the vibrator', () => {
+    Platform.OS = 'android';
+    service.selection();
+
+    expect(Haptics.performAndroidHapticsAsync).toHaveBeenCalledTimes(1);
+    expect(Haptics.performAndroidHapticsAsync).toHaveBeenCalledWith('clock-tick');
+    expect(Haptics.selectionAsync).not.toHaveBeenCalled();
+
+    // Same throttle as iOS while the finger glides over the dock.
+    service.selection();
+    expect(Haptics.performAndroidHapticsAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('survives a rejected Android tick without crashing', async () => {
+    Platform.OS = 'android';
+    (Haptics.performAndroidHapticsAsync as jest.Mock).mockRejectedValueOnce(new Error('no view'));
+
+    expect(() => service.selection()).not.toThrow();
+    await Promise.resolve();
+  });
+
+  it('keeps the iOS selection tick untouched', () => {
+    service.selection();
+    expect(Haptics.selectionAsync).toHaveBeenCalledTimes(1);
+    expect(Haptics.performAndroidHapticsAsync).not.toHaveBeenCalled();
+  });
+
   it('is completely safe and silent on Web without invoking native modules', () => {
     Platform.OS = 'web';
     service.selection();
@@ -106,6 +137,7 @@ describe('AppleHapticService (Zero-Delay Fluid Tactile Feedback)', () => {
     expect(Haptics.selectionAsync).not.toHaveBeenCalled();
     expect(Haptics.impactAsync).not.toHaveBeenCalled();
     expect(Haptics.notificationAsync).not.toHaveBeenCalled();
+    expect(Haptics.performAndroidHapticsAsync).not.toHaveBeenCalled();
   });
 
   it('suppresses any native errors gracefully without crashing the application', async () => {

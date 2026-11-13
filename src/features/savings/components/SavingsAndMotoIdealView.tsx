@@ -17,6 +17,8 @@ import {
   AppTextInput,
   CurrencyText,
   GlassSurface,
+  hapticService,
+  MIN_TOUCH_TARGET_PT,
   PencilEditIcon,
   ResponsiveColumns,
   RevealDown,
@@ -35,7 +37,203 @@ import {
 } from '../../../domain';
 import type { SaveProvisionItemInput } from '../../budget/store/useBudgetStore';
 
-const MIN_TOUCH_TARGET_PT = 44;
+type ListActionMode = 'edit' | 'delete' | null;
+
+interface ActionModeToggleRowProps {
+  activeMode: ListActionMode;
+  showEdit: boolean;
+  showDelete: boolean;
+  editLabel: string;
+  deleteLabel: string;
+  editTestID: string;
+  deleteTestID: string;
+  editAccessibilityLabel: string;
+  deleteAccessibilityLabel: string;
+  onToggleEdit: () => void;
+  onToggleDelete: () => void;
+}
+
+/** Renders a two-button Editar / Eliminar mode toggle row for a list section. */
+function ActionModeToggleRow({
+  activeMode,
+  showEdit,
+  showDelete,
+  editLabel,
+  deleteLabel,
+  editTestID,
+  deleteTestID,
+  editAccessibilityLabel,
+  deleteAccessibilityLabel,
+  onToggleEdit,
+  onToggleDelete,
+}: ActionModeToggleRowProps): React.JSX.Element | null {
+  const { colors, spacing, radius } = useBFlowTheme();
+  if (!showEdit && !showDelete) return null;
+
+  const isEditActive = activeMode === 'edit';
+  const isDeleteActive = activeMode === 'delete';
+
+  return (
+    <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+      {showEdit ? (
+        <AppPressable
+          testID={editTestID}
+          accessibilityRole="button"
+          accessibilityLabel={editAccessibilityLabel}
+          onPress={onToggleEdit}
+          style={{
+            flex: 1,
+            minHeight: MIN_TOUCH_TARGET_PT,
+            paddingHorizontal: spacing.md,
+            borderRadius: radius.pill,
+            borderCurve: 'continuous',
+            backgroundColor: isEditActive
+              ? colors.glass.surfaceElevatedTint
+              : colors.glass.surfaceTint,
+            borderWidth: 1.5,
+            borderColor: isEditActive
+              ? colors.semantic.income
+              : colors.glass.subtleBorder,
+            flexDirection: 'row',
+            gap: spacing.xs,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <PencilEditIcon
+            size={16}
+            color={isEditActive ? colors.semantic.income : colors.text.secondary}
+          />
+          <AppText
+            variant="caption"
+            color={isEditActive ? colors.semantic.income : colors.text.secondary}
+          >
+            {isEditActive ? 'Cancelar Edición' : editLabel}
+          </AppText>
+        </AppPressable>
+      ) : null}
+
+      {showDelete ? (
+        <AppPressable
+          testID={deleteTestID}
+          accessibilityRole="button"
+          accessibilityLabel={deleteAccessibilityLabel}
+          onPress={onToggleDelete}
+          style={{
+            flex: 1,
+            minHeight: MIN_TOUCH_TARGET_PT,
+            paddingHorizontal: spacing.md,
+            borderRadius: radius.pill,
+            borderCurve: 'continuous',
+            backgroundColor: isDeleteActive
+              ? colors.semantic.expenseSoft
+              : colors.glass.surfaceTint,
+            borderWidth: 1.5,
+            borderColor: isDeleteActive
+              ? colors.semantic.expense
+              : colors.glass.subtleBorder,
+            flexDirection: 'row',
+            gap: spacing.xs,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <TrashBinIcon
+            size={16}
+            color={isDeleteActive ? colors.semantic.expense : colors.text.secondary}
+          />
+          <AppText
+            variant="caption"
+            color={isDeleteActive ? colors.semantic.expense : colors.text.secondary}
+          >
+            {isDeleteActive ? 'Cancelar Eliminación' : deleteLabel}
+          </AppText>
+        </AppPressable>
+      ) : null}
+    </View>
+  );
+}
+
+interface InlineItemActionPillProps {
+  mode: ListActionMode;
+  itemName: string;
+  editTestID: string;
+  deleteTestID: string;
+  onEdit?: () => void;
+  onDelete?: () => void;
+}
+
+/** Renders the per-item Editar or Eliminar pill when the section action mode is active. */
+function InlineItemActionPill({
+  mode,
+  itemName,
+  editTestID,
+  deleteTestID,
+  onEdit,
+  onDelete,
+}: InlineItemActionPillProps): React.JSX.Element | null {
+  const { colors, spacing, radius } = useBFlowTheme();
+
+  if (mode === 'edit' && onEdit) {
+    return (
+      <AppPressable
+        testID={editTestID}
+        accessibilityRole="button"
+        accessibilityLabel={`Editar ${itemName}`}
+        onPress={onEdit}
+        style={{
+          minHeight: MIN_TOUCH_TARGET_PT,
+          paddingHorizontal: spacing.md,
+          borderRadius: radius.pill,
+          borderCurve: 'continuous',
+          backgroundColor: colors.glass.surfaceElevatedTint,
+          borderWidth: 1,
+          borderColor: colors.glass.specularBorder,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing.xs,
+          justifyContent: 'center',
+        }}
+      >
+        <PencilEditIcon size={14} color={colors.semantic.income} />
+        <AppText variant="caption" color={colors.semantic.income}>
+          Editar
+        </AppText>
+      </AppPressable>
+    );
+  }
+
+  if (mode === 'delete' && onDelete) {
+    return (
+      <AppPressable
+        testID={deleteTestID}
+        accessibilityRole="button"
+        accessibilityLabel={`Eliminar ${itemName}`}
+        onPress={onDelete}
+        style={{
+          minHeight: MIN_TOUCH_TARGET_PT,
+          paddingHorizontal: spacing.md,
+          borderRadius: radius.pill,
+          borderCurve: 'continuous',
+          backgroundColor: colors.semantic.expenseSoft,
+          borderWidth: 1,
+          borderColor: colors.semantic.expense,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing.xs,
+          justifyContent: 'center',
+        }}
+      >
+        <TrashBinIcon size={14} color={colors.semantic.expense} />
+        <AppText variant="caption" color={colors.semantic.expense}>
+          Eliminar
+        </AppText>
+      </AppPressable>
+    );
+  }
+
+  return null;
+}
 
 export interface SavingsAndMotoIdealViewProps {
   savingsSummary: MonthlySavingsSummary;
@@ -64,21 +262,13 @@ export function SavingsAndMotoIdealView({
 }: SavingsAndMotoIdealViewProps): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
   const primaryAction = usePrimaryActionLook();
-  const [isEditingBalances, setIsEditingBalances] = useState(false);
-  const [motoNameInput, setMotoNameInput] = useState(
-    savingsSummary.moto.name || 'Fondo de Reserva'
-  );
-  const [motoBalanceInput, setMotoBalanceInput] = useState(
-    String(savingsSummary.moto.openingBalance)
-  );
-  const [savingsNameInput, setSavingsNameInput] = useState(
-    savingsSummary.savings.name || 'Fondo Ahorros'
-  );
-  const [savingsBalanceInput, setSavingsBalanceInput] = useState(
-    String(savingsSummary.savings.openingBalance)
-  );
-  const [customNameInputs, setCustomNameInputs] = useState<Record<string, string>>({});
-  const [customBalanceInputs, setCustomBalanceInputs] = useState<Record<string, string>>({});
+
+  // Savings bucket add / individual edit / individual delete state
+  const [bucketActionMode, setBucketActionMode] = useState<ListActionMode>(null);
+  const [editingBucketId, setEditingBucketId] = useState<string | null>(null);
+  const [editingBucketLabel, setEditingBucketLabel] = useState('');
+  const [editBucketNameInput, setEditBucketNameInput] = useState('');
+  const [editBucketBalanceInput, setEditBucketBalanceInput] = useState('');
   const [balanceError, setBalanceError] = useState<string | null>(null);
 
   // New Custom Savings Bucket form state
@@ -89,6 +279,7 @@ export function SavingsAndMotoIdealView({
 
   // Provision / Target Goal CRUD form state
   const [isProvisionFormOpen, setIsProvisionFormOpen] = useState(false);
+  const [provisionActionMode, setProvisionActionMode] = useState<ListActionMode>(null);
   const [editingProvisionId, setEditingProvisionId] = useState<string | null>(null);
   const [provisionName, setProvisionName] = useState('');
   const [provisionAmount, setProvisionAmount] = useState('');
@@ -97,79 +288,128 @@ export function SavingsAndMotoIdealView({
   const [provisionNotes, setProvisionNotes] = useState('');
   const [provisionError, setProvisionError] = useState<string | null>(null);
 
+  const hasProvisionItems =
+    motoIdealSummary.recurringItems.length > 0 || motoIdealSummary.targetGoals.length > 0;
+  const canManageProvisions = Boolean(onSaveProvisionItem || onDeleteProvisionItem);
+
+  const toggleBucketActionMode = (mode: Exclude<ListActionMode, null>) => {
+    setBucketActionMode((prev) => {
+      const next = prev === mode ? null : mode;
+      if (mode === 'delete') {
+        hapticService.trigger(prev === 'delete' ? 'light' : 'warning');
+      } else {
+        hapticService.selection();
+      }
+      if (next) {
+        setIsAddingBucket(false);
+        setEditingBucketId(null);
+        setNewBucketError(null);
+        setBalanceError(null);
+      }
+      return next;
+    });
+  };
+
+  const toggleProvisionActionMode = (mode: Exclude<ListActionMode, null>) => {
+    hapticService.selection();
+    setProvisionActionMode((prev) => {
+      const next = prev === mode ? null : mode;
+      if (next) {
+        setIsProvisionFormOpen(false);
+        setEditingProvisionId(null);
+        setProvisionError(null);
+      }
+      return next;
+    });
+  };
+
   const customBuckets = savingsSummary.customBuckets ?? [];
   const hasMotoBucket = savingsSummary.hasMotoBucket !== false;
   const hasSavingsBucket = savingsSummary.hasSavingsBucket !== false;
   const activeBucketsCount =
     (hasMotoBucket ? 1 : 0) + (hasSavingsBucket ? 1 : 0) + customBuckets.length;
 
-  const openEditFundsSheet = () => {
-    setMotoNameInput(savingsSummary.moto.name || 'Fondo Moto');
-    setMotoBalanceInput(String(savingsSummary.moto.openingBalance));
-    setSavingsNameInput(savingsSummary.savings.name || 'Fondo Ahorros');
-    setSavingsBalanceInput(String(savingsSummary.savings.openingBalance));
-    const nextCustomNames: Record<string, string> = {};
-    const nextCustomInputs: Record<string, string> = {};
-    for (const cb of customBuckets) {
-      nextCustomNames[cb.id] = cb.name;
-      nextCustomInputs[cb.id] = String(cb.openingBalance);
-    }
-    setCustomNameInputs(nextCustomNames);
-    setCustomBalanceInputs(nextCustomInputs);
-    setBalanceError(null);
-    setIsEditingBalances(true);
-  };
-
   useEffect(() => {
-    if (!isEditingBalances) {
-      setMotoNameInput(savingsSummary.moto.name || 'Fondo Moto');
-      setMotoBalanceInput(String(savingsSummary.moto.openingBalance));
-      setSavingsNameInput(savingsSummary.savings.name || 'Fondo Ahorros');
-      setSavingsBalanceInput(String(savingsSummary.savings.openingBalance));
-    }
-  }, [
-    isEditingBalances,
-    savingsSummary.moto.name,
-    savingsSummary.moto.openingBalance,
-    savingsSummary.savings.name,
-    savingsSummary.savings.openingBalance,
-  ]);
+    setBucketActionMode(null);
+    setEditingBucketId(null);
+    setIsAddingBucket(false);
+    setBalanceError(null);
+    setNewBucketError(null);
+  }, [savingsSummary.monthKey]);
 
-  const handleSaveBalances = () => {
-    const motoDigits = motoBalanceInput.replace(/[^0-9]/g, '');
-    const savingsDigits = savingsBalanceInput.replace(/[^0-9]/g, '');
-    const motoNum = motoDigits ? Number(motoDigits) : 0;
-    const savingsNum = savingsDigits ? Number(savingsDigits) : 0;
+  const handleToggleAddBucket = () => {
+    setIsAddingBucket((prev) => {
+      const next = !prev;
+      if (next) {
+        setBucketActionMode(null);
+        setEditingBucketId(null);
+        setBalanceError(null);
+      }
+      setNewBucketError(null);
+      return next;
+    });
+  };
 
-    if (hasMotoBucket && (!Number.isSafeInteger(motoNum) || motoNum < 0)) {
-      setBalanceError('Ingresa un valor entero válido para el fondo principal.');
-      return;
-    }
-    if (hasSavingsBucket && (!Number.isSafeInteger(savingsNum) || savingsNum < 0)) {
-      setBalanceError('Ingresa un valor entero válido para el Fondo Ahorros.');
-      return;
-    }
-
-    if (onUpdateOpeningBalance) {
-      if (hasMotoBucket) {
-        onUpdateOpeningBalance('moto', motoNum, motoNameInput.trim() || 'Fondo de Reserva');
-      }
-      if (hasSavingsBucket) {
-        onUpdateOpeningBalance('savings', savingsNum, savingsNameInput.trim() || 'Fondo Ahorros');
-      }
-      for (const cb of customBuckets) {
-        const raw = customBalanceInputs[cb.id] ?? String(cb.openingBalance);
-        const updatedName = customNameInputs[cb.id]?.trim() || cb.name;
-        const digits = raw.replace(/[^0-9]/g, '');
-        const parsed = digits ? Number(digits) : 0;
-        if (Number.isSafeInteger(parsed) && parsed >= 0) {
-          onUpdateOpeningBalance(cb.id, parsed, updatedName);
-        }
-      }
-    }
-    setIsEditingBalances(false);
+  const handleOpenEditBucket = (bucketId: string, name: string, openingBalance: number) => {
+    setBucketActionMode(null);
+    setIsAddingBucket(false);
+    setEditingBucketId(bucketId);
+    setEditingBucketLabel(name);
+    setEditBucketNameInput(name);
+    setEditBucketBalanceInput(String(openingBalance));
     setBalanceError(null);
   };
+
+  const handleCancelEditBucket = () => {
+    setEditingBucketId(null);
+    setBalanceError(null);
+  };
+
+  const handleSaveEditedBucket = () => {
+    if (!editingBucketId) return;
+    const trimmedName = editBucketNameInput.trim();
+    if (!trimmedName) {
+      setBalanceError('Escribe el nombre del fondo de ahorro.');
+      return;
+    }
+    const digits = editBucketBalanceInput.replace(/[^0-9]/g, '');
+    const parsed = digits ? Number(digits) : 0;
+    if (!Number.isSafeInteger(parsed) || parsed < 0) {
+      setBalanceError('Ingresa un saldo entero válido para el fondo.');
+      return;
+    }
+
+    onUpdateOpeningBalance?.(editingBucketId, parsed, trimmedName);
+    setEditingBucketId(null);
+    setBalanceError(null);
+  };
+
+  const handleDeleteBucket = (bucketId: string) => {
+    onDeleteSavingsBucket?.(bucketId);
+    if (editingBucketId === bucketId) {
+      setEditingBucketId(null);
+      setBalanceError(null);
+    }
+  };
+
+  const renderBucketRowAction = (
+    bucketId: string,
+    name: string,
+    openingBalance: number
+  ): React.JSX.Element | null => (
+    <InlineItemActionPill
+      mode={bucketActionMode}
+      itemName={name}
+      editTestID={`edit-savings-bucket-${bucketId}`}
+      deleteTestID={`delete-savings-bucket-${bucketId}`}
+      onEdit={
+        onUpdateOpeningBalance
+          ? () => handleOpenEditBucket(bucketId, name, openingBalance)
+          : undefined
+      }
+      onDelete={onDeleteSavingsBucket ? () => handleDeleteBucket(bucketId) : undefined}
+    />
+  );
 
   const handleCreateBucket = () => {
     if (!newBucketName.trim()) {
@@ -192,6 +432,7 @@ export function SavingsAndMotoIdealView({
   };
 
   const handleOpenCreateProvision = () => {
+    setProvisionActionMode(null);
     setEditingProvisionId(null);
     setProvisionName('');
     setProvisionAmount('');
@@ -210,6 +451,7 @@ export function SavingsAndMotoIdealView({
     kind: 'recurring' | 'target_goal';
     notes?: string;
   }) => {
+    setProvisionActionMode(null);
     setEditingProvisionId(item.id);
     setProvisionName(item.name);
     setProvisionAmount(String(item.amount));
@@ -219,6 +461,24 @@ export function SavingsAndMotoIdealView({
     setProvisionError(null);
     setIsProvisionFormOpen(true);
   };
+
+  const renderProvisionRowAction = (item: {
+    id: string;
+    name: string;
+    amount: number;
+    periodMonths: number;
+    kind: 'recurring' | 'target_goal';
+    notes?: string;
+  }): React.JSX.Element | null => (
+    <InlineItemActionPill
+      mode={provisionActionMode}
+      itemName={item.name}
+      editTestID={`edit-provision-${item.id}`}
+      deleteTestID={`delete-provision-${item.id}`}
+      onEdit={onSaveProvisionItem ? () => handleOpenEditProvision(item) : undefined}
+      onDelete={onDeleteProvisionItem ? () => onDeleteProvisionItem(item.id) : undefined}
+    />
+  );
 
   const handleSubmitProvision = () => {
     if (!provisionName.trim()) {
@@ -293,238 +553,48 @@ export function SavingsAndMotoIdealView({
             </View>
           </GlassSurface>
 
-          {/* Primary Bucket Cards: Fondo Moto & Fondo Ahorros (rendered only when present in the user's account) */}
-          {hasMotoBucket || hasSavingsBucket ? (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
-              {hasMotoBucket ? (
-                <GlassSurface style={{ flex: 1, minWidth: 200 }} testID="bucket-moto-card">
-                  <View style={{ gap: spacing.xs }}>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        gap: spacing.xs,
-                      }}
-                    >
-                      <AppText variant="headline" style={{ flex: 1 }}>
-                        {savingsSummary.moto.name || 'Fondo de Reserva'}
-                      </AppText>
-                      {onDeleteSavingsBucket ? (
-                        <AppPressable
-                          testID="delete-savings-bucket-moto"
-                          accessibilityRole="button"
-                          accessibilityLabel="Eliminar Fondo de Reserva"
-                          onPress={() => onDeleteSavingsBucket('moto')}
-                          style={{
-                            minHeight: MIN_TOUCH_TARGET_PT,
-                            minWidth: MIN_TOUCH_TARGET_PT,
-                            borderRadius: radius.md,
-                            borderCurve: 'continuous',
-                            backgroundColor: colors.semantic.expenseSoft,
-                            borderWidth: 1,
-                            borderColor: colors.glass.subtleBorder,
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <TrashBinIcon size={16} color={colors.semantic.expense} />
-                        </AppPressable>
-                      ) : null}
-                    </View>
-                    <CurrencyText
-                      testID="bucket-moto-current"
-                      amount={savingsSummary.moto.currentBalance}
-                      variant="title2"
-                      tone="reserve"
-                    />
-                    <AppText variant="micro" color={colors.text.secondary}>
-                      {`Saldo mes anterior: ${formatCurrency(savingsSummary.moto.openingBalance)}`}
-                    </AppText>
-                    <AppText variant="micro" color={colors.semantic.income}>
-                      {`+ Aportes pagados: ${formatCurrency(savingsSummary.moto.paidContributionsThisMonth)}`}
-                    </AppText>
-                  </View>
-                </GlassSurface>
-              ) : null}
+          {/* Add New Fund Button (directly below Total Ahorros Acumulados, above the funds list) */}
+          <AppPressable
+            testID="open-add-savings-bucket-button"
+            accessibilityRole="button"
+            accessibilityLabel={isAddingBucket ? 'Cerrar formulario de nuevo fondo' : 'Nuevo fondo de ahorro'}
+            onPress={handleToggleAddBucket}
+            style={{
+              minHeight: MIN_TOUCH_TARGET_PT,
+              paddingVertical: spacing.xs,
+              paddingHorizontal: spacing.md,
+              borderRadius: radius.md,
+              borderCurve: 'continuous',
+              backgroundColor: colors.glass.surfaceElevatedTint,
+              borderWidth: 1,
+              borderColor: colors.glass.specularBorder,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <AppText variant="caption" color={colors.text.primary}>
+              {isAddingBucket ? 'Cerrar' : '+ Nuevo Fondo'}
+            </AppText>
+          </AppPressable>
 
-              {hasSavingsBucket ? (
-                <GlassSurface style={{ flex: 1, minWidth: 200 }} testID="bucket-savings-card">
-                  <View style={{ gap: spacing.xs }}>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        gap: spacing.xs,
-                      }}
-                    >
-                      <AppText variant="headline" style={{ flex: 1 }}>
-                        {savingsSummary.savings.name || 'Fondo Ahorros'}
-                      </AppText>
-                      {onDeleteSavingsBucket ? (
-                        <AppPressable
-                          testID="delete-savings-bucket-savings"
-                          accessibilityRole="button"
-                          accessibilityLabel="Eliminar Fondo Ahorros"
-                          onPress={() => onDeleteSavingsBucket('savings')}
-                          style={{
-                            minHeight: MIN_TOUCH_TARGET_PT,
-                            minWidth: MIN_TOUCH_TARGET_PT,
-                            borderRadius: radius.md,
-                            borderCurve: 'continuous',
-                            backgroundColor: colors.semantic.expenseSoft,
-                            borderWidth: 1,
-                            borderColor: colors.glass.subtleBorder,
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <TrashBinIcon size={16} color={colors.semantic.expense} />
-                        </AppPressable>
-                      ) : null}
-                    </View>
-                    <CurrencyText
-                      testID="bucket-savings-current"
-                      amount={savingsSummary.savings.currentBalance}
-                      variant="title2"
-                      tone="income"
-                    />
-                    <AppText variant="micro" color={colors.text.secondary}>
-                      {`Saldo mes anterior: ${formatCurrency(savingsSummary.savings.openingBalance)} + Flujo Neto ${formatCurrency(savingsSummary.savings.netCashFlowContribution)}`}
-                    </AppText>
-                    <AppText variant="micro" color={colors.semantic.pending}>
-                      {`Tras pendientes: ${formatCurrency(savingsSummary.savings.projectedAfterPendingExpenses)}`}
-                    </AppText>
-                  </View>
-                </GlassSurface>
-              ) : null}
-            </View>
-          ) : null}
-
-          {/* Custom User-Created Savings Funds */}
-          {customBuckets.map((cb) => (
-            <GlassSurface key={cb.id} testID={`bucket-custom-card-${cb.id}`}>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: spacing.sm,
-                }}
-              >
-                <View style={{ flex: 1, gap: spacing.xxs }}>
-                  <AppText variant="headline">{cb.name}</AppText>
-                  <CurrencyText amount={cb.currentBalance} variant="title2" tone="savings" />
-                  <AppText variant="micro" color={colors.text.secondary}>
-                    {`Saldo anterior: ${formatCurrency(cb.openingBalance)} · + Aportes pagados: ${formatCurrency(cb.paidContributionsThisMonth)}`}
-                  </AppText>
-                </View>
-                {onDeleteSavingsBucket ? (
-                  <AppPressable
-                    testID={`delete-savings-bucket-${cb.id}`}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Eliminar fondo ${cb.name}`}
-                    onPress={() => onDeleteSavingsBucket(cb.id)}
-                    style={{
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      minWidth: MIN_TOUCH_TARGET_PT,
-                      borderRadius: radius.md,
-                      borderCurve: 'continuous',
-                      backgroundColor: colors.semantic.expenseSoft,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <TrashBinIcon size={16} color={colors.semantic.expense} />
-                  </AppPressable>
-                ) : null}
-              </View>
-            </GlassSurface>
-          ))}
-
-          {activeBucketsCount === 0 ? (
-            <GlassSurface testID="empty-savings-buckets-card">
-              <AppText variant="caption" color={colors.text.secondary}>
-                No tienes fondos de ahorro creados aún. Usa &quot;+ Nuevo Fondo&quot; para agregar tus
-                propios fondos y vincularles movimientos.
-              </AppText>
-            </GlassSurface>
-          ) : null}
-
-          {/* Action Row: Adjust Opening Balances & Create New Savings Fund */}
-          <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-            <AppPressable
-              testID="open-edit-opening-balance-button"
-              accessibilityRole="button"
-              accessibilityLabel="Editar Fondos/Ahorros"
-              onPress={() => {
-                if (isEditingBalances) {
-                  setIsEditingBalances(false);
-                } else {
-                  openEditFundsSheet();
-                }
-              }}
-              style={{
-                flex: 1,
-                minHeight: MIN_TOUCH_TARGET_PT,
-                paddingVertical: spacing.sm,
-                paddingHorizontal: spacing.sm,
-                borderRadius: radius.md,
-                backgroundColor: isEditingBalances
-                  ? colors.glass.surfaceElevatedTint
-                  : colors.glass.surfaceTint,
-                borderWidth: 1,
-                borderColor: isEditingBalances
-                  ? colors.glass.specularBorder
-                  : colors.glass.subtleBorder,
-                flexDirection: 'row',
-                gap: spacing.xxs,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <PencilEditIcon
-                size={14}
-                color={isEditingBalances ? colors.text.primary : colors.text.secondary}
-              />
-              <AppText
-                variant="caption"
-                color={isEditingBalances ? colors.text.primary : colors.text.secondary}
-              >
-                {isEditingBalances ? 'Cancelar edición' : 'Editar Fondos/Ahorros'}
-              </AppText>
-            </AppPressable>
-
-            <AppPressable
-              testID="open-add-savings-bucket-button"
-              accessibilityRole="button"
-              accessibilityLabel="Nuevo fondo de ahorro"
-              onPress={() => {
-                setIsAddingBucket(!isAddingBucket);
-                setNewBucketError(null);
-              }}
-              style={{
-                flex: 1,
-                minHeight: MIN_TOUCH_TARGET_PT,
-                paddingVertical: spacing.sm,
-                paddingHorizontal: spacing.sm,
-                borderRadius: radius.md,
-                borderCurve: 'continuous',
-                backgroundColor: colors.glass.surfaceElevatedTint,
-                borderWidth: 1,
-                borderColor: colors.glass.specularBorder,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <AppText variant="caption" color={colors.text.primary}>
-                {isAddingBucket ? 'Cerrar' : '+ Nuevo Fondo'}
-              </AppText>
-            </AppPressable>
-          </View>
+          {/* Separate global Editar & Eliminar mode buttons below "+ Nuevo Fondo" */}
+          <ActionModeToggleRow
+            activeMode={bucketActionMode}
+            showEdit
+            showDelete
+            editLabel="Editar Fondo"
+            deleteLabel="Eliminar Fondo"
+            editTestID="bucket-action-edit-button"
+            deleteTestID="bucket-action-delete-button"
+            editAccessibilityLabel={
+              bucketActionMode === 'edit' ? 'Cancelar edición de fondos' : 'Editar fondo'
+            }
+            deleteAccessibilityLabel={
+              bucketActionMode === 'delete' ? 'Cancelar eliminación de fondos' : 'Eliminar fondo'
+            }
+            onToggleEdit={() => toggleBucketActionMode('edit')}
+            onToggleDelete={() => toggleBucketActionMode('delete')}
+          />
 
           {/* Add New Custom Savings Fund Sheet */}
           <RevealDown visible={isAddingBucket}>
@@ -573,102 +643,194 @@ export function SavingsAndMotoIdealView({
             </GlassSurface>
           </RevealDown>
 
-          {/* Edit Opening Balances & Fund Names Sheet */}
-          <RevealDown visible={isEditingBalances}>
-            <GlassSurface elevated testID="edit-opening-balances-card">
+          {/* Individual Savings Fund Edit Sheet */}
+          <RevealDown visible={Boolean(editingBucketId)}>
+            <GlassSurface elevated testID="edit-savings-bucket-card">
               <View style={{ gap: spacing.sm }}>
-                <AppText variant="headline">Editar Fondos y Saldos del Mes Anterior</AppText>
+                <AppText variant="headline">
+                  {editingBucketLabel ? `Editar ${editingBucketLabel}` : 'Editar Fondo de Ahorro'}
+                </AppText>
                 <AppText variant="micro" color={colors.text.secondary}>
-                  Edita el nombre o el saldo actual/del mes anterior con el que inicia cada fondo de
-                  ahorro.
+                  Edita el nombre o el saldo actual/del mes anterior con el que inicia este fondo.
                 </AppText>
 
-                {hasMotoBucket ? (
-                  <View style={{ gap: spacing.xs }}>
-                    <AppText variant="caption">Nombre y saldo mes anterior Fondo de Reserva</AppText>
-                    <AppTextInput
-                      testID="moto-bucket-name-input"
-                      value={motoNameInput}
-                      onChangeText={setMotoNameInput}
-                      placeholder="Nombre del fondo"
-                    />
-                    <AppTextInput
-                      testID="moto-opening-balance-input"
-                      value={motoBalanceInput}
-                      onChangeText={setMotoBalanceInput}
-                      keyboardType="numeric"
-                      placeholder="0"
-                    />
-                  </View>
-                ) : null}
+                <AppTextInput
+                  testID="edit-bucket-name-input"
+                  value={editBucketNameInput}
+                  onChangeText={setEditBucketNameInput}
+                  placeholder="Nombre del fondo"
+                />
 
-                {hasSavingsBucket ? (
-                  <View style={{ gap: spacing.xs }}>
-                    <AppText variant="caption">Nombre y saldo mes anterior Fondo Ahorros</AppText>
-                    <AppTextInput
-                      testID="savings-bucket-name-input"
-                      value={savingsNameInput}
-                      onChangeText={setSavingsNameInput}
-                      placeholder="Nombre del fondo"
-                    />
-                    <AppTextInput
-                      testID="savings-opening-balance-input"
-                      value={savingsBalanceInput}
-                      onChangeText={setSavingsBalanceInput}
-                      keyboardType="numeric"
-                      placeholder="0"
-                    />
-                  </View>
-                ) : null}
-
-                {customBuckets.map((cb) => (
-                  <View key={cb.id} style={{ gap: spacing.xs }}>
-                    <AppText variant="caption">{`Nombre y saldo mes anterior ${cb.name}`}</AppText>
-                    <AppTextInput
-                      testID={`custom-bucket-name-input-${cb.id}`}
-                      value={customNameInputs[cb.id] ?? cb.name}
-                      onChangeText={(text) =>
-                        setCustomNameInputs((prev) => ({ ...prev, [cb.id]: text }))
-                      }
-                      placeholder="Nombre del fondo"
-                    />
-                    <AppTextInput
-                      testID={`custom-opening-balance-input-${cb.id}`}
-                      value={customBalanceInputs[cb.id] ?? String(cb.openingBalance)}
-                      onChangeText={(text) =>
-                        setCustomBalanceInputs((prev) => ({ ...prev, [cb.id]: text }))
-                      }
-                      keyboardType="numeric"
-                      placeholder="0"
-                    />
-                  </View>
-                ))}
+                <AppTextInput
+                  testID="edit-bucket-balance-input"
+                  value={editBucketBalanceInput}
+                  onChangeText={setEditBucketBalanceInput}
+                  keyboardType="numeric"
+                  placeholder="0"
+                />
 
                 <FormMessage message={balanceError} />
 
-                <AppPressable
-                  testID="save-opening-balances-button"
-                  accessibilityRole="button"
-                  accessibilityLabel="Guardar Saldos"
-                  onPress={handleSaveBalances}
-                  style={{
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    borderRadius: radius.md,
-                    borderCurve: 'continuous',
-                    backgroundColor: colors.glass.surfaceElevatedTint,
-                    borderWidth: 1,
-                    borderColor: colors.glass.specularBorder,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                >
-                  <AppText variant="body" color={colors.semantic.income}>
-                    Guardar Saldos
-                  </AppText>
-                </AppPressable>
+                <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                  <AppPressable
+                    testID="cancel-edit-bucket-button"
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancelar edición de fondo"
+                    onPress={handleCancelEditBucket}
+                    style={{
+                      flex: 1,
+                      minHeight: MIN_TOUCH_TARGET_PT,
+                      borderRadius: radius.md,
+                      borderCurve: 'continuous',
+                      backgroundColor: colors.glass.surfaceTint,
+                      borderWidth: 1,
+                      borderColor: colors.glass.subtleBorder,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <AppText variant="body" color={colors.text.secondary}>
+                      Cancelar
+                    </AppText>
+                  </AppPressable>
+
+                  <AppPressable
+                    testID="save-edit-bucket-button"
+                    accessibilityRole="button"
+                    accessibilityLabel="Guardar Saldos"
+                    onPress={handleSaveEditedBucket}
+                    style={{
+                      flex: 1,
+                      minHeight: MIN_TOUCH_TARGET_PT,
+                      borderRadius: radius.md,
+                      borderCurve: 'continuous',
+                      backgroundColor: colors.glass.surfaceElevatedTint,
+                      borderWidth: 1,
+                      borderColor: colors.glass.specularBorder,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <AppText variant="body" color={colors.semantic.income}>
+                      Guardar Saldo
+                    </AppText>
+                  </AppPressable>
+                </View>
               </View>
             </GlassSurface>
           </RevealDown>
+
+          {/* Primary Bucket Cards: Fondo Moto & Fondo Ahorros (rendered only when present in the user's account) */}
+          {hasMotoBucket || hasSavingsBucket ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
+              {hasMotoBucket ? (
+                <GlassSurface style={{ flex: 1, minWidth: 200 }} testID="bucket-moto-card">
+                  <View style={{ gap: spacing.xs }}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: spacing.xs,
+                      }}
+                    >
+                      <AppText variant="headline" style={{ flex: 1, minWidth: 120 }}>
+                        {savingsSummary.moto.name || 'Fondo de Reserva'}
+                      </AppText>
+                      {renderBucketRowAction(
+                        'moto',
+                        savingsSummary.moto.name || 'Fondo de Reserva',
+                        savingsSummary.moto.openingBalance
+                      )}
+                    </View>
+                    <CurrencyText
+                      testID="bucket-moto-current"
+                      amount={savingsSummary.moto.currentBalance}
+                      variant="title2"
+                      tone="reserve"
+                    />
+                    <AppText variant="micro" color={colors.text.secondary}>
+                      {`Saldo mes anterior: ${formatCurrency(savingsSummary.moto.openingBalance)}`}
+                    </AppText>
+                    <AppText variant="micro" color={colors.semantic.income}>
+                      {`+ Aportes pagados: ${formatCurrency(savingsSummary.moto.paidContributionsThisMonth)}`}
+                    </AppText>
+                  </View>
+                </GlassSurface>
+              ) : null}
+
+              {hasSavingsBucket ? (
+                <GlassSurface style={{ flex: 1, minWidth: 200 }} testID="bucket-savings-card">
+                  <View style={{ gap: spacing.xs }}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: spacing.xs,
+                      }}
+                    >
+                      <AppText variant="headline" style={{ flex: 1, minWidth: 120 }}>
+                        {savingsSummary.savings.name || 'Fondo Ahorros'}
+                      </AppText>
+                      {renderBucketRowAction(
+                        'savings',
+                        savingsSummary.savings.name || 'Fondo Ahorros',
+                        savingsSummary.savings.openingBalance
+                      )}
+                    </View>
+                    <CurrencyText
+                      testID="bucket-savings-current"
+                      amount={savingsSummary.savings.currentBalance}
+                      variant="title2"
+                      tone="income"
+                    />
+                    <AppText variant="micro" color={colors.text.secondary}>
+                      {`Saldo mes anterior: ${formatCurrency(savingsSummary.savings.openingBalance)} + Flujo Neto ${formatCurrency(savingsSummary.savings.netCashFlowContribution)}`}
+                    </AppText>
+                    <AppText variant="micro" color={colors.semantic.pending}>
+                      {`Tras pendientes: ${formatCurrency(savingsSummary.savings.projectedAfterPendingExpenses)}`}
+                    </AppText>
+                  </View>
+                </GlassSurface>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Custom User-Created Savings Funds */}
+          {customBuckets.map((cb) => (
+            <GlassSurface key={cb.id} testID={`bucket-custom-card-${cb.id}`}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: spacing.sm,
+                }}
+              >
+                <View style={{ flex: 1, minWidth: 140, gap: spacing.xxs }}>
+                  <AppText variant="headline">{cb.name}</AppText>
+                  <CurrencyText amount={cb.currentBalance} variant="title2" tone="savings" />
+                  <AppText variant="micro" color={colors.text.secondary}>
+                    {`Saldo anterior: ${formatCurrency(cb.openingBalance)} · + Aportes pagados: ${formatCurrency(cb.paidContributionsThisMonth)}`}
+                  </AppText>
+                </View>
+                {renderBucketRowAction(cb.id, cb.name, cb.openingBalance)}
+              </View>
+            </GlassSurface>
+          ))}
+
+          {activeBucketsCount === 0 ? (
+            <GlassSurface testID="empty-savings-buckets-card">
+              <AppText variant="caption" color={colors.text.secondary}>
+                No tienes fondos de ahorro creados aún. Usa &quot;+ Nuevo Fondo&quot; para agregar tus
+                propios fondos y vincularles movimientos.
+              </AppText>
+            </GlassSurface>
+          ) : null}
 
         </View>
 
@@ -724,6 +886,30 @@ export function SavingsAndMotoIdealView({
                 {isProvisionFormOpen ? 'Cerrar' : '+ Agregar Provisión o Meta'}
               </AppText>
             </AppPressable>
+
+            {canManageProvisions ? (
+              <ActionModeToggleRow
+                activeMode={provisionActionMode}
+                showEdit={Boolean(onSaveProvisionItem)}
+                showDelete={Boolean(onDeleteProvisionItem)}
+                editLabel="Editar"
+                deleteLabel="Eliminar"
+                editTestID="provision-action-edit-button"
+                deleteTestID="provision-action-delete-button"
+                editAccessibilityLabel={
+                  provisionActionMode === 'edit'
+                    ? 'Cancelar edición de provisiones y metas'
+                    : 'Editar provisiones y metas'
+                }
+                deleteAccessibilityLabel={
+                  provisionActionMode === 'delete'
+                    ? 'Cancelar eliminación de provisiones y metas'
+                    : 'Eliminar provisiones y metas'
+                }
+                onToggleEdit={() => toggleProvisionActionMode('edit')}
+                onToggleDelete={() => toggleProvisionActionMode('delete')}
+              />
+            ) : null}
 
             <RevealDown visible={isProvisionFormOpen}>
               <View
@@ -834,8 +1020,7 @@ export function SavingsAndMotoIdealView({
               </View>
             </RevealDown>
 
-            {motoIdealSummary.recurringItems.length === 0 &&
-            motoIdealSummary.targetGoals.length === 0 ? (
+            {!hasProvisionItems ? (
               <AppText variant="caption" color={colors.text.muted}>
                 No tienes provisiones ni metas configuradas aún. Usa el botón superior para agregar las tuyas.
               </AppText>
@@ -844,6 +1029,14 @@ export function SavingsAndMotoIdealView({
             <View style={{ gap: spacing.xs }}>
               {motoIdealSummary.recurringItems.map((item) => {
                 const rawPlanItem = provisionPlan?.items.find((p) => p.id === item.id);
+                const actionButton = renderProvisionRowAction({
+                  id: item.id,
+                  name: rawPlanItem?.displayName ?? item.displayName,
+                  amount: rawPlanItem?.cycleCostCop ?? item.cycleCostCop,
+                  periodMonths: item.periodMonths,
+                  kind: 'recurring',
+                  notes: rawPlanItem?.notes ?? item.notes,
+                });
                 return (
                   <View
                     key={item.id}
@@ -852,6 +1045,7 @@ export function SavingsAndMotoIdealView({
                       flexDirection: 'row',
                       justifyContent: 'space-between',
                       alignItems: 'center',
+                      flexWrap: 'wrap',
                       gap: spacing.sm,
                       paddingVertical: spacing.xs,
                       paddingHorizontal: spacing.sm,
@@ -861,7 +1055,7 @@ export function SavingsAndMotoIdealView({
                       borderColor: colors.glass.subtleBorder,
                     }}
                   >
-                    <View style={{ flex: 1, gap: spacing.xxs }}>
+                    <View style={{ flex: 1, minWidth: 140, gap: spacing.xxs }}>
                       <AppText variant="body">{item.displayName}</AppText>
                       <AppText variant="micro" color={colors.text.secondary}>
                         {item.periodMonths > 1
@@ -871,64 +1065,12 @@ export function SavingsAndMotoIdealView({
                             : 'Provisión mensual directa'}
                       </AppText>
                     </View>
-                    <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
-                      <CurrencyText amount={item.excelMonthlyAmountCop} variant="body" tone="provisions" />
-                    </View>
-                    {onSaveProvisionItem || onDeleteProvisionItem ? (
-                      <View style={{ flexDirection: 'row', gap: spacing.xxs }}>
-                        {onSaveProvisionItem ? (
-                          <AppPressable
-                            testID={`edit-provision-${item.id}`}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Editar ${item.displayName}`}
-                            onPress={() =>
-                              handleOpenEditProvision({
-                                id: item.id,
-                                name: rawPlanItem?.displayName ?? item.displayName,
-                                amount: rawPlanItem?.cycleCostCop ?? item.cycleCostCop,
-                                periodMonths: item.periodMonths,
-                                kind: 'recurring',
-                                notes: rawPlanItem?.notes ?? item.notes,
-                              })
-                            }
-                            style={{
-                              minHeight: 36,
-                              minWidth: 36,
-                              borderRadius: radius.md,
-                              borderCurve: 'continuous',
-                              backgroundColor: colors.glass.surfaceElevatedTint,
-                              borderWidth: 1,
-                              borderColor: colors.glass.specularBorder,
-                              justifyContent: 'center',
-                              alignItems: 'center',
-                            }}
-                          >
-                            <PencilEditIcon size={14} color={colors.text.secondary} />
-                          </AppPressable>
-                        ) : null}
-                        {onDeleteProvisionItem ? (
-                          <AppPressable
-                            testID={`delete-provision-${item.id}`}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Eliminar ${item.displayName}`}
-                            onPress={() => onDeleteProvisionItem(item.id)}
-                            style={{
-                              minHeight: 36,
-                              minWidth: 36,
-                              borderRadius: radius.md,
-                              borderCurve: 'continuous',
-                              backgroundColor: colors.semantic.expenseSoft,
-                              borderWidth: 1,
-                              borderColor: colors.glass.subtleBorder,
-                              justifyContent: 'center',
-                              alignItems: 'center',
-                            }}
-                          >
-                            <TrashBinIcon size={14} color={colors.semantic.expense} />
-                          </AppPressable>
-                        ) : null}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                      <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+                        <CurrencyText amount={item.excelMonthlyAmountCop} variant="body" tone="provisions" />
                       </View>
-                    ) : null}
+                      {actionButton}
+                    </View>
                   </View>
                 );
               })}
@@ -937,6 +1079,14 @@ export function SavingsAndMotoIdealView({
             {/* Target Goals */}
             {motoIdealSummary.targetGoals.map((goal) => {
               const rawPlanItem = provisionPlan?.items.find((p) => p.id === goal.id);
+              const actionButton = renderProvisionRowAction({
+                id: goal.id,
+                name: rawPlanItem?.displayName ?? goal.displayName,
+                amount: goal.targetAmountCop,
+                periodMonths: rawPlanItem?.periodMonths ?? 1,
+                kind: 'target_goal',
+                notes: rawPlanItem?.notes ?? goal.notes,
+              });
               return (
                 <View
                   key={goal.id}
@@ -954,7 +1104,7 @@ export function SavingsAndMotoIdealView({
                     style={{
                       flexDirection: 'row',
                       justifyContent: 'space-between',
-                      alignItems: 'flex-start',
+                      alignItems: 'center',
                       flexWrap: 'wrap',
                       gap: spacing.xs,
                     }}
@@ -962,59 +1112,9 @@ export function SavingsAndMotoIdealView({
                     <View style={{ flex: 1, minWidth: 160 }}>
                       <AppText variant="headline">{`🎯 ${goal.displayName}`}</AppText>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.xs }}>
                       <StatusBadge label={`Meta: ${goal.targetMonthKey}`} status="provisions" />
-                      {onSaveProvisionItem ? (
-                        <AppPressable
-                          testID={`edit-provision-${goal.id}`}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Editar ${goal.displayName}`}
-                          onPress={() =>
-                            handleOpenEditProvision({
-                              id: goal.id,
-                              name: rawPlanItem?.displayName ?? goal.displayName,
-                              amount: goal.targetAmountCop,
-                              periodMonths: rawPlanItem?.periodMonths ?? 1,
-                              kind: 'target_goal',
-                              notes: rawPlanItem?.notes ?? goal.notes,
-                            })
-                          }
-                          style={{
-                            minHeight: 34,
-                            minWidth: 34,
-                            borderRadius: radius.md,
-                            borderCurve: 'continuous',
-                            backgroundColor: colors.glass.surfaceElevatedTint,
-                            borderWidth: 1,
-                            borderColor: colors.glass.specularBorder,
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <PencilEditIcon size={14} color={colors.text.secondary} />
-                        </AppPressable>
-                      ) : null}
-                      {onDeleteProvisionItem ? (
-                        <AppPressable
-                          testID={`delete-provision-${goal.id}`}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Eliminar ${goal.displayName}`}
-                          onPress={() => onDeleteProvisionItem(goal.id)}
-                          style={{
-                            minHeight: 34,
-                            minWidth: 34,
-                            borderRadius: radius.md,
-                            borderCurve: 'continuous',
-                            backgroundColor: colors.semantic.expenseSoft,
-                            borderWidth: 1,
-                            borderColor: colors.glass.subtleBorder,
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <TrashBinIcon size={14} color={colors.semantic.expense} />
-                        </AppPressable>
-                      ) : null}
+                      {actionButton}
                     </View>
                   </View>
                   <AppText variant="caption" color={colors.text.secondary}>

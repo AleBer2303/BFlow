@@ -8,7 +8,7 @@
  * | Skin    | Header                         | Navigation                              |
  * |---------|--------------------------------|-----------------------------------------|
  * | ios     | Large title + theme switch     | Floating Liquid Glass dock (overlaps)   |
- * | android | Material top app bar           | Material navigation bar (in the flow)   |
+ * | android | Material top app bar           | Same floating dock, flat selection pill |
  * | web     | Opaque header with a hairline  | Words in the header from 840px, else a  |
  * |         |                                | tab bar at the foot                     |
  *
@@ -22,7 +22,6 @@ import {
   AppText,
   FloatingLiquidGlassDock,
   KeyboardAwareScrollView,
-  MaterialNavigationBar,
   ThemeToggleIconButton,
   WORKSPACE_TABS,
   WebAppHeader,
@@ -45,8 +44,8 @@ export interface WorkspaceShellProps {
   children: React.ReactNode;
 }
 
-/** Space the floating iOS dock covers at the bottom of the scroll content. */
-const IOS_DOCK_CLEARANCE = Platform.OS === 'ios' ? 84 : 76;
+/** Space the floating dock covers at the bottom of the scroll content. */
+const DOCK_CLEARANCE = Platform.OS === 'ios' ? 84 : 76;
 const ANDROID_TOP_APP_BAR_HEIGHT = 64;
 const NAVIGATION_TEST_ID = 'liquid-glass-tab-bar';
 
@@ -58,13 +57,17 @@ export function WorkspaceShell({
   pendingSyncCount,
   children,
 }: WorkspaceShellProps): React.JSX.Element {
-  const { colors, spacing, skin } = useBFlowTheme();
+  const { colors, spacing, skin, skinSpec } = useBFlowTheme();
   const layout = useResponsiveLayout();
   const insets = useSafeInsets();
 
   const isWeb = skin === 'web';
   const isAndroid = skin === 'android';
   const isIos = skin === 'ios';
+  const showsDock = showNavigation && skinSpec.navigation === 'floating-dock';
+  // iOS clears its home indicator by itself; Android draws edge to edge, so there the dock and
+  // the end of the scroll content clear the system gesture area.
+  const bottomSystemInset = isAndroid ? insets.bottom : 0;
   const showsWebTabBar = isWeb && showNavigation && layout.sizeClass !== 'expanded';
   const activeTabLabel = WORKSPACE_TABS.find((tab) => tab.id === activeTab)?.label ?? '';
   const title = `BFlow · ${monthLabel}`;
@@ -76,7 +79,8 @@ export function WorkspaceShell({
 
   const contentGap = isWeb && layout.sizeClass !== 'compact' ? spacing.xl : spacing.md;
   const paddingTop = isWeb ? (layout.isWide ? spacing.xxxl : spacing.xxl) : spacing.xl;
-  const paddingBottom = isIos && showNavigation ? IOS_DOCK_CLEARANCE : isWeb ? spacing.huge : spacing.xl;
+  const paddingBottom =
+    (showsDock ? DOCK_CLEARANCE : isWeb ? spacing.huge : spacing.xl) + bottomSystemInset;
 
   return (
     <View testID="workspace-shell" style={{ flex: 1, backgroundColor: colors.background.primary }}>
@@ -224,20 +228,12 @@ export function WorkspaceShell({
         </View>
       </KeyboardAwareScrollView>
 
-      {showNavigation && isIos ? (
+      {showsDock ? (
         <FloatingLiquidGlassDock
           testID={NAVIGATION_TEST_ID}
           activeTab={activeTab}
           onSelectTab={onSelectTab}
-        />
-      ) : null}
-
-      {showNavigation && isAndroid ? (
-        <MaterialNavigationBar
-          testID={NAVIGATION_TEST_ID}
-          activeTab={activeTab}
-          onSelectTab={onSelectTab}
-          bottomInset={insets.bottom}
+          bottomInset={bottomSystemInset}
         />
       ) : null}
 

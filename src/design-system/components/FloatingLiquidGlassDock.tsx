@@ -14,7 +14,7 @@ import type { BFlowWorkspaceTab } from '../../features/budget/store/useBudgetSto
 import { GlassSurface } from '../../platform/glass/GlassSurface';
 import { hapticService } from '../../platform/haptics/hapticService';
 import { useBFlowTheme } from '../theme/ThemeContext';
-import { MIN_TOUCH_TARGET_PT, springConfigs } from '../tokens';
+import { springConfigs } from '../tokens';
 import { WORKSPACE_TABS } from './navigation/workspaceTabs';
 import { AppText } from './Typography';
 import {
@@ -29,6 +29,8 @@ import {
 export interface FloatingLiquidGlassDockProps {
   activeTab: BFlowWorkspaceTab;
   onSelectTab: (tab: BFlowWorkspaceTab) => void;
+  /** System gesture / navigation area below the dock (Android draws edge to edge). */
+  bottomInset?: number;
   testID?: string;
 }
 
@@ -214,16 +216,24 @@ export function buildLensGeometry({
 }
 
 /**
- * Floating Liquid Glass Dock navigation with custom vector icons,
- * fluid 60/120Hz ProMotion spring animations, touch/drag gesture sliding,
- * zero-delay mechanical haptic feedback on touch-down, and Apple magnifying lens.
+ * Floating dock navigation with custom vector icons, touch/drag gesture sliding and zero-delay
+ * haptic feedback on touch-down. iOS and Android share it (ADR 0024); the selection marker
+ * depends on the material of the skin:
+ * - liquid-glass (iOS): the Apple magnifying lens, which lifts, stretches and bounces.
+ * - any other (Android): a flat pill in `accent.container`. It slides and follows the finger,
+ *   but has no rim, shine, shadow, growth or overshoot.
  */
 export const FloatingLiquidGlassDock = React.memo(function FloatingLiquidGlassDock({
   activeTab,
   onSelectTab,
+  bottomInset = 0,
   testID = 'floating-liquid-glass-dock',
 }: FloatingLiquidGlassDockProps): React.JSX.Element {
-  const { colors, mode, radius, spacing, reducedMotion } = useBFlowTheme();
+  const { colors, mode, radius, spacing, reducedMotion, skinSpec } = useBFlowTheme();
+  // Liquid Glass is iOS only: every other skin gets the flat selection pill.
+  const isLiquidGlass = skinSpec.surfaceMaterial === 'liquid-glass';
+  const isLiquidGlassRef = useRef(isLiquidGlass);
+  isLiquidGlassRef.current = isLiquidGlass;
   // Reduce Motion: the lens and the icons jump to their place, with no spring or stretch.
   const reducedMotionRef = useRef(reducedMotion);
   reducedMotionRef.current = reducedMotion;
@@ -236,11 +246,23 @@ export const FloatingLiquidGlassDock = React.memo(function FloatingLiquidGlassDo
       runSpring(value, toValue, config, velocity);
     }
   ).current;
+  // The marker settling on a tab. The lens keeps its momentum and may bounce; the flat pill
+  // arrives without overshoot.
+  const settle = useRef((value: Animated.Value, toValue: number, velocity = 0): void => {
+    if (isLiquidGlassRef.current) {
+      spring(value, toValue, springConfigs.liquidSettle, velocity);
+    } else {
+      spring(value, toValue, springConfigs.flatSettle);
+    }
+  }).current;
   // Light mode: bone-white dock with a defined outline + deeper accent so it reads against the sand page.
   const accentColor = colors.accent.primary;
-  const dockBackground =
-    mode === 'dark' ? colors.glass.surfaceElevatedTint : 'rgba(247, 244, 236, 0.97)';
-  const dockBorder = mode === 'dark' ? colors.glass.specularBorder : 'rgba(90, 75, 45, 0.26)';
+  // Outside iOS the dock is an opaque surface of the skin's own palette.
+  const usesSkinSurface = !isLiquidGlass || mode === 'dark';
+  const dockBackground = usesSkinSurface
+    ? colors.glass.surfaceElevatedTint
+    : 'rgba(247, 244, 236, 0.97)';
+  const dockBorder = usesSkinSurface ? colors.glass.specularBorder : 'rgba(90, 75, 45, 0.26)';
   const screenWidth = Dimensions.get('window').width;
   const defaultWidth = Math.min(DOCK_MAX_WIDTH, Math.max(304, screenWidth - spacing.sm * 2));
   const [dockWidth, setDockWidth] = useState<number>(defaultWidth);
@@ -299,7 +321,7 @@ export const FloatingLiquidGlassDock = React.memo(function FloatingLiquidGlassDo
       return;
     }
 
-    spring(gliderAnim, activeIndex, springConfigs.liquidSettle);
+    settle(gliderAnim, activeIndex);
     tabScaleAnims.forEach((anim, i) => {
       spring(anim, i === activeIndex ? 1.05 : 1, springConfigs.gentle);
     });
@@ -316,7 +338,7 @@ export const FloatingLiquidGlassDock = React.memo(function FloatingLiquidGlassDo
         visualIndexRef.current = clamped;
         hapticService.selection();
 
-        spring(gliderAnim, clamped, springConfigs.liquidSettle);
+        settle(gliderAnim, clamped);
         tabScaleAnims.forEach((anim, i) => {
           spring(anim, i === clamped ? 1.05 : 1, springConfigs.gentle);
         });
@@ -342,7 +364,7 @@ export const FloatingLiquidGlassDock = React.memo(function FloatingLiquidGlassDo
   const isDraggingRef = useRef<boolean>(false);
 
   const springGliderTo = useCallback(
-    (toValue: number) => spring(gliderAnim, toValue, springConfigs.liquidSettle),
+    (toValue: number) => settle(gliderAnim, toValue),
     [gliderAnim]
   );
 
@@ -486,12 +508,7 @@ export const FloatingLiquidGlassDock = React.memo(function FloatingLiquidGlassDo
 
           // Settle the lens softly on the tab it is over (keeping its momentum),
           // and relax its shape
-          spring(
-            gliderAnim,
-            finalIndex,
-            springConfigs.liquidSettle,
-            Math.max(-12, Math.min(12, lensVelocityRef.current))
-          );
+          settle(gliderAnim, finalIndex, Math.max(-12, Math.min(12, lensVelocityRef.current)));
           lensVelocityRef.current = 0;
           relaxLens();
 
@@ -583,6 +600,12 @@ export const FloatingLiquidGlassDock = React.memo(function FloatingLiquidGlassDo
     tabWidth,
     lensWidth,
   });
+  // Flat pill: plain travel, clamped to the first and last tab.
+  const flatTranslateX = gliderAnim.interpolate({
+    inputRange: [0, DOCK_TABS.length - 1],
+    outputRange: [0, tabWidth * (DOCK_TABS.length - 1)],
+    extrapolate: 'clamp',
+  });
   const lensScaleY = Animated.multiply(
     liftAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06], extrapolate: 'clamp' }),
     stretchAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.92], extrapolate: 'clamp' })
@@ -618,10 +641,11 @@ export const FloatingLiquidGlassDock = React.memo(function FloatingLiquidGlassDo
     // Full-width anchor: an absolutely positioned view with left/right AND maxWidth pins to the
     // left edge, so the dock is centered by its parent instead (tablets, landscape, browsers).
     <View
+      testID={`${testID}-anchor`}
       pointerEvents="box-none"
       style={{
         position: 'absolute',
-        bottom: Platform.OS === 'ios' ? 24 : 16,
+        bottom: (Platform.OS === 'ios' ? 24 : 16) + bottomInset,
         left: spacing.sm,
         right: spacing.sm,
         alignItems: 'center',
@@ -660,7 +684,26 @@ export const FloatingLiquidGlassDock = React.memo(function FloatingLiquidGlassDo
         }}
       >
         {/* iOS 26 Liquid Glass Lens Glider (Clean Symmetrical Specular Squircle) */}
-        {availableWidth > 0 && lensWidth > 0 ? (
+        {/* Flat selection pill (Android): one tonal fill, nothing that reads as glass */}
+        {!isLiquidGlass && availableWidth > 0 && lensWidth > 0 ? (
+          <Animated.View
+            pointerEvents="none"
+            testID="dock-flat-indicator"
+            style={{
+              position: 'absolute',
+              top: 3,
+              bottom: 3,
+              left: DOCK_PADDING_H + LENS_MARGIN_H,
+              width: lensWidth,
+              transform: [{ translateX: flatTranslateX }],
+              borderRadius: radius.pill,
+              backgroundColor: colors.accent.container,
+              zIndex: 1,
+            }}
+          />
+        ) : null}
+
+        {isLiquidGlass && availableWidth > 0 && lensWidth > 0 ? (
           <Animated.View
             pointerEvents="none"
             testID="dock-magnifying-lens"
@@ -763,7 +806,7 @@ export const FloatingLiquidGlassDock = React.memo(function FloatingLiquidGlassDo
                 style={{
                   flex: 1,
                   height: 54,
-                  minHeight: MIN_TOUCH_TARGET_PT,
+                  minHeight: skinSpec.minTouchTarget,
                   justifyContent: 'center',
                   alignItems: 'center',
                 }}

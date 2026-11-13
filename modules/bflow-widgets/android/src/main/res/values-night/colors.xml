@@ -1,24 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Tokens de la piel Android en modo oscuro: androidPalettes.dark de src/design-system/tokens.ts. -->
+<!--
+  Piel iOS de los widgets (modo oscuro): los mismos 11 colores { light, dark } de
+  targets/widgets/expo-target.config.js, que replican palettes.dark de src/design-system/tokens.ts.
+  Sin colores dinamicos del sistema: Android se ve igual que iOS (ADR 0021).
+-->
 <resources>
-  <color name="bflow_widget_background">#101411</color>
-  <color name="bflow_widget_surface">#1A201C</color>
-  <color name="bflow_widget_surface_elevated">#232925</color>
-  <color name="bflow_widget_outline">#404943</color>
-
-  <color name="bflow_widget_text_primary">#E0E4DD</color>
-  <color name="bflow_widget_text_secondary">#C0C9BF</color>
-  <color name="bflow_widget_text_muted">#939C92</color>
-
-  <color name="bflow_widget_accent">#8CD5B4</color>
-
+  <!-- background.primary -->
+  <color name="bflow_widget_background">#0D0F12</color>
+  <!-- text.primary -->
+  <color name="bflow_widget_text_primary">#F4F5F7</color>
+  <!-- text.secondary -->
+  <color name="bflow_widget_text_secondary">#9BA3AF</color>
+  <!-- accent.primary -->
+  <color name="bflow_widget_accent">#388AF6</color>
+  <!-- semantic.income -->
   <color name="bflow_widget_income">#2EBD85</color>
-  <color name="bflow_widget_expense">#E57373</color>
+  <!-- semantic.expense -->
+  <color name="bflow_widget_expense">#E06A6A</color>
+  <!-- semantic.pending -->
   <color name="bflow_widget_pending">#E5A84B</color>
+  <!-- semantic.debt -->
   <color name="bflow_widget_debt">#D9824C</color>
-  <color name="bflow_widget_savings">#AD93EA</color>
-  <color name="bflow_widget_reserve">#6FA4F0</color>
+  <!-- semantic.savings -->
+  <color name="bflow_widget_savings">#9D7FE6</color>
+  <!-- semantic.reserve -->
+  <color name="bflow_widget_reserve">#4F8FEA</color>
+  <!-- semantic.completed -->
   <color name="bflow_widget_completed">#2EBD85</color>
-
-  <color name="bflow_widget_track">#404943</color>
+  <!-- Pista de barras y separadores: texto secundario al 22 % (WidgetPalette.track). -->
+  <color name="bflow_widget_track">#389BA3AF</color>
 </resources>

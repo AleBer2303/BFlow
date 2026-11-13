@@ -87,6 +87,7 @@ export function DonutChart({
         testID={`${testID}-ring`}
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
+        aria-hidden
       >
         <Svg width={size} height={size} testID={`${testID}-svg`}>
           <Circle

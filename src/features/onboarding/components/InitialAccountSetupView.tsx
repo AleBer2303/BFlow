@@ -9,8 +9,9 @@
      */
 
     import React, { useMemo, useState } from 'react';
-    import { LayoutAnimation, Platform, UIManager, View } from 'react-native';
+    import { View } from 'react-native';
     import {
+  animateNextLayout,
   AppPressable,
   AppText,
   AppTextInput,
@@ -29,32 +30,6 @@
       type DebtInterestRateType,
     } from '../../../domain';
     import type { InitialOnboardingConfigInput } from '../../budget/store/useBudgetStore';
-
-    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-      UIManager.setLayoutAnimationEnabledExperimental(true);
-    }
-
-    /**
-     * Subtle, imperceptible iOS-style accordion transition (250ms ease-in-out).
-     */
-    const triggerSubtleAccordionAnimation = () => {
-      if (Platform.OS !== 'web') {
-        LayoutAnimation.configureNext({
-          duration: 250,
-          create: {
-            type: LayoutAnimation.Types.easeInEaseOut,
-            property: LayoutAnimation.Properties.opacity,
-          },
-          update: {
-            type: LayoutAnimation.Types.easeInEaseOut,
-          },
-          delete: {
-            type: LayoutAnimation.Types.easeInEaseOut,
-            property: LayoutAnimation.Properties.opacity,
-          },
-        });
-      }
-    };
 
     export interface InitialAccountSetupViewProps {
       defaultMonthKey?: string;
@@ -176,7 +151,7 @@
         ]);
         setIncName('');
         setIncAmount('');
-        triggerSubtleAccordionAnimation();
+        animateNextLayout();
         setIsAddIncomeOpen(false);
       };
 
@@ -208,7 +183,7 @@
         setDebtBalance('');
         setDebtRate('');
         setDebtInstallment('');
-        triggerSubtleAccordionAnimation();
+        animateNextLayout();
         setIsAddDebtOpen(false);
       };
 
@@ -244,7 +219,7 @@
         ]);
         setNewBucketName('');
         setNewBucketBalance('');
-        triggerSubtleAccordionAnimation();
+        animateNextLayout();
         setIsAddBucketOpen(false);
       };
 
@@ -268,7 +243,7 @@
         setExpAmount('');
         setExpDebtKey(null);
         setExpBucketKey(null);
-        triggerSubtleAccordionAnimation();
+        animateNextLayout();
         setIsAddExpenseOpen(false);
       };
 
@@ -291,7 +266,7 @@
         setProvName('');
         setProvAmount('');
         setProvMonths('12');
-        triggerSubtleAccordionAnimation();
+        animateNextLayout();
         setIsAddProvisionOpen(false);
       };
 
@@ -524,7 +499,7 @@
                   accessibilityRole="button"
                   accessibilityLabel="Agregar nuevo fondo de ahorro"
                   onPress={() => {
-                    triggerSubtleAccordionAnimation();
+                    animateNextLayout();
                     setIsAddBucketOpen(true);
                   }}
                   style={{
@@ -601,7 +576,7 @@
                       testID="onboarding-cancel-add-bucket"
                       accessibilityRole="button"
                       onPress={() => {
-                        triggerSubtleAccordionAnimation();
+                        animateNextLayout();
                         setIsAddBucketOpen(false);
                       }}
                       style={{
@@ -696,7 +671,7 @@
                   accessibilityRole="button"
                   accessibilityLabel="Agregar nueva deuda"
                   onPress={() => {
-                    triggerSubtleAccordionAnimation();
+                    animateNextLayout();
                     setIsAddDebtOpen(true);
                   }}
                   style={{
@@ -864,7 +839,7 @@
                       testID="onboarding-cancel-add-debt"
                       accessibilityRole="button"
                       onPress={() => {
-                        triggerSubtleAccordionAnimation();
+                        animateNextLayout();
                         setIsAddDebtOpen(false);
                       }}
                       style={{
@@ -961,7 +936,7 @@
                   accessibilityRole="button"
                   accessibilityLabel="Agregar nuevo ingreso"
                   onPress={() => {
-                    triggerSubtleAccordionAnimation();
+                    animateNextLayout();
                     setIsAddIncomeOpen(true);
                   }}
                   style={{
@@ -1112,7 +1087,7 @@
                       testID="onboarding-cancel-add-income"
                       accessibilityRole="button"
                       onPress={() => {
-                        triggerSubtleAccordionAnimation();
+                        animateNextLayout();
                         setIsAddIncomeOpen(false);
                       }}
                       style={{
@@ -1210,7 +1185,7 @@
                   accessibilityRole="button"
                   accessibilityLabel="Agregar nuevo gasto"
                   onPress={() => {
-                    triggerSubtleAccordionAnimation();
+                    animateNextLayout();
                     setIsAddExpenseOpen(true);
                   }}
                   style={{
@@ -1471,7 +1446,7 @@
                       testID="onboarding-cancel-add-expense"
                       accessibilityRole="button"
                       onPress={() => {
-                        triggerSubtleAccordionAnimation();
+                        animateNextLayout();
                         setIsAddExpenseOpen(false);
                       }}
                       style={{
@@ -1561,7 +1536,7 @@
                   accessibilityRole="button"
                   accessibilityLabel="Agregar nueva provisión o meta"
                   onPress={() => {
-                    triggerSubtleAccordionAnimation();
+                    animateNextLayout();
                     setIsAddProvisionOpen(true);
                   }}
                   style={{
@@ -1679,7 +1654,7 @@
                       testID="onboarding-cancel-add-provision"
                       accessibilityRole="button"
                       onPress={() => {
-                        triggerSubtleAccordionAnimation();
+                        animateNextLayout();
                         setIsAddProvisionOpen(false);
                       }}
                       style={{

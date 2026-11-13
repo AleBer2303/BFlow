@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SavingsMediumView (iOS systemMedium) = 4x2. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@android:id/background"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:background="@drawable/bflow_widget_background"
+  android:clipToOutline="true">
+
+  <LinearLayout
+    android:id="@+id/bflow_widget_content"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="@dimen/bflow_widget_padding">
+    <LinearLayout
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:gravity="center_vertical"
+      android:orientation="horizontal"
+      android:minHeight="20dp">
+      <TextView
+        android:id="@+id/bflow_widget_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:textColor="@color/bflow_widget_text_primary"
+        android:textSize="12sp"
+        android:fontFamily="sans-serif-medium" />
+      <TextView
+        android:id="@+id/bflow_widget_month"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:textColor="@color/bflow_widget_text_secondary"
+        android:textSize="11sp"
+        android:fontFamily="sans-serif-medium" />
+      <FrameLayout
+        android:layout_width="0dp"
+        android:layout_height="1dp"
+        android:layout_weight="1"
+        android:minWidth="4dp" />
+      <TextView
+        android:id="@+id/bflow_widget_updated"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:fontFeatureSettings="tnum"
+        android:maxLines="1"
+        android:textColor="@color/bflow_widget_text_secondary"
+        android:textSize="11sp" />
+      <!-- Hueco del icono "Actualizar" (24 dp como en iOS); el boton tactil de 48 dp va encima. -->
+      <FrameLayout
+        android:layout_width="24dp"
+        android:layout_height="20dp"
+        android:layout_marginStart="6dp" />
+    </LinearLayout>
+    <LinearLayout
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:gravity="top"
+      android:orientation="horizontal"
+      android:layout_marginTop="6dp">
+      <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+        <TextView
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:ellipsize="end"
+          android:includeFontPadding="false"
+          android:maxLines="1"
+          android:text="@string/bflow_widget_savings_total"
+          android:textColor="@color/bflow_widget_text_secondary"
+          android:textSize="12sp" />
+        <TextView
+          android:id="@+id/savings_total"
+          android:layout_width="match_parent"
+          android:layout_height="30dp"
+          android:layout_marginTop="2dp"
+          android:autoSizeMaxTextSize="22sp"
+          android:autoSizeMinTextSize="12sp"
+          android:autoSizeStepGranularity="1sp"
+          android:autoSizeTextType="uniform"
+          android:gravity="center_vertical|start"
+          android:ellipsize="end"
+          android:includeFontPadding="false"
+          android:fontFeatureSettings="tnum"
+          android:maxLines="1"
+          android:textColor="@color/bflow_widget_savings"
+          android:textSize="22sp"
+          android:textStyle="bold" />
+      </LinearLayout>
+      <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_marginStart="14dp">
+        <LinearLayout
+          android:id="@+id/savings_reserve_row"
+          android:layout_width="match_parent"
+          android:layout_height="wrap_content"
+          android:gravity="center_vertical"
+          android:orientation="horizontal">
+          <ImageView
+            android:id="@+id/savings_reserve_dot"
+            android:layout_width="7dp"
+            android:layout_height="7dp"
+            android:importantForAccessibility="no"
+            android:scaleType="fitCenter"
+            android:src="@drawable/bflow_widget_dot_reserve" />
+          <TextView
+            android:id="@+id/savings_reserve_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="@color/bflow_widget_text_secondary"
+            android:textSize="12sp" />
+          <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"
+            android:minWidth="4dp" />
+          <TextView
+            android:id="@+id/savings_reserve_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:fontFeatureSettings="tnum"
+            android:maxLines="1"
+            android:textColor="@color/bflow_widget_text_primary"
+            android:textSize="12sp"
+            android:fontFamily="sans-serif-medium" />
+        </LinearLayout>
+        <LinearLayout
+          android:id="@+id/savings_savings_row"
+          android:layout_width="match_parent"
+          android:layout_height="wrap_content"
+          android:gravity="center_vertical"
+          android:orientation="horizontal"
+          android:layout_marginTop="4dp">
+          <ImageView
+            android:id="@+id/savings_savings_dot"
+            android:layout_width="7dp"
+            android:layout_height="7dp"
+            android:importantForAccessibility="no"
+            android:scaleType="fitCenter"
+            android:src="@drawable/bflow_widget_dot_savings" />
+          <TextView
+            android:id="@+id/savings_savings_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="@color/bflow_widget_text_secondary"
+            android:textSize="12sp" />
+          <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"
+            android:minWidth="4dp" />
+          <TextView
+            android:id="@+id/savings_savings_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:fontFeatureSettings="tnum"
+            android:maxLines="1"
+            android:textColor="@color/bflow_widget_text_primary"
+            android:textSize="12sp"
+            android:fontFamily="sans-serif-medium" />
+        </LinearLayout>
+        <LinearLayout
+          android:id="@+id/savings_other_row"
+          android:layout_width="match_parent"
+          android:layout_height="wrap_content"
+          android:gravity="center_vertical"
+          android:orientation="horizontal"
+          android:layout_marginTop="4dp"
+          android:visibility="gone">
+          <ImageView
+            android:id="@+id/savings_other_dot"
+            android:layout_width="7dp"
+            android:layout_height="7dp"
+            android:importantForAccessibility="no"
+            android:scaleType="fitCenter"
+            android:src="@drawable/bflow_widget_dot_accent" />
+          <TextView
+            android:id="@+id/savings_other_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="@color/bflow_widget_text_secondary"
+            android:textSize="12sp" />
+          <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"
+            android:minWidth="4dp" />
+          <TextView
+            android:id="@+id/savings_other_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:fontFeatureSettings="tnum"
+            android:maxLines="1"
+            android:textColor="@color/bflow_widget_text_primary"
+            android:textSize="12sp"
+            android:fontFamily="sans-serif-medium" />
+        </LinearLayout>
+      </LinearLayout>
+    </LinearLayout>
+    <FrameLayout
+      android:layout_width="match_parent"
+      android:layout_height="0dp"
+      android:layout_weight="1"
+      android:minHeight="0dp" />
+    <!-- SavingsDistributionBar: tramos apilados (otros, ahorro y reserva, de abajo arriba). -->
+    <FrameLayout
+      android:layout_width="match_parent"
+      android:layout_height="8dp"
+      android:importantForAccessibility="noHideDescendants">
+      <ProgressBar
+        android:id="@+id/savings_bar_other"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="8dp"
+        android:importantForAccessibility="no"
+        android:indeterminate="false"
+        android:max="1000"
+        android:maxHeight="8dp"
+        android:minHeight="8dp"
+        android:progress="0"
+        android:progressDrawable="@drawable/bflow_widget_progress_accent" />
+      <ProgressBar
+        android:id="@+id/savings_bar_savings"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="8dp"
+        android:importantForAccessibility="no"
+        android:indeterminate="false"
+        android:max="1000"
+        android:maxHeight="8dp"
+        android:minHeight="8dp"
+        android:progress="0"
+        android:progressDrawable="@drawable/bflow_widget_progress_savings_overlay" />
+      <ProgressBar
+        android:id="@+id/savings_bar_reserve"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="8dp"
+        android:importantForAccessibility="no"
+        android:indeterminate="false"
+        android:max="1000"
+        android:maxHeight="8dp"
+        android:minHeight="8dp"
+        android:progress="0"
+        android:progressDrawable="@drawable/bflow_widget_progress_reserve_overlay" />
+    </FrameLayout>
+  </LinearLayout>
+
+  <LinearLayout
+    android:id="@+id/bflow_widget_empty"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="@dimen/bflow_widget_padding"
+    android:visibility="gone"
+    android:contentDescription="@string/bflow_widget_empty">
+    <ImageView
+      android:layout_width="22dp"
+      android:layout_height="22dp"
+      android:importantForAccessibility="no"
+      android:scaleType="fitCenter"
+      android:src="@drawable/bflow_widget_ic_chart_trend_accent" />
+    <FrameLayout
+      android:layout_width="match_parent"
+      android:layout_height="0dp"
+      android:layout_weight="1"
+      android:minHeight="8dp" />
+    <TextView
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:ellipsize="end"
+      android:includeFontPadding="false"
+      android:maxLines="1"
+      android:text="@string/bflow_widget_brand"
+      android:textColor="@color/bflow_widget_text_primary"
+      android:textSize="17sp"
+      android:fontFamily="sans-serif-medium" />
+    <TextView
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="8dp"
+      android:ellipsize="end"
+      android:includeFontPadding="false"
+      android:maxLines="3"
+      android:text="@string/bflow_widget_empty"
+      android:textColor="@color/bflow_widget_text_secondary"
+      android:textSize="15sp" />
+  </LinearLayout>
+
+  <!-- Boton "Actualizar": icono de 12 dp (caption2) alineado con la cabecera; objetivo de 48 dp. -->
+  <ImageView
+    android:id="@+id/bflow_widget_refresh"
+    android:layout_width="@dimen/bflow_widget_touch_target"
+    android:layout_height="@dimen/bflow_widget_touch_target"
+    android:layout_gravity="top|end"
+    android:layout_marginTop="2dp"
+    android:layout_marginEnd="4dp"
+    android:background="@drawable/bflow_widget_refresh_ripple"
+    android:contentDescription="@string/bflow_widget_refresh"
+    android:padding="18dp"
+    android:scaleType="fitCenter"
+    android:src="@drawable/bflow_widget_ic_refresh_text_secondary"
+    android:visibility="gone" />
+</FrameLayout>

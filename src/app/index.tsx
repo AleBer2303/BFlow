@@ -6,11 +6,15 @@ import {
   cancelCloudWidgetSnapshotWrite,
   flushCloudWidgetSnapshotWrite,
 } from '../data/repositories/widgetSnapshotRepository';
-import { hapticService, type HapticType } from '../design-system';
+import { Entrance, hapticService, type HapticType } from '../design-system';
 import { formatMonthKeyLabelEs } from '../domain';
 import { AnalyticsTab } from '../features/analytics/components/AnalyticsTab';
 import { AccountTab, type AccountTabProps } from '../features/auth/components/AccountTab';
 import { AuthScreen, type AuthScreenProps } from '../features/auth/components/AuthScreen';
+import {
+  havePersistedAccountFieldsChanged,
+  type PersistedAccountFields,
+} from '../features/budget/store/persistedAccountFields';
 import { useBudgetStore } from '../features/budget/store/useBudgetStore';
 import { ChecklistTab } from '../features/checklist/components/ChecklistTab';
 import { DebtsTab } from '../features/debts/components/DebtsTab';
@@ -192,26 +196,14 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     if (process.env.NODE_ENV === 'test') {
       return;
     }
-    let prevExtract: string | null = null;
+    let lastSaved: PersistedAccountFields | null = null;
     const unsubscribe = useBudgetStore.subscribe((state) => {
       const uid = state.authUser?.uid;
       if (!uid || uid === 'local-owner' || uid === 'local-demo' || !state.isAccountHydrated) {
         return;
       }
-      const currentExtract = JSON.stringify([
-        state.activeMonthKey,
-        state.availableMonths,
-        state.concepts,
-        state.entries,
-        state.debtsByMonth,
-        state.debtPayments,
-        state.savingsBucketsByMonth,
-        state.idealMotoPlan,
-        state.closedSnapshots,
-        state.needsOnboarding,
-      ]);
-      if (currentExtract !== prevExtract) {
-        prevExtract = currentExtract;
+      if (havePersistedAccountFieldsChanged(lastSaved, state)) {
+        lastSaved = state;
         schedulePersistedAccountSave(uid, {
           activeMonthKey: state.activeMonthKey,
           availableMonths: state.availableMonths,
@@ -379,8 +371,8 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
 
   const handleUpdateProfile = useCallback<NonNullable<AccountTabProps['onUpdateProfile']>>(
     async (updates) => {
-      triggerHaptic('success');
       await useBudgetStore.getState().updateAuthUserProfile(updates);
+      triggerHaptic('success');
     },
     []
   );
@@ -402,13 +394,13 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
   );
 
   const handleResetFullAccount = useCallback(() => {
-    triggerHaptic('light');
+    triggerHaptic('warning');
     void useBudgetStore.getState().resetFullAccount();
   }, []);
 
   // The navigation shows the new tab at once; the tab's content mounts as a transition. A
-  // heavy tab (Checklist, most visible on Android, where every ripple is a native drawable)
-  // used to mount in the same frame as the tap, so the indicator and ripple froze until it
+  // heavy tab (Checklist, most visible on Android) used to mount in the same frame as the
+  // tap, so the indicator and the press feedback froze until it
   // finished. Meanwhile the previous tab stays on screen instead of a blank frame.
   const contentTab = useDeferredValue(activeTab);
 
@@ -447,8 +439,8 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
           }}
         />
       ) : (
-        <>
-          {/* Active Workspace Content */}
+        // Keyed by tab: the incoming screen fades in and rises once, on the native driver.
+        <Entrance key={contentTab} kind="screen" testID="workspace-tab-content">
           {contentTab === 'summary' ? <SummaryTab /> : null}
           {contentTab === 'checklist' ? <ChecklistTab /> : null}
           {contentTab === 'debts' ? <DebtsTab /> : null}
@@ -465,7 +457,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
               onResetFullAccount={handleResetFullAccount}
             />
           ) : null}
-        </>
+        </Entrance>
       )}
     </WorkspaceShell>
   );

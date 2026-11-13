@@ -280,6 +280,8 @@ export function ChartTouchColumns({
           onHoverOut={() => selection.hover(null)}
           onFocus={() => selection.hover(index)}
           onBlur={() => selection.hover(null)}
+          // An invisible hit area over the plot: nothing to sink under the finger.
+          pressEffect="none"
           style={{ flex: 1 }}
         />
       ))}
@@ -343,6 +345,7 @@ export function ChartCategoryLabels({
       style={{ flexDirection: 'row', marginRight: CHART_AXIS_GUTTER_PT }}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
+      aria-hidden
     >
       {labels.map((label, index) => (
         <AppText

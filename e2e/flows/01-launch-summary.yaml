@@ -1,0 +1,36 @@
+# Arranque: la app abre con la sesión demo y muestra el Resumen de octubre 2026.
+appId: com.bflow.app
+name: 01-launch-summary
+tags:
+  - smoke
+  - demo
+---
+- runFlow: ../subflows/launch-demo.yaml
+
+# No hay puerta de autenticación y el mes activo es el del seed.
+- assertNotVisible:
+    id: auth-gate-screen
+- assertVisible: '.*Octubre 2026'
+- assertVisible:
+    id: workspace-tab-summary
+
+# Tarjetas del Resumen.
+- assertVisible:
+    id: net-flow-hero-card
+- assertVisible:
+    id: golden-net-flow
+- assertVisible:
+    id: checklist-progress-badge
+# Valor dorado del seed: 6 de 12 ítems completados (fixtures/october-2026.json).
+- assertVisible: 'Checklist 6 de 12'
+- assertVisible:
+    id: income-summary-card
+- assertVisible:
+    id: expense-summary-card
+
+# La curva del mes queda debajo de las tarjetas.
+- scrollUntilVisible:
+    element:
+      id: monthly-curve-section
+    direction: DOWN
+- takeScreenshot: 01-launch-summary

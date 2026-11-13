@@ -21,7 +21,7 @@ import {
   hasPendingOfflineWrites,
 } from '../../../../platform/storage/offlineWriteQueue';
 import {
-  buildInitialState,
+  getStoreInitialState,
   isRealAuthUser,
   triggerWidgetSync,
   type SliceCreator,
@@ -29,7 +29,7 @@ import {
 } from './sliceTypes';
 
 export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
-  const initial = buildInitialState();
+  const initial = getStoreInitialState();
   return {
     activeTab: 'summary',
     activeMonthKey: initial.activeMonthKey,

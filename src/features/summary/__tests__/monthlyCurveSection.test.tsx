@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { GLView, type ExpoWebGLRenderingContext } from 'expo-gl';
 import React from 'react';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, View } from 'react-native';
 import { BFlowThemeProvider } from '../../../design-system/theme/ThemeContext';
 import { palettes } from '../../../design-system/tokens';
 import type { MonthlyCurve } from '../../../domain/overview/monthlyCurve';
@@ -251,7 +251,8 @@ describe('scenePalette', () => {
 describe('useReducedMotionPreference', () => {
   function Probe(): React.JSX.Element {
     const isReduced = useReducedMotionPreference();
-    return <>{isReduced ? <BFlowThemeProvider>{null}</BFlowThemeProvider> : null}</>;
+    // A plain marker: the theme provider tracks the setting too and would add its own listener.
+    return <>{isReduced ? <View testID="reduced-motion-marker" /> : null}</>;
   }
 
   it('reads the system setting and removes its listener on unmount', async () => {
@@ -263,9 +264,9 @@ describe('useReducedMotionPreference', () => {
       .spyOn(AccessibilityInfo, 'addEventListener')
       .mockReturnValue({ remove } as never);
 
-    const { unmount, UNSAFE_queryByType } = render(<Probe />);
+    const { unmount, queryByTestId } = render(<Probe />);
 
-    await waitFor(() => expect(UNSAFE_queryByType(BFlowThemeProvider)).toBeTruthy());
+    await waitFor(() => expect(queryByTestId('reduced-motion-marker')).toBeTruthy());
     expect(addListener).toHaveBeenCalledWith('reduceMotionChanged', expect.any(Function));
 
     unmount();

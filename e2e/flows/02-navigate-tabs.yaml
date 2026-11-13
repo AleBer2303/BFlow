@@ -1,0 +1,40 @@
+# Navegación: recorre las 6 pestañas y comprueba que cada una monta su pantalla.
+# Los testID `workspace-tab-<id>` son los mismos en las tres pieles (AGENTS.md §7.5).
+appId: com.bflow.app
+name: 02-navigate-tabs
+tags:
+  - smoke
+  - demo
+---
+- runFlow: ../subflows/launch-demo.yaml
+
+- tapOn:
+    id: workspace-tab-checklist
+- assertVisible:
+    id: checklist-workspace-view
+
+- tapOn:
+    id: workspace-tab-debts
+- assertVisible:
+    id: debts-funfami-view
+
+- tapOn:
+    id: workspace-tab-savings
+- assertVisible:
+    id: savings-and-moto-ideal-view
+
+- tapOn:
+    id: workspace-tab-analytics
+- assertVisible:
+    id: analytics-and-history-view
+
+- tapOn:
+    id: workspace-tab-account
+- assertVisible:
+    id: account-profile-workspace-view
+
+- tapOn:
+    id: workspace-tab-summary
+- assertVisible:
+    id: net-flow-hero-card
+- takeScreenshot: 02-navigate-tabs

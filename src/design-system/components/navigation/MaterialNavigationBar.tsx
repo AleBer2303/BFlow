@@ -3,15 +3,17 @@
  *
  * Android navigation: a Material 3 navigation bar. Deliberately the opposite of the iOS dock:
  * anchored edge to edge at the bottom (not floating), opaque tonal container (no blur, no
- * glass, no lens), a pill "active indicator" behind the selected icon and a ripple on touch.
+ * glass, no lens) and a pill "active indicator" behind the selected icon.
  * It sits in the layout flow, so content never hides behind it, and pads the system gesture
  * area itself.
  */
 
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { Animated, StyleSheet, View } from 'react-native';
 import { hapticService } from '../../../platform/haptics/hapticService';
+import { IS_MOTION_STATIC, USE_NATIVE_DRIVER, toEasing } from '../../motion/motionRuntime';
 import { useBFlowTheme } from '../../theme/ThemeContext';
+import { motionBySkin, motionDuration } from '../../tokens';
 import { AppPressable } from '../AppPressable';
 import { AppText } from '../Typography';
 import {
@@ -25,7 +27,6 @@ export const MATERIAL_NAV_BAR_HEIGHT = 80;
 export const MATERIAL_NAV_INDICATOR = { width: 56, height: 32 } as const;
 const MATERIAL_NAV_ICON_SIZE = 24;
 const MATERIAL_NAV_MAX_WIDTH = 640;
-const INDICATOR_ENTER_MS = 200;
 
 export interface MaterialNavigationBarProps extends WorkspaceNavigationProps {
   /** System gesture / navigation area below the bar (edge-to-edge). */
@@ -39,8 +40,9 @@ interface MaterialNavItemProps {
 }
 
 function MaterialNavItem({ tab, isSelected, onSelect }: MaterialNavItemProps): React.JSX.Element {
-  const { colors, radius, spacing } = useBFlowTheme();
-  const skipMotion = process.env.NODE_ENV === 'test';
+  const { colors, radius, spacing, reducedMotion } = useBFlowTheme();
+  // Reduce Motion: the pill is simply there, it does not widen.
+  const skipMotion = IS_MOTION_STATIC || reducedMotion;
   const indicator = useRef(new Animated.Value(1)).current;
   const wasSelected = useRef(isSelected);
 
@@ -57,9 +59,9 @@ function MaterialNavItem({ tab, isSelected, onSelect }: MaterialNavItemProps): R
     indicator.setValue(0);
     Animated.timing(indicator, {
       toValue: 1,
-      duration: INDICATOR_ENTER_MS,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
+      duration: motionDuration.fast,
+      easing: toEasing(motionBySkin.android.enter),
+      useNativeDriver: USE_NATIVE_DRIVER,
     }).start();
   }, [indicator, isSelected, skipMotion]);
 

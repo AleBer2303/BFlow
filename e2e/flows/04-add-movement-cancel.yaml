@@ -1,0 +1,36 @@
+# Nuevo movimiento: abre el formulario y lo cierra sin guardar.
+#
+# El formulario no tiene botón propio de cancelar: el mismo botón que lo abre
+# (`open-add-movement-modal-button`) pasa a decir «Cerrar» y lo cierra.
+appId: com.bflow.app
+name: 04-add-movement-cancel
+tags:
+  - demo
+---
+- runFlow: ../subflows/launch-demo.yaml
+
+- tapOn:
+    id: workspace-tab-checklist
+- assertVisible:
+    id: checklist-workspace-view
+- assertVisible: 'Todos \(12\)'
+
+# Abrir.
+- tapOn:
+    id: open-add-movement-modal-button
+- assertVisible:
+    id: add-movement-modal-card
+- assertVisible:
+    id: modal-type-expense
+- assertVisible:
+    id: modal-type-income
+- takeScreenshot: 04-add-movement-open
+
+# Cancelar.
+- tapOn:
+    id: open-add-movement-modal-button
+- assertNotVisible:
+    id: add-movement-modal-card
+
+# No se creó ningún movimiento.
+- assertVisible: 'Todos \(12\)'

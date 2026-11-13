@@ -41,6 +41,7 @@ import {
   buildCleanEmptyWorkspaceState,
   buildHydratedWorkspaceState,
   buildInitialState,
+  getStoreInitialState,
   isRealAuthUser,
   recalculateProvisionPlan,
   triggerWidgetSync,
@@ -49,7 +50,7 @@ import {
 } from './sliceTypes';
 
 export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
-  const initial = buildInitialState();
+  const initial = getStoreInitialState();
   return {
     authUser: initial.authUser,
     needsOnboarding: initial.needsOnboarding,

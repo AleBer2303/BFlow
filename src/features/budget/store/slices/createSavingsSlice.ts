@@ -11,7 +11,7 @@ import {
 import { type SavingsBucket } from '../../../../domain';
 import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
-  buildInitialState,
+  getStoreInitialState,
   isRealAuthUser,
   triggerWidgetSync,
   type SavingsSlice,
@@ -19,7 +19,7 @@ import {
 } from './sliceTypes';
 
 export const createSavingsSlice: SliceCreator<SavingsSlice> = (set, get) => {
-  const initial = buildInitialState();
+  const initial = getStoreInitialState();
   return {
     savingsBucketsByMonth: initial.savingsBucketsByMonth,
 

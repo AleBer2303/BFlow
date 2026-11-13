@@ -1,0 +1,15 @@
+# Configuración del workspace de Maestro (se lee al ejecutar `maestro test e2e`).
+# Los flujos viven en flows/; subflows/ guarda pasos compartidos que no se ejecutan solos.
+flows:
+  - 'flows/*'
+
+# El arranque va primero: si la app no abre en modo vitrina, el resto no aporta información.
+# Cada flujo reinicia la app con el estado limpio, así que un fallo no contamina al siguiente.
+executionOrder:
+  continueOnFailure: true
+  flowsOrder:
+    - 01-launch-summary
+    - 02-navigate-tabs
+    - 03-checklist-toggle
+    - 04-add-movement-cancel
+    - 05-theme-toggle

@@ -156,6 +156,24 @@ export function AnalyticsChartsPanel({
           />
         </ChartCard>
 
+        <ChartCard
+          title="Distribución de gastos"
+          subtitle="Por concepto: lo pagado y lo que falta por pagar"
+          testID="analytics-chart-distribution"
+        >
+          <DonutChart
+            testID="distribution-chart"
+            totalLabel="Gastos del mes"
+            emptyLabel="Este mes todavía no tiene gastos."
+            slices={distribution.slices.map((slice, index) => ({
+              id: slice.id,
+              label: slice.label,
+              amount: slice.amount,
+              color: palette[index % palette.length] as string,
+            }))}
+          />
+        </ChartCard>
+
         <ChartCard title="Balance mensual" testID="analytics-chart-balance">
           <LineChart
             testID="balance-chart"
@@ -206,24 +224,6 @@ export function AnalyticsChartsPanel({
               { id: 'paid', label: 'Pagado', amount: split.paid, color: colors.semantic.completed },
               { id: 'pending', label: 'Pendiente', amount: split.pending, color: colors.semantic.pending },
             ]}
-          />
-        </ChartCard>
-
-        <ChartCard
-          title="Distribución de gastos"
-          subtitle="Por concepto: lo pagado y lo que falta por pagar"
-          testID="analytics-chart-distribution"
-        >
-          <DonutChart
-            testID="distribution-chart"
-            totalLabel="Gastos del mes"
-            emptyLabel="Este mes todavía no tiene gastos."
-            slices={distribution.slices.map((slice, index) => ({
-              id: slice.id,
-              label: slice.label,
-              amount: slice.amount,
-              color: palette[index % palette.length] as string,
-            }))}
           />
         </ChartCard>
 

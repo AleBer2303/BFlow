@@ -72,7 +72,7 @@ export const ChecklistTab = React.memo(function ChecklistTab(): React.JSX.Elemen
   );
   const handleDeleteConcept = useCallback<NonNullable<Props['onDeleteConcept']>>(
     (conceptId) => {
-      hapticService.trigger('light');
+      hapticService.trigger('warning');
       void actions.deleteConcept(conceptId);
     },
     [actions]
@@ -86,7 +86,7 @@ export const ChecklistTab = React.memo(function ChecklistTab(): React.JSX.Elemen
   );
   const handleDeleteEntry = useCallback<NonNullable<Props['onDeleteEntry']>>(
     (entryId) => {
-      hapticService.trigger('light');
+      hapticService.trigger('warning');
       void actions.deleteEntryById(entryId);
     },
     [actions]

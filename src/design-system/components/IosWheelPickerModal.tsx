@@ -19,6 +19,7 @@
 import { BlurView } from 'expo-blur';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -28,6 +29,8 @@ import {
   View,
 } from 'react-native';
 import { hapticService } from '../../platform/haptics/hapticService';
+import { IS_MOTION_STATIC, USE_NATIVE_DRIVER, toEasing } from '../motion/motionRuntime';
+import { resolvePresenceSpec } from '../motion/motionSpec';
 import { useBFlowTheme } from '../theme/ThemeContext';
 import { AppPressable } from './AppPressable';
 import { MIN_TOUCH_TARGET_PT } from '../tokens';
@@ -62,7 +65,9 @@ export function IosWheelPickerModal<T extends string = string>({
   onCancel,
   testID = 'ios-wheel-picker-modal',
 }: IosWheelPickerModalProps<T>): React.JSX.Element {
-  const { colors, spacing, radius, skinSpec } = useBFlowTheme();
+  const { colors, spacing, radius, skinSpec, skin, reducedMotion } = useBFlowTheme();
+  const sheetOpen = resolvePresenceSpec({ skin, reducedMotion }, 'dialog').open;
+  const sheetProgress = useRef(new Animated.Value(1)).current;
   const scrollViewRef = useRef<React.ElementRef<typeof ScrollView>>(null);
 
   const initialIndex = useMemo(() => {
@@ -127,6 +132,22 @@ export function IosWheelPickerModal<T extends string = string>({
     }
   };
 
+  // The backdrop fades with the modal; the sheet rises from the edge (iOS) or grows in place
+  // (Android, Web) each time it opens. Closing is the modal's own quick fade.
+  useEffect(() => {
+    if (!visible || IS_MOTION_STATIC) return undefined;
+    sheetProgress.setValue(0);
+    const animation = Animated.timing(sheetProgress, {
+      toValue: 1,
+      duration: sheetOpen.durationMs,
+      easing: toEasing(sheetOpen.easing),
+      useNativeDriver: USE_NATIVE_DRIVER,
+    });
+    animation.start();
+    return () => animation.stop();
+    // The spec only changes with the skin or the Reduce Motion setting, never while open.
+  }, [visible, sheetProgress]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleConfirm = () => {
     hapticService.medium();
     onConfirm(tempValue);
@@ -161,7 +182,7 @@ export function IosWheelPickerModal<T extends string = string>({
         />
 
         {/* Ultra-Subtle Apple Liquid Glass Floating Capsule */}
-        <View
+        <Animated.View
           style={{
             width: '100%',
             maxWidth: 416,
@@ -170,6 +191,20 @@ export function IosWheelPickerModal<T extends string = string>({
             borderWidth: StyleSheet.hairlineWidth,
             borderColor: colors.glass.specularBorder,
             overflow: 'hidden',
+            transform: [
+              {
+                translateY: sheetProgress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [sheetOpen.distance, 0],
+                }),
+              },
+              {
+                scale: sheetProgress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [sheetOpen.scale, 1],
+                }),
+              },
+            ],
           }}
           testID={`${testID}-sheet`}
         >
@@ -323,7 +358,7 @@ export function IosWheelPickerModal<T extends string = string>({
               })}
             </ScrollView>
           </View>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );

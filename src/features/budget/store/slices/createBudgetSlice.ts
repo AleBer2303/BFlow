@@ -25,7 +25,7 @@ import { clearPersistedAccount } from '../../../../platform/storage/accountCache
 import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
   applyConceptLinkageUpdates,
-  buildInitialState,
+  getStoreInitialState,
   buildOctober2026SeedWorkspaceState,
   isRealAuthUser,
   resolveDefaultInitialAuthUser,
@@ -35,7 +35,7 @@ import {
 } from './sliceTypes';
 
 export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
-  const initial = buildInitialState();
+  const initial = getStoreInitialState();
   return {
     concepts: initial.concepts,
     entries: initial.entries,

@@ -9,6 +9,7 @@ import {
 import {
   AppPressable,
   AppText,
+  FormMessage,
   AppTextInput,
   EyeIcon,
   EyeOffIcon,
@@ -520,21 +521,7 @@ export function AccountProfileWorkspaceView({
                     />
                   </View>
 
-                  {profileSuccessMsg ? (
-                    <View
-                      style={{
-                        padding: spacing.xs,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.semantic.completedSoft,
-                        borderWidth: 1,
-                        borderColor: colors.glass.specularBorder,
-                      }}
-                    >
-                      <AppText variant="caption" color={colors.semantic.income}>
-                        {profileSuccessMsg}
-                      </AppText>
-                    </View>
-                  ) : null}
+                  <FormMessage message={profileSuccessMsg} tone="success" />
 
                   <AppPressable
                     testID="save-profile-settings-button"
@@ -568,39 +555,9 @@ export function AccountProfileWorkspaceView({
                     Por seguridad bancaria, para cambiar tu contraseña enviaremos un código de verificación de 6 dígitos a tu correo. El cambio se realiza internamente en la app.
                   </AppText>
 
-                  {securitySuccess ? (
-                    <View
-                      testID="security-success-banner"
-                      style={{
-                        padding: spacing.xs,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.semantic.completedSoft,
-                        borderWidth: 1,
-                        borderColor: colors.glass.specularBorder,
-                      }}
-                    >
-                      <AppText variant="caption" color={colors.semantic.income}>
-                        {securitySuccess}
-                      </AppText>
-                    </View>
-                  ) : null}
+                  <FormMessage message={securitySuccess} tone="success" testID="security-success-banner" />
 
-                  {securityError ? (
-                    <View
-                      testID="security-error-banner"
-                      style={{
-                        padding: spacing.xs,
-                        borderRadius: radius.md,
-                        backgroundColor: colors.semantic.expenseSoft,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                      }}
-                    >
-                      <AppText variant="caption" color={colors.semantic.expense}>
-                        {securityError}
-                      </AppText>
-                    </View>
-                  ) : null}
+                  <FormMessage message={securityError} testID="security-error-banner" />
 
                   {securityStep === 'idle' ? (
                     <View style={{ gap: spacing.xs }}>

@@ -14,6 +14,8 @@
     "lint": "node scripts/lint-check.mjs",
     "test": "jest --watchAll=false",
     "test:phase0": "node --test scripts/verify-phase0-fixture.test.mjs",
+    "test:scripts": "node --test scripts/release.test.mjs scripts/workflow-guards.test.mjs",
+    "release": "node scripts/release.mjs",
     "optimize:assets": "node scripts/optimize-assets.mjs"
   },
   "dependencies": {

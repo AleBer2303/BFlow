@@ -76,6 +76,7 @@ function BrandMark(): React.JSX.Element {
           style={{ fontWeight: '600' }}
           accessibilityElementsHidden
           importantForAccessibility="no"
+          aria-hidden
         >
           B
         </AppText>
@@ -85,6 +86,7 @@ function BrandMark(): React.JSX.Element {
         style={{ letterSpacing: typography.title2.letterSpacing }}
         accessibilityElementsHidden
         importantForAccessibility="no"
+        aria-hidden
       >
         BFlow
       </AppText>

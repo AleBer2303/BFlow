@@ -1,0 +1,58 @@
+# Checklist: marca un gasto pendiente como pagado y lo vuelve a dejar pendiente.
+#
+# Usa los filtros para comprobar el cambio de estado sin depender del aspecto de la fila:
+# un ítem marcado sale de «Pendientes» y aparece en «Completados», y al revés.
+# Ítem: Gemini Pro, pendiente en el seed (id `2026-10_exp_gemini_pro`).
+appId: com.bflow.app
+name: 03-checklist-toggle
+tags:
+  - demo
+---
+- runFlow: ../subflows/launch-demo.yaml
+
+- tapOn:
+    id: workspace-tab-checklist
+- assertVisible:
+    id: checklist-workspace-view
+# Seed de octubre 2026: 12 ítems, 6 pendientes y 6 completados.
+- assertVisible: 'Pendientes \(6\)'
+- assertVisible: 'Completados \(6\)'
+
+# Marcar: el ítem deja la lista de pendientes.
+- tapOn:
+    id: checklist-filter-pending
+- scrollUntilVisible:
+    element:
+      id: checklist-workspace-item-2026-10_exp_gemini_pro
+    direction: DOWN
+- tapOn:
+    id: checklist-workspace-item-2026-10_exp_gemini_pro
+- assertNotVisible:
+    id: checklist-workspace-item-2026-10_exp_gemini_pro
+- scrollUntilVisible:
+    element:
+      id: checklist-filter-completed
+    direction: UP
+- assertVisible: 'Pendientes \(5\)'
+- assertVisible: 'Completados \(7\)'
+
+# Desmarcar: el ítem está en completados y, al tocarlo, vuelve a pendientes.
+- tapOn:
+    id: checklist-filter-completed
+- scrollUntilVisible:
+    element:
+      id: checklist-workspace-item-2026-10_exp_gemini_pro
+    direction: DOWN
+- takeScreenshot: 03-checklist-toggle-completed
+- tapOn:
+    id: checklist-workspace-item-2026-10_exp_gemini_pro
+- assertNotVisible:
+    id: checklist-workspace-item-2026-10_exp_gemini_pro
+- scrollUntilVisible:
+    element:
+      id: checklist-filter-all
+    direction: UP
+- assertVisible: 'Pendientes \(6\)'
+- assertVisible: 'Completados \(6\)'
+- tapOn:
+    id: checklist-filter-all

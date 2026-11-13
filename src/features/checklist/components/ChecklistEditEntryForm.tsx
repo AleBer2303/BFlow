@@ -11,6 +11,7 @@ import { View } from 'react-native';
 import {
   AppPressable,
   AppText,
+  FormMessage,
   AppTextInput,
   CurrencyText,
   GlassSurface,
@@ -405,21 +406,7 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
           </View>
         </View>
 
-        {editError ? (
-          <View
-            style={{
-              padding: spacing.sm,
-              borderRadius: radius.md,
-              backgroundColor: colors.semantic.expenseSoft,
-              borderWidth: 1,
-              borderColor: colors.semantic.expense,
-            }}
-          >
-            <AppText variant="caption" color={colors.semantic.expense}>
-              {editError}
-            </AppText>
-          </View>
-        ) : null}
+        <FormMessage message={editError} />
 
         <AppPressable
           testID="save-edit-entry-button"

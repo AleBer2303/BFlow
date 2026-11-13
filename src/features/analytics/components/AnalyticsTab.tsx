@@ -23,7 +23,6 @@ import { AnalyticsAndHistoryView } from './AnalyticsAndHistoryView';
 export const AnalyticsTab = React.memo(function AnalyticsTab(): React.JSX.Element {
   const activeMonthKey = useActiveMonthKey();
   const availableMonths = useBudgetStore((state) => state.availableMonths);
-  const concepts = useBudgetStore((state) => state.concepts);
   const entries = useBudgetStore((state) => state.entries);
   const closedSnapshots = useBudgetStore((state) => state.closedSnapshots);
   const budget = useBudgetSummary();
@@ -55,7 +54,7 @@ export const AnalyticsTab = React.memo(function AnalyticsTab(): React.JSX.Elemen
   );
   const handleDeleteOrRevertMonth = useCallback(
     (monthKey: string) => {
-      hapticService.trigger('light');
+      hapticService.trigger('warning');
       void actions.deleteOrRevertMonth(monthKey);
     },
     [actions]
@@ -66,8 +65,6 @@ export const AnalyticsTab = React.memo(function AnalyticsTab(): React.JSX.Elemen
       <AnalyticsAndHistoryView
         activeMonthKey={activeMonthKey}
         availableMonths={availableMonths}
-        concepts={concepts}
-        entries={entries}
         budget={budget}
         checklist={checklist}
         debtSummary={debtSummary}

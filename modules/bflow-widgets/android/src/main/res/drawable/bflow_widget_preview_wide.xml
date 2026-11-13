@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Vista previa del selector en Android < 12: solo la estructura del widget, sin datos. -->
+<!-- Vista previa del selector en Android < 12: estructura del widget, sin datos. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
   android:width="250dp"
   android:height="110dp"
@@ -7,20 +7,16 @@
   android:viewportHeight="110">
   <path
     android:fillColor="@color/bflow_widget_background"
-    android:pathData="M16,0 H234 A16,16 0 0 1 250,16 V94 A16,16 0 0 1 234,110 H16 A16,16 0 0 1 0,94 V16 A16,16 0 0 1 16,0 Z" />
-  <path android:fillColor="@color/bflow_widget_text_muted" android:pathData="M16,18 h80 v6 h-80 Z" />
-  <path android:fillColor="@color/bflow_widget_income" android:pathData="M16,38 h60 v10 h-60 Z" />
-  <path android:fillColor="@color/bflow_widget_expense" android:pathData="M96,38 h60 v10 h-60 Z" />
-  <path android:fillColor="@color/bflow_widget_pending" android:pathData="M176,38 h58 v10 h-58 Z" />
-  <path android:fillColor="@color/bflow_widget_income" android:pathData="M24,74 h8 v20 h-8 Z" />
-  <path android:fillColor="@color/bflow_widget_expense" android:pathData="M34,80 h8 v14 h-8 Z" />
-  <path android:fillColor="@color/bflow_widget_income" android:pathData="M64,68 h8 v26 h-8 Z" />
-  <path android:fillColor="@color/bflow_widget_expense" android:pathData="M74,76 h8 v18 h-8 Z" />
-  <path android:fillColor="@color/bflow_widget_income" android:pathData="M104,70 h8 v24 h-8 Z" />
-  <path android:fillColor="@color/bflow_widget_expense" android:pathData="M114,72 h8 v22 h-8 Z" />
-  <path android:fillColor="@color/bflow_widget_income" android:pathData="M144,66 h8 v28 h-8 Z" />
-  <path android:fillColor="@color/bflow_widget_expense" android:pathData="M154,78 h8 v16 h-8 Z" />
-  <path android:fillColor="@color/bflow_widget_income" android:pathData="M184,72 h8 v22 h-8 Z" />
-  <path android:fillColor="@color/bflow_widget_expense" android:pathData="M194,74 h8 v20 h-8 Z" />
-  <path android:fillColor="@color/bflow_widget_income" android:pathData="M224,64 h8 v30 h-8 Z" />
+    android:pathData="M22,0 H228 A22,22 0 0 1 250,22 V88 A22,22 0 0 1 228,110 H22 A22,22 0 0 1 0,88 V22 A22,22 0 0 1 22,0 Z" />
+  <path android:fillColor="@color/bflow_widget_text_primary" android:pathData="M16,16 h80 v6 h-80 Z" />
+  <path android:fillColor="@color/bflow_widget_income" android:pathData="M16,34 h70 v10 h-70 Z" />
+  <path android:fillColor="@color/bflow_widget_text_secondary" android:pathData="M16,54 h90 v5 h-90 Z" />
+  <path android:fillColor="@color/bflow_widget_text_secondary" android:pathData="M16,66 h90 v5 h-90 Z" />
+  <path android:fillColor="@color/bflow_widget_text_secondary" android:pathData="M16,78 h90 v5 h-90 Z" />
+  <path android:fillColor="@color/bflow_widget_income" android:pathData="M140,60 h8 v30 h-8 Z" />
+  <path android:fillColor="@color/bflow_widget_expense" android:pathData="M150,70 h8 v20 h-8 Z" />
+  <path android:fillColor="@color/bflow_widget_income" android:pathData="M180,50 h8 v40 h-8 Z" />
+  <path android:fillColor="@color/bflow_widget_expense" android:pathData="M190,64 h8 v26 h-8 Z" />
+  <path android:fillColor="@color/bflow_widget_income" android:pathData="M220,56 h8 v34 h-8 Z" />
+  <path android:fillColor="@color/bflow_widget_expense" android:pathData="M230,70 h8 v20 h-8 Z" />
 </vector>

@@ -10,15 +10,17 @@
  */
 
 import React, { useState } from 'react';
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 import {
   AppPressable,
   AppText,
+  FormMessage,
   AppTextInput,
   CurrencyText,
   GlassSurface,
   MIN_TOUCH_TARGET_PT,
   PencilEditIcon,
+  ProgressFill,
   ResponsiveColumns,
   RevealDown,
   StatusBadge,
@@ -26,6 +28,7 @@ import {
   useBFlowTheme,
   usePrimaryActionLook,
 } from '../../../design-system';
+import { confirmDestructive } from '../../../platform/dialogs/confirmDestructive';
 import {
   formatCurrency,
   formatMonthKeyLabelEs,
@@ -219,22 +222,12 @@ export function DebtsFunfamiView({
   };
 
   const handleDeleteDebtConfirm = (debtId: string, name: string) => {
-    Alert.alert(
-      'Eliminar deuda',
-      `¿Deseas eliminar permanentemente la obligación "${name}"?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: () => {
-            if (onDeleteDebt) {
-              onDeleteDebt(debtId);
-            }
-          },
-        },
-      ]
-    );
+    confirmDestructive({
+      title: 'Eliminar deuda',
+      message: `¿Deseas eliminar permanentemente la obligación "${name}"?`,
+      confirmLabel: 'Eliminar',
+      onConfirm: () => onDeleteDebt?.(debtId),
+    });
   };
 
   return (
@@ -287,14 +280,10 @@ export function DebtsFunfamiView({
               borderColor: colors.glass.subtleBorder,
             }}
           >
-            <View
-              style={{
-                width: `${Math.min(100, Math.max(4, paydownPercent))}%`,
-                height: '100%',
-                borderRadius: radius.pill,
-                borderCurve: 'continuous',
-                backgroundColor: colors.semantic.debt,
-              }}
+            <ProgressFill
+              testID="debt-paydown-progress"
+              fraction={Math.max(4, paydownPercent) / 100}
+              color={colors.semantic.debt}
             />
           </View>
 
@@ -470,11 +459,7 @@ export function DebtsFunfamiView({
               />
             </View>
 
-            {formError ? (
-              <AppText variant="micro" color={colors.semantic.expense}>
-                {formError}
-              </AppText>
-            ) : null}
+            <FormMessage message={formError} />
 
             <View style={{ flexDirection: 'row', gap: spacing.xs, justifyContent: 'flex-end', paddingTop: spacing.xs }}>
               <AppPressable
@@ -501,7 +486,7 @@ export function DebtsFunfamiView({
       </RevealDown>
 
       {/* Banner when a debt is 100% paid off (Dismissible, only in month of completion) */}
-      {isMotoDebtPaidOff ? (
+      <RevealDown visible={isMotoDebtPaidOff}>
         <GlassSurface testID="moto-debt-completed-banner">
           <View style={{ gap: spacing.xs }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -536,7 +521,7 @@ export function DebtsFunfamiView({
             </AppText>
           </View>
         </GlassSurface>
-      ) : null}
+      </RevealDown>
 
       <ResponsiveColumns testID="debt-cards-grid">
         {/* Individual Active Obligations Breakdown */}

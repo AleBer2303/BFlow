@@ -141,7 +141,7 @@ describe('platform skin identity', () => {
     expect(platformSkins.android).toMatchObject({
       surfaceMaterial: 'tonal',
       navigation: 'navigation-bar',
-      pressFeedback: 'ripple',
+      pressFeedback: 'sink',
     });
     expect(platformSkins.web).toMatchObject({
       surfaceMaterial: 'flat',

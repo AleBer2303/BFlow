@@ -46,7 +46,7 @@ export const DebtsTab = React.memo(function DebtsTab(): React.JSX.Element {
   );
   const handleDeleteDebt = useCallback<NonNullable<Props['onDeleteDebt']>>(
     (debtId) => {
-      hapticService.trigger('light');
+      hapticService.trigger('warning');
       void actions.deleteDebt(monthKey, debtId);
     },
     [actions, monthKey]

@@ -1,20 +1,128 @@
-name: Maestro E2E Tests (iOS Simulator)
+name: Maestro E2E Tests (Android Emulator)
+
+# Pruebas de extremo a extremo con Maestro en un emulador Android (ADR 0023).
+#
+# El APK que se compila aquí lleva EXPO_PUBLIC_BFLOW_DEMO=1 (modo vitrina: sesión demo con el
+# seed de octubre 2026, sin Firebase ni credenciales). Existe SOLO para estas pruebas:
+#   - no se sube como artefacto,
+#   - no se adjunta a ningún GitHub Release,
+#   - este workflow solo tiene permiso de lectura sobre el repositorio.
+# AGENTS.md §7.6 prohíbe esa variable en builds reales y en workflows de publicación;
+# scripts/workflow-guards.test.mjs falla si aparece en otro workflow o si este publica algo.
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 7 * * 1' # Weekly on Mondays at 02:00 America/Bogota
 
 concurrency:
   group: e2e-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
+env:
+  EMULATOR_API_LEVEL: 34
+  EMULATOR_ARCH: x86_64
+  EMULATOR_TARGET: default
+  EMULATOR_PROFILE: pixel_6
+  MAESTRO_VERSION: 2.12.1
+
 jobs:
-  maestro-e2e:
-    name: Run Maestro E2E Flows on iOS Simulator
-    runs-on: macos-15
+  maestro-android:
+    name: Run Maestro flows on Android emulator (demo build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - name: Verify Maestro flows directory
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle (with dependency cache)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install JS dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Guard — demo flag stays out of publishing workflows
+        run: node --test scripts/workflow-guards.test.mjs
+
+      - name: Generate native Android project (Expo Prebuild)
+        env:
+          EXPO_NO_GIT_STATUS: 1
+        run: npx expo prebuild --platform android --clean --no-install
+
+      # Variante release (R8 activo y bundle de JS embebido, como el .apk publicado; ADR 0013
+      # y 0019), firmada con la keystore de depuración y solo para la ABI del emulador.
+      - name: Build E2E-only demo APK (never published)
+        working-directory: android
+        env:
+          EXPO_PUBLIC_BFLOW_DEMO: '1'
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=${{ env.EMULATOR_ARCH }} --no-daemon
+
+      - name: Enable KVM for the emulator
         run: |
-          echo "Maestro E2E harness ready (full flows enabled in Phase 8)"
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Cache AVD snapshot
+        id: avd-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ env.EMULATOR_API_LEVEL }}-${{ env.EMULATOR_TARGET }}-${{ env.EMULATOR_ARCH }}-${{ env.EMULATOR_PROFILE }}
+
+      - name: Create AVD and generate snapshot for caching
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.EMULATOR_API_LEVEL }}
+          arch: ${{ env.EMULATOR_ARCH }}
+          target: ${{ env.EMULATOR_TARGET }}
+          profile: ${{ env.EMULATOR_PROFILE }}
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: echo "AVD snapshot generated"
+
+      - name: Install Maestro CLI
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Run Maestro flows
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ env.EMULATOR_API_LEVEL }}
+          arch: ${{ env.EMULATOR_ARCH }}
+          target: ${{ env.EMULATOR_TARGET }}
+          profile: ${{ env.EMULATOR_PROFILE }}
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash e2e/run-android-ci.sh android/app/build/outputs/apk/release/app-release.apk e2e-artifacts
+
+      # Solo diagnóstico: informe JUnit, capturas y logs de Maestro, y logcat. El APK no se sube.
+      - name: Upload Maestro artifacts (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-e2e-artifacts
+          path: |
+            e2e-artifacts
+            ~/.maestro/tests
+          if-no-files-found: ignore
+          retention-days: 14

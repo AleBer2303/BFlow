@@ -1,0 +1,38 @@
+# Tema: alterna entre claro y oscuro con el botón de la cabecera y vuelve al inicial.
+#
+# El estado se lee de la etiqueta de accesibilidad del botón (`theme-toggle-button`):
+# «Cambiar a modo oscuro» significa que ahora está en claro, y al revés.
+appId: com.bflow.app
+name: 05-theme-toggle
+tags:
+  - demo
+---
+- runFlow: ../subflows/launch-demo.yaml
+
+- assertVisible:
+    id: theme-toggle-button
+
+# El tema inicial depende del dispositivo: si arranca en oscuro, se pasa primero a claro.
+- runFlow:
+    when:
+      visible: 'Cambiar a modo claro'
+    commands:
+      - tapOn:
+          id: theme-toggle-button
+
+# Claro -> oscuro.
+- assertVisible: 'Cambiar a modo oscuro'
+- takeScreenshot: 05-theme-light
+- tapOn:
+    id: theme-toggle-button
+- assertVisible: 'Cambiar a modo claro'
+- takeScreenshot: 05-theme-dark
+
+# Oscuro -> claro.
+- tapOn:
+    id: theme-toggle-button
+- assertVisible: 'Cambiar a modo oscuro'
+
+# La app sigue operativa tras cambiar de tema.
+- assertVisible:
+    id: net-flow-hero-card

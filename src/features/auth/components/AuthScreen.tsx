@@ -15,6 +15,7 @@ import { View } from 'react-native';
 import {
   AppPressable,
   AppText,
+  FormMessage,
   AppTextInput,
   EyeIcon,
   EyeOffIcon,
@@ -508,39 +509,9 @@ export function AuthScreen({
         ) : null}
 
         {/* Error or Status Feedback */}
-        {activeError ? (
-          <View
-            testID="auth-error-banner"
-            style={{
-              padding: spacing.sm,
-              borderRadius: radius.md,
-              backgroundColor: colors.semantic.expenseSoft,
-              borderWidth: 1,
-              borderColor: colors.glass.subtleBorder,
-            }}
-          >
-            <AppText variant="caption" color={colors.semantic.expense}>
-              {activeError}
-            </AppText>
-          </View>
-        ) : null}
+        <FormMessage message={activeError} testID="auth-error-banner" />
 
-        {activeStatusMessage ? (
-          <View
-            testID="auth-status-banner"
-            style={{
-              padding: spacing.sm,
-              borderRadius: radius.md,
-              backgroundColor: colors.semantic.incomeSoft,
-              borderWidth: 1,
-              borderColor: colors.glass.subtleBorder,
-            }}
-          >
-            <AppText variant="caption" color={colors.semantic.income}>
-              {activeStatusMessage}
-            </AppText>
-          </View>
-        ) : null}
+        <FormMessage message={activeStatusMessage} tone="success" testID="auth-status-banner" />
 
         {/* Primary CTA */}
         <AppPressable

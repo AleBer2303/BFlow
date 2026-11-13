@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useMemo, useState } from 'react';
 import { resolvePlatformSkin } from '../platform/platformSkin';
+import { useReducedMotionPreference } from '../platform/useReducedMotionPreference';
 import {
   palettesBySkin,
   platformSkins,
@@ -25,6 +26,8 @@ export interface BFlowThemeContextValue {
   typography: TypographyScale;
   /** 44pt on iOS and Web, 48dp on Android. */
   minTouchTarget: number;
+  /** The system Reduce Motion setting, tracked once for the whole app. */
+  reducedMotion: boolean;
   toggleTheme: () => void;
   setThemeMode: (mode: ThemeMode) => void;
 }
@@ -32,6 +35,7 @@ export interface BFlowThemeContextValue {
 function buildThemeValue(
   mode: ThemeMode,
   skin: PlatformSkinId,
+  reducedMotion: boolean,
   toggleTheme: () => void,
   setThemeMode: (mode: ThemeMode) => void
 ): BFlowThemeContextValue {
@@ -45,6 +49,7 @@ function buildThemeValue(
     radius: radiusBySkin[skin],
     typography: typographyBySkin[skin],
     minTouchTarget: skinSpec.minTouchTarget,
+    reducedMotion,
     toggleTheme,
     setThemeMode,
   };
@@ -54,6 +59,7 @@ const BFlowThemeContext = createContext<BFlowThemeContextValue>(
   buildThemeValue(
     'dark',
     'ios',
+    false,
     () => undefined,
     () => undefined
   )
@@ -74,16 +80,18 @@ export function BFlowThemeProvider({
   const [mode, setMode] = useState<ThemeMode>(initialMode);
   const [detectedSkin] = useState<PlatformSkinId>(() => resolvePlatformSkin());
   const activeSkin = skin ?? detectedSkin;
+  const reducedMotion = useReducedMotionPreference();
 
   const value = useMemo<BFlowThemeContextValue>(
     () =>
       buildThemeValue(
         mode,
         activeSkin,
+        reducedMotion,
         () => setMode((prev) => (prev === 'dark' ? 'light' : 'dark')),
         setMode
       ),
-    [mode, activeSkin]
+    [mode, activeSkin, reducedMotion]
   );
 
   return <BFlowThemeContext.Provider value={value}>{children}</BFlowThemeContext.Provider>;

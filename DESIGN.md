@@ -126,7 +126,10 @@ $$\text{Radio Interior} = \max(0, \text{Radio Exterior} - \text{Padding})$$
 4. **Semántica para Lectores de Pantalla (VoiceOver / TalkBack):**
    - Todo elemento interactivo declara `accessibilityRole` (`button`, `tab`, `checkbox`, `header`).
    - Los elementos de estado declaran `accessibilityState={{ selected, checked, disabled }}`.
-   - Todos los botones de sólo icono (`ThemeToggleIconButton`, `EyeIcon`) cuentan con `accessibilityLabel` descriptivo en español neutro.
+   - Todos los botones de sólo icono (`ThemeToggleIconButton`, `EyeIcon`) cuentan con `accessibilityLabel` descriptivo en español neutro, que nombra la acción y su objeto («Eliminar SOAT»).
+   - **Web:** `react-native-web` descarta el objeto `accessibilityState`. `AppPressable` lo convierte en `aria-selected`, `aria-checked`, `aria-expanded` y `aria-busy`. Lo que se oculta con `accessibilityElementsHidden` lleva además `aria-hidden`.
+   - **Errores y avisos:** se muestran con `FormMessage`, que los anuncia al aparecer (región viva en Android y Web, anuncio explícito en iOS).
+5. **Confirmaciones destructivas:** `confirmDestructive` (`src/platform/dialogs/`), nunca `Alert.alert` directo: en Web `Alert` no hace nada.
 
 ---
 
@@ -164,9 +167,10 @@ export const springConfigs = {
 **Lente del dock (Liquid Glass):** cápsula translúcida con borde superior especular, brillo curvo superior, sombra interior inferior y resplandor de refracción que aparece al levantarse bajo el dedo. Sigue la posición continua del dedo mediante suavizado exponencial por frame (sin reiniciar resortes en cada evento táctil) y solo hace *snap* al tab más cercano al soltar. En los extremos del dock el rebote se conserva, pero el recorrido se limita para que el lente (incluido su crecimiento por *lift*/estiramiento) nunca cruce el borde interior; el sobrepaso se convierte en una compresión horizontal (*squash* hasta ×0.84) como una gota contra la pared.
 
 ### 6.2 Soporte de Reducción de Movimiento (`prefers-reduced-motion`):
-Si el usuario tiene activado *Reducir Movimiento* en iOS (`useReducedMotion()`):
-- Se cancelan todas las oscilaciones de traslación y escala espacial.
-- Se sustituyen por transiciones lineales de opacidad suave: `withTiming(..., { duration: 140, easing: Easing.out(Easing.quad) })`.
+`BFlowThemeProvider` sigue el ajuste *Reducir Movimiento* del sistema (iOS, Android y Web) y lo entrega como `useBFlowTheme().reducedMotion`. Con el ajuste activo:
+- No hay traslación, escala, resorte ni sacudida. Queda un cambio de opacidad de `REDUCED_MOTION_DURATION_MS` (140 ms).
+- El dock y la píldora de la barra Material saltan a su sitio. El acordeón del onboarding (`animateNextLayout`) cambia de una vez.
+- Los gráficos y la curva del mes dibujan su estado final.
 
 ### 6.3 Matriz de Retroalimentación Háptica (`expo-haptics`):
 
@@ -178,7 +182,51 @@ Si el usuario tiene activado *Reducir Movimiento* en iOS (`useReducedMotion()`):
 | **Recorrer la curva del mes o cambiar de métrica** | `Haptics.selectionAsync()` | Tic ligero por cada día nuevo bajo el dedo y al confirmar una métrica; soltar no vibra. |
 | **Marcar ítem como completado** | `Haptics.notificationAsync(Success)` | Doble pulso de confirmación y recompensa. |
 | **Cierre de mes contable exitoso** | `Haptics.notificationAsync(Success)` | Confirmación solemne de consolidación. |
-| **Eliminar ítem o revertir cierre** | `Haptics.notificationAsync(Warning)` | Pulso de advertencia para evitar errores. |
+| **Eliminar** (movimiento, concepto, deuda, fondo, provisión, mes) **o reiniciar la cuenta** | `Haptics.notificationAsync(Warning)` | Pulso de advertencia para evitar errores. |
+| **Entrar al modo eliminar** | `Haptics.notificationAsync(Warning)` | Aviso de que el siguiente toque borra. Salir del modo es un `impactAsync(Light)`. |
+| **Error de un formulario** (`FormMessage`) | `Haptics.notificationAsync(Error)` | Triple pulso, una vez por error nuevo. |
+
+**Reglas:** una vibración por acción, cuando la acción se confirma (`onPress`), nunca al tocar (`onPressIn`). Una acción que ya confirmó con `Success` no añade otra en su aviso de éxito. No hay háptica al escribir.
+
+### 6.4 Escala de movimiento (`motionDuration`, `motionDistance`, `motionScale`, `motionBySkin`)
+
+Un movimiento nuevo no escribe milisegundos: pide su especificación a `src/design-system/motion/motionSpec.ts`. El valor se elige por lo que hace el movimiento, no por el número más cercano. Decisión en el [ADR 0022](docs/decisions/0022-motion-scale-and-interaction-feedback.md).
+
+| Token | Valor | Uso |
+| :--- | :--- | :--- |
+| `motionDuration.stagger` | 40 ms | Desfase entre elementos que entran uno tras otro (tope: 6 elementos) |
+| `motionDuration.micro` | 80 ms | Un tramo de la sacudida de error; espera de la tarjeta de un panel; bajada de un botón en Android |
+| `motionDuration.quick` | 150 ms | Cierre de un diálogo; la tarjeta de un panel al cerrarse; salida de un control de fila |
+| `motionDuration.fast` | 250 ms | Cambio de pestaña, apertura de un diálogo o de la tarjeta de un panel, pliegue del espacio de un panel, píldora de la barra Material, acordeón, cambio de icono |
+| `motionDuration.medium` | 350 ms | Cierre de un aviso flotante |
+| `motionDuration.slow` | 400 ms | Un bloque que llega a una pantalla ya visible (`Entrance kind="section"`) |
+| `motionDuration.emphasis` | 500 ms | Momentos únicos de énfasis: la barra de progreso que crece |
+| `motionDistance.small` / `base` | 6 / 8 pt | Sacudida de error; cambio de pestaña, tarjeta de un panel y control de fila |
+| `motionDistance.medium` | 12 pt | Un bloque que llega a una pantalla ya visible |
+| `motionDistance.large` | 30 pt | Hoja que sube (diálogo en iOS) |
+| `motionScale.dialog` / `menu` | 0,96 / 0,97 | Diálogo que crece en su sitio (Android, Web) y tarjeta de un panel; control de fila |
+| `pressSinkMotion` | escala 0,97 · opacidad 0,82 | Botón bajo el dedo en iOS y Android |
+
+| Piel | Curva de entrada | Curva de salida | Sobrepaso | Diálogo |
+| :--- | :--- | :--- | :--- | :--- |
+| iOS | `0.22, 1, 0.36, 1` | la misma | Sí, con resortes | Hoja que sube |
+| Android | `0.05, 0.7, 0.1, 1` | `0.3, 0, 0.8, 0.15` | No | Crece en su sitio |
+| Web | `0.2, 0.8, 0.2, 1` | la misma | No | Crece en su sitio |
+
+**Piezas:**
+- **`Entrance`:** fundido y subida corta al montar. `kind="screen"` para una pantalla que sustituye a otra (cambio de pestaña, con `key`), `kind="section"` para un bloque que llega a una pantalla ya visible. Una entrada por pantalla; las tarjetas no se escalonan una a una.
+- **`RevealDown`:** un panel que se abre empujando el contenido (formularios de añadir y editar, avisos). Son dos movimientos a la vez:
+  - **El espacio se despliega:** el alto va de 0 al del contenido en 330 ms, con la curva de la piel.
+  - **La tarjeta se asienta:** 80 ms después, el contenido aparece mientras crece desde el 96 % y sube 8 pt, con driver nativo. En iOS aterriza con el resorte `gentle`; en Android y Web, con su curva y sin sobrepaso.
+  - **Al cerrar:** la tarjeta se atenúa en 150 ms y el espacio se pliega detrás en 250 ms. Mientras se cierra muestra su último contenido.
+- **`FormMessage`:** el aviso de un formulario. `tone="error"` sacude el texto y vibra; `tone="success"` solo se abre. Siempre se anuncia a los lectores de pantalla.
+- **`AppPressable`:** respuesta al toque por piel. En iOS el control se hunde y vuelve con resorte. En Android se hunde igual, con curva y sin sobrepaso (80 ms al bajar, 150 ms al volver); **no hay ripple**, porque el ripple nativo pintaba un recuadro gris de esquinas rectas sobre los controles redondeados mientras se mantenía el dedo. En Web, pasos de hover y presión. `pressEffect="none"` para superficies que no son un botón (columnas de un gráfico).
+- **`CheckIndicator`:** la marca de una fila que se puede completar: aro vacío si está pendiente, disco relleno con el check si está hecha. Al cambiar en pantalla el disco aparece creciendo (con sobrepaso suave en iOS) y se va más rápido de lo que llegó.
+- **`ProgressFill`:** el tramo lleno de una barra de progreso; crece desde el inicio una vez, al llegar su pantalla.
+- **`useReplayOnChange`:** un valor que se repite de 0 a 1 cuando cambia una clave. Lo usan el contador del Checklist (`StatusBadge pulseOnChange`, que se hincha un 10 %) y el botón de tema (el icono nuevo gira un cuarto de vuelta y crece).
+- **`animateNextLayout()`:** anima el siguiente cambio de layout (filas que se añaden, acordeones). No hace nada en Web.
+
+**Reglas:** cerrar es más rápido que abrir; un cierre nunca se retrasa; el sobrepaso es solo de iOS y solo en entradas; nada se mueve por el scroll.
 
 ---
 
@@ -265,7 +313,7 @@ Decisiones en los ADR [0010](docs/decisions/0010-platform-skins-and-responsive-l
 | :--- | :--- | :--- | :--- |
 | Material | Liquid Glass: tinte translúcido + blur + borde especular | Material 3: contenedor tonal **opaco**; la variante elevada sube un tono y usa `elevation: 2` | Tarjeta plana, línea de 1 px, sin sombra |
 | Navegación | Dock flotante con lente líquido | Barra superior + barra de navegación anclada con indicador en píldora | Cabecera opaca con línea; palabras desde 840 px, barra al pie por debajo |
-| Toque | Resorte (escala 0,96) + háptica | Ripple recortado al control | Hover (140 ms) y pulsación (90 ms, escala 0,985), sin rebote |
+| Toque | Se hunde y atenúa con resorte (escala 0,97, opacidad 0,82) | Se hunde y atenúa igual, con curva y sin sobrepaso; sin ripple | Hover (140 ms) y pulsación (90 ms, escala 0,985), sin rebote |
 | Botón principal | Cápsula de vidrio | Relleno con el acento, totalmente redondeado | El único botón relleno con el acento, radio 4 |
 | Radios `xs / sm / md / lg / xl / pill` | 6 / 10 / 16 / 22 / 28 / 999 | 4 / 8 / 12 / 16 / 28 / 999 | 2 / 4 / 6 / 8 / 8 / 4 |
 | Objetivo táctil | 44 pt | 48 dp | 44 px |

@@ -158,6 +158,7 @@ function CurveTicks({ curve }: { curve: MonthlyCurve }): React.JSX.Element {
       style={{ height: spacing.lg, paddingHorizontal: CURVE_MARGIN_PT }}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
+      aria-hidden
     >
       <View style={{ flex: 1 }}>
         {buildCurveTicks(curve).map((tick) => (

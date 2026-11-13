@@ -156,7 +156,7 @@ Para permitir el desarrollo diario sin fricción en **Windows 11 sin Mac local**
 
 ## 🎨 Sistema de Diseño Visual: Liquid Glass & SF Pro
 
-> **Multiplataforma con tres pieles (ADR 0010 y 0011).** Lo que sigue describe la piel **iOS**. **Android** usa Material 3 (superficies tonales opacas, barra de navegación anclada, ripple; sin Liquid Glass) y **Web** un sistema plano (paleta arena y negro con acento petróleo, tipografía Geist, cabecera fija, composición de escritorio a dos columnas y curva del mes vectorial animada, ADR 0012). La curva del mes es una escena three.js solo en iOS; Android usa la misma curva vectorial animada que Web, con gesto táctil (ADR 0014). Los tokens de cada piel y el contrato responsive están en `DESIGN.md` §10 y §11.
+> **Multiplataforma con tres pieles (ADR 0010 y 0011).** Lo que sigue describe la piel **iOS**. **Android** usa Material 3 (superficies tonales opacas, barra de navegación anclada; sin Liquid Glass ni ripple) y **Web** un sistema plano (paleta arena y negro con acento petróleo, tipografía Geist, cabecera fija, composición de escritorio a dos columnas y curva del mes vectorial animada, ADR 0012). La curva del mes es una escena three.js solo en iOS; Android usa la misma curva vectorial animada que Web, con gesto táctil (ADR 0014). Los tokens de cada piel y el contrato responsive están en `DESIGN.md` §10 y §11.
 
 Documentado a profundidad en [`DESIGN.md`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/DESIGN.md) y centralizado en [`src/design-system/tokens.ts`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/src/design-system/tokens.ts):
 
@@ -228,10 +228,10 @@ Widgets de iOS en [`targets/widgets/`](targets/widgets/) (SwiftUI, compilados co
 BFlow/
 ├── .agents/                      # Configuración de agentes, roles y skills (Antigravity)
 ├── .github/
-│   └── workflows/                # CI/CD (ci.yml, build-ios.yml, build-android.yml, e2e.yml)
+│   └── workflows/                # CI/CD (ci.yml, build-ios.yml, build-android.yml, e2e.yml, release.yml)
 ├── assets/                       # Iconos y splash screens de la aplicación
 ├── docs/
-│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0016)
+│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0023)
 │   ├── guides/                   # Guías operativas (firma con iloader, validación multiplataforma)
 │   └── Improvements/             # Guías de auditoría de rendimiento
 ├── fixtures/                     # Datos dorados de prueba (october-2026.json)
@@ -243,7 +243,7 @@ BFlow/
 │   │   ├── mappers/              # Esquemas de validación Zod
 │   │   ├── repositories/         # budgetRepository.ts (acceso a datos)
 │   │   └── seed/                 # Carga de datos iniciales de octubre 2026
-│   ├── design-system/            # Tokens por piel (iOS / Android / Web), tema y componentes base
+│   ├── design-system/            # Tokens por piel (iOS / Android / Web), tema, componentes base y movimiento (motion/)
 │   │   ├── components/           # AppPressable, AppText, CurrencyText, ResponsiveColumns…
 │   │   │   ├── charts/           # Gráficos animados SVG: barras, línea y dona (ADR 0020)
 │   │   │   └── navigation/       # Dock iOS, barra Material (Android), cabecera y barra Web
@@ -409,8 +409,9 @@ Como parte de la evaluación técnica exhaustiva requerida antes de un lanzamien
 2. ✅ **Workflow de Build Android en CI (`build-android.yml`)** (ADR 0009): genera `.apk` de prueba y `.aab` en `ubuntu-latest`. El release se compila con R8; las reglas keep del proyecto las añade `plugins/withAndroidKeepRules.js` en cada prebuild (ADR 0013).
 3. **Splash Screen Oficial (`expo-splash-screen`):**
    - *Falta:* Declarar la configuración de pantalla de carga nativa en `app.json` para evitar transiciones en blanco en arranques en frío.
-4. **Flujos de Pruebas E2E en Maestro:**
-   - *Falta:* Completar los archivos de flujo `.yaml` en `e2e/` para validar el recorrido completo de usuario (registro $\to$ pago $\to$ cierre) de forma desatendida.
+4. ✅ **Flujos de Pruebas E2E en Maestro** (ADR 0023): cinco flujos en `e2e/flows/` sobre el modo vitrina (arranque, pestañas, Checklist, nuevo movimiento, tema) y `e2e.yml` en un emulador Android. Guía en [`e2e/README.md`](e2e/README.md).
+   - *Falta:* ejecutarlos por primera vez (no se han corrido en un emulador ni en GitHub) y cubrir el recorrido con cuenta real (registro $\to$ pago $\to$ cierre).
+   - **Release de un paso** (ADR 0023): `npm run release -- patch --dry-run` muestra el plan; el workflow `release.yml` pasa la puerta de calidad, crea el tag y publica el `.ipa`, el `.apk` y el `.aab`. Tampoco se ha ejecutado en GitHub.
 5. **Monitoreo de Errores y Telemetría en Producción:**
    - *Falta:* Integración de Sentry Expo o Firebase Crashlytics para capturar excepciones no controladas en dispositivos de usuarios finales.
 6. **Cumplimiento Legal de Tiendas (Política de Privacidad y Borrado de Cuenta):**

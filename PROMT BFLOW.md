@@ -181,7 +181,7 @@ Verifica rutas y formatos vigentes de Antigravity y crea:
 - Fase 5: módulos Deuda FUNFAMI, Ahorros y Moto, Moto ideal (UI + datos).
 - Fase 6: gráficos animados ios, android y web.
 - Fase 7: widgets ios, android.
-- Fase 8: pulido en ios, android y web (animaciones, haptics, accesibilidad, Liquid Glass), E2E Maestro, release automatizado.
+- Fase 8: pulido en ios, android y web: (animaciones, transiciones, animaciones para botones, modales y elementos que consideres agregen una estetica moderna y fluida al usuario, haptics (sin exagerar), accesibilidad, Liquid Glass), E2E Maestro, release automatizado, optimizacion del codigo, mejorar el rendimiento de la app y sus animaciones/graficos y demas posibles causantes de bajo rendimiento en todos los ecosistemas.
 
 # FORMA DE TRABAJAR
 - Empieza SOLO por la Fase 0 y entrégame: (1) resumen de riesgos y viabilidad, (2) árbol de carpetas, (3) contenido de AGENTS.md, skills y workflows, (4) comandos exactos para Windows, (5) mapeo Excel → modelo de dominio con tu decisión propuesta para cada una de las 9 inconsistencias, y (6) las preguntas que necesites que responda (nombre de la app, bundle id, moneda, proyecto de Firebase, URL del repo, y las preguntas abiertas del Excel).

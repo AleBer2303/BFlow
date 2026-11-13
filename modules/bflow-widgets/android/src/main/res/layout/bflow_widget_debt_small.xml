@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DebtSmallView (iOS systemSmall) = 2x2. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@android:id/background"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:background="@drawable/bflow_widget_background"
+  android:clipToOutline="true">
+
+  <LinearLayout
+    android:id="@+id/bflow_widget_content"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="@dimen/bflow_widget_padding">
+    <LinearLayout
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:gravity="center_vertical"
+      android:orientation="horizontal"
+      android:minHeight="20dp">
+      <TextView
+        android:id="@+id/bflow_widget_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:textColor="@color/bflow_widget_text_primary"
+        android:textSize="12sp"
+        android:fontFamily="sans-serif-medium" />
+      <FrameLayout
+        android:layout_width="0dp"
+        android:layout_height="1dp"
+        android:layout_weight="1"
+        android:minWidth="4dp" />
+      <TextView
+        android:id="@+id/bflow_widget_month"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:textColor="@color/bflow_widget_text_secondary"
+        android:textSize="11sp"
+        android:fontFamily="sans-serif-medium" />
+    </LinearLayout>
+    <FrameLayout
+      android:layout_width="match_parent"
+      android:layout_height="0dp"
+      android:layout_weight="1"
+      android:minHeight="6dp" />
+    <LinearLayout
+      android:id="@+id/debt_active"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:orientation="vertical">
+      <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:text="@string/bflow_widget_debt_remaining_short"
+        android:textColor="@color/bflow_widget_text_secondary"
+        android:textSize="11sp" />
+      <TextView
+        android:id="@+id/debt_amount"
+        android:layout_width="match_parent"
+        android:layout_height="28dp"
+        android:autoSizeMaxTextSize="20sp"
+        android:autoSizeMinTextSize="11sp"
+        android:autoSizeStepGranularity="1sp"
+        android:autoSizeTextType="uniform"
+        android:gravity="center_vertical|start"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:fontFeatureSettings="tnum"
+        android:maxLines="1"
+        android:textColor="@color/bflow_widget_debt"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+    </LinearLayout>
+    <LinearLayout
+      android:id="@+id/debt_free"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:orientation="vertical"
+      android:visibility="gone">
+      <ImageView
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:importantForAccessibility="no"
+        android:scaleType="fitCenter"
+        android:src="@drawable/bflow_widget_ic_seal_completed" />
+      <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:text="@string/bflow_widget_debt_none"
+        android:textColor="@color/bflow_widget_text_primary"
+        android:textSize="17sp"
+        android:fontFamily="sans-serif-medium" />
+      <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:maxLines="2"
+        android:text="@string/bflow_widget_debt_none_detail"
+        android:textColor="@color/bflow_widget_text_secondary"
+        android:textSize="12sp" />
+    </LinearLayout>
+    <FrameLayout
+      android:id="@+id/debt_spacer"
+      android:layout_width="match_parent"
+      android:layout_height="0dp"
+      android:layout_weight="1"
+      android:minHeight="6dp" />
+    <LinearLayout
+      android:id="@+id/debt_progress_block"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:orientation="vertical">
+      <ProgressBar
+        android:id="@+id/debt_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="6dp"
+        android:importantForAccessibility="no"
+        android:indeterminate="false"
+        android:max="1000"
+        android:maxHeight="6dp"
+        android:minHeight="6dp"
+        android:progress="0"
+        android:progressDrawable="@drawable/bflow_widget_progress_completed" />
+      <TextView
+        android:id="@+id/debt_progress_label"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:ellipsize="end"
+        android:includeFontPadding="false"
+        android:fontFeatureSettings="tnum"
+        android:maxLines="1"
+        android:textColor="@color/bflow_widget_text_secondary"
+        android:textSize="11sp" />
+    </LinearLayout>
+    <TextView
+      android:id="@+id/bflow_widget_updated"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="4dp"
+      android:ellipsize="end"
+      android:includeFontPadding="false"
+      android:fontFeatureSettings="tnum"
+      android:maxLines="1"
+      android:textColor="@color/bflow_widget_text_secondary"
+      android:textSize="11sp" />
+  </LinearLayout>
+
+  <LinearLayout
+    android:id="@+id/bflow_widget_empty"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="@dimen/bflow_widget_padding"
+    android:visibility="gone"
+    android:contentDescription="@string/bflow_widget_empty">
+    <ImageView
+      android:layout_width="22dp"
+      android:layout_height="22dp"
+      android:importantForAccessibility="no"
+      android:scaleType="fitCenter"
+      android:src="@drawable/bflow_widget_ic_chart_trend_accent" />
+    <FrameLayout
+      android:layout_width="match_parent"
+      android:layout_height="0dp"
+      android:layout_weight="1"
+      android:minHeight="8dp" />
+    <TextView
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:ellipsize="end"
+      android:includeFontPadding="false"
+      android:maxLines="1"
+      android:text="@string/bflow_widget_brand"
+      android:textColor="@color/bflow_widget_text_primary"
+      android:textSize="17sp"
+      android:fontFamily="sans-serif-medium" />
+    <TextView
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="8dp"
+      android:ellipsize="end"
+      android:includeFontPadding="false"
+      android:maxLines="3"
+      android:text="@string/bflow_widget_empty"
+      android:textColor="@color/bflow_widget_text_secondary"
+      android:textSize="15sp" />
+  </LinearLayout>
+
+</FrameLayout>

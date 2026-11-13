@@ -14,7 +14,6 @@ export * from './components/BrandAndThemeIcons';
 export * from './components/WorkspaceNavIcons';
 export * from './components/FloatingLiquidGlassDock';
 export * from './components/navigation/workspaceTabs';
-export * from './components/navigation/MaterialNavigationBar';
 export * from './components/navigation/WebNavigation';
 export * from './components/IosWheelPickerModal';
 export * from './components/KeyboardAwareScrollView';

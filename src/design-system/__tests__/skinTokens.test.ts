@@ -132,7 +132,7 @@ describe('platform skin resolution', () => {
 });
 
 describe('platform skin identity', () => {
-  it('declares a distinct material, navigation and press feedback per skin', () => {
+  it('declares a distinct material and press feedback per skin, and the dock on iOS and Android', () => {
     expect(platformSkins.ios).toMatchObject({
       surfaceMaterial: 'liquid-glass',
       navigation: 'floating-dock',
@@ -140,7 +140,7 @@ describe('platform skin identity', () => {
     });
     expect(platformSkins.android).toMatchObject({
       surfaceMaterial: 'tonal',
-      navigation: 'navigation-bar',
+      navigation: 'floating-dock',
       pressFeedback: 'sink',
     });
     expect(platformSkins.web).toMatchObject({
@@ -149,7 +149,8 @@ describe('platform skin identity', () => {
       pressFeedback: 'step',
     });
 
-    for (const field of ['surfaceMaterial', 'navigation', 'pressFeedback'] as const) {
+    // iOS and Android share the floating dock (ADR 0024); material and touch stay distinct.
+    for (const field of ['surfaceMaterial', 'pressFeedback'] as const) {
       expect(new Set(PLATFORM_SKIN_IDS.map((id) => platformSkins[id][field])).size).toBe(3);
     }
   });

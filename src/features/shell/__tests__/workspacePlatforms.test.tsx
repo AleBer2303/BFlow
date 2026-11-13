@@ -10,7 +10,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { BlurView } from 'expo-blur';
 import { GLView } from 'expo-gl';
 import React from 'react';
-import { Dimensions, StyleSheet, type ViewStyle } from 'react-native';
+import { Dimensions, ScrollView, StyleSheet, type ViewStyle } from 'react-native';
 import PhaseOneHomeScreen from '../../../app/index';
 import { BFlowThemeProvider } from '../../../design-system/theme/ThemeContext';
 import {
@@ -194,13 +194,15 @@ describe('iOS skin · Liquid Glass frame', () => {
 });
 
 describe('Android skin · Material 3 frame', () => {
-  it('uses a top app bar and an anchored navigation bar, with no Liquid Glass anywhere', () => {
+  it('uses a top app bar and the floating dock with a flat pill, with no Liquid Glass anywhere', () => {
     renderApp('android');
 
     expect(screen.getByTestId('material-top-app-bar')).toBeTruthy();
     expect(screen.getByText('BFlow · Octubre 2026')).toBeTruthy();
-    expect(screen.getByTestId('liquid-glass-tab-bar')).toBeTruthy();
-    expect(screen.getAllByTestId('material-nav-active-indicator')).toHaveLength(1);
+    expect(styleOf('liquid-glass-tab-bar')).toMatchObject({ width: '100%', maxWidth: 580 });
+    expect(styleOf('dock-flat-indicator').backgroundColor).toBe(
+      palettesBySkin.android.dark.accent.container
+    );
 
     expect(screen.queryByTestId('dock-magnifying-lens')).toBeNull();
     expect(screen.UNSAFE_queryAllByType(BlurView)).toHaveLength(0);
@@ -216,10 +218,12 @@ describe('Android skin · Material 3 frame', () => {
     }
   });
 
-  it('keeps the navigation bar in the layout flow so content is never covered', () => {
+  it('leaves room at the end of the content for the floating dock', () => {
     renderApp('android');
 
-    expect(styleOf('liquid-glass-tab-bar').position).toBeUndefined();
+    expect(styleOf('liquid-glass-tab-bar-anchor').position).toBe('absolute');
+    const scrollContent = screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle;
+    expect(StyleSheet.flatten(scrollContent).paddingBottom).toBeGreaterThanOrEqual(76);
   });
 
   it('draws the month curve with animated vectors and never mounts a GL surface', () => {

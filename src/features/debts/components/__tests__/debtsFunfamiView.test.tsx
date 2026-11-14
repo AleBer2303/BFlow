@@ -14,6 +14,20 @@ import { DebtsFunfamiView } from '../DebtsFunfamiView';
 const ORIGINAL_WINDOW = Dimensions.get('window');
 const ORIGINAL_SCREEN = Dimensions.get('screen');
 
+/** Counts renders of the cards' status badges: none of the forms with text fields has one. */
+const mockStatusBadgeRender = jest.fn();
+jest.mock('../../../../design-system/components/StatusBadge', () => {
+  const ReactLib = jest.requireActual('react') as typeof import('react');
+  const actual = jest.requireActual('../../../../design-system/components/StatusBadge') as typeof import('../../../../design-system/components/StatusBadge');
+  return {
+    ...actual,
+    StatusBadge: (props: React.ComponentProps<typeof actual.StatusBadge>) => {
+      mockStatusBadgeRender();
+      return ReactLib.createElement(actual.StatusBadge, props);
+    },
+  };
+});
+
 const BASE_DEBT_SUMMARY: DebtSummaryResult = {
   monthKey: '2026-10',
   openingTotalDebt: 6_200_000,
@@ -192,5 +206,73 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView on %s skin', (skin) => {
     fireEvent.press(screen.getByTestId('debts-add-new-debt-button'));
     expect(screen.queryByTestId('debt-delete-debt_cb300f_moto')).toBeNull();
     expect(screen.getByTestId('debt-form-modal')).toBeTruthy();
+  });
+});
+
+describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView form state on %s skin', (skin) => {
+  it('typing in the debt form does not re-render the debt cards', () => {
+    const { onCreateDebt } = renderView(skin);
+    fireEvent.press(screen.getByTestId('debts-add-new-debt-button'));
+    mockStatusBadgeRender.mockClear();
+
+    fireEvent.changeText(screen.getByTestId('debt-form-name-input'), 'Tarjeta');
+    fireEvent.changeText(screen.getByTestId('debt-form-lender-input'), 'Banco');
+    fireEvent.changeText(screen.getByTestId('debt-form-amount-input'), '1.200.000');
+    fireEvent.changeText(screen.getByTestId('debt-form-interest-rate-input'), '1.5');
+    fireEvent.press(screen.getByTestId('debt-form-rate-type-annual'));
+    fireEvent.changeText(screen.getByTestId('debt-form-installment-input'), '100.000');
+
+    expect(mockStatusBadgeRender).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByTestId('debt-form-submit-button'));
+    expect(onCreateDebt).toHaveBeenCalledWith({
+      name: 'Tarjeta',
+      lender: 'Banco',
+      openingBalance: 1_200_000,
+      monthlyInterestRate: 0.125,
+      annualInterestRate: 1.5,
+      interestRateType: 'annual',
+      monthlyInstallment: 100_000,
+    });
+    expect(screen.queryByTestId('debt-form-modal')).toBeNull();
+  });
+
+  it('a validation error stays inside the form and keeps what was typed', () => {
+    const { onCreateDebt } = renderView(skin);
+    fireEvent.press(screen.getByTestId('debts-add-new-debt-button'));
+    fireEvent.changeText(screen.getByTestId('debt-form-name-input'), 'Tarjeta');
+    mockStatusBadgeRender.mockClear();
+
+    fireEvent.press(screen.getByTestId('debt-form-submit-button'));
+
+    expect(screen.getByText('Escribe la entidad o persona acreedora.')).toBeTruthy();
+    expect(screen.getByTestId('debt-form-name-input').props.value).toBe('Tarjeta');
+    expect(onCreateDebt).not.toHaveBeenCalled();
+    expect(mockStatusBadgeRender).not.toHaveBeenCalled();
+  });
+
+  it('reopening the form starts empty, and editing loads the chosen debt each time', () => {
+    const { onUpdateDebt } = renderView(skin);
+    fireEvent.press(screen.getByTestId('debts-add-new-debt-button'));
+    fireEvent.changeText(screen.getByTestId('debt-form-name-input'), 'Borrador');
+    fireEvent.press(screen.getByTestId('debts-add-new-debt-button'));
+    fireEvent.press(screen.getByTestId('debts-add-new-debt-button'));
+    expect(screen.getByTestId('debt-form-name-input').props.value).toBe('');
+
+    fireEvent.press(screen.getByTestId('debt-action-edit-button'));
+    fireEvent.press(screen.getByTestId('debt-edit-debt_cb300f_moto'));
+    expect(screen.getByTestId('debt-form-name-input').props.value).toBe('Moto CB300F');
+    expect(screen.getByTestId('debt-form-amount-input').props.value).toBe('2.600.000');
+
+    fireEvent.press(screen.getByTestId('debt-action-edit-button'));
+    fireEvent.press(screen.getByTestId('debt-edit-debt_esp_ia'));
+    expect(screen.getByTestId('debt-form-name-input').props.value).toBe('Especialización IA');
+
+    fireEvent.changeText(screen.getByTestId('debt-form-name-input'), 'Posgrado');
+    fireEvent.press(screen.getByTestId('debt-form-submit-button'));
+    expect(onUpdateDebt).toHaveBeenCalledWith(
+      'debt_esp_ia',
+      expect.objectContaining({ name: 'Posgrado', openingBalance: 3_600_000 })
+    );
   });
 });

@@ -380,15 +380,43 @@ export function persistHydratedAccountSnapshot(state: BudgetStoreState): void {
   });
 }
 
+const WIDGET_NOT_SYNCED: WidgetSyncResult = {
+  synced: false,
+  mode: 'mode-a-preview',
+  appGroupId: 'group.com.bflow.app',
+};
+
+let pendingWidgetSyncState: BudgetStoreState | null = null;
+let pendingWidgetSync: Promise<WidgetSyncResult> | null = null;
+
+/**
+ * Asks for the widgets to be refreshed with `state`. Calls made in the same tick are merged:
+ * the snapshot is built once, at the end of the tick, from the last state received, and
+ * every caller gets that same result.
+ */
 export function triggerWidgetSync(state: BudgetStoreState): Promise<WidgetSyncResult> {
   if (!state.isAccountHydrated) {
-    return Promise.resolve({
-      synced: false,
-      mode: 'mode-a-preview' as const,
-      appGroupId: 'group.com.bflow.app',
-    });
+    return Promise.resolve(WIDGET_NOT_SYNCED);
   }
   persistHydratedAccountSnapshot(state);
+  pendingWidgetSyncState = state;
+  if (!pendingWidgetSync) {
+    pendingWidgetSync = Promise.resolve().then(() => {
+      const latestState = pendingWidgetSyncState;
+      pendingWidgetSyncState = null;
+      pendingWidgetSync = null;
+      return latestState ? runWidgetSync(latestState) : WIDGET_NOT_SYNCED;
+    });
+  }
+  return pendingWidgetSync;
+}
+
+/** Drops a refresh that has not run yet (sign-out: the widgets must stay empty). */
+export function cancelPendingWidgetSync(): void {
+  pendingWidgetSyncState = null;
+}
+
+function runWidgetSync(state: BudgetStoreState): Promise<WidgetSyncResult> {
   try {
     const snapshot = buildWidgetSnapshot({
       monthKeys: state.availableMonths,
@@ -408,11 +436,7 @@ export function triggerWidgetSync(state: BudgetStoreState): Promise<WidgetSyncRe
     }
     return syncWidgetSnapshot(snapshot);
   } catch {
-    return Promise.resolve({
-      synced: false,
-      mode: 'mode-a-preview' as const,
-      appGroupId: 'group.com.bflow.app',
-    });
+    return Promise.resolve(WIDGET_NOT_SYNCED);
   }
 }
 

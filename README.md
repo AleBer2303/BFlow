@@ -231,7 +231,7 @@ BFlow/
 │   └── workflows/                # CI/CD (ci.yml, build-ios.yml, build-android.yml, e2e.yml, release.yml)
 ├── assets/                       # Iconos y splash screens de la aplicación
 ├── docs/
-│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0027)
+│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0029)
 │   ├── guides/                   # Guías operativas (firma con iloader, validación multiplataforma, seguridad de Firebase Auth)
 │   └── Improvements/             # Guías de auditoría de rendimiento
 ├── fixtures/                     # Datos dorados de prueba (october-2026.json)
@@ -241,7 +241,7 @@ BFlow/
 │   ├── data/                     # Repositorios Firestore, esquemas Zod, seeds
 │   │   ├── firebase/             # Configuración Firebase SDK, persistencia Auth por plataforma y emulador
 │   │   ├── mappers/              # Esquemas de validación Zod
-│   │   ├── repositories/         # budgetRepository.ts (acceso a datos)
+│   │   ├── repositories/         # budgetRepository.ts (acceso a datos) y historyWindow.ts (historial archivado en la carga completa, ADR 0028)
 │   │   └── seed/                 # Carga de datos iniciales de octubre 2026
 │   ├── design-system/            # Tokens por piel (iOS / Android / Web), tema, componentes base y movimiento (motion/)
 │   │   ├── components/           # AppPressable, AppText, CurrencyText, ResponsiveColumns…
@@ -266,11 +266,11 @@ BFlow/
 │   │   ├── auth/                 # Login, registro con política de contraseñas, verificación de correo, perfil y recuperación
 │   │   ├── budget/               # Resumen mensual y modal de agregar movimiento
 │   │   ├── checklist/            # Lista de movimientos y filtros
-│   │   ├── debts/                # Amortización de deudas, abonos y gráfico de evolución
+│   │   ├── debts/                # Amortización de deudas, abonos, formulario de deuda (DebtForm) y gráfico de evolución
 │   │   ├── onboarding/           # Configuración inicial de usuario nuevo
-│   │   ├── savings/              # Tarjetas de fondos, provisión moto y gráfico de evolución
+│   │   ├── savings/              # Tarjetas de fondos, provisiones, sus formularios (SavingsBucketForms, ProvisionItemForm) y gráfico de evolución
 │   │   ├── shell/                # WorkspaceShell: cabecera, columna y navegación de cada piel
-│   │   └── summary/              # Resumen y curva del mes: three.js (iOS), SVG animado (Android, Web y respaldo de iOS)
+│   │   └── summary/              # Resumen y curva del mes: three.js (iOS; el cargador .android no lo importa), SVG animado (Android, Web y respaldo de iOS)
 │   └── platform/                 # Adaptadores Modo A vs Modo B
 │       ├── auth/                 # Adaptador de autenticación y correos de cuenta de Firebase Auth (verificación, contraseña, cambio de correo; ADR 0025) y límites de uso: 5 intentos de contraseña y esperas entre envíos (ADR 0026)
 │       ├── glass/                # GlassSurface: vidrio (iOS), tonal (Android), plano (Web)

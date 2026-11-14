@@ -104,14 +104,16 @@ export async function syncWidgetSnapshot(
   snapshot: WidgetSnapshotV2,
   bundleIdentifier?: string
 ): Promise<WidgetSyncResult> {
-  const payload = serializeWidgetSnapshot(snapshot);
   const appGroupId = resolveDynamicAppGroupId(bundleIdentifier);
   const bridge = resolveNativeBridge();
   const mode = bridge ? 'mode-b-native' : 'mode-a-preview';
 
+  // Antes de validar y serializar: la mayoría de las mutaciones no cambian lo que pinta el widget.
   if (isEquivalentWidgetSnapshot(latestSnapshot, snapshot)) {
     return { synced: true, mode, appGroupId, skippedRedundantWrite: true };
   }
+
+  const payload = serializeWidgetSnapshot(snapshot);
 
   if (!bridge) {
     latestSnapshot = snapshot;

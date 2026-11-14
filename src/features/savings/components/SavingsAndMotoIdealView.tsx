@@ -8,13 +8,11 @@
  * - Full CRUD (Create, Edit, Update, Delete) for user-configurable Provisions & Target Goals
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import {
   AppPressable,
   AppText,
-  FormMessage,
-  AppTextInput,
   CurrencyText,
   GlassSurface,
   hapticService,
@@ -25,11 +23,9 @@ import {
   StatusBadge,
   TrashBinIcon,
   useBFlowTheme,
-  usePrimaryActionLook,
 } from '../../../design-system';
 import {
   formatCurrency,
-  formatGroupedIntegerInput,
   type IdealMotoPlan,
   type MonthlySavingsSummary,
   type MotoIdealComparisonSummary,
@@ -37,6 +33,12 @@ import {
   type ProvisionPlanComparisonSummary,
 } from '../../../domain';
 import type { SaveProvisionItemInput } from '../../budget/store/useBudgetStore';
+import { ProvisionItemForm, type EditableProvisionItem } from './ProvisionItemForm';
+import {
+  EditSavingsBucketForm,
+  NewSavingsBucketForm,
+  type EditableSavingsBucket,
+} from './SavingsBucketForms';
 
 type ListActionMode = 'edit' | 'delete' | null;
 
@@ -262,32 +264,18 @@ export function SavingsAndMotoIdealView({
   onDeleteProvisionItem,
 }: SavingsAndMotoIdealViewProps): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
-  const primaryAction = usePrimaryActionLook();
 
-  // Savings bucket add / individual edit / individual delete state
+  // The forms own their field state (R-17); the view only knows which one is open and for
+  // which item. A new key remounts a form, so it loads that item's values (or starts empty).
   const [bucketActionMode, setBucketActionMode] = useState<ListActionMode>(null);
-  const [editingBucketId, setEditingBucketId] = useState<string | null>(null);
-  const [editingBucketLabel, setEditingBucketLabel] = useState('');
-  const [editBucketNameInput, setEditBucketNameInput] = useState('');
-  const [editBucketBalanceInput, setEditBucketBalanceInput] = useState('');
-  const [balanceError, setBalanceError] = useState<string | null>(null);
-
-  // New Custom Savings Bucket form state
+  const [editingBucket, setEditingBucket] = useState<EditableSavingsBucket | null>(null);
   const [isAddingBucket, setIsAddingBucket] = useState(false);
-  const [newBucketName, setNewBucketName] = useState('');
-  const [newBucketBalance, setNewBucketBalance] = useState('');
-  const [newBucketError, setNewBucketError] = useState<string | null>(null);
+  const [bucketFormKey, setBucketFormKey] = useState(0);
 
-  // Provision / Target Goal CRUD form state
   const [isProvisionFormOpen, setIsProvisionFormOpen] = useState(false);
   const [provisionActionMode, setProvisionActionMode] = useState<ListActionMode>(null);
-  const [editingProvisionId, setEditingProvisionId] = useState<string | null>(null);
-  const [provisionName, setProvisionName] = useState('');
-  const [provisionAmount, setProvisionAmount] = useState('');
-  const [provisionMonths, setProvisionMonths] = useState('1');
-  const [provisionKind, setProvisionKind] = useState<'recurring' | 'target_goal'>('recurring');
-  const [provisionNotes, setProvisionNotes] = useState('');
-  const [provisionError, setProvisionError] = useState<string | null>(null);
+  const [editingProvision, setEditingProvision] = useState<EditableProvisionItem | null>(null);
+  const [provisionFormKey, setProvisionFormKey] = useState(0);
 
   const hasProvisionItems =
     motoIdealSummary.recurringItems.length > 0 || motoIdealSummary.targetGoals.length > 0;
@@ -303,9 +291,7 @@ export function SavingsAndMotoIdealView({
       }
       if (next) {
         setIsAddingBucket(false);
-        setEditingBucketId(null);
-        setNewBucketError(null);
-        setBalanceError(null);
+        setEditingBucket(null);
       }
       return next;
     });
@@ -317,8 +303,7 @@ export function SavingsAndMotoIdealView({
       const next = prev === mode ? null : mode;
       if (next) {
         setIsProvisionFormOpen(false);
-        setEditingProvisionId(null);
-        setProvisionError(null);
+        setEditingProvision(null);
       }
       return next;
     });
@@ -332,10 +317,8 @@ export function SavingsAndMotoIdealView({
 
   useEffect(() => {
     setBucketActionMode(null);
-    setEditingBucketId(null);
+    setEditingBucket(null);
     setIsAddingBucket(false);
-    setBalanceError(null);
-    setNewBucketError(null);
   }, [savingsSummary.monthKey]);
 
   const handleToggleAddBucket = () => {
@@ -343,53 +326,26 @@ export function SavingsAndMotoIdealView({
       const next = !prev;
       if (next) {
         setBucketActionMode(null);
-        setEditingBucketId(null);
-        setBalanceError(null);
+        setEditingBucket(null);
+        setBucketFormKey((key) => key + 1);
       }
-      setNewBucketError(null);
       return next;
     });
   };
+  const handleCloseAddBucket = useCallback(() => setIsAddingBucket(false), []);
 
   const handleOpenEditBucket = (bucketId: string, name: string, openingBalance: number) => {
     setBucketActionMode(null);
     setIsAddingBucket(false);
-    setEditingBucketId(bucketId);
-    setEditingBucketLabel(name);
-    setEditBucketNameInput(name);
-    setEditBucketBalanceInput(formatGroupedIntegerInput(openingBalance));
-    setBalanceError(null);
+    setBucketFormKey((key) => key + 1);
+    setEditingBucket({ id: bucketId, name, openingBalance });
   };
-
-  const handleCancelEditBucket = () => {
-    setEditingBucketId(null);
-    setBalanceError(null);
-  };
-
-  const handleSaveEditedBucket = () => {
-    if (!editingBucketId) return;
-    const trimmedName = editBucketNameInput.trim();
-    if (!trimmedName) {
-      setBalanceError('Escribe el nombre del fondo de ahorro.');
-      return;
-    }
-    const digits = editBucketBalanceInput.replace(/[^0-9]/g, '');
-    const parsed = digits ? Number(digits) : 0;
-    if (!Number.isSafeInteger(parsed) || parsed < 0) {
-      setBalanceError('Ingresa un saldo entero válido para el fondo.');
-      return;
-    }
-
-    onUpdateOpeningBalance?.(editingBucketId, parsed, trimmedName);
-    setEditingBucketId(null);
-    setBalanceError(null);
-  };
+  const handleCloseEditBucket = useCallback(() => setEditingBucket(null), []);
 
   const handleDeleteBucket = (bucketId: string) => {
     onDeleteSavingsBucket?.(bucketId);
-    if (editingBucketId === bucketId) {
-      setEditingBucketId(null);
-      setBalanceError(null);
+    if (editingBucket?.id === bucketId) {
+      setEditingBucket(null);
     }
   };
 
@@ -412,108 +368,28 @@ export function SavingsAndMotoIdealView({
     />
   );
 
-  const handleCreateBucket = () => {
-    if (!newBucketName.trim()) {
-      setNewBucketError('Escribe el nombre del nuevo fondo de ahorro.');
-      return;
-    }
-    const digits = newBucketBalance.replace(/[^0-9]/g, '');
-    const parsed = digits ? Number(digits) : 0;
-    if (!Number.isSafeInteger(parsed) || parsed < 0) {
-      setNewBucketError('Ingresa un saldo inicial entero válido.');
-      return;
-    }
-    if (onCreateSavingsBucket) {
-      onCreateSavingsBucket(newBucketName.trim(), parsed);
-    }
-    setNewBucketName('');
-    setNewBucketBalance('');
-    setNewBucketError(null);
-    setIsAddingBucket(false);
-  };
-
-  const handleOpenCreateProvision = () => {
+  const openProvisionForm = (item: EditableProvisionItem | null) => {
     setProvisionActionMode(null);
-    setEditingProvisionId(null);
-    setProvisionName('');
-    setProvisionAmount('');
-    setProvisionMonths('1');
-    setProvisionKind('recurring');
-    setProvisionNotes('');
-    setProvisionError(null);
+    setEditingProvision(item);
+    setProvisionFormKey((key) => key + 1);
     setIsProvisionFormOpen(true);
   };
+  const handleCloseProvisionForm = useCallback(() => {
+    setIsProvisionFormOpen(false);
+    setEditingProvision(null);
+  }, []);
 
-  const handleOpenEditProvision = (item: {
-    id: string;
-    name: string;
-    amount: number;
-    periodMonths: number;
-    kind: 'recurring' | 'target_goal';
-    notes?: string;
-  }) => {
-    setProvisionActionMode(null);
-    setEditingProvisionId(item.id);
-    setProvisionName(item.name);
-    setProvisionAmount(formatGroupedIntegerInput(item.amount));
-    setProvisionMonths(formatGroupedIntegerInput(item.periodMonths));
-    setProvisionKind(item.kind);
-    setProvisionNotes(item.notes ?? '');
-    setProvisionError(null);
-    setIsProvisionFormOpen(true);
-  };
-
-  const renderProvisionRowAction = (item: {
-    id: string;
-    name: string;
-    amount: number;
-    periodMonths: number;
-    kind: 'recurring' | 'target_goal';
-    notes?: string;
-  }): React.JSX.Element | null => (
+  const renderProvisionRowAction = (item: EditableProvisionItem): React.JSX.Element | null => (
     <InlineItemActionPill
       mode={provisionActionMode}
       itemName={item.name}
       editTestID={`edit-provision-${item.id}`}
       deleteTestID={`delete-provision-${item.id}`}
-      onEdit={onSaveProvisionItem ? () => handleOpenEditProvision(item) : undefined}
+      onEdit={onSaveProvisionItem ? () => openProvisionForm(item) : undefined}
       onDelete={onDeleteProvisionItem ? () => onDeleteProvisionItem(item.id) : undefined}
     />
   );
 
-  const handleSubmitProvision = () => {
-    if (!provisionName.trim()) {
-      setProvisionError('Escribe el nombre de la provisión o meta.');
-      return;
-    }
-    const amountDigits = provisionAmount.replace(/[^0-9]/g, '');
-    const parsedAmount = amountDigits ? Number(amountDigits) : 0;
-    if (!Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
-      setProvisionError('Ingresa un monto entero válido mayor a 0.');
-      return;
-    }
-    const monthsDigits = provisionMonths.replace(/[^0-9]/g, '');
-    const parsedMonths = monthsDigits ? Number(monthsDigits) : 1;
-    if (!Number.isSafeInteger(parsedMonths) || parsedMonths < 1) {
-      setProvisionError('El periodo en meses debe ser un entero mayor o igual a 1.');
-      return;
-    }
-
-    if (onSaveProvisionItem) {
-      onSaveProvisionItem({
-        ...(editingProvisionId ? { id: editingProvisionId } : {}),
-        name: provisionName.trim(),
-        amount: parsedAmount,
-        periodMonths: parsedMonths,
-        priority: '1. Alta',
-        kind: provisionKind,
-        ...(provisionNotes.trim() ? { notes: provisionNotes.trim() } : {}),
-      });
-    }
-    setIsProvisionFormOpen(false);
-    setEditingProvisionId(null);
-    setProvisionError(null);
-  };
 
   return (
     <View style={{ gap: spacing.md }} testID="savings-and-moto-ideal-view">
@@ -599,126 +475,23 @@ export function SavingsAndMotoIdealView({
 
           {/* Add New Custom Savings Fund Sheet */}
           <RevealDown visible={isAddingBucket}>
-            <GlassSurface elevated testID="add-savings-bucket-card">
-              <View style={{ gap: spacing.sm }}>
-                <AppText variant="headline">Crear Nuevo Fondo de Ahorro</AppText>
-                <AppText variant="micro" color={colors.text.secondary}>
-                  Podrás vincular cualquier gasto de tu Checklist a este fondo para que sume automáticamente al marcarlo como pagado.
-                </AppText>
-
-                <AppTextInput
-                  testID="new-bucket-name-input"
-                  value={newBucketName}
-                  onChangeText={setNewBucketName}
-                  placeholder="Nombre del fondo (ej. Fondo Viaje, Emergencias)"
-                />
-
-                <AppTextInput
-                  testID="new-bucket-balance-input"
-                  value={newBucketBalance}
-                  onChangeText={setNewBucketBalance}
-                  keyboardType="number-pad"
-                  placeholder="Saldo actual o del mes anterior (ej. 500.000)"
-                />
-
-                <FormMessage message={newBucketError} />
-
-                <AppPressable
-                  testID="submit-new-bucket-button"
-                  accessibilityRole="button"
-                  onPress={handleCreateBucket}
-                  style={{
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    borderRadius: radius.md,
-                    borderCurve: 'continuous',
-                    ...primaryAction.container,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                >
-                  <AppText variant="body" color={primaryAction.labelColor ?? colors.semantic.income}>
-                    Guardar Fondo de Ahorro
-                  </AppText>
-                </AppPressable>
-              </View>
-            </GlassSurface>
+            <NewSavingsBucketForm
+              key={bucketFormKey}
+              onCreateSavingsBucket={onCreateSavingsBucket}
+              onClose={handleCloseAddBucket}
+            />
           </RevealDown>
 
           {/* Individual Savings Fund Edit Sheet */}
-          <RevealDown visible={Boolean(editingBucketId)}>
-            <GlassSurface elevated testID="edit-savings-bucket-card">
-              <View style={{ gap: spacing.sm }}>
-                <AppText variant="headline">
-                  {editingBucketLabel ? `Editar ${editingBucketLabel}` : 'Editar Fondo de Ahorro'}
-                </AppText>
-                <AppText variant="micro" color={colors.text.secondary}>
-                  Edita el nombre o el saldo actual/del mes anterior con el que inicia este fondo.
-                </AppText>
-
-                <AppTextInput
-                  testID="edit-bucket-name-input"
-                  value={editBucketNameInput}
-                  onChangeText={setEditBucketNameInput}
-                  placeholder="Nombre del fondo"
-                />
-
-                <AppTextInput
-                  testID="edit-bucket-balance-input"
-                  value={editBucketBalanceInput}
-                  onChangeText={setEditBucketBalanceInput}
-                  keyboardType="number-pad"
-                  placeholder="0"
-                />
-
-                <FormMessage message={balanceError} />
-
-                <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                  <AppPressable
-                    testID="cancel-edit-bucket-button"
-                    accessibilityRole="button"
-                    accessibilityLabel="Cancelar edición de fondo"
-                    onPress={handleCancelEditBucket}
-                    style={{
-                      flex: 1,
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      borderRadius: radius.md,
-                      borderCurve: 'continuous',
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <AppText variant="body" color={colors.text.secondary}>
-                      Cancelar
-                    </AppText>
-                  </AppPressable>
-
-                  <AppPressable
-                    testID="save-edit-bucket-button"
-                    accessibilityRole="button"
-                    accessibilityLabel="Guardar Saldos"
-                    onPress={handleSaveEditedBucket}
-                    style={{
-                      flex: 1,
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      borderRadius: radius.md,
-                      borderCurve: 'continuous',
-                      backgroundColor: colors.glass.surfaceElevatedTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.specularBorder,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <AppText variant="body" color={colors.semantic.income}>
-                      Guardar Saldo
-                    </AppText>
-                  </AppPressable>
-                </View>
-              </View>
-            </GlassSurface>
+          <RevealDown visible={editingBucket !== null}>
+            {editingBucket ? (
+              <EditSavingsBucketForm
+                key={bucketFormKey}
+                bucket={editingBucket}
+                onUpdateOpeningBalance={onUpdateOpeningBalance}
+                onClose={handleCloseEditBucket}
+              />
+            ) : null}
           </RevealDown>
 
           {/* Primary Bucket Cards: Fondo Moto & Fondo Ahorros (rendered only when present in the user's account) */}
@@ -867,7 +640,7 @@ export function SavingsAndMotoIdealView({
                 if (isProvisionFormOpen) {
                   setIsProvisionFormOpen(false);
                 } else {
-                  handleOpenCreateProvision();
+                  openProvisionForm(null);
                 }
               }}
               style={{
@@ -913,112 +686,12 @@ export function SavingsAndMotoIdealView({
             ) : null}
 
             <RevealDown visible={isProvisionFormOpen}>
-              <View
-                testID="provision-form-card"
-                style={{
-                  padding: spacing.md,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.glass.surfaceElevatedTint,
-                  borderWidth: 1,
-                  borderColor: colors.glass.specularBorder,
-                  gap: spacing.xs,
-                }}
-              >
-                <AppText variant="headline">
-                  {editingProvisionId ? 'Editar Provisión o Meta' : 'Nueva Provisión o Meta'}
-                </AppText>
-
-                <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-                  {(
-                    [
-                      { id: 'recurring', label: 'Provisión Recurrente' },
-                      { id: 'target_goal', label: 'Meta Objetivo' },
-                    ] as const
-                  ).map((opt) => {
-                    const active = provisionKind === opt.id;
-                    return (
-                      <AppPressable
-                        key={opt.id}
-                        testID={`provision-kind-${opt.id}`}
-                        accessibilityRole="button"
-                        onPress={() => setProvisionKind(opt.id)}
-                        style={{
-                          flex: 1,
-                          minHeight: 38,
-                          borderRadius: radius.md,
-                          backgroundColor: active
-                            ? colors.semantic.provisionsSoft
-                            : colors.glass.surfaceTint,
-                          borderWidth: 1,
-                          borderColor: active ? colors.glass.specularBorder : colors.glass.subtleBorder,
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <AppText
-                          variant="micro"
-                          color={active ? colors.semantic.provisions : colors.text.secondary}
-                        >
-                          {opt.label}
-                        </AppText>
-                      </AppPressable>
-                    );
-                  })}
-                </View>
-
-                <AppTextInput
-                  testID="provision-name-input"
-                  value={provisionName}
-                  onChangeText={setProvisionName}
-                  placeholder="Nombre (ej. Seguro, Mantenimiento, Póliza)"
-                />
-
-                <AppTextInput
-                  testID="provision-amount-input"
-                  value={provisionAmount}
-                  onChangeText={setProvisionAmount}
-                  keyboardType="number-pad"
-                  placeholder="Costo total del ciclo (ej. 690.000)"
-                />
-
-                <AppTextInput
-                  testID="provision-months-input"
-                  value={provisionMonths}
-                  onChangeText={setProvisionMonths}
-                  keyboardType="number-pad"
-                  placeholder="Periodo en meses (ej. 1 mensual, 12 anual)"
-                />
-
-                <AppTextInput
-                  testID="provision-notes-input"
-                  value={provisionNotes}
-                  onChangeText={setProvisionNotes}
-                  placeholder="Nota o fecha objetivo opcional"
-                />
-
-                <FormMessage message={provisionError} />
-
-                <View style={{ flexDirection: 'row', gap: spacing.xs, justifyContent: 'flex-end' }}>
-                  <AppPressable
-                    testID="submit-provision-button"
-                    accessibilityRole="button"
-                    onPress={handleSubmitProvision}
-                    style={{
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.md,
-                      borderCurve: 'continuous',
-                      ...primaryAction.container,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <AppText variant="caption" color={primaryAction.labelColor ?? colors.semantic.income}>
-                      Guardar Provisión
-                    </AppText>
-                  </AppPressable>
-                </View>
-              </View>
+              <ProvisionItemForm
+                key={provisionFormKey}
+                item={editingProvision}
+                onSaveProvisionItem={onSaveProvisionItem}
+                onClose={handleCloseProvisionForm}
+              />
             </RevealDown>
 
             {!hasProvisionItems ? (

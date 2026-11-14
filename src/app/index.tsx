@@ -21,7 +21,11 @@ import {
   havePersistedAccountFieldsChanged,
   type PersistedAccountFields,
 } from '../features/budget/store/persistedAccountFields';
-import { useBudgetStore, type BFlowWorkspaceTab } from '../features/budget/store/useBudgetStore';
+import {
+  cancelPendingWidgetSync,
+  useBudgetStore,
+  type BFlowWorkspaceTab,
+} from '../features/budget/store/useBudgetStore';
 import { ChecklistTab } from '../features/checklist/components/ChecklistTab';
 import { DebtsTab } from '../features/debts/components/DebtsTab';
 import { InitialAccountSetupView } from '../features/onboarding/components/InitialAccountSetupView';
@@ -476,6 +480,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     ]);
     cancelCloudWidgetSnapshotWrite();
     await signOutCurrentUser();
+    cancelPendingWidgetSync();
     clearWidgetData();
     if (outgoingUid) {
       clearPersistedAccount(outgoingUid);

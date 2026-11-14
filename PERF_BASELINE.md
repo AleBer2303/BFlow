@@ -580,3 +580,82 @@ Intervención sobre las 5 causas raíz identificadas en [`docs/Improvements/AUDI
 
 - FPS reales, tiempo por frame en hilo JS/UI (ms) ni suavidad de gestos en dispositivo Android físico (Hermes release build): los resultados anteriores corresponden a conteos deterministas de renders, nodos animados y timers en Jest / React Native Testing Library.
 
+---
+
+## 19. Auditoría de Producción — Fase 4: bundle de Android, formularios, widgets e historial de Firestore
+
+Hallazgo AUD-07 de [`docs/Improvements/AUDITS/auditoria_produccion_bflow.md`](docs/Improvements/AUDITS/auditoria_produccion_bflow.md). Decisión de la carga acotada y del refresco de widgets en el [ADR 0028](docs/decisions/0028-archived-history-window-and-widget-sync-coalescing.md).
+
+### Bundle de Android sin three.js
+
+Medido en Windows 11 con el mismo árbol de trabajo, quitando y poniendo únicamente `MonthlyCurveStageLoader.android.tsx`:
+
+```bash
+npx expo export --platform android --output-dir <carpeta>
+```
+
+con `EXPO_PUBLIC_BFLOW_DEMO=1` en el entorno (modo vitrina, para no depender de las variables de Firebase).
+
+| Bundle Hermes (`_expo/static/js/android/entry-*.hbc`) | Bytes | |
+| :--- | ---: | :--- |
+| Antes (Android resolvía `MonthlyCurveStageLoader.tsx` → `MonthlyCurveStage` → `three`) | 7.657.437 | 7,66 MB |
+| Después (`MonthlyCurveStageLoader.android.tsx` no importa nada) | 5.403.577 | 5,40 MB |
+| **Diferencia** | **−2.253.860** | **−29,4 %** |
+
+iOS conserva la escena (`MonthlyCurveStageLoader.ios.tsx`) y Web el chunk diferido. `src/features/summary/__tests__/monthlyCurveStageLoader.test.tsx` falla si la variante de Android vuelve a cargar `three` o `expo-gl`.
+
+### Formularios con estado propio
+
+Contado en Jest/RNTL con un `StatusBadge` instrumentado (lo usan las tarjetas, no los formularios), en las tres pieles.
+
+| Acción | Antes | Después | Test |
+| :--- | :--- | :---: | :--- |
+| Escribir en los 5 campos de la deuda y cambiar el tipo de interés | La vista entera en cada tecla (los `useState` vivían en `DebtsFunfamiView`) | **0** renders de tarjetas | `debtsFunfamiView.test.tsx` |
+| Escribir en «Nuevo Fondo», en el editor de fondo o en la provisión | La vista entera en cada tecla (`SavingsAndMotoIdealView`) | **0** renders de fondos y provisiones | `savingsAndMotoIdealView.test.tsx` |
+| Escribir nombre, meta, correo nuevo y contraseña en la ventana de perfil | La pantalla de Cuenta entera en cada tecla | **0** renders de la pantalla de detrás | `accountProfileWorkspaceView.test.tsx` |
+
+El «antes» es la lectura del código anterior, no una medición: los `useState` de cada campo estaban en el componente de la vista. Los gráficos de Deudas y Ahorros ya eran hermanos de la vista en `DebtsTab` y `SavingsTab`, así que no se re-renderizaban al escribir; lo que se ahorra son las tarjetas.
+
+### Widgets y caché de la cuenta
+
+| Verificación | Antes | Después | Test |
+| :--- | :--- | :---: | :--- |
+| 3 llamadas a `triggerWidgetSync` en el mismo tick | 3 cálculos de `buildWidgetSnapshot` | **1**, con el último estado | `widgetCloudSync.test.ts` |
+| `syncWidgetSnapshot` nativo con contenido sin cambios | Validaba con Zod y serializaba antes de comparar | **0** validaciones y serializaciones | `widgetNativeBridge.test.ts` |
+| `isEquivalentCloudAccount` con cuentas de distinta forma (meses, deudas, fondos o snapshots de más) | Hasta 8 pares de `JSON.stringify` | **0** `JSON.stringify` | `accountCache.test.ts` |
+| `isEquivalentCloudAccount` con la misma forma y la misma `dataRevision` | 8 pares de `JSON.stringify` | **0** `JSON.stringify` | `accountCache.test.ts` |
+
+### Documentos de `entries` leídos en una carga completa
+
+Mismo criterio de conteo que el §15 (1 lectura por documento devuelto, mínimo 1 por consulta; el `count()` cuesta 1 lectura por cada 1.000 documentos). Solo cambia la colección `entries`; el resto de la carga se lee igual.
+
+| Cuenta (≈12 movimientos por mes, último mes abierto) | Antes | Después, caché al día | |
+| :--- | ---: | ---: | :--- |
+| 13 meses (12 cerrados) | 156 | 156 | Sin cambio: no hay historial archivado |
+| 20 meses (19 cerrados) | 240 | **158** | **Medido** en `archivedHistoryLoad.test.ts` (156 recientes + 1 consulta de cambios vacía + 1 conteo) |
+| 24 meses (23 cerrados) | 288 | 158 | Proyección con el mismo modelo |
+| 60 meses (59 cerrados) | 720 | 158 | Proyección con el mismo modelo |
+
+Si la caché no coincide con la nube (un borrado en un mes archivado, un mes reabierto, el conteo no disponible), la carga lee las tres consultas de la ventana **y además** la colección completa: es más cara que antes en ese caso.
+
+### Íconos PNG: sin cambios
+
+`assets/icon.png` y `assets/adaptive-icon.png` son el mismo archivo y pesan **890.512 bytes** cada uno (PNG RGB de 8 bits, 1.024 × 1.024, 181.438 colores), no los 1,77 MB que indica la auditoría. Pruebas con `sharp` 0.35.5 (libvips 8.18, libimagequant 2.4):
+
+| Variante | Bytes | PSNR frente al original |
+| :--- | ---: | :--- |
+| Actual | 890.512 | — |
+| Recompresión sin pérdida (zlib 9) | 1.719.732 | idéntico (más grande) |
+| Paleta de 256 colores, tramado 1,0 | 320.766 | 39,45 dB |
+| Paleta de 256 colores, tramado 0,5 | 298.196 | 39,91 dB |
+| Paleta de 256 colores, tramado 0,2 | 248.107 | 40,45 dB |
+
+La única variante por debajo de 250 KB deja bandas visibles en el degradado del resplandor (comparación ampliada al 200 %); las de tramado alto no llegan al objetivo y añaden grano. Como el objetivo de peso y «sin pérdida visual» no se cumplen a la vez con esta imagen, los archivos no se tocaron.
+
+### No medido
+
+- Tamaño del `.apk` o del `.aab`: solo se midió el bundle de JavaScript que exporta Metro. CI no compiló un release con este cambio.
+- Tiempo de arranque de Hermes en un dispositivo Android con y sin three.js.
+- Lecturas reales en Firestore: los conteos salen del SDK simulado. `getCountFromServer` y la consulta por `updatedAt` no se han ejecutado contra Firestore ni contra el emulador.
+- Tiempo por tecla en dispositivo al escribir en los formularios: los resultados son conteos de renders en Jest.
+- Si el peso de `icon.png` influye en el `.ipa` o el `.apk`: el prebuild de Expo genera los íconos de cada densidad a partir de ese archivo, y no se compiló ningún binario para comprobarlo.

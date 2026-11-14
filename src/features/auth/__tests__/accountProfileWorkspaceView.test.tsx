@@ -2,11 +2,112 @@ import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { BFlowThemeProvider } from '../../../design-system/theme/ThemeContext';
 import { AccountProfileWorkspaceView } from '../components/AccountProfileWorkspaceView';
+import { PLATFORM_SKIN_IDS } from '../../../design-system/tokens';
 import type { BFlowAuthUser } from '../../../platform/auth/authAdapter';
 import {
   __resetAuthRateLimiterForTests,
   recordFailedAuthAttempt,
 } from '../../../platform/auth/authRateLimiter';
+
+/** Counts renders of the account screen's status badge: the profile forms have none here. */
+const mockStatusBadgeRender = jest.fn();
+jest.mock('../../../design-system/components/StatusBadge', () => {
+  const ReactLib = jest.requireActual('react') as typeof import('react');
+  const actual = jest.requireActual(
+    '../../../design-system/components/StatusBadge'
+  ) as typeof import('../../../design-system/components/StatusBadge');
+  return {
+    ...actual,
+    StatusBadge: (props: React.ComponentProps<typeof actual.StatusBadge>) => {
+      mockStatusBadgeRender();
+      return ReactLib.createElement(actual.StatusBadge, props);
+    },
+  };
+});
+
+describe.each(PLATFORM_SKIN_IDS)('AccountProfileWorkspaceView form state on %s skin', (skin) => {
+  const user: BFlowAuthUser = {
+    uid: 'usr_form_state',
+    email: 'persona@bflow.app',
+    displayName: 'Persona Prueba',
+    financialGoal: 'Fondo de emergencia',
+    authProvider: 'password',
+    activeMonthKey: '2026-10',
+    provider: 'local-demo',
+  };
+
+  function renderAccount() {
+    const onUpdateProfile = jest.fn();
+    const onRequestEmailChange = jest.fn();
+    render(
+      <BFlowThemeProvider skin={skin} initialMode="dark">
+        <AccountProfileWorkspaceView
+          authUser={user}
+          syncStatusMessage="En línea"
+          isSyncing={false}
+          onSignOut={jest.fn()}
+          onUpdateProfile={onUpdateProfile}
+          onRequestEmailChange={onRequestEmailChange}
+          onSendPasswordReset={jest.fn()}
+        />
+      </BFlowThemeProvider>
+    );
+    return { onUpdateProfile, onRequestEmailChange };
+  }
+
+  beforeEach(() => {
+    __resetAuthRateLimiterForTests();
+  });
+
+  it('typing in the profile window does not re-render the account screen behind it', async () => {
+    const { onUpdateProfile, onRequestEmailChange } = renderAccount();
+    fireEvent.press(screen.getByTestId('open-profile-settings-button'));
+    mockStatusBadgeRender.mockClear();
+
+    fireEvent.changeText(screen.getByTestId('profile-input-name'), 'Persona Nueva');
+    fireEvent.changeText(screen.getByTestId('profile-input-goal'), 'Viaje');
+    fireEvent.changeText(screen.getByTestId('change-email-input'), 'nueva@bflow.app');
+    fireEvent.changeText(screen.getByTestId('change-email-password-input'), 'Clave#2026');
+    fireEvent.press(screen.getByTestId('change-email-password-toggle'));
+    expect(mockStatusBadgeRender).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('save-profile-settings-button'));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('request-email-change-button'));
+    });
+
+    expect(onUpdateProfile).toHaveBeenCalledWith({
+      displayName: 'Persona Nueva',
+      financialGoal: 'Viaje',
+    });
+    expect(onRequestEmailChange).toHaveBeenCalledWith('nueva@bflow.app', 'Clave#2026');
+    expect(mockStatusBadgeRender).not.toHaveBeenCalled();
+  });
+
+  it('the window reopens with the saved profile, empty email fields and no messages', () => {
+    renderAccount();
+    fireEvent.press(screen.getByTestId('open-profile-settings-button'));
+    fireEvent.changeText(screen.getByTestId('profile-input-name'), '');
+    fireEvent.changeText(screen.getByTestId('change-email-input'), 'sin-arroba');
+    fireEvent.press(screen.getByTestId('save-profile-settings-button'));
+    fireEvent.press(screen.getByTestId('request-email-change-button'));
+    expect(screen.getByTestId('profile-error-banner')).toHaveTextContent('Escribe tu nombre.');
+    expect(screen.getByTestId('email-error-banner')).toHaveTextContent(
+      'Escribe el nuevo correo electrónico.'
+    );
+
+    fireEvent.press(screen.getByTestId('close-profile-settings-modal'));
+    fireEvent.press(screen.getByTestId('open-profile-settings-button'));
+
+    expect(screen.getByTestId('profile-input-name').props.value).toBe('Persona Prueba');
+    expect(screen.getByTestId('profile-input-goal').props.value).toBe('Fondo de emergencia');
+    expect(screen.getByTestId('change-email-input').props.value).toBe('');
+    expect(screen.queryByTestId('profile-error-banner')).toBeNull();
+    expect(screen.queryByTestId('email-error-banner')).toBeNull();
+  });
+});
 
 describe('AccountProfileWorkspaceView', () => {
   const mockUser: BFlowAuthUser = {

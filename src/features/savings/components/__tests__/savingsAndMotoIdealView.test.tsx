@@ -18,6 +18,20 @@ import { SavingsAndMotoIdealView } from '../SavingsAndMotoIdealView';
 const ORIGINAL_WINDOW = Dimensions.get('window');
 const ORIGINAL_SCREEN = Dimensions.get('screen');
 
+/** Counts renders of the cards' status badges: none of the forms with text fields has one. */
+const mockStatusBadgeRender = jest.fn();
+jest.mock('../../../../design-system/components/StatusBadge', () => {
+  const ReactLib = jest.requireActual('react') as typeof import('react');
+  const actual = jest.requireActual('../../../../design-system/components/StatusBadge') as typeof import('../../../../design-system/components/StatusBadge');
+  return {
+    ...actual,
+    StatusBadge: (props: React.ComponentProps<typeof actual.StatusBadge>) => {
+      mockStatusBadgeRender();
+      return ReactLib.createElement(actual.StatusBadge, props);
+    },
+  };
+});
+
 const BASE_RESERVE_BUCKET = {
   bucketId: 'moto',
   name: 'Fondo de Reserva',
@@ -391,5 +405,84 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) =>
     fireEvent.press(screen.getByTestId('open-add-provision-button'));
     expect(screen.queryByTestId('delete-provision-prov-1')).toBeNull();
     expect(screen.getByTestId('provision-form-card')).toBeTruthy();
+  });
+});
+
+describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView form state on %s skin', (skin) => {
+  it('typing in the new fund form does not re-render the funds or the provisions', () => {
+    const { onCreateSavingsBucket } = renderView(skin);
+    fireEvent.press(screen.getByTestId('open-add-savings-bucket-button'));
+    mockStatusBadgeRender.mockClear();
+
+    fireEvent.changeText(screen.getByTestId('new-bucket-name-input'), 'Fondo Viaje 2');
+    fireEvent.changeText(screen.getByTestId('new-bucket-balance-input'), '250.000');
+    expect(mockStatusBadgeRender).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByTestId('submit-new-bucket-button'));
+    expect(onCreateSavingsBucket).toHaveBeenCalledWith('Fondo Viaje 2', 250_000);
+    expect(screen.queryByTestId('add-savings-bucket-card')).toBeNull();
+  });
+
+  it('typing in the fund editor does not re-render the funds or the provisions', () => {
+    const { onUpdateOpeningBalance } = renderView(skin);
+    fireEvent.press(screen.getByTestId('bucket-action-edit-button'));
+    fireEvent.press(screen.getByTestId('edit-savings-bucket-bucket_viaje'));
+    expect(screen.getByTestId('edit-bucket-name-input').props.value).toBe('Fondo Viaje');
+    expect(screen.getByTestId('edit-bucket-balance-input').props.value).toBe('500.000');
+    mockStatusBadgeRender.mockClear();
+
+    fireEvent.changeText(screen.getByTestId('edit-bucket-name-input'), 'Fondo Vacaciones');
+    fireEvent.changeText(screen.getByTestId('edit-bucket-balance-input'), '750.000');
+    expect(mockStatusBadgeRender).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByTestId('save-edit-bucket-button'));
+    expect(onUpdateOpeningBalance).toHaveBeenCalledWith('bucket_viaje', 750_000, 'Fondo Vacaciones');
+    expect(screen.queryByTestId('edit-savings-bucket-card')).toBeNull();
+  });
+
+  it('typing in the provision form does not re-render the funds or the provisions', () => {
+    const { onSaveProvisionItem } = renderView(skin);
+    fireEvent.press(screen.getByTestId('open-add-provision-button'));
+    mockStatusBadgeRender.mockClear();
+
+    fireEvent.changeText(screen.getByTestId('provision-name-input'), 'SOAT');
+    fireEvent.changeText(screen.getByTestId('provision-amount-input'), '690.000');
+    fireEvent.changeText(screen.getByTestId('provision-months-input'), '12');
+    fireEvent.changeText(screen.getByTestId('provision-notes-input'), 'Vence en marzo');
+    fireEvent.press(screen.getByTestId('provision-kind-target_goal'));
+    expect(mockStatusBadgeRender).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByTestId('submit-provision-button'));
+    expect(onSaveProvisionItem).toHaveBeenCalledWith({
+      name: 'SOAT',
+      amount: 690_000,
+      periodMonths: 12,
+      priority: '1. Alta',
+      kind: 'target_goal',
+      notes: 'Vence en marzo',
+    });
+    expect(screen.queryByTestId('provision-form-card')).toBeNull();
+  });
+
+  it('a validation error stays inside its form, and each form reopens with fresh values', () => {
+    const { onCreateSavingsBucket } = renderView(skin);
+    fireEvent.press(screen.getByTestId('open-add-savings-bucket-button'));
+    mockStatusBadgeRender.mockClear();
+    fireEvent.press(screen.getByTestId('submit-new-bucket-button'));
+    expect(screen.getByText('Escribe el nombre del nuevo fondo de ahorro.')).toBeTruthy();
+    expect(onCreateSavingsBucket).not.toHaveBeenCalled();
+    expect(mockStatusBadgeRender).not.toHaveBeenCalled();
+
+    fireEvent.changeText(screen.getByTestId('new-bucket-name-input'), 'Borrador');
+    fireEvent.press(screen.getByTestId('open-add-savings-bucket-button'));
+    fireEvent.press(screen.getByTestId('open-add-savings-bucket-button'));
+    expect(screen.getByTestId('new-bucket-name-input').props.value).toBe('');
+    expect(screen.queryByText('Escribe el nombre del nuevo fondo de ahorro.')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('provision-action-edit-button'));
+    fireEvent.press(screen.getByTestId('edit-provision-prov-1'));
+    expect(screen.getByTestId('provision-name-input').props.value).toBe('Seguro Moto');
+    expect(screen.getByTestId('provision-amount-input').props.value).toBe('600.000');
+    expect(screen.getByTestId('provision-months-input').props.value).toBe('12');
   });
 });

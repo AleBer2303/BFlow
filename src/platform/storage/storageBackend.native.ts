@@ -10,6 +10,11 @@
  * 2. `expo-sqlite/kv-store` for larger encrypted payloads such as the user's
  *    budget account cache (`bflow.account.cache.v2.<uid>`), which are encrypted
  *    with AES-256-CTR + HMAC-SHA256 before reaching this backend.
+ *
+ * Fail-closed (ADR 0027): the device secret token is the only value that reaches this backend
+ * in plain text, so it is never written to SQLite. If the Keychain/Keystore rejects the write,
+ * the token lives in memory until the app closes. Session keys are already ciphertext and may
+ * still fall back to SQLite, which does not hold the key that decrypts them.
  */
 
 import * as SecureStore from 'expo-secure-store';
@@ -84,6 +89,59 @@ function toSecureStoreKey(key: string): string {
   return key.replace(/[^a-zA-Z0-9._-]/g, '_');
 }
 
+const DEVICE_SECRET_TOKEN_SECURE_KEY = toSecureStoreKey(DEVICE_SECRET_TOKEN_KEY);
+
+/** Token vigente cuando el Keychain/Keystore no aceptó guardarlo; se pierde al cerrar la app. */
+let volatileDeviceSecretToken: string | null = null;
+
+function writeDeviceSecretToken(token: string): void {
+  try {
+    SecureStore.setItem(DEVICE_SECRET_TOKEN_SECURE_KEY, token, SECURE_STORE_OPTIONS);
+    volatileDeviceSecretToken = null;
+  } catch {
+    volatileDeviceSecretToken = token;
+  }
+  purgePlaintextDeviceSecretToken();
+}
+
+/** Borra el token que versiones anteriores dejaban en SQLite cuando fallaba SecureStore. */
+function purgePlaintextDeviceSecretToken(): void {
+  try {
+    removeFallbackKv(DEVICE_SECRET_TOKEN_KEY);
+  } catch {
+    // Ignore fallback I/O error
+  }
+}
+
+function readDeviceSecretToken(): string | null {
+  if (volatileDeviceSecretToken !== null) {
+    return volatileDeviceSecretToken;
+  }
+  try {
+    const secureToken = SecureStore.getItem(DEVICE_SECRET_TOKEN_SECURE_KEY, SECURE_STORE_OPTIONS);
+    if (secureToken !== null && secureToken.length > 0) {
+      return secureToken;
+    }
+  } catch {
+    // Keychain/Keystore unavailable: look for a legacy copy below
+  }
+  return migrateLegacyPlaintextDeviceSecretToken();
+}
+
+function migrateLegacyPlaintextDeviceSecretToken(): string | null {
+  let legacyToken: string | null = null;
+  try {
+    legacyToken = readFallbackKv(DEVICE_SECRET_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+  if (legacyToken === null || legacyToken.length === 0) {
+    return null;
+  }
+  writeDeviceSecretToken(legacyToken);
+  return legacyToken;
+}
+
 const trackedSecureStoreKeys = new Set<string>([
   toSecureStoreKey(DEVICE_SECRET_TOKEN_KEY),
   toSecureStoreKey('bflow.auth.session.v1'),
@@ -106,6 +164,10 @@ function deleteFromSecureStoreSyncAndAsync(rawKey: string): void {
 
 export const storageBackend: RawStorageBackend = {
   getItem(key: string): string | null {
+    if (key === DEVICE_SECRET_TOKEN_KEY) {
+      return readDeviceSecretToken();
+    }
+
     if (isDirectSecureStoreSessionKey(key)) {
       const safeKey = toSecureStoreKey(key);
       trackedSecureStoreKeys.add(safeKey);
@@ -146,6 +208,11 @@ export const storageBackend: RawStorageBackend = {
   },
 
   setItem(key: string, value: string): void {
+    if (key === DEVICE_SECRET_TOKEN_KEY) {
+      writeDeviceSecretToken(value);
+      return;
+    }
+
     if (isDirectSecureStoreSessionKey(key) && value.length <= SECURE_STORE_MAX_SAFE_BYTES) {
       const safeKey = toSecureStoreKey(key);
       trackedSecureStoreKeys.add(safeKey);
@@ -158,7 +225,7 @@ export const storageBackend: RawStorageBackend = {
         }
         return;
       } catch {
-        // Fallback to SQLite/memory if SecureStore write fails
+        // Session keys are ciphertext: SQLite/memory is an acceptable fallback for them
       }
     }
 
@@ -170,6 +237,9 @@ export const storageBackend: RawStorageBackend = {
   },
 
   removeItem(key: string): void {
+    if (key === DEVICE_SECRET_TOKEN_KEY) {
+      volatileDeviceSecretToken = null;
+    }
     if (isDirectSecureStoreSessionKey(key)) {
       deleteFromSecureStoreSyncAndAsync(key);
     }
@@ -181,6 +251,7 @@ export const storageBackend: RawStorageBackend = {
   },
 
   clear(): void {
+    volatileDeviceSecretToken = null;
     for (const safeKey of trackedSecureStoreKeys) {
       deleteFromSecureStoreSyncAndAsync(safeKey);
     }

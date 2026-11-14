@@ -7,11 +7,15 @@
  * Key derivation (HKDF-SHA256) combines:
  *   1. Application passphrase/pepper (`EXPO_PUBLIC_LOCAL_CIPHER_PEPPER` or built-in vault pepper)
  *   2. A 256-bit generated device/session secret token (`deviceSecretToken` stored in
- *      `expo-secure-store` on iOS Keychain / Android Keystore, or isolated web token store).
+ *      `expo-secure-store` on iOS Keychain / Android Keystore, or `sessionStorage` on Web).
+ *
+ * Keys and IVs come only from a CSPRNG (`secureRandom.ts`, ADR 0027).
  *
  * Ciphertext envelope format:
  *   `enc:v1:<ivHex(32)>:<cipherHex>:<hmacSha256Hex(64)>`
  */
+
+import { resolveSecureRandomFill, SecureRandomUnavailableError } from './secureRandom';
 
 export const ENCRYPTED_PAYLOAD_PREFIX = 'enc:v1:';
 
@@ -84,30 +88,23 @@ export function bytesToUtf8(bytes: Uint8Array): string {
 // Random Bytes & 256-bit Secret Token Generation
 // ============================================================================
 
-let fallbackCounter = 1;
+/** Desde este tamaño, una salida toda en ceros delata una fuente que no escribió nada. */
+const ZERO_OUTPUT_CHECK_MIN_BYTES = 16;
 
+/**
+ * Bytes de un CSPRNG (ADR 0027). Lanza `SecureRandomUnavailableError` si el entorno no tiene
+ * ninguno: una llave o un IV predecibles son peores que no cifrar.
+ */
 export function randomBytes(length: number): Uint8Array {
-  const out = new Uint8Array(length);
-  const cryptoObj = (
-    globalThis as unknown as {
-      crypto?: { getRandomValues?: (arr: Uint8Array) => Uint8Array };
-    }
-  ).crypto;
-
-  if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
-    cryptoObj.getRandomValues(out);
-    return out;
+  const fill = resolveSecureRandomFill();
+  if (!fill) {
+    throw new SecureRandomUnavailableError();
   }
 
-  // Fallback PRNG mixed with SHA-256 state when WebCrypto is unavailable in Hermes/test
-  let offset = 0;
-  while (offset < length) {
-    fallbackCounter = (fallbackCounter + 1) >>> 0;
-    const entropy = `${Date.now()}:${Math.random()}:${Math.random()}:${fallbackCounter}`;
-    const digest = sha256(utf8ToBytes(entropy));
-    const copyLen = Math.min(digest.length, length - offset);
-    out.set(digest.subarray(0, copyLen), offset);
-    offset += copyLen;
+  const out = new Uint8Array(length);
+  fill(out);
+  if (length >= ZERO_OUTPUT_CHECK_MIN_BYTES && out.every((byte) => byte === 0)) {
+    throw new SecureRandomUnavailableError('the random source returned only zeros');
   }
   return out;
 }

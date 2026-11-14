@@ -89,7 +89,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     // Fill personal fields and test mismatched password confirmation
     fireEvent.changeText(screen.getByTestId('auth-name-input'), 'Alejandro Bernal Garnica');
     fireEvent.changeText(screen.getByTestId('auth-phone-input'), '+57 300 123 4567');
-    fireEvent.changeText(screen.getByTestId('auth-email-input'), 'abernalg2303@gmail.com');
+    fireEvent.changeText(screen.getByTestId('auth-email-input'), 'demo.owner@bflow.example');
     fireEvent.changeText(screen.getByTestId('auth-password-input'), 'Secreto123!');
     fireEvent.changeText(screen.getByTestId('auth-confirm-password-input'), 'otraClave');
 
@@ -102,7 +102,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
   it('persists user session with personal metadata and signs out back to the Auth Gate', async () => {
     const customUser: BFlowAuthUser = {
       uid: 'uid_alejandro_01',
-      email: 'abernalg2303@gmail.com',
+      email: 'demo.owner@bflow.example',
       displayName: 'Alejandro Bernal Garnica',
       phone: '+57 300 987 6543',
       financialGoal: 'Pagar CB300F y ahorrar para apartamento',
@@ -136,10 +136,10 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     expect(loadPersistedSession()).toBeNull();
   });
 
-  it('guarantees 100% account isolation when switching between a newly created user and abernalg2303@gmail.com', async () => {
+  it('guarantees 100% account isolation when switching between a newly created user and demo.owner@bflow.example', async () => {
     const ownerUser: BFlowAuthUser = {
       uid: 'uid_owner_abernalg',
-      email: 'abernalg2303@gmail.com',
+      email: 'demo.owner@bflow.example',
       displayName: 'Alejandro Bernal Garnica',
       authProvider: 'password',
       activeMonthKey: '2026-10',
@@ -154,7 +154,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       provider: 'local-demo',
     };
 
-    // 1. Start in owner account (abernalg2303@gmail.com) and verify canonical savings ($ 4.380.000)
+    // 1. Start in owner account (demo.owner@bflow.example) and verify canonical savings ($ 4.380.000)
     useBudgetStore.getState().setAuthUser(ownerUser);
     render(
       <BFlowThemeProvider initialMode="dark">
@@ -195,8 +195,8 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
         .savingsBucketsByMonth['2026-11']?.find((b) => b.id === 'savings')?.openingBalance
     ).toBe(12_500_000);
 
-    // 4. Sign out and log back into abernalg2303@gmail.com:
-    // Zero data from secondUser may remain, and abernalg2303@gmail.com must retain exact golden balances ($ 4.380.000)
+    // 4. Sign out and log back into demo.owner@bflow.example:
+    // Zero data from secondUser may remain, and demo.owner@bflow.example must retain exact golden balances ($ 4.380.000)
     act(() => {
       useBudgetStore.getState().clearWorkspaceSession();
     });
@@ -215,7 +215,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     const repo = new InMemoryBudgetRepository();
     const initialCloud = await repo.loadFullCloudAccount(
       'uid-owner-123',
-      'abernalg2303@gmail.com'
+      'demo.owner@bflow.example'
     );
 
     const motoDebt = initialCloud.debtsByMonth['2026-10']?.find(
@@ -251,7 +251,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     });
     const reloadedCloud = await repo.loadFullCloudAccount(
       'uid-owner-123',
-      'abernalg2303@gmail.com'
+      'demo.owner@bflow.example'
     );
     act(() => {
       useBudgetStore.getState().applyFullCloudAccount(reloadedCloud);
@@ -374,10 +374,10 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     );
     expect(subsequentLoginLoad.needsOnboarding).toBe(false);
 
-    // 4. Switch to owner account (abernalg2303@gmail.com) and verify editing/deleting Fondo Moto & Fondo Ahorros
+    // 4. Switch to owner account (demo.owner@bflow.example) and verify editing/deleting Fondo Moto & Fondo Ahorros
     const ownerUser: BFlowAuthUser = {
       uid: 'uid-owner-123',
-      email: 'abernalg2303@gmail.com',
+      email: 'demo.owner@bflow.example',
       displayName: 'Alejandro Bernal',
       provider: 'firebase',
     };
@@ -443,19 +443,19 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
         'Escribe el correo electrónico con el que registraste tu cuenta.'
       );
 
-      fireEvent.changeText(screen.getByTestId('auth-email-input'), 'abernalg2303@gmail.com');
+      fireEvent.changeText(screen.getByTestId('auth-email-input'), 'demo.owner@bflow.example');
       await act(async () => {
         fireEvent.press(screen.getByTestId('auth-primary-submit-button'));
       });
 
-      expect(resetSpy).toHaveBeenCalledWith('abernalg2303@gmail.com');
+      expect(resetSpy).toHaveBeenCalledWith('demo.owner@bflow.example');
 
       // Back in Login mode, with a message that does not reveal whether the account exists
       expect(screen.getByText('Entra a tu cuenta personal')).toBeTruthy();
       expect(screen.getByTestId('auth-status-banner')).toHaveTextContent(
-        /Si abernalg2303@gmail.com tiene una cuenta en BFlow, recibirás un enlace/i
+        /Si demo.owner@bflow.example tiene una cuenta en BFlow, recibirás un enlace/i
       );
-      expect(screen.getByTestId('auth-email-input').props.value).toBe('abernalg2303@gmail.com');
+      expect(screen.getByTestId('auth-email-input').props.value).toBe('demo.owner@bflow.example');
     } finally {
       resetSpy.mockRestore();
     }
@@ -475,7 +475,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       );
 
       fireEvent.press(screen.getByTestId('auth-mode-recover'));
-      fireEvent.changeText(screen.getByTestId('auth-email-input'), 'abernalg2303@gmail.com');
+      fireEvent.changeText(screen.getByTestId('auth-email-input'), 'demo.owner@bflow.example');
       await act(async () => {
         fireEvent.press(screen.getByTestId('auth-primary-submit-button'));
       });
@@ -611,7 +611,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
   it('saves the profile to Firestore from the account window and reverts it when the cloud rejects it', async () => {
     const cloudUser: BFlowAuthUser = {
       uid: 'uid_cloud_test_profile_window',
-      email: 'abernalg2303@gmail.com',
+      email: 'demo.owner@bflow.example',
       displayName: 'Alejandro Bernal',
       financialGoal: 'Meta anterior',
       authProvider: 'password',
@@ -759,7 +759,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
 
     const mockUser: BFlowAuthUser = {
       uid: 'uid_test_dedup_01',
-      email: 'abernalg2303@gmail.com',
+      email: 'demo.owner@bflow.example',
       displayName: 'Alejandro Bernal',
       authProvider: 'password',
       provider: 'local-demo',
@@ -786,7 +786,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
         </BFlowThemeProvider>
       );
 
-      fireEvent.changeText(screen.getByTestId('auth-email-input'), 'abernalg2303@gmail.com');
+      fireEvent.changeText(screen.getByTestId('auth-email-input'), 'demo.owner@bflow.example');
       fireEvent.changeText(screen.getByTestId('auth-password-input'), 'claveValida123');
 
       await act(async () => {
@@ -839,11 +839,11 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       const repo = new InMemoryBudgetRepository();
       const cloudAccount = await repo.loadFullCloudAccount(
         'uid_signout_cleanup_01',
-        'abernalg2303@gmail.com'
+        'demo.owner@bflow.example'
       );
       const user: BFlowAuthUser = {
         uid: 'uid_signout_cleanup_01',
-        email: 'abernalg2303@gmail.com',
+        email: 'demo.owner@bflow.example',
         displayName: 'Alejandro Bernal Garnica',
         authProvider: 'password',
         provider: 'local-demo',
@@ -911,7 +911,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     try {
       const ownerUser: BFlowAuthUser = {
         uid: 'uid_real_owner_iphone',
-        email: 'abernalg2303@gmail.com',
+        email: 'demo.owner@bflow.example',
         displayName: 'Alejandro Bernal Garnica',
         authProvider: 'password',
         activeMonthKey: '2026-11',
@@ -1024,7 +1024,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       act(() => {
         capturedAuthCallback!({
           uid: 'uid_fast_immediate',
-          email: 'abernalg2303@gmail.com',
+          email: 'demo.owner@bflow.example',
           displayName: 'Alejandro',
           providerData: [],
         });

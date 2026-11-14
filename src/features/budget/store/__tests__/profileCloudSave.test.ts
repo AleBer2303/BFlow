@@ -23,7 +23,7 @@ import { useBudgetStore } from '../useBudgetStore';
 describe('updateAuthUserProfile: el perfil se guarda en Firestore', () => {
   const cloudUser: BFlowAuthUser = {
     uid: 'uid_cloud_test_profile',
-    email: 'abernalg2303@gmail.com',
+    email: 'demo.owner@bflow.example',
     displayName: 'Alejandro Bernal',
     financialGoal: 'Meta anterior',
     authProvider: 'password',
@@ -65,7 +65,7 @@ describe('updateAuthUserProfile: el perfil se guarda en Firestore', () => {
     expect(useBudgetStore.getState().authUser).toMatchObject({
       displayName: 'Alejandro Bernal G.',
       financialGoal: 'Viaje a Japón',
-      email: 'abernalg2303@gmail.com',
+      email: 'demo.owner@bflow.example',
       emailVerified: true,
     });
     expect(loadPersistedSession()).toMatchObject({

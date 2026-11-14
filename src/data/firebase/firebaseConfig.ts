@@ -2,9 +2,10 @@
  * src/data/firebase/firebaseConfig.ts
  *
  * Firebase JS SDK initialization for BFlow (Mode A & Mode B compatible).
- * Uses `EXPO_PUBLIC_FIREBASE_*` environment variables with fallback to the
- * public client configuration of project `bflow-deaeb` so Expo Go and Web
- * connect out of the box.
+ *
+ * The project configuration comes only from `EXPO_PUBLIC_FIREBASE_*` (ADR 0027): the source
+ * carries no project credentials. Tests and the showcase mode use an offline placeholder
+ * project; a real build without the variables fails with an explicit error.
  */
 
 import { getApp, getApps, initializeApp, type FirebaseApp, type FirebaseOptions } from 'firebase/app';
@@ -23,51 +24,118 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import { Platform } from 'react-native';
+import { isDemoModeEnabled } from '../../platform/mode/demoMode';
 import { resolveFirebaseAuthPersistence } from './authPersistence';
+
+/** De dónde sale la configuración: del entorno, del proyecto ficticio o de ningún sitio. */
+export type FirebaseConfigSource = 'environment' | 'offline-mock' | 'missing';
 
 export interface BFlowFirebaseEnvironment {
   options: FirebaseOptions;
   isConfigured: boolean;
+  source: FirebaseConfigSource;
+  missingKeys: string[];
 }
 
-const DEFAULT_BFLOW_FIREBASE_OPTIONS: FirebaseOptions = {
-  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY ?? 'AIzaSyAWzxVFw0B9PDibx494JzZXMpfrxXvKD04',
-  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN ?? 'bflow-deaeb.firebaseapp.com',
-  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID ?? 'bflow-deaeb',
-  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET ?? 'bflow-deaeb.firebasestorage.app',
-  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? '836510275030',
-  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID ?? '1:836510275030:web:b4ca05235e73e724c78077',
+export interface FirebaseEnvironmentRuntime {
+  isTestRuntime?: boolean;
+  isDemoMode?: boolean;
+}
+
+type FirebaseEnvRecord = Record<string, string | undefined>;
+
+/**
+ * Metro solo sustituye `process.env.EXPO_PUBLIC_*` cuando se lee con acceso estático, así que
+ * cada variable se nombra aquí completa.
+ */
+const BUNDLED_FIREBASE_ENV: FirebaseEnvRecord = {
+  EXPO_PUBLIC_FIREBASE_API_KEY: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  EXPO_PUBLIC_FIREBASE_PROJECT_ID: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  EXPO_PUBLIC_FIREBASE_APP_ID: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
-export function resolveFirebaseEnvironment(
-  env: Record<string, string | undefined> = process.env
-): BFlowFirebaseEnvironment {
-  const apiKey = env.EXPO_PUBLIC_FIREBASE_API_KEY ?? DEFAULT_BFLOW_FIREBASE_OPTIONS.apiKey;
-  const projectId = env.EXPO_PUBLIC_FIREBASE_PROJECT_ID ?? DEFAULT_BFLOW_FIREBASE_OPTIONS.projectId;
-  const appId = env.EXPO_PUBLIC_FIREBASE_APP_ID ?? DEFAULT_BFLOW_FIREBASE_OPTIONS.appId;
+export const REQUIRED_FIREBASE_ENV_KEYS = [
+  'EXPO_PUBLIC_FIREBASE_API_KEY',
+  'EXPO_PUBLIC_FIREBASE_PROJECT_ID',
+  'EXPO_PUBLIC_FIREBASE_APP_ID',
+] as const;
 
-  const isConfigured = Boolean(
-    apiKey &&
-      projectId &&
-      appId &&
-      !apiKey.includes('your_api_key') &&
-      !projectId.includes('your-project-id')
+const PLACEHOLDER_FRAGMENTS = ['your_api_key', 'your-project-id'];
+
+/** Proyecto ficticio (`demo-` es el prefijo de proyectos sin conexión de Firebase). */
+const OFFLINE_FIREBASE_OPTIONS: FirebaseOptions = {
+  apiKey: 'offline-placeholder-api-key',
+  authDomain: 'demo-bflow.firebaseapp.com',
+  projectId: 'demo-bflow',
+  storageBucket: 'demo-bflow.firebasestorage.app',
+  messagingSenderId: '000000000000',
+  appId: '1:000000000000:web:0000000000000000000000',
+};
+
+export const FIREBASE_CONFIG_MISSING_MESSAGE =
+  'BFlow no está conectado a Firebase: este build no trae las variables EXPO_PUBLIC_FIREBASE_*.';
+
+function readConfiguredValue(env: FirebaseEnvRecord, key: string): string | undefined {
+  const value = env[key]?.trim();
+  if (!value || PLACEHOLDER_FRAGMENTS.some((fragment) => value.includes(fragment))) {
+    return undefined;
+  }
+  return value;
+}
+
+export function resolveFirebaseEnvironment(
+  env: FirebaseEnvRecord = BUNDLED_FIREBASE_ENV,
+  runtime: FirebaseEnvironmentRuntime = {}
+): BFlowFirebaseEnvironment {
+  const { isTestRuntime = process.env.NODE_ENV === 'test', isDemoMode = isDemoModeEnabled() } =
+    runtime;
+
+  const offlineMock: BFlowFirebaseEnvironment = {
+    options: OFFLINE_FIREBASE_OPTIONS,
+    isConfigured: false,
+    source: 'offline-mock',
+    missingKeys: [],
+  };
+  // El modo vitrina no habla con Firebase aunque el entorno traiga un proyecto real.
+  if (isDemoMode) {
+    return offlineMock;
+  }
+
+  const missingKeys = REQUIRED_FIREBASE_ENV_KEYS.filter(
+    (key) => readConfiguredValue(env, key) === undefined
   );
+  if (missingKeys.length > 0) {
+    return isTestRuntime
+      ? offlineMock
+      : { options: {}, isConfigured: false, source: 'missing', missingKeys };
+  }
 
   return {
     options: {
-      apiKey,
-      authDomain: env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN ?? DEFAULT_BFLOW_FIREBASE_OPTIONS.authDomain,
-      projectId,
-      storageBucket:
-        env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET ?? DEFAULT_BFLOW_FIREBASE_OPTIONS.storageBucket,
-      messagingSenderId:
-        env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ??
-        DEFAULT_BFLOW_FIREBASE_OPTIONS.messagingSenderId,
-      appId,
+      apiKey: readConfiguredValue(env, 'EXPO_PUBLIC_FIREBASE_API_KEY'),
+      authDomain: readConfiguredValue(env, 'EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN'),
+      projectId: readConfiguredValue(env, 'EXPO_PUBLIC_FIREBASE_PROJECT_ID'),
+      storageBucket: readConfiguredValue(env, 'EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET'),
+      messagingSenderId: readConfiguredValue(env, 'EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID'),
+      appId: readConfiguredValue(env, 'EXPO_PUBLIC_FIREBASE_APP_ID'),
     },
-    isConfigured,
+    isConfigured: true,
+    source: 'environment',
+    missingKeys: [],
   };
+}
+
+/** Opciones para `initializeApp`; lanza si el build no trae configuración. */
+export function requireFirebaseOptions(
+  environment: BFlowFirebaseEnvironment = resolveFirebaseEnvironment()
+): FirebaseOptions {
+  if (environment.source === 'missing') {
+    throw new Error(FIREBASE_CONFIG_MISSING_MESSAGE);
+  }
+  return environment.options;
 }
 
 let cachedApp: FirebaseApp | null = null;
@@ -83,8 +151,7 @@ export function getFirebaseApp(): FirebaseApp {
     cachedApp = existing[0];
     return cachedApp;
   }
-  const { options } = resolveFirebaseEnvironment();
-  cachedApp = initializeApp(options);
+  cachedApp = initializeApp(requireFirebaseOptions());
   return cachedApp;
 }
 

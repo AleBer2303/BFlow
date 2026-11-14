@@ -31,6 +31,7 @@ import { stripUndefinedFields } from '../../data/mappers/firestoreSchemas';
 import { isOwnerCanonicalEmail } from '../../data/repositories/budgetRepository';
 import { describeUnmetPasswordRule } from '../../domain/auth/passwordPolicy';
 import { toBogotaMonthKey } from '../../domain/date/monthKey';
+import { DEMO_OWNER_SEED_EMAIL } from '../mode/ownerSeedEmail';
 import { clearPersistedAccount } from '../storage/accountCache';
 import { runPasswordAttempt, startCooldown } from './authRateLimiter';
 import {
@@ -68,7 +69,7 @@ export interface RegisterPersonalAccountInput {
 
 export const DEMO_OWNER_USER: BFlowAuthUser = {
   uid: 'local-owner',
-  email: 'abernalg2303@gmail.com',
+  email: DEMO_OWNER_SEED_EMAIL,
   displayName: 'Alejandro Bernal',
   phone: '+57 300 000 0000',
   financialGoal: 'Alcanzar libertad financiera y optimizar flujo de caja',

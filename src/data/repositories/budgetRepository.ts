@@ -51,6 +51,7 @@ import {
   isCacheFreshWithin24Hours,
   updatePersistedAccountRevision,
 } from '../../platform/storage/accountCache';
+import { resolveOwnerSeedEmails } from '../../platform/mode/ownerSeedEmail';
 import {
   parseConceptFromFirestore,
   parseDebtFromFirestore,
@@ -117,10 +118,7 @@ export interface ToggleEntryCompletionResult {
   updatedDebtPayment?: DebtPayment;
 }
 
-const OWNER_CANONICAL_EMAILS = new Set([
-  'abernalg2303@gmail.com',
-  'abernalg2303gmail.com',
-]);
+const OWNER_SEED_EMAILS = resolveOwnerSeedEmails();
 
 function safeParseList<T>(
   rawDocs: ReadonlyArray<{ data: () => unknown }>,
@@ -139,7 +137,7 @@ function safeParseList<T>(
 
 export function isOwnerCanonicalEmail(email?: string | null): boolean {
   if (!email) return false;
-  return OWNER_CANONICAL_EMAILS.has(email.trim().toLowerCase());
+  return OWNER_SEED_EMAILS.has(email.trim().toLowerCase());
 }
 
 export const EMPTY_PROVISION_PLAN: IdealMotoPlan = {
@@ -1036,7 +1034,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       return { seeded: false, monthKey: existingActive };
     }
 
-    // Only the canonical owner account (abernalg2303@gmail.com) gets the October 2026 seed.
+    // Only the owner seed account (EXPO_PUBLIC_OWNER_SEED_EMAIL) gets the October 2026 seed.
     // All other users start clean and configure their account on first login.
     if (!isOwnerCanonicalEmail(resolvedEmail)) {
       return { seeded: false, monthKey: existingActive };

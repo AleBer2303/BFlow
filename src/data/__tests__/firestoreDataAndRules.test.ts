@@ -19,11 +19,11 @@ import { InMemoryBudgetRepository } from '../repositories/budgetRepository';
 import { buildOctober2026SeedPayload } from '../seed/october2026SeedData';
 
 describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & Security Rules', () => {
-  it('resolves Firebase environment for bflow-deaeb by default and supports overrides', () => {
+  it('resolves an offline placeholder project under tests and rejects placeholder values', () => {
     const defaultEnv = resolveFirebaseEnvironment({});
-    expect(defaultEnv.isConfigured).toBe(true);
-    expect(defaultEnv.options.projectId).toBe('bflow-deaeb');
-    expect(defaultEnv.options.authDomain).toBe('bflow-deaeb.firebaseapp.com');
+    expect(defaultEnv.isConfigured).toBe(false);
+    expect(defaultEnv.source).toBe('offline-mock');
+    expect(defaultEnv.options.projectId).toBe('demo-bflow');
 
     const placeholderEnv = resolveFirebaseEnvironment({
       EXPO_PUBLIC_FIREBASE_API_KEY: 'your_api_key_here',

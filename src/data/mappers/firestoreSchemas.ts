@@ -62,7 +62,7 @@ const savingsContributionRuleSchema = z.object({
   onlyWhenCompleted: z.boolean(),
 });
 
-export const conceptSchema: z.ZodType<Concept, z.ZodTypeDef, unknown> = z.object({
+export const conceptSchema: z.ZodType<Concept, unknown> = z.object({
   id: z.string().min(1),
   name: z.string().min(1).max(120),
   type: z.enum(['income', 'expense']),

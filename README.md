@@ -231,7 +231,7 @@ BFlow/
 │   └── workflows/                # CI/CD (ci.yml, build-ios.yml, build-android.yml, e2e.yml, release.yml)
 ├── assets/                       # Iconos y splash screens de la aplicación
 ├── docs/
-│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0026)
+│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0027)
 │   ├── guides/                   # Guías operativas (firma con iloader, validación multiplataforma, seguridad de Firebase Auth)
 │   └── Improvements/             # Guías de auditoría de rendimiento
 ├── fixtures/                     # Datos dorados de prueba (october-2026.json)
@@ -277,7 +277,7 @@ BFlow/
 │       ├── haptics/              # Servicio unificado de vibración háptica
 │       ├── insets/               # Áreas seguras (borde a borde en Android)
 │       ├── mode/                 # Detección de entorno (runtimeMode.ts) y modo vitrina (demoMode.ts)
-│       ├── storage/              # Persistencia KV síncrona cifrada (AES-256 + HMAC-SHA256, expo-secure-store + expo-sqlite/kv-store en iOS/Android, localStorage cifrado en Web) y caché v2
+│       ├── storage/              # Persistencia KV síncrona cifrada (AES-256 + HMAC-SHA256, expo-secure-store + expo-sqlite/kv-store en iOS/Android, localStorage cifrado en Web con el token en sessionStorage; CSPRNG de WebCrypto o expo-crypto, ADR 0027) y caché v2
 │       ├── system/               # Fondo de la ventana nativa / documento HTML según el tema
 │       └── widgets/              # Serialización y puente de sincronización con WidgetKit
 ├── plugins/                      # Config plugins locales del prebuild (reglas keep de R8 para Android, ADR 0013)
@@ -313,13 +313,22 @@ BFlow/
    ```bash
    npm ci --legacy-peer-deps
    ```
-   *(El script postinstall aplicará automáticamente el parche de almacenamiento para extensiones nativas. Este paso también instala `three`, `expo-gl`, `expo-sqlite` y `expo-secure-store`, usados por la escena 3D de Resumen y la persistencia local nativa cifrada con Keychain/Keystore + `expo-sqlite/kv-store`; todos vienen incluidos en Expo Go y no requieren configuración adicional).*
+   *(El script postinstall aplicará automáticamente el parche de almacenamiento para extensiones nativas. Este paso también instala `three`, `expo-gl`, `expo-sqlite`, `expo-secure-store` y `expo-crypto`, usados por la escena 3D de Resumen y la persistencia local nativa cifrada con Keychain/Keystore + `expo-sqlite/kv-store` (llaves e IV generados con el CSPRNG nativo); todos vienen incluidos en Expo Go y no requieren configuración adicional).*
 
 3. **Configurar variables de entorno:**
    ```bash
    cp .env.example .env
    ```
-   *(Los valores predeterminados de Firebase ya apuntan al proyecto configurado `bflow-deaeb`).*
+   Rellena en `.env` la configuración de tu proyecto de Firebase (Consola de Firebase → Configuración del proyecto → Tus apps). El código no trae ningún proyecto por defecto (ADR 0027):
+
+   | Variable | Obligatoria | Uso |
+   | :--- | :--- | :--- |
+   | `EXPO_PUBLIC_FIREBASE_API_KEY`, `EXPO_PUBLIC_FIREBASE_PROJECT_ID`, `EXPO_PUBLIC_FIREBASE_APP_ID` | Sí | Sin ellas la app no se conecta a Firebase y lo indica al iniciar sesión |
+   | `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN`, `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET`, `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | No | Resto de la configuración del cliente (`AUTH_DOMAIN` hace falta para entrar con Google en Web) |
+   | `EXPO_PUBLIC_OWNER_SEED_EMAIL` | No | Correo de la cuenta que recibe la semilla de octubre de 2026; vacío, todas las cuentas arrancan sin datos |
+   | `EXPO_PUBLIC_LOCAL_CIPHER_PEPPER` | No | Palabra secreta del cifrado local (ADR 0016) |
+
+   Los tests y `npm run web:demo` no necesitan ninguna: usan un proyecto ficticio sin conexión. Los workflows de build leen las mismas variables de GitHub (Settings → Secrets and variables → Actions → Variables) y fallan si faltan las obligatorias.
 
 4. **Ejecutar verificaciones de calidad:**
    ```bash

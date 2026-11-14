@@ -178,3 +178,50 @@ test('Cada flujo de Maestro declara la app y arranca desde el estado limpio', ()
   const appJson = JSON.parse(fs.readFileSync(path.resolve(rootDir, 'app.json'), 'utf8'));
   assert.equal(appJson.expo.android.package, 'com.bflow.app');
 });
+
+// ---------------------------------------------------------------------------
+// Configuración de Firebase en los builds (ADR 0027)
+// ---------------------------------------------------------------------------
+
+const BUILD_WORKFLOWS = ['build-android.yml', 'build-ios.yml'];
+const FIREBASE_BUILD_ENV = [
+  'EXPO_PUBLIC_FIREBASE_API_KEY',
+  'EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN',
+  'EXPO_PUBLIC_FIREBASE_PROJECT_ID',
+  'EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET',
+  'EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
+  'EXPO_PUBLIC_FIREBASE_APP_ID',
+];
+
+test('Los builds reciben la configuración de Firebase de las variables del repositorio', () => {
+  for (const name of BUILD_WORKFLOWS) {
+    const workflow = withoutComments(readWorkflow(name));
+    for (const variable of FIREBASE_BUILD_ENV) {
+      assert.ok(
+        workflow.includes(`${variable}: \${{ vars.${variable} }}`),
+        `${name} debe tomar ${variable} de vars.${variable}`
+      );
+    }
+    assert.ok(
+      workflow.includes('node scripts/check-build-env.mjs'),
+      `${name} debe comprobar la configuración antes de compilar`
+    );
+  }
+});
+
+test('Ningún workflow lleva escritas credenciales de Firebase', () => {
+  const workflows = fs.readdirSync(workflowsDir).filter((name) => /\.ya?ml$/.test(name));
+  const offenders = workflows.filter((name) => /AIza[0-9A-Za-z_-]{20,}/.test(readWorkflow(name)));
+  assert.deepEqual(offenders, []);
+});
+
+test('check-build-env detecta las variables obligatorias ausentes o vacías', async () => {
+  const { findMissingBuildEnv, REQUIRED_BUILD_ENV } = await import('./check-build-env.mjs');
+  const complete = Object.fromEntries(REQUIRED_BUILD_ENV.map((name) => [name, 'value']));
+
+  assert.deepEqual(findMissingBuildEnv(complete), []);
+  assert.deepEqual(findMissingBuildEnv({}), REQUIRED_BUILD_ENV);
+  assert.deepEqual(findMissingBuildEnv({ ...complete, EXPO_PUBLIC_FIREBASE_APP_ID: '  ' }), [
+    'EXPO_PUBLIC_FIREBASE_APP_ID',
+  ]);
+});

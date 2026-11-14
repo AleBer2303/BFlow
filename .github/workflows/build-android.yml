@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '**/*.md'
   workflow_dispatch:
   # Reutilizado por release.yml (ADR 0023): compila el tag indicado y deja el .apk y el .aab como
   # artefacto; el GitHub Release lo publica release.yml, no este workflow.
@@ -28,7 +32,7 @@ permissions:
 jobs:
   quality-gate:
     name: Pre-build Quality Gate (Linux)
-    if: ${{ !inputs.skip_quality_gate }}
+    if: ${{ !inputs.skip_quality_gate && !(github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,6 +43,13 @@ jobs:
       - run: npm ci --legacy-peer-deps
       - run: npm run typecheck
       - run: npm run lint
+      - name: Cache Jest transform cache
+        uses: actions/cache@v4
+        with:
+          path: .jest-cache
+          key: ${{ runner.os }}-jest-${{ hashFiles('package-lock.json', 'babel.config.js', 'jest.config.js', 'tsconfig.json') }}
+          restore-keys: |
+            ${{ runner.os }}-jest-
       - run: npm test -- --coverage --ci
 
   build-android:
@@ -88,13 +99,12 @@ jobs:
           EXPO_NO_GIT_STATUS: 1
         run: npx expo prebuild --platform android --clean --no-install
 
-      - name: Build test .apk (Release, debug keystore)
+      - name: Build Release .apk and .aab (single Gradle invocation)
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon
-
-      - name: Build .aab (Release, debug keystore)
-        working-directory: android
-        run: ./gradlew bundleRelease --no-daemon
+        run: |
+          ./gradlew assembleRelease bundleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
+            -Dorg.gradle.caching=true \
+            -Dorg.gradle.parallel=true
 
       - name: Collect artifacts
         run: |

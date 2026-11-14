@@ -366,17 +366,16 @@ BFlow/
 Toda la automatización de BFlow se ejecuta en **GitHub Actions**:
 
 ### 1. `ci.yml` (Puerta de Enlace de Calidad en Linux)
-Se ejecuta en cada `push` a las ramas `main` o `develop`, y en cada Pull Request:
-- Comprueba paridad con el fixture de Excel (`scripts/extract-excel-fixture.mjs`).
-- Evalúa la guardia heurística: cualquier cambio en `src/` debe incluir tests nuevos o actualizados (`scripts/check-src-tests-guard.mjs`).
-- Ejecuta `npm run typecheck`, `npm run lint` y `npm test -- --coverage`.
+Se ejecuta en cada `push` a las ramas `main` o `develop`, y en cada Pull Request hacia `main` (con `concurrency` cancelando ejecuciones obsoletas):
+- Comprueba paridad con el fixture dorado (`scripts/verify-phase0-fixture.test.mjs`) y las guardias de release y workflows (`scripts/release.test.mjs`, `scripts/workflow-guards.test.mjs`).
+- Evalúa la guardia heurística en PRs: cualquier cambio en `src/` debe incluir tests nuevos o actualizados (`scripts/check-src-tests-guard.mjs`).
+- Ejecuta `npm run typecheck`, `npm run lint`, restaura/guarda `.jest-cache` con `actions/cache@v4` y corre `npm test -- --coverage --ci`.
 
-### 2. `build-ios.yml` (Compilación Nativa en macOS Gratuito)
-Se ejecuta en cada `push` a `main` o al crear una etiqueta de versión `v*`:
-- Utiliza un runner **`macos-26`** de GitHub Actions con Xcode 26+ (Swift 6.2+).
-- Genera el proyecto nativo mediante `npx expo prebuild --platform ios --clean`.
-- Compila con `xcodebuild` deshabilitando temporalmente la firma de código.
-- Empaqueta el bundle en `BFlow-unsigned.ipa` y lo publica automáticamente en **GitHub Releases**.
+### 2. `build-ios.yml` y `build-android.yml` (Compilación Nativa Optimizada, ADR 0029)
+Se ejecutan en `push` a `main` (ignorando cambios exclusivos en `docs/**` y `*.md` mediante `paths-ignore`), en tags `v*`, bajo demanda (`workflow_dispatch`) o como workflows reutilizables desde `release.yml`:
+- **Sin triple ejecución de tests en `main`:** en `push` a `main`, ambos workflows omiten su `quality-gate` interno (ya cubierto por `ci.yml`); en tags `v*` y `workflow_dispatch` sí ejecutan `quality-gate` con caché `.jest-cache`. Todos mantienen `concurrency` con `cancel-in-progress: true`.
+- **iOS (`build-ios.yml` en `macos-26`):** genera el proyecto nativo con `npx expo prebuild --platform ios --clean --no-install`, cachea CocoaPods por `hashFiles('ios/Podfile', 'package-lock.json')`, habilita `ccache` (`~/Library/Caches/ccache`, `USE_CCACHE=1`), compila con `xcodebuild` (`COMPILER_INDEX_STORE_ENABLE=NO`, sin firma) y empaqueta `BFlow-unsigned.ipa`.
+- **Android (`build-android.yml` en `ubuntu-latest`):** configura JDK 17 y Gradle (`gradle/actions/setup-gradle@v4`), genera el proyecto nativo y compila `BFlow-test.apk` y `BFlow.aab` en **una sola invocación de Gradle** (`./gradlew assembleRelease bundleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a`) con `org.gradle.caching=true` y `org.gradle.parallel=true`.
 
 ### 3. Instalación en iPhone con `iloader` (Ciclo de 7 Días)
 Sigue la guía detallada en [`docs/guides/iloader-signing-guide.md`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/docs/guides/iloader-signing-guide.md):

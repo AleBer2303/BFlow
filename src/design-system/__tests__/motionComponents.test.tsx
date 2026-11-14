@@ -11,13 +11,14 @@ import { hapticService } from '../../platform/haptics/hapticService';
 import { RevealDown } from '../components/RevealDown';
 import { StatusBadge } from '../components/StatusBadge';
 import { CheckIndicator } from '../motion/CheckIndicator';
+import { deferTaskAfterTransition, scheduleAfterTabTransition } from '../motion/motionRuntime';
 import { ProgressFill } from '../motion/ProgressFill';
 import { useReplayOnChange } from '../motion/useReplayOnChange';
 import { AppPressable, shouldSinkOnPress, toWebAriaState } from '../components/AppPressable';
 import { FormMessage } from '../components/FormMessage';
 import { Entrance } from '../motion/Entrance';
 import { BFlowThemeProvider } from '../theme/ThemeContext';
-import { PLATFORM_SKIN_IDS } from '../tokens';
+import { motionDuration, PLATFORM_SKIN_IDS } from '../tokens';
 
 describe.each(PLATFORM_SKIN_IDS)('Entrance on the %s skin', (skin) => {
   it('shows its content at once and keeps the layout style it was given', () => {
@@ -247,5 +248,36 @@ describe('toWebAriaState', () => {
       'aria-busy': true,
     });
     expect(toWebAriaState(undefined)).toBeNull();
+  });
+});
+
+describe('tab transition deferral helpers', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('defers tasks by the transition duration and cancels cleanly when superseded', () => {
+    jest.useFakeTimers();
+
+    const deferred = jest.fn();
+    const cancelled = jest.fn();
+    deferTaskAfterTransition(deferred);
+    const handle = deferTaskAfterTransition(cancelled);
+    handle.cancel();
+
+    expect(deferred).not.toHaveBeenCalled();
+    jest.advanceTimersByTime(motionDuration.fast - 1);
+    expect(deferred).not.toHaveBeenCalled();
+
+    jest.advanceTimersByTime(1);
+    expect(deferred).toHaveBeenCalledTimes(1);
+    expect(cancelled).not.toHaveBeenCalled();
+  });
+
+  it('executes scheduleAfterTabTransition synchronously under Jest static runtime', () => {
+    const immediate = jest.fn();
+    const handle = scheduleAfterTabTransition(immediate);
+    expect(immediate).toHaveBeenCalledTimes(1);
+    expect(() => handle.cancel()).not.toThrow();
   });
 });

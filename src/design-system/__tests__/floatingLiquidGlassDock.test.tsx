@@ -1,6 +1,6 @@
 import React from 'react';
 import { Animated, StyleSheet } from 'react-native';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { BFlowThemeProvider } from '../theme/ThemeContext';
 import {
   FloatingLiquidGlassDock,
@@ -11,6 +11,7 @@ import {
   getDockLensPositionFromScreenX,
   buildLensGeometry,
 } from '../components/FloatingLiquidGlassDock';
+import * as WorkspaceNavIconsModule from '../components/WorkspaceNavIcons';
 import {
   AccountNavIcon,
   ChecklistNavIcon,
@@ -537,5 +538,118 @@ describe('FloatingLiquidGlassDock on the Android skin (flat selection pill)', ()
   it('settles without overshoot: the flat spring is not underdamped', () => {
     const { damping, stiffness, mass } = springConfigs.flatSettle;
     expect(damping).toBeGreaterThanOrEqual(2 * Math.sqrt(stiffness * mass));
+  });
+
+  it('skips iOS lens Animated node graph construction on Android and memoizes flat travel', () => {
+    const multiplySpy = jest.spyOn(Animated, 'multiply');
+    const subtractSpy = jest.spyOn(Animated, 'subtract');
+
+    try {
+      const { rerender, unmount } = renderAndroidDock();
+      expect(multiplySpy).not.toHaveBeenCalled();
+      expect(subtractSpy).not.toHaveBeenCalled();
+
+      const pillBefore = screen.getByTestId('dock-flat-indicator').props.style;
+      rerender(
+        <BFlowThemeProvider skin="android" initialMode="dark">
+          <FloatingLiquidGlassDock activeTab="checklist" onSelectTab={jest.fn()} />
+        </BFlowThemeProvider>
+      );
+      expect(multiplySpy).not.toHaveBeenCalled();
+      expect(subtractSpy).not.toHaveBeenCalled();
+      expect(StyleSheet.flatten(pillBefore).transform).toBeTruthy();
+      unmount();
+
+      render(
+        <BFlowThemeProvider skin="ios" initialMode="dark">
+          <FloatingLiquidGlassDock activeTab="summary" onSelectTab={jest.fn()} />
+        </BFlowThemeProvider>
+      );
+      expect(multiplySpy).toHaveBeenCalled();
+      expect(subtractSpy).toHaveBeenCalled();
+    } finally {
+      multiplySpy.mockRestore();
+      subtractSpy.mockRestore();
+    }
+  });
+
+  it('avoids re-renders during drag moves within the same tab and skips lens springs on Android', () => {
+    const springSpy = jest.spyOn(Animated, 'spring');
+    const dockIconRenderSpy = jest.spyOn(WorkspaceNavIconsModule, 'SummaryNavIcon');
+    const dockTouch = (pageX: number, timestamp: number) => ({
+      nativeEvent: { pageX, touches: [{}], locationX: pageX - 16 },
+      touchHistory: {
+        indexOfSingleActiveTouch: 0,
+        mostRecentTimeStamp: timestamp,
+        numberActiveTouches: 1,
+        touchBank: [
+          {
+            touchActive: true,
+            startPageX: 40,
+            startPageY: 700,
+            startTimeStamp: 1,
+            currentPageX: pageX,
+            currentPageY: 700,
+            currentTimeStamp: timestamp,
+            previousPageX: 40,
+            previousPageY: 700,
+            previousTimeStamp: Math.max(1, timestamp - 1),
+          },
+        ],
+      },
+    });
+
+    try {
+      render(
+        <BFlowThemeProvider skin="android" initialMode="dark">
+          <FloatingLiquidGlassDock activeTab="summary" onSelectTab={jest.fn()} />
+        </BFlowThemeProvider>
+      );
+
+      const dock = screen.getByTestId('floating-liquid-glass-dock');
+      act(() => {
+        dock.props.onLayout({
+          nativeEvent: { layout: { x: 16, y: 700, width: 360, height: 64 } },
+        });
+      });
+      const laidOutDock = screen.getByTestId('floating-liquid-glass-dock');
+
+      expect(styleOf('dock-flat-indicator').width).toBeCloseTo(54, 1);
+      dockIconRenderSpy.mockClear();
+      springSpy.mockClear();
+
+      // Grant and intra-tab drag moves must not trigger a React re-render of the dock.
+      act(() => {
+        laidOutDock.props.onResponderGrant(dockTouch(40, 2));
+        laidOutDock.props.onResponderMove(dockTouch(45, 3));
+        laidOutDock.props.onResponderMove(dockTouch(52, 4));
+      });
+      expect(dockIconRenderSpy).not.toHaveBeenCalled();
+      expect(springSpy).not.toHaveBeenCalled();
+
+      // Crossing into tab 1 (checklist) triggers a single dock re-render without lens springs.
+      act(() => {
+        laidOutDock.props.onResponderMove(dockTouch(109, 5));
+      });
+      expect(dockIconRenderSpy).toHaveBeenCalledTimes(1);
+      expect(dockIconRenderSpy.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({ focused: false })
+      );
+      expect(springSpy).not.toHaveBeenCalled();
+
+      // Further moves within tab 1 again trigger 0 extra re-renders.
+      dockIconRenderSpy.mockClear();
+      act(() => {
+        laidOutDock.props.onResponderMove(dockTouch(115, 6));
+      });
+      expect(dockIconRenderSpy).not.toHaveBeenCalled();
+
+      act(() => {
+        laidOutDock.props.onResponderTerminate?.(dockTouch(115, 7));
+      });
+    } finally {
+      dockIconRenderSpy.mockRestore();
+      springSpy.mockRestore();
+    }
   });
 });

@@ -16,7 +16,9 @@ import {
   MIN_TOUCH_TARGET_PT,
   TactilePressable,
   hapticService,
+  scheduleAfterTabTransition,
   useBFlowTheme,
+  useIsTabActive,
   useResponsiveLayout,
 } from '../../../design-system';
 import {
@@ -95,8 +97,10 @@ function useTweenedAmount(target: number, shouldAnimate: boolean): number {
     const from = latestRef.current;
     let startTime: number | null = null;
     let handle = 0;
+    let cancelled = false;
 
     const step = (timestamp: number) => {
+      if (cancelled) return;
       startTime ??= timestamp;
       const progress = Math.min(1, (timestamp - startTime) / AMOUNT_TWEEN_MS);
       const eased = 1 - (1 - progress) ** 3;
@@ -109,8 +113,18 @@ function useTweenedAmount(target: number, shouldAnimate: boolean): number {
       }
     };
 
-    handle = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(handle);
+    const deferred = scheduleAfterTabTransition(() => {
+      if (!cancelled) {
+        handle = requestAnimationFrame(step);
+      }
+    });
+    return () => {
+      cancelled = true;
+      deferred.cancel();
+      if (handle !== 0) {
+        cancelAnimationFrame(handle);
+      }
+    };
   }, [target, shouldAnimate]);
 
   return shouldAnimate ? tweened : target;
@@ -130,8 +144,9 @@ function CurveReadoutView({
   reducedMotion,
 }: CurveReadoutViewProps): React.JSX.Element {
   const { colors, spacing } = useBFlowTheme();
+  const isTabActive = useIsTabActive();
   const readout = describeCurveReadout(curve, metricId, stop);
-  const amount = useTweenedAmount(readout.amount, !reducedMotion && stop === null);
+  const amount = useTweenedAmount(readout.amount, !reducedMotion && stop === null && isTabActive);
 
   return (
     <View

@@ -539,10 +539,44 @@ Cambios de la rama `feature/phase-8-polish`, a partir de un inventario por lectu
 ### Pendiente, por orden de impacto estimado (sin medir)
 
 1. **Cifrado de la caché en JS puro y síncrono** (`storageCipher.ts`): AES-256-CTR y HMAC-SHA256 sobre toda la cuenta en el hilo de JS, al arrancar y en cada guardado. Medir en Hermes antes de cambiarlo.
-2. **Curva vectorial y gráficos con un `setState` por cuadro** (`MonthlyCurveVectorStage.tsx`, `useChartTransition.ts`): es la curva principal en Android y Web. Requiere Reanimated o props animadas de `react-native-svg`.
+2. **Curva vectorial y gráficos con un `setState` por cuadro** (`MonthlyCurveVectorStage.tsx`, `useChartTransition.ts`): mitigado al pausarse cuando la pestaña está oculta y diferir el arranque fuera de la ventana de transición en nativo, pero la animación activa sigue usando `setState` en JS (requiere Reanimated / props animadas de `react-native-svg`).
 3. **Un `BlurView` por tarjeta en iOS sobre fondo liso** (`GlassSurface.tsx`). Quitarlo cambia el material de la piel iOS y necesita ADR.
-4. **R-20:** volver a Resumen recrea el contexto GL y compila los shaders.
-5. **Snapshot del widget y resúmenes de dominio recalculados en cada mutación** (57 llamadas a `triggerWidgetSync`).
-6. **Animaciones de layout en el hilo de JS:** `RevealDown` (alto) y los botones de fila del Checklist (ancho).
-7. **R-22:** `three` se carga de forma estática al arrancar en nativo.
-8. **Formularios de Ahorros, Deudas y Cuenta** con su estado junto a las listas: cada tecla vuelve a pintar la vista entera.
+4. **Snapshot del widget y resúmenes de dominio recalculados en cada mutación** (57 llamadas a `triggerWidgetSync`).
+5. **Animación de altura de `RevealDown` en el hilo de JS** cuando se abre un panel.
+6. **R-22:** `three` se carga de forma estática al arrancar en nativo.
+7. **Formularios de Ahorros, Deudas y Cuenta** con su estado junto a las listas: cada tecla vuelve a pintar la vista entera.
+
+---
+
+## 18. Auditoría de Producción — Fase 3: Lag al cambiar rápido de pestañas en Android
+
+Intervención sobre las 5 causas raíz identificadas en [`docs/Improvements/AUDITS/auditoria_produccion_bflow.md`](docs/Improvements/AUDITS/auditoria_produccion_bflow.md) al alternar rápido entre pestañas en Android.
+
+### Cambios implementados
+
+1. **`ActionRevealSlot` inerte al montar cerrado (`src/features/checklist/components/ChecklistWorkspaceView.tsx`):** se añadió `hasBeenVisibleRef` para no disparar `Animated.timing(..., { useNativeDriver: false })` en el montaje inicial cuando `visible === false`. La animación de cierre solo corre tras haber estado abierto (`true -> false`).
+2. **Keep-alive perezoso de pestañas visitadas (`src/app/index.tsx`, `src/design-system/motion/TabVisibilityContext.tsx`):** en lugar de `<Entrance key={contentTab}>` (que destruía y reconstruía el árbol nativo completo en cada cambio), `WorkspaceTabKeepAlive` monta cada pestaña bajo demanda en `visitedTabs` y oculta las pestañas inactivas visitadas con `display: 'none'`, `pointerEvents="none"`, `importantForAccessibility="no-hide-descendants"`, `accessibilityElementsHidden` y `aria-hidden`, conservando `testID="workspace-tab-panel-<id>"` sin duplicar nodos visibles.
+3. **Bucles `requestAnimationFrame` desacoplados y pausables (`src/design-system/motion/motionRuntime.ts`, `MonthlyCurveVectorStage.tsx`, `MonthlyCurveSection.tsx`, `useChartTransition.ts`, `BarChart.tsx`, `LineChart.tsx`):**
+   - `scheduleAfterTabTransition` difiere el arranque en nativo (en RN 0.88.1 `InteractionManager` fue eliminado del núcleo de `react-native`, por lo que se usa aplazamiento cancelable alineado a `motionDuration.fast` = 250 ms; en Jest y Web ejecuta de forma síncrona).
+   - `MonthlyCurveVectorStage`, `CurveReadoutView` y `useChartTransition` leen `useIsTabActive()` (o prop `isActive`) y cancelan cualquier `requestAnimationFrame` / tarea diferida inmediatamente cuando la pestaña deja de estar activa, e ignoran eventos `onLayout` con ancho/alto `<= 0` mientras el slot está colapsado con `display: 'none'`.
+4. **Memoización de interpolaciones en `AppPressable` (`src/design-system/components/AppPressable.tsx`):** los nodos `.interpolate()` (`sinkOpacity`, `sinkScale`), el estilo compuesto `sinkPressStyle` y los handlers `animatePress`, `handleSinkPressIn` y `handleSinkPressOut` quedan memoizados con `useMemo`/`useCallback`.
+5. **Eliminación de trabajo de lente iOS y re-renders intra-tab en el dock de Android (`src/design-system/components/FloatingLiquidGlassDock.tsx`):**
+   - `lensMotion` (`buildLensGeometry`, `scaleY`, `glowOpacity`) retorna `null` en `!isLiquidGlass` (Android/Web); `flatTranslateX` se memoiza solo en `!isLiquidGlass`; `liftAnim`/`stretchAnim` no se actualizan en Android.
+   - Se eliminó `setDraggedIndex(initialIndex)` en `onPanResponderGrant` y se protegió `setDraggedIndex` contra actualizaciones redundantes cuando el índice bajo el dedo no cambia.
+
+### Evidencia observada en Jest / RNTL (sin dispositivo Android físico)
+
+| Verificación observada en Jest (`NODE_ENV=test` salvo mock de runtime activo) | Antes | Después | Archivo de test |
+| :--- | :---: | :---: | :--- |
+| Llamadas `Animated.timing` al montar `ActionRevealSlot` cerrado (`IS_MOTION_STATIC: false`) | 1 por slot en montaje inicial | **0** (solo 1 al abrir, 1 al cerrar tras abrir) | `src/features/checklist/__tests__/actionRevealSlot.test.tsx` |
+| Llamadas `.interpolate()` por re-render en `AppPressable` (`IS_MOTION_STATIC: false`) | 2 por cada re-render | **2** en montaje, **0** en re-renders posteriores | `src/design-system/__tests__/activeMotionRuntime.test.tsx` |
+| Nodos `Animated.multiply` / `Animated.subtract` de lente creados en `FloatingLiquidGlassDock` (`skin="android"`) | Construidos en cada render | **0** en montaje y re-render (`lensMotion === null`) | `src/design-system/__tests__/floatingLiquidGlassDock.test.tsx` |
+| Re-renders de `FloatingLiquidGlassDock` (`skin="android"`) en `onResponderGrant` + movimientos intra-tab | ≥ 1 en `grant` | **0** en `grant` y moves intra-tab; **1** al cruzar de tab; **0** `Animated.spring` | `src/design-system/__tests__/floatingLiquidGlassDock.test.tsx` |
+| Commits de `Checklist`, `Debts` y `row` al revisitar tabs en cambios rápidos (`checklist → summary → debts → checklist`, 3 pieles) | Remontaje completo en cada visita | **0** (`checklist: 0`, `debts: 0`, `row: 0`) | `src/features/__tests__/renderCommits.test.tsx` |
+| Timers/rAF activos tras ocultar `MonthlyCurveVectorStage` y `BarChart` con `TabVisibilityProvider isActive={false}` | Bucle continuaba hasta finalizar | **0** timers pendientes (`cancelAnimationFrame` ejecutado de inmediato) | `vectorCurve.test.tsx`, `charts.test.tsx` |
+| Conteos `BFLOW_RENDER_REPORT=1` (3 pieles): `syncMessage_x5` / `toggle_one_row.row` / `type_5_chars.row` | 0 / 1 / 0 | **0 / 1 / 0** (sin regresiones de aislamiento) | `src/features/__tests__/renderCommits.test.tsx` |
+
+### No medido
+
+- FPS reales, tiempo por frame en hilo JS/UI (ms) ni suavidad de gestos en dispositivo Android físico (Hermes release build): los resultados anteriores corresponden a conteos deterministas de renders, nodos animados y timers en Jest / React Native Testing Library.
+

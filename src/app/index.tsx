@@ -1,12 +1,17 @@
-import React, { useCallback, useDeferredValue, useEffect, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import * as Linking from 'expo-linking';
-import { AppState } from 'react-native';
+import { AppState, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 import {
   cancelCloudWidgetSnapshotWrite,
   flushCloudWidgetSnapshotWrite,
 } from '../data/repositories/widgetSnapshotRepository';
-import { Entrance, hapticService, type HapticType } from '../design-system';
+import {
+  Entrance,
+  TabVisibilityProvider,
+  hapticService,
+  type HapticType,
+} from '../design-system';
 import { formatMonthKeyLabelEs } from '../domain';
 import { AnalyticsTab } from '../features/analytics/components/AnalyticsTab';
 import { AccountTab, type AccountTabProps } from '../features/auth/components/AccountTab';
@@ -16,7 +21,7 @@ import {
   havePersistedAccountFieldsChanged,
   type PersistedAccountFields,
 } from '../features/budget/store/persistedAccountFields';
-import { useBudgetStore } from '../features/budget/store/useBudgetStore';
+import { useBudgetStore, type BFlowWorkspaceTab } from '../features/budget/store/useBudgetStore';
 import { ChecklistTab } from '../features/checklist/components/ChecklistTab';
 import { DebtsTab } from '../features/debts/components/DebtsTab';
 import { InitialAccountSetupView } from '../features/onboarding/components/InitialAccountSetupView';
@@ -103,6 +108,83 @@ function AuthGateScreen({
     />
   );
 }
+
+const WORKSPACE_TAB_ORDER: readonly BFlowWorkspaceTab[] = [
+  'summary',
+  'checklist',
+  'debts',
+  'savings',
+  'analytics',
+  'account',
+];
+
+const HIDDEN_TAB_SLOT_STYLE = { display: 'none' } as const;
+
+interface WorkspaceTabKeepAliveProps {
+  activeTab: BFlowWorkspaceTab;
+  accountTabProps: AccountTabProps;
+}
+
+/**
+ * Lazy keep-alive for workspace tabs: each visited tab mounts inside `<Entrance>` once
+ * and remains mounted hidden (`display: 'none'`, hidden from touch & screen readers) when
+ * switching tabs, avoiding massive Android native view teardown/rebuild on rapid switches.
+ */
+const WorkspaceTabKeepAlive = React.memo(function WorkspaceTabKeepAlive({
+  activeTab,
+  accountTabProps,
+}: WorkspaceTabKeepAliveProps): React.JSX.Element {
+  const [visitedTabs, setVisitedTabs] = useState<Partial<Record<BFlowWorkspaceTab, true>>>(() => ({
+    [activeTab]: true,
+  }));
+
+  if (!visitedTabs[activeTab]) {
+    setVisitedTabs((prev) => (prev[activeTab] ? prev : { ...prev, [activeTab]: true }));
+  }
+
+  const renderTabContent = (tab: BFlowWorkspaceTab): React.JSX.Element => {
+    switch (tab) {
+      case 'summary':
+        return <SummaryTab />;
+      case 'checklist':
+        return <ChecklistTab />;
+      case 'debts':
+        return <DebtsTab />;
+      case 'savings':
+        return <SavingsTab />;
+      case 'analytics':
+        return <AnalyticsTab />;
+      case 'account':
+        return <AccountTab {...accountTabProps} />;
+    }
+  };
+
+  return (
+    <View testID="workspace-tab-content">
+      {WORKSPACE_TAB_ORDER.map((tab) => {
+        if (!visitedTabs[tab]) {
+          return null;
+        }
+        const isActive = tab === activeTab;
+        return (
+          <View
+            key={tab}
+            testID={`workspace-tab-panel-${tab}`}
+            style={isActive ? undefined : HIDDEN_TAB_SLOT_STYLE}
+            pointerEvents={isActive ? 'auto' : 'none'}
+            accessibilityElementsHidden={!isActive}
+            importantForAccessibility={isActive ? 'auto' : 'no-hide-descendants'}
+            aria-hidden={!isActive}
+          >
+            <TabVisibilityProvider isActive={isActive}>
+              <Entrance kind="screen">{renderTabContent(tab)}</Entrance>
+            </TabVisibilityProvider>
+          </View>
+        );
+      })}
+    </View>
+  );
+});
 
 /**
  * Orchestrator: authentication gate, session and persistence effects, shell and dock.
@@ -467,6 +549,27 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     void useBudgetStore.getState().resetFullAccount();
   }, []);
 
+  const accountTabProps = useMemo<AccountTabProps>(
+    () => ({
+      onSignOut: handleSignOut,
+      onManualSync: handleManualSync,
+      onUpdateProfile: handleUpdateProfile,
+      onSendPasswordReset: handleAccountSendPasswordReset,
+      onRequestEmailChange: handleAccountRequestEmailChange,
+      onSendEmailVerification: handleAccountSendEmailVerification,
+      onResetFullAccount: handleResetFullAccount,
+    }),
+    [
+      handleSignOut,
+      handleManualSync,
+      handleUpdateProfile,
+      handleAccountSendPasswordReset,
+      handleAccountRequestEmailChange,
+      handleAccountSendEmailVerification,
+      handleResetFullAccount,
+    ]
+  );
+
   // The navigation shows the new tab at once; the tab's content mounts as a transition. A
   // heavy tab (Checklist, most visible on Android) used to mount in the same frame as the
   // tap, so the indicator and the press feedback froze until it
@@ -519,25 +622,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
           }}
         />
       ) : (
-        // Keyed by tab: the incoming screen fades in and rises once, on the native driver.
-        <Entrance key={contentTab} kind="screen" testID="workspace-tab-content">
-          {contentTab === 'summary' ? <SummaryTab /> : null}
-          {contentTab === 'checklist' ? <ChecklistTab /> : null}
-          {contentTab === 'debts' ? <DebtsTab /> : null}
-          {contentTab === 'savings' ? <SavingsTab /> : null}
-          {contentTab === 'analytics' ? <AnalyticsTab /> : null}
-          {contentTab === 'account' ? (
-            <AccountTab
-              onSignOut={handleSignOut}
-              onManualSync={handleManualSync}
-              onUpdateProfile={handleUpdateProfile}
-              onSendPasswordReset={handleAccountSendPasswordReset}
-              onRequestEmailChange={handleAccountRequestEmailChange}
-              onSendEmailVerification={handleAccountSendEmailVerification}
-              onResetFullAccount={handleResetFullAccount}
-            />
-          ) : null}
-        </Entrance>
+        <WorkspaceTabKeepAlive activeTab={contentTab} accountTabProps={accountTabProps} />
       )}
     </WorkspaceShell>
   );

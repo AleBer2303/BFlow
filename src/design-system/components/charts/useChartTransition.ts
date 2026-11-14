@@ -8,18 +8,23 @@
  */
 
 import { useEffect, useReducer, useRef } from 'react';
+import { scheduleAfterTabTransition } from '../../motion/motionRuntime';
+import { useIsTabActive } from '../../motion/TabVisibilityContext';
 import { useReducedMotionPreference } from '../../platform/useReducedMotionPreference';
 import { ChartTransition, resolveChartFrameSeconds } from './chartTransition';
 
 export interface UseChartTransitionOptions {
   enabled: boolean;
   stagger?: boolean;
+  isActive?: boolean;
 }
 
 export function useChartTransition(
   targets: readonly number[],
-  { enabled, stagger = true }: UseChartTransitionOptions
+  { enabled, stagger = true, isActive: isActiveProp }: UseChartTransitionOptions
 ): readonly number[] {
+  const isContextActive = useIsTabActive();
+  const isActive = isActiveProp ?? isContextActive;
   const reducedMotion = useReducedMotionPreference();
   const transitionRef = useRef<ChartTransition | null>(null);
   if (transitionRef.current === null) {
@@ -33,7 +38,7 @@ export function useChartTransition(
     const transition = transitionRef.current as ChartTransition;
     const jumped = transition.setAnimate(!reducedMotion);
     const retargeted = transition.retarget(targets);
-    if (!enabled || transition.isSettled()) {
+    if (!enabled || !isActive || transition.isSettled()) {
       // Repaint only when the values to draw changed; a mount with nothing new costs nothing.
       if (jumped || retargeted) {
         redraw();
@@ -43,21 +48,29 @@ export function useChartTransition(
 
     let handle: number | null = null;
     let lastTimestamp: number | null = null;
+    let cancelled = false;
     const step = (timestamp: number) => {
+      if (cancelled) return;
       const isMoving = transition.advance(resolveChartFrameSeconds(timestamp, lastTimestamp));
       lastTimestamp = timestamp;
       redraw();
       handle = isMoving ? requestAnimationFrame(step) : null;
     };
-    handle = requestAnimationFrame(step);
+    const deferred = scheduleAfterTabTransition(() => {
+      if (!cancelled) {
+        handle = requestAnimationFrame(step);
+      }
+    });
 
     return () => {
+      cancelled = true;
+      deferred.cancel();
       if (handle !== null) {
         cancelAnimationFrame(handle);
       }
     };
     // `targets` is read through `targetsKey`, its content.
-  }, [targetsKey, enabled, reducedMotion]);
+  }, [targetsKey, enabled, isActive, reducedMotion]);
 
   return transitionRef.current.getValues();
 }

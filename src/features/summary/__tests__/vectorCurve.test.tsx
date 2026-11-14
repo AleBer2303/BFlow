@@ -7,6 +7,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { GLView } from 'expo-gl';
 import React from 'react';
+import { TabVisibilityProvider } from '../../../design-system/motion/TabVisibilityContext';
 import { BFlowThemeProvider } from '../../../design-system/theme/ThemeContext';
 import { palettesBySkin, type PlatformSkinId } from '../../../design-system/tokens';
 import type { MonthlyCurve } from '../../../domain/overview/monthlyCurve';
@@ -435,6 +436,65 @@ describe('MonthlyCurveVectorStage', () => {
 
     fastForward(REVEAL_MS);
     expect(screen.getByTestId('monthly-curve-vector-line')).toBeTruthy();
+  });
+
+  it('cancels requestAnimationFrame when inactive and resumes on return without collapsing layout', () => {
+    const cancelSpy = jest.spyOn(globalThis, 'cancelAnimationFrame');
+    const rafSpy = jest.spyOn(globalThis, 'requestAnimationFrame');
+
+    try {
+      const onUnavailable = jest.fn();
+      const stageNode = (isActive: boolean) => (
+        <BFlowThemeProvider skin="android">
+          <TabVisibilityProvider isActive={isActive}>
+            <MonthlyCurveVectorStage
+              curve={CURVE}
+              metricId="flow"
+              reducedMotion={false}
+              onScrub={jest.fn()}
+              onUnavailable={onUnavailable}
+            />
+          </TabVisibilityProvider>
+        </BFlowThemeProvider>
+      );
+
+      const view = render(stageNode(true));
+
+      act(() => {
+        screen.getByTestId('monthly-curve-vector-stage').props.onLayout({
+          nativeEvent: { layout: { width: WIDTH, height: HEIGHT, x: 0, y: 0 } },
+        });
+      });
+
+      expect(rafSpy).toHaveBeenCalled();
+      expect(jest.getTimerCount()).toBeGreaterThan(0);
+
+      cancelSpy.mockClear();
+      rafSpy.mockClear();
+
+      // Switch tab away: keep-alive collapses layout to 0x0 and marks tab inactive.
+      view.rerender(stageNode(false));
+      act(() => {
+        screen.getByTestId('monthly-curve-vector-stage').props.onLayout({
+          nativeEvent: { layout: { width: 0, height: 0, x: 0, y: 0 } },
+        });
+      });
+
+      expect(cancelSpy).toHaveBeenCalled();
+      expect(rafSpy).not.toHaveBeenCalled();
+      expect(jest.getTimerCount()).toBe(0);
+
+      // Returning to summary resumes the animation with the retained dimensions.
+      view.rerender(stageNode(true));
+      expect(rafSpy).toHaveBeenCalled();
+      fastForward(MOTION_REST_MS);
+      expect(screen.getByTestId('monthly-curve-vector-line').props.d).toBe(
+        buildVectorCurveGeometry(CURVE, 'flow', WIDTH, HEIGHT)?.linePath
+      );
+    } finally {
+      cancelSpy.mockRestore();
+      rafSpy.mockRestore();
+    }
   });
 
   it('scrubs by touch from the first contact and stays hidden from screen readers on phones', () => {

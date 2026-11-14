@@ -283,4 +283,51 @@ describe('Fase 5: renders por acción', () => {
       );
     }
   );
+
+  it.each(SKINS)(
+    'mantiene vivas las pestañas visitadas sin remontar filas en cambios rápidos consecutivos (piel %s)',
+    async (skin) => {
+      render(
+        <BFlowThemeProvider initialMode="dark" skin={skin}>
+          <PhaseOneHomeScreen />
+        </BFlowThemeProvider>
+      );
+      await act(async () => {});
+
+      // Visit checklist and debts once so both enter the keep-alive pool.
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('workspace-tab-checklist'));
+      });
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('workspace-tab-debts'));
+      });
+
+      const resetCounts = () => {
+        const counts = mockCounts();
+        for (const key of Object.keys(counts)) counts[key] = 0;
+        mockTimeline().length = 0;
+        return counts;
+      };
+
+      const counts = resetCounts();
+
+      // Rapidly switch between already-visited tabs (checklist -> summary -> debts -> checklist).
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('workspace-tab-checklist'));
+        fireEvent.press(screen.getByTestId('workspace-tab-summary'));
+        fireEvent.press(screen.getByTestId('workspace-tab-debts'));
+        fireEvent.press(screen.getByTestId('workspace-tab-checklist'));
+      });
+
+      // Returning to already-mounted tabs does not re-render heavy view trees or checklist rows.
+      expect(counts.checklist ?? 0).toBe(0);
+      expect(counts.debts ?? 0).toBe(0);
+      expect(counts.row ?? 0).toBe(0);
+      expect(screen.getByTestId('checklist-workspace-view')).toBeTruthy();
+      expect(screen.getByTestId('workspace-tab-checklist')).toHaveProp(
+        'accessibilityState',
+        expect.objectContaining({ selected: true })
+      );
+    }
+  );
 });

@@ -235,7 +235,10 @@ export function BarChart({
   );
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
-    setWidth(Math.round(event.nativeEvent.layout.width));
+    const nextWidth = Math.round(event.nativeEvent.layout.width);
+    if (nextWidth > 0) {
+      setWidth(nextWidth);
+    }
   }, []);
 
   const activeIndex = selection.active ?? Math.max(0, count - 1);

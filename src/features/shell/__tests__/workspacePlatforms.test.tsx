@@ -96,6 +96,42 @@ describe.each(PLATFORM_SKIN_IDS)('core flows on the %s skin', (skin) => {
     }
   });
 
+  it('keeps visited tabs mounted and hidden on rapid switches without duplicate visible views', () => {
+    renderApp(skin);
+
+    expect(screen.getByTestId('workspace-tab-panel-summary')).toBeTruthy();
+    expect(screen.queryByTestId('workspace-tab-panel-checklist', { includeHiddenElements: true })).toBeNull();
+
+    // Rapid consecutive switches across multiple tabs before settling on analytics.
+    fireEvent.press(screen.getByTestId('workspace-tab-checklist'));
+    fireEvent.press(screen.getByTestId('workspace-tab-debts'));
+    fireEvent.press(screen.getByTestId('workspace-tab-analytics'));
+
+    expect(screen.getByTestId('analytics-and-history-view')).toBeTruthy();
+    expect(screen.queryByTestId('checklist-workspace-view')).toBeNull();
+    expect(screen.queryByTestId('debts-funfami-view')).toBeNull();
+    expect(screen.queryByTestId('net-flow-hero-card')).toBeNull();
+
+    for (const hiddenTab of ['summary', 'checklist', 'debts'] as const) {
+      const panel = screen.getByTestId(`workspace-tab-panel-${hiddenTab}`, {
+        includeHiddenElements: true,
+      });
+      expect(StyleSheet.flatten(panel.props.style)).toMatchObject({ display: 'none' });
+      expect(panel.props.importantForAccessibility).toBe('no-hide-descendants');
+      expect(panel.props.pointerEvents).toBe('none');
+      expect(panel.props.accessibilityElementsHidden).toBe(true);
+      expect(panel.props['aria-hidden']).toBe(true);
+    }
+
+    // Returning to a visited tab restores visibility and keeps unvisited tabs unmounted.
+    fireEvent.press(screen.getByTestId('workspace-tab-checklist'));
+    expect(screen.getByTestId('checklist-workspace-view')).toBeTruthy();
+    expect(
+      screen.queryByTestId('workspace-tab-panel-savings', { includeHiddenElements: true })
+    ).toBeNull();
+    expect(screen.getAllByTestId('checklist-workspace-view')).toHaveLength(1);
+  });
+
   it('recalculates debt and checklist progress when a checklist item changes', () => {
     renderApp(skin);
 

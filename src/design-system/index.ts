@@ -25,6 +25,7 @@ export * from './components/FormMessage';
 export * from './components/charts';
 export * from './motion/motionSpec';
 export * from './motion/motionRuntime';
+export * from './motion/TabVisibilityContext';
 export * from './motion/Entrance';
 export * from './motion/layoutTransition';
 export * from './motion/useReplayOnChange';

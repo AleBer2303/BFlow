@@ -237,7 +237,10 @@ export function LineChart({
   );
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
-    setWidth(Math.round(event.nativeEvent.layout.width));
+    const nextWidth = Math.round(event.nativeEvent.layout.width);
+    if (nextWidth > 0) {
+      setWidth(nextWidth);
+    }
   }, []);
 
   // With nothing chosen the readout rests on the last measured point (the active month).

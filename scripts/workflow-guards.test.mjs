@@ -1,13 +1,14 @@
 /**
  * scripts/workflow-guards.test.mjs
  *
- * Guardias de la tubería de E2E y release (ADR 0023). Son comprobaciones de texto, sin
- * dependencias, sobre los workflows y los flujos de Maestro:
+ * Guardias de la tubería de E2E, release y optimización CI/CD (ADR 0023 y ADR 0029).
+ * Comprobaciones estáticas sobre los workflows y los flujos de Maestro:
  *
  *   1. EXPO_PUBLIC_BFLOW_DEMO (modo vitrina) solo aparece en e2e.yml, y ese workflow no
  *      publica nada (AGENTS.md §7.6).
  *   2. release.yml reutiliza los workflows de build en vez de duplicarlos.
  *   3. Todo `id:` que usan los flujos de Maestro existe como `testID` en `src/`.
+ *   4. Invariantes de caché, concurrencia, paths-ignore y deduplicación de quality-gate (ADR 0029).
  *
  *   node --test scripts/workflow-guards.test.mjs
  */
@@ -16,6 +17,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import yaml from 'js-yaml';
 
 const rootDir = process.cwd();
 const workflowsDir = path.resolve(rootDir, '.github/workflows');
@@ -177,4 +179,135 @@ test('Cada flujo de Maestro declara la app y arranca desde el estado limpio', ()
 
   const appJson = JSON.parse(fs.readFileSync(path.resolve(rootDir, 'app.json'), 'utf8'));
   assert.equal(appJson.expo.android.package, 'com.bflow.app');
+});
+
+// ---------------------------------------------------------------------------
+// Configuración de Firebase en los builds (ADR 0027)
+// ---------------------------------------------------------------------------
+
+const BUILD_WORKFLOWS = ['build-android.yml', 'build-ios.yml'];
+const FIREBASE_BUILD_ENV = [
+  'EXPO_PUBLIC_FIREBASE_API_KEY',
+  'EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN',
+  'EXPO_PUBLIC_FIREBASE_PROJECT_ID',
+  'EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET',
+  'EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
+  'EXPO_PUBLIC_FIREBASE_APP_ID',
+];
+
+test('Los builds reciben la configuración de Firebase de las variables del repositorio', () => {
+  for (const name of BUILD_WORKFLOWS) {
+    const workflow = withoutComments(readWorkflow(name));
+    for (const variable of FIREBASE_BUILD_ENV) {
+      assert.ok(
+        workflow.includes(`${variable}: \${{ vars.${variable} }}`),
+        `${name} debe tomar ${variable} de vars.${variable}`
+      );
+    }
+    assert.ok(
+      workflow.includes('node scripts/check-build-env.mjs'),
+      `${name} debe comprobar la configuración antes de compilar`
+    );
+  }
+});
+
+test('Ningún workflow lleva escritas credenciales de Firebase', () => {
+  const workflows = fs.readdirSync(workflowsDir).filter((name) => /\.ya?ml$/.test(name));
+  const offenders = workflows.filter((name) => /AIza[0-9A-Za-z_-]{20,}/.test(readWorkflow(name)));
+  assert.deepEqual(offenders, []);
+});
+
+test('check-build-env detecta las variables obligatorias ausentes o vacías', async () => {
+  const { findMissingBuildEnv, REQUIRED_BUILD_ENV } = await import('./check-build-env.mjs');
+  const complete = Object.fromEntries(REQUIRED_BUILD_ENV.map((name) => [name, 'value']));
+
+  assert.deepEqual(findMissingBuildEnv(complete), []);
+  assert.deepEqual(findMissingBuildEnv({}), REQUIRED_BUILD_ENV);
+  assert.deepEqual(findMissingBuildEnv({ ...complete, EXPO_PUBLIC_FIREBASE_APP_ID: '  ' }), [
+    'EXPO_PUBLIC_FIREBASE_APP_ID',
+  ]);
+});
+
+// ---------------------------------------------------------------------------
+// Optimización de tubería CI/CD (Fase 6 / ADR 0029)
+// ---------------------------------------------------------------------------
+
+test('Todos los workflows YAML tienen sintaxis válida', () => {
+  const workflows = fs.readdirSync(workflowsDir).filter((name) => /\.ya?ml$/.test(name));
+  assert.ok(workflows.length >= 5, 'deben existir los 5 workflows del proyecto');
+
+  for (const name of workflows) {
+    const parsed = yaml.load(readWorkflow(name));
+    assert.ok(parsed && typeof parsed === 'object', `${name} debe parsear como objeto YAML`);
+    assert.ok(parsed.on, `${name} debe declarar disparadores (on)`);
+    assert.ok(parsed.jobs && typeof parsed.jobs === 'object', `${name} debe declarar jobs`);
+  }
+});
+
+test('ci.yml, build-ios.yml y build-android.yml cancelan ejecuciones obsoletas y cachean .jest-cache', () => {
+  for (const name of ['ci.yml', 'build-ios.yml', 'build-android.yml']) {
+    const parsed = yaml.load(readWorkflow(name));
+    assert.equal(
+      parsed.concurrency?.['cancel-in-progress'],
+      true,
+      `${name} debe configurar concurrency con cancel-in-progress: true`
+    );
+
+    const raw = withoutComments(readWorkflow(name));
+    assert.ok(raw.includes('actions/cache@v4'), `${name} debe usar actions/cache@v4`);
+    assert.ok(raw.includes('.jest-cache'), `${name} debe cachear .jest-cache`);
+  }
+
+  const releaseRaw = withoutComments(readWorkflow('release.yml'));
+  assert.ok(releaseRaw.includes('actions/cache@v4'), 'release.yml debe usar actions/cache@v4');
+  assert.ok(releaseRaw.includes('.jest-cache'), 'release.yml debe cachear .jest-cache');
+});
+
+test('Los builds omiten quality-gate en push a main y excluyen cambios de documentación', () => {
+  for (const name of BUILD_WORKFLOWS) {
+    const parsed = yaml.load(readWorkflow(name));
+    const pathsIgnore = parsed.on?.push?.['paths-ignore'] ?? [];
+    assert.ok(pathsIgnore.includes('docs/**'), `${name} debe ignorar docs/** en push`);
+    assert.ok(pathsIgnore.includes('*.md'), `${name} debe ignorar *.md en push`);
+
+    const gateIf = parsed.jobs?.['quality-gate']?.if ?? '';
+    assert.match(
+      gateIf,
+      /github\.event_name\s*==\s*'push'\s*&&\s*github\.ref\s*==\s*'refs\/heads\/main'/,
+      `${name} debe omitir quality-gate en push a main (ya corre en ci.yml)`
+    );
+  }
+});
+
+test('build-ios.yml corrige la caché de CocoaPods, activa ccache y desactiva el index store', () => {
+  const raw = withoutComments(readWorkflow('build-ios.yml'));
+
+  assert.doesNotMatch(
+    raw,
+    /hashFiles\([^)]*ios\/Podfile\.lock/,
+    'build-ios.yml no debe depender de ios/Podfile.lock (no existe tras expo prebuild --no-install)'
+  );
+  assert.ok(
+    raw.includes("key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile', 'package-lock.json') }}"),
+    'build-ios.yml debe cachear CocoaPods con hashFiles de ios/Podfile y package-lock.json'
+  );
+  assert.ok(raw.includes('~/Library/Caches/ccache'), 'build-ios.yml debe cachear ~/Library/Caches/ccache');
+  assert.ok(raw.includes('USE_CCACHE'), 'build-ios.yml debe definir USE_CCACHE');
+  assert.ok(raw.includes('CCACHE_DIR'), 'build-ios.yml debe definir CCACHE_DIR');
+  assert.ok(
+    raw.includes('COMPILER_INDEX_STORE_ENABLE=NO'),
+    'build-ios.yml debe pasar COMPILER_INDEX_STORE_ENABLE=NO a xcodebuild'
+  );
+});
+
+test('build-android.yml unifica assembleRelease y bundleRelease para ABIs ARM con caché y paralelismo', () => {
+  const raw = withoutComments(readWorkflow('build-android.yml'));
+
+  assert.match(
+    raw,
+    /\.\/gradlew assembleRelease bundleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a/,
+    'build-android.yml debe ejecutar assembleRelease y bundleRelease en una sola invocación para arm64-v8a,armeabi-v7a'
+  );
+  assert.ok(raw.includes('org.gradle.caching=true'), 'build-android.yml debe activar org.gradle.caching=true');
+  assert.ok(raw.includes('org.gradle.parallel=true'), 'build-android.yml debe activar org.gradle.parallel=true');
 });

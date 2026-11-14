@@ -15,7 +15,6 @@ import {
   resolveTouchTargetFix,
 } from '../components/AppPressable';
 import { ThemeToggleIconButton } from '../components/BrandAndThemeIcons';
-import { MaterialNavigationBar } from '../components/navigation/MaterialNavigationBar';
 import {
   WebAppHeader,
   WebTabBar,
@@ -357,52 +356,6 @@ describe('usePrimaryActionLook', () => {
     expect(look.container.backgroundColor).toBe('#256F82');
     expect(look.container.borderRadius).toBeUndefined();
     expect(look.labelColor).toBe('#FFFFFF');
-  });
-});
-
-describe('MaterialNavigationBar (Android)', () => {
-  it('shows the six destinations with one active indicator and no glass lens', () => {
-    renderWithSkin(
-      'android',
-      <MaterialNavigationBar activeTab="debts" onSelectTab={jest.fn()} testID="nav" />
-    );
-
-    for (const tab of WORKSPACE_TABS) {
-      expect(screen.getByTestId(`workspace-tab-${tab.id}`)).toHaveTextContent(tab.label);
-    }
-    expect(screen.getAllByTestId('material-nav-active-indicator')).toHaveLength(1);
-    expect(screen.queryByTestId('dock-magnifying-lens')).toBeNull();
-    expect(screen.UNSAFE_queryAllByType(BlurView)).toHaveLength(0);
-    expect(screen.getByTestId('workspace-tab-debts').props.accessibilityState).toEqual(
-      expect.objectContaining({ selected: true })
-    );
-    expect(screen.getByTestId('workspace-tab-summary').props.accessibilityState).toEqual(
-      expect.objectContaining({ selected: false })
-    );
-  });
-
-  it('is anchored in the flow, opaque, and pads the system gesture area', () => {
-    renderWithSkin(
-      'android',
-      <MaterialNavigationBar activeTab="summary" onSelectTab={jest.fn()} testID="nav" bottomInset={24} />
-    );
-
-    const bar = restingStyle('nav');
-    expect(bar.position).toBeUndefined();
-    expect(bar.paddingBottom).toBe(24);
-    expect(bar.backgroundColor).toBe(palettesBySkin.android.dark.background.elevated);
-    expect(restingStyle('workspace-tab-summary').height).toBe(80);
-  });
-
-  it('selects another destination once and ignores the active one', () => {
-    const onSelectTab = jest.fn();
-    renderWithSkin('android', <MaterialNavigationBar activeTab="summary" onSelectTab={onSelectTab} />);
-
-    fireEvent.press(screen.getByTestId('workspace-tab-savings'));
-    fireEvent.press(screen.getByTestId('workspace-tab-summary'));
-
-    expect(onSelectTab).toHaveBeenCalledTimes(1);
-    expect(onSelectTab).toHaveBeenCalledWith('savings');
   });
 });
 

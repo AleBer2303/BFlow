@@ -284,4 +284,77 @@ describe('accountCache', () => {
     expect(isCacheFreshWithin24Hours(undefined, nowMs)).toBe(false);
     expect(isCacheFreshWithin24Hours('invalid-date', nowMs)).toBe(false);
   });
+
+  describe('isEquivalentCloudAccount short-circuits (Auditoría, Fase 4)', () => {
+    const snapshot = { monthKey: '2026-09' } as unknown as FullCloudAccountData['closedSnapshots'][string];
+
+    it('rejects payloads of a different shape without serializing them', () => {
+      const stringify = jest.spyOn(JSON, 'stringify');
+      try {
+        const cases: FullCloudAccountData[] = [
+          { ...mockAccount, availableMonths: ['2026-09', '2026-10'] },
+          { ...mockAccount, debtsByMonth: { '2026-10': [] } },
+          { ...mockAccount, savingsBucketsByMonth: { '2026-10': [] } },
+          { ...mockAccount, closedSnapshots: { '2026-09': snapshot } },
+          { ...mockAccount, needsOnboarding: true },
+        ];
+        for (const other of cases) {
+          expect(isEquivalentCloudAccount(mockAccount, other)).toBe(false);
+        }
+        expect(stringify).not.toHaveBeenCalled();
+      } finally {
+        stringify.mockRestore();
+      }
+    });
+
+    it('accepts two payloads of the same shape and the same dataRevision without serializing them', () => {
+      const stringify = jest.spyOn(JSON, 'stringify');
+      try {
+        const a = { ...mockAccount, dataRevision: 'rev_same' };
+        const b = { ...mockAccount, availableMonths: ['2026-10'], dataRevision: 'rev_same' };
+        expect(isEquivalentCloudAccount(a, b)).toBe(true);
+        expect(stringify).not.toHaveBeenCalled();
+      } finally {
+        stringify.mockRestore();
+      }
+    });
+
+    it('still compares the content when the revisions differ or are missing', () => {
+      const a = { ...mockAccount, dataRevision: 'rev_1' };
+      expect(isEquivalentCloudAccount(a, { ...mockAccount, dataRevision: 'rev_2' })).toBe(true);
+      expect(
+        isEquivalentCloudAccount(a, { ...mockAccount, availableMonths: ['2026-11'], dataRevision: 'rev_2' })
+      ).toBe(false);
+      expect(isEquivalentCloudAccount(mockAccount, { ...mockAccount, availableMonths: ['2026-11'] })).toBe(
+        false
+      );
+    });
+
+    it('a different shape wins over an equal dataRevision', () => {
+      const a = { ...mockAccount, dataRevision: 'rev_same' };
+      const b = { ...mockAccount, availableMonths: ['2026-09', '2026-10'], dataRevision: 'rev_same' };
+      expect(isEquivalentCloudAccount(a, b)).toBe(false);
+    });
+  });
+
+  it('keeps the historySyncedAt marker of the last cloud load across saves made from the store (ADR 0028)', () => {
+    savePersistedAccount(uid, { ...mockAccount, historySyncedAt: '2026-11-10T15:00:00.000Z' });
+
+    // A store save carries no marker: the stored one stays.
+    schedulePersistedAccountSave(uid, { ...mockAccount, activeMonthKey: '2026-11' }, 10);
+    flushPendingPersistedAccount();
+    __resetMemoryCacheForTests();
+    expect(loadPersistedAccount(uid)?.activeMonthKey).toBe('2026-11');
+    expect(loadPersistedAccount(uid)?.historySyncedAt).toBe('2026-11-10T15:00:00.000Z');
+
+    // A new cloud load replaces it.
+    savePersistedAccount(uid, { ...mockAccount, historySyncedAt: '2026-11-12T09:00:00.000Z' });
+    __resetMemoryCacheForTests();
+    expect(loadPersistedAccount(uid)?.historySyncedAt).toBe('2026-11-12T09:00:00.000Z');
+
+    // Clearing the account drops it.
+    clearPersistedAccount(uid);
+    savePersistedAccount(uid, mockAccount);
+    expect(loadPersistedAccount(uid)?.historySyncedAt).toBeUndefined();
+  });
 });

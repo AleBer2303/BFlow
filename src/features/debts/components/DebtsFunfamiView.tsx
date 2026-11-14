@@ -9,15 +9,14 @@
  * - 100% pure COP integers, >= 44pt touch targets, Apple Liquid Glass aesthetics
  */
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View } from 'react-native';
 import {
   AppPressable,
   AppText,
-  FormMessage,
-  AppTextInput,
   CurrencyText,
   GlassSurface,
+  hapticService,
   MIN_TOUCH_TARGET_PT,
   PencilEditIcon,
   ProgressFill,
@@ -26,37 +25,20 @@ import {
   StatusBadge,
   TrashBinIcon,
   useBFlowTheme,
-  usePrimaryActionLook,
 } from '../../../design-system';
 import { confirmDestructive } from '../../../platform/dialogs/confirmDestructive';
 import {
   formatCurrency,
   formatMonthKeyLabelEs,
-  type DebtInterestRateType,
   type DebtSummaryResult,
   type FunfamiDebtSummary,
   type MonthEntry,
 } from '../../../domain';
+import { DebtForm, type CreateDebtInput, type DebtFormDebt, type UpdateDebtInput } from './DebtForm';
 
-export interface CreateDebtInput {
-  name: string;
-  lender: string;
-  openingBalance: number;
-  monthlyInterestRate?: number;
-  annualInterestRate?: number;
-  interestRateType?: DebtInterestRateType;
-  monthlyInstallment?: number;
-}
+export type { CreateDebtInput, UpdateDebtInput } from './DebtForm';
 
-export interface UpdateDebtInput {
-  name?: string;
-  lender?: string;
-  openingBalance?: number;
-  monthlyInterestRate?: number;
-  annualInterestRate?: number;
-  interestRateType?: DebtInterestRateType;
-  monthlyInstallment?: number;
-}
+type DebtActionMode = 'edit' | 'delete' | null;
 
 export interface DebtsFunfamiViewProps {
   debtSummary: FunfamiDebtSummary | DebtSummaryResult;
@@ -78,21 +60,15 @@ export function DebtsFunfamiView({
   onDeleteDebt,
 }: DebtsFunfamiViewProps): React.JSX.Element {
   const { colors, spacing, radius } = useBFlowTheme();
-  const primaryAction = usePrimaryActionLook();
 
   const [dismissedBannerMonth, setDismissedBannerMonth] = useState<string | null>(null);
 
-  // Form modal/drawer state for adding or editing a debt
+  // The form owns its field state (R-17); the view only knows whether it is open and for
+  // which debt. A new key remounts it, so it loads that debt's values (or starts empty).
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingDebtId, setEditingDebtId] = useState<string | null>(null);
-  const [formName, setFormName] = useState('');
-  const [formLender, setFormLender] = useState('');
-  const [formOpeningBalance, setFormOpeningBalance] = useState('');
-  const [formInterestRate, setFormInterestRate] = useState('');
-  const [formInterestRateType, setFormInterestRateType] =
-    useState<DebtInterestRateType>('monthly');
-  const [formMonthlyInstallment, setFormMonthlyInstallment] = useState('');
-  const [formError, setFormError] = useState<string | null>(null);
+  const [formKey, setFormKey] = useState(0);
+  const [debtActionMode, setDebtActionMode] = useState<DebtActionMode>(null);
+  const [editingDebt, setEditingDebt] = useState<DebtFormDebt | null>(null);
 
   const paydownRatio =
     debtSummary.openingTotalDebt > 0
@@ -121,105 +97,25 @@ export function DebtsFunfamiView({
   // When a debt is 100% paid off (remainingBalance === 0), remove it from active obligations
   const activeObligations = debtSummary.debts.filter((d) => d.remainingBalance > 0);
 
-  const openCreateForm = () => {
-    setEditingDebtId(null);
-    setFormName('');
-    setFormLender('');
-    setFormOpeningBalance('');
-    setFormInterestRate('0');
-    setFormInterestRateType('monthly');
-    setFormMonthlyInstallment('');
-    setFormError(null);
+  const toggleDebtActionMode = (mode: Exclude<DebtActionMode, null>) => {
+    hapticService.selection();
+    setDebtActionMode((prev) => {
+      const next = prev === mode ? null : mode;
+      if (next) {
+        setIsFormOpen(false);
+        setEditingDebt(null);
+      }
+      return next;
+    });
+  };
+
+  const openForm = (debt: DebtFormDebt | null) => {
+    setDebtActionMode(null);
+    setEditingDebt(debt);
+    setFormKey((key) => key + 1);
     setIsFormOpen(true);
   };
-
-  const openEditForm = (debt: (typeof debtSummary.debts)[number]) => {
-    const rateType: DebtInterestRateType = debt.interestRateType ?? 'monthly';
-    setEditingDebtId(debt.debtId);
-    setFormName(debt.name);
-    setFormLender(debt.lender);
-    setFormOpeningBalance(String(debt.openingBalance));
-    setFormInterestRateType(rateType);
-    setFormInterestRate(
-      rateType === 'annual' && debt.annualInterestRate !== undefined
-        ? String(debt.annualInterestRate)
-        : debt.monthlyInterestRate !== undefined
-          ? String(debt.monthlyInterestRate)
-          : '0'
-    );
-    setFormMonthlyInstallment(
-      debt.monthlyInstallment !== undefined && debt.monthlyInstallment > 0
-        ? String(debt.monthlyInstallment)
-        : ''
-    );
-    setFormError(null);
-    setIsFormOpen(true);
-  };
-
-  const handleSaveDebtForm = () => {
-    if (!formName.trim()) {
-      setFormError('Escribe el nombre de la deuda.');
-      return;
-    }
-    if (!formLender.trim()) {
-      setFormError('Escribe la entidad o persona acreedora.');
-      return;
-    }
-    const cleanBalance = formOpeningBalance.replace(/[^0-9]/g, '');
-    const parsedBalance = cleanBalance ? Number(cleanBalance) : 0;
-    if (!Number.isSafeInteger(parsedBalance) || parsedBalance <= 0) {
-      setFormError('Ingresa un saldo inicial válido.');
-      return;
-    }
-
-    const cleanRate = formInterestRate.replace(',', '.').trim();
-    const parsedRate = cleanRate ? parseFloat(cleanRate) : 0;
-    const maxAllowedRate = formInterestRateType === 'annual' ? 200 : 100;
-    if (isNaN(parsedRate) || parsedRate < 0 || parsedRate > maxAllowedRate) {
-      setFormError(`La tasa de interés debe ser entre 0% y ${maxAllowedRate}%.`);
-      return;
-    }
-
-    const cleanInstallment = formMonthlyInstallment.replace(/[^0-9]/g, '');
-    const parsedInstallment = cleanInstallment ? Number(cleanInstallment) : 0;
-
-    const monthlyRate =
-      formInterestRateType === 'annual'
-        ? Number((parsedRate / 12).toFixed(4))
-        : parsedRate;
-    const annualRate =
-      formInterestRateType === 'annual'
-        ? parsedRate
-        : Number((parsedRate * 12).toFixed(4));
-
-    setFormError(null);
-    if (editingDebtId) {
-      if (onUpdateDebt) {
-        onUpdateDebt(editingDebtId, {
-          name: formName.trim(),
-          lender: formLender.trim(),
-          openingBalance: parsedBalance,
-          monthlyInterestRate: monthlyRate,
-          annualInterestRate: annualRate,
-          interestRateType: formInterestRateType,
-          monthlyInstallment: parsedInstallment,
-        });
-      }
-    } else {
-      if (onCreateDebt) {
-        onCreateDebt({
-          name: formName.trim(),
-          lender: formLender.trim(),
-          openingBalance: parsedBalance,
-          monthlyInterestRate: monthlyRate,
-          annualInterestRate: annualRate,
-          interestRateType: formInterestRateType,
-          monthlyInstallment: parsedInstallment,
-        });
-      }
-    }
-    setIsFormOpen(false);
-  };
+  const handleCloseForm = useCallback(() => setIsFormOpen(false), []);
 
   const handleDeleteDebtConfirm = (debtId: string, name: string) => {
     confirmDestructive({
@@ -306,15 +202,8 @@ export function DebtsFunfamiView({
         </View>
       </GlassSurface>
 
-      {/* Action Bar: "+ Nueva Deuda" */}
-      <View
-        style={{
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        <AppText variant="title2">Obligaciones Activas</AppText>
+      {/* Action Bar: "+ Nueva Deuda" + Global Edit & Delete Mode Buttons */}
+      <View style={{ gap: spacing.sm }}>
         <AppPressable
           testID="debts-add-new-debt-button"
           accessibilityRole="button"
@@ -322,7 +211,7 @@ export function DebtsFunfamiView({
             if (isFormOpen) {
               setIsFormOpen(false);
             } else {
-              openCreateForm();
+              openForm(null);
             }
           }}
           style={{
@@ -342,147 +231,78 @@ export function DebtsFunfamiView({
             {isFormOpen ? 'Cerrar' : '+ Nueva Deuda'}
           </AppText>
         </AppPressable>
+
+        {/* Global Edit & Delete Mode Buttons */}
+        <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+          {(
+            [
+              {
+                mode: 'edit' as const,
+                testID: 'debt-action-edit-button',
+                label: 'Editar',
+                cancelLabel: 'Cancelar Edición',
+                a11yLabel: 'Editar obligaciones activas',
+                cancelA11yLabel: 'Cancelar edición de obligaciones',
+                activeColor: colors.semantic.income,
+                activeBg: colors.glass.surfaceElevatedTint,
+                Icon: PencilEditIcon,
+              },
+              {
+                mode: 'delete' as const,
+                testID: 'debt-action-delete-button',
+                label: 'Eliminar',
+                cancelLabel: 'Cancelar Eliminación',
+                a11yLabel: 'Eliminar obligaciones activas',
+                cancelA11yLabel: 'Cancelar eliminación de obligaciones',
+                activeColor: colors.semantic.expense,
+                activeBg: colors.semantic.expenseSoft,
+                Icon: TrashBinIcon,
+              },
+            ] as const
+          ).map((btn) => {
+            const isActive = debtActionMode === btn.mode;
+            const fgColor = isActive ? btn.activeColor : colors.text.secondary;
+            return (
+              <AppPressable
+                key={btn.mode}
+                testID={btn.testID}
+                accessibilityRole="button"
+                accessibilityLabel={isActive ? btn.cancelA11yLabel : btn.a11yLabel}
+                onPress={() => toggleDebtActionMode(btn.mode)}
+                style={{
+                  flex: 1,
+                  minHeight: MIN_TOUCH_TARGET_PT,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.pill,
+                  borderCurve: 'continuous',
+                  backgroundColor: isActive ? btn.activeBg : colors.glass.surfaceTint,
+                  borderWidth: 1.5,
+                  borderColor: isActive ? btn.activeColor : colors.glass.subtleBorder,
+                  flexDirection: 'row',
+                  gap: spacing.xs,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <btn.Icon size={16} color={fgColor} />
+                <AppText variant="caption" color={fgColor}>
+                  {isActive ? btn.cancelLabel : btn.label}
+                </AppText>
+              </AppPressable>
+            );
+          })}
+        </View>
       </View>
 
       {/* Form Drawer / Card for Creating or Editing a Debt */}
       <RevealDown visible={isFormOpen}>
-        <GlassSurface elevated testID="debt-form-modal">
-          <View style={{ gap: spacing.sm }}>
-            <AppText variant="title2">
-              {editingDebtId ? 'Editar Deuda' : 'Registrar Nueva Deuda'}
-            </AppText>
-
-            <View style={{ gap: spacing.xxs }}>
-              <AppText variant="caption" color={colors.text.secondary}>
-                Nombre de la deuda
-              </AppText>
-              <AppTextInput
-                testID="debt-form-name-input"
-                value={formName}
-                onChangeText={setFormName}
-                placeholder="Ej. Tarjeta de crédito, Préstamo personal"
-              />
-            </View>
-
-            <View style={{ gap: spacing.xxs }}>
-              <AppText variant="caption" color={colors.text.secondary}>
-                Acreedor / Entidad
-              </AppText>
-              <AppTextInput
-                testID="debt-form-lender-input"
-                value={formLender}
-                onChangeText={setFormLender}
-                placeholder="Ej. Banco, Entidad financiera, Familiar"
-              />
-            </View>
-
-            <View style={{ gap: spacing.xxs }}>
-              <AppText variant="caption" color={colors.text.secondary}>
-                Saldo inicial
-              </AppText>
-              <AppTextInput
-                testID="debt-form-amount-input"
-                value={formOpeningBalance}
-                onChangeText={setFormOpeningBalance}
-                keyboardType="numeric"
-                placeholder="Ej. 2500000"
-              />
-            </View>
-
-            <View style={{ gap: spacing.xxs }}>
-              <AppText variant="caption" color={colors.text.secondary}>
-                Tipo y porcentaje de interés:
-              </AppText>
-              <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-                {(
-                  [
-                    { id: 'monthly', label: 'Interés Mensual (%)' },
-                    { id: 'annual', label: 'Interés Anual (%)' },
-                  ] as const
-                ).map((opt) => {
-                  const active = formInterestRateType === opt.id;
-                  return (
-                    <AppPressable
-                      key={opt.id}
-                      testID={`debt-form-rate-type-${opt.id}`}
-                      accessibilityRole="button"
-                      onPress={() => setFormInterestRateType(opt.id)}
-                      style={{
-                        flex: 1,
-                        minHeight: 38,
-                        borderRadius: radius.md,
-                        backgroundColor: active
-                          ? colors.semantic.debtSoft
-                          : colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: active ? colors.glass.specularBorder : colors.glass.subtleBorder,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <AppText
-                        variant="micro"
-                        color={active ? colors.semantic.debt : colors.text.secondary}
-                      >
-                        {opt.label}
-                      </AppText>
-                    </AppPressable>
-                  );
-                })}
-              </View>
-              <AppTextInput
-                testID="debt-form-interest-rate-input"
-                value={formInterestRate}
-                onChangeText={setFormInterestRate}
-                keyboardType="decimal-pad"
-                placeholder={
-                  formInterestRateType === 'annual'
-                    ? 'Ej. 12.0 o 24.0 anual (0 si no cobra interés)'
-                    : 'Ej. 0.9 o 2.0 mensual (0 si no cobra interés)'
-                }
-              />
-              <AppText variant="micro" color={colors.text.muted}>
-                Se conserva mes a mes y entre sesiones a menos que lo edites directamente.
-              </AppText>
-            </View>
-
-            <View style={{ gap: spacing.xxs }}>
-              <AppText variant="caption" color={colors.text.secondary}>
-                Cuota mensual pactada que aportas a esta deuda (opcional)
-              </AppText>
-              <AppTextInput
-                testID="debt-form-installment-input"
-                value={formMonthlyInstallment}
-                onChangeText={setFormMonthlyInstallment}
-                keyboardType="numeric"
-                placeholder="Ej. 500000"
-              />
-            </View>
-
-            <FormMessage message={formError} />
-
-            <View style={{ flexDirection: 'row', gap: spacing.xs, justifyContent: 'flex-end', paddingTop: spacing.xs }}>
-              <AppPressable
-                testID="debt-form-submit-button"
-                accessibilityRole="button"
-                onPress={handleSaveDebtForm}
-                style={{
-                  minHeight: MIN_TOUCH_TARGET_PT,
-                  paddingHorizontal: spacing.lg,
-                  borderRadius: radius.md,
-                  borderCurve: 'continuous',
-                  ...primaryAction.container,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
-              >
-                <AppText variant="headline" color={primaryAction.labelColor ?? colors.semantic.income}>
-                  Guardar Deuda
-                </AppText>
-              </AppPressable>
-            </View>
-          </View>
-        </GlassSurface>
+        <DebtForm
+          key={formKey}
+          debt={editingDebt}
+          onCreateDebt={onCreateDebt}
+          onUpdateDebt={onUpdateDebt}
+          onClose={handleCloseForm}
+        />
       </RevealDown>
 
       {/* Banner when a debt is 100% paid off (Dismissible, only in month of completion) */}
@@ -599,19 +419,17 @@ export function DebtsFunfamiView({
                   </AppText>
                 </View>
 
-                {/* Edit & Delete Action Buttons */}
-                <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+                {/* Contextual Edit or Delete Action Button on Existing Debt Card */}
+                {debtActionMode === 'edit' ? (
                   <AppPressable
                     testID={`debt-edit-${debt.debtId}`}
                     accessibilityRole="button"
                     accessibilityLabel={`Editar deuda ${debt.name}`}
-                    onPress={() => openEditForm(debt)}
+                    onPress={() => openForm(debt)}
                     style={{
                       minHeight: MIN_TOUCH_TARGET_PT,
-                      minWidth: MIN_TOUCH_TARGET_PT,
-                      paddingHorizontal: spacing.sm,
-                      paddingVertical: spacing.xxs,
-                      borderRadius: radius.md,
+                      paddingHorizontal: spacing.md,
+                      borderRadius: radius.pill,
                       borderCurve: 'continuous',
                       backgroundColor: colors.glass.surfaceElevatedTint,
                       borderWidth: 1,
@@ -619,12 +437,15 @@ export function DebtsFunfamiView({
                       flexDirection: 'row',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: spacing.xxs,
+                      gap: spacing.xs,
                     }}
                   >
-                    <PencilEditIcon size={16} color={colors.text.secondary} />
+                    <PencilEditIcon size={14} color={colors.semantic.income} />
+                    <AppText variant="caption" color={colors.semantic.income}>
+                      Editar
+                    </AppText>
                   </AppPressable>
-
+                ) : debtActionMode === 'delete' ? (
                   <AppPressable
                     testID={`debt-delete-${debt.debtId}`}
                     accessibilityRole="button"
@@ -632,21 +453,24 @@ export function DebtsFunfamiView({
                     onPress={() => handleDeleteDebtConfirm(debt.debtId, debt.name)}
                     style={{
                       minHeight: MIN_TOUCH_TARGET_PT,
-                      minWidth: MIN_TOUCH_TARGET_PT,
-                      paddingHorizontal: spacing.sm,
-                      paddingVertical: spacing.xxs,
-                      borderRadius: radius.md,
+                      paddingHorizontal: spacing.md,
+                      borderRadius: radius.pill,
                       borderCurve: 'continuous',
                       backgroundColor: colors.semantic.expenseSoft,
                       borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                      justifyContent: 'center',
+                      borderColor: colors.semantic.expense,
+                      flexDirection: 'row',
                       alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: spacing.xs,
                     }}
                   >
-                    <TrashBinIcon size={16} color={colors.semantic.expense} />
+                    <TrashBinIcon size={14} color={colors.semantic.expense} />
+                    <AppText variant="caption" color={colors.semantic.expense}>
+                      Eliminar
+                    </AppText>
                   </AppPressable>
-                </View>
+                ) : null}
               </View>
             </View>
           </GlassSurface>

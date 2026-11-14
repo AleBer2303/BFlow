@@ -159,6 +159,8 @@ export const springConfigs = {
   },
   // Lente líquido del dock: asentamiento suave con sobrepaso casi imperceptible
   liquidSettle: { damping: 16, stiffness: 170, mass: 1 },
+  // Píldora plana del dock en Android: llega sin sobrepaso
+  flatSettle: { damping: 28, stiffness: 170, mass: 1 },
   // "Lift" (crece ×1.12 / ×1.06) y estiramiento elástico por velocidad (×1.2 / ×0.92)
   liquidLift: { damping: 14, stiffness: 190, mass: 0.9 },
 } as const;
@@ -166,10 +168,12 @@ export const springConfigs = {
 
 **Lente del dock (Liquid Glass):** cápsula translúcida con borde superior especular, brillo curvo superior, sombra interior inferior y resplandor de refracción que aparece al levantarse bajo el dedo. Sigue la posición continua del dedo mediante suavizado exponencial por frame (sin reiniciar resortes en cada evento táctil) y solo hace *snap* al tab más cercano al soltar. En los extremos del dock el rebote se conserva, pero el recorrido se limita para que el lente (incluido su crecimiento por *lift*/estiramiento) nunca cruce el borde interior; el sobrepaso se convierte en una compresión horizontal (*squash* hasta ×0.84) como una gota contra la pared.
 
+**Píldora del dock (Android, ADR 0024):** el mismo dock, con una píldora plana de `accent.container` en lugar del lente. No tiene borde, brillo, sombra ni capas interiores, y no crece ni se estira bajo el dedo. Sigue el dedo con el mismo suavizado y se asienta con `flatSettle`, sin rebote; su recorrido termina en la primera y la última pestaña.
+
 ### 6.2 Soporte de Reducción de Movimiento (`prefers-reduced-motion`):
 `BFlowThemeProvider` sigue el ajuste *Reducir Movimiento* del sistema (iOS, Android y Web) y lo entrega como `useBFlowTheme().reducedMotion`. Con el ajuste activo:
 - No hay traslación, escala, resorte ni sacudida. Queda un cambio de opacidad de `REDUCED_MOTION_DURATION_MS` (140 ms).
-- El dock y la píldora de la barra Material saltan a su sitio. El acordeón del onboarding (`animateNextLayout`) cambia de una vez.
+- El lente y la píldora del dock saltan a su sitio. El acordeón del onboarding (`animateNextLayout`) cambia de una vez.
 - Los gráficos y la curva del mes dibujan su estado final.
 
 ### 6.3 Matriz de Retroalimentación Háptica (`expo-haptics`):
@@ -186,6 +190,8 @@ export const springConfigs = {
 | **Entrar al modo eliminar** | `Haptics.notificationAsync(Warning)` | Aviso de que el siguiente toque borra. Salir del modo es un `impactAsync(Light)`. |
 | **Error de un formulario** (`FormMessage`) | `Haptics.notificationAsync(Error)` | Triple pulso, una vez por error nuevo. |
 
+**Tic de selección en Android:** `hapticService.selection()` (dock, selector de rueda, curva, gráficos) no llama a `selectionAsync`, que en Android enciende el vibrador 50 ms y se siente mucho más fuerte que en iOS. Usa `performAndroidHapticsAsync(AndroidHaptics.Clock_Tick)`: el tic corto del sistema, que además respeta el ajuste de respuesta táctil del teléfono.
+
 **Reglas:** una vibración por acción, cuando la acción se confirma (`onPress`), nunca al tocar (`onPressIn`). Una acción que ya confirmó con `Success` no añade otra en su aviso de éxito. No hay háptica al escribir.
 
 ### 6.4 Escala de movimiento (`motionDuration`, `motionDistance`, `motionScale`, `motionBySkin`)
@@ -197,7 +203,7 @@ Un movimiento nuevo no escribe milisegundos: pide su especificación a `src/desi
 | `motionDuration.stagger` | 40 ms | Desfase entre elementos que entran uno tras otro (tope: 6 elementos) |
 | `motionDuration.micro` | 80 ms | Un tramo de la sacudida de error; espera de la tarjeta de un panel; bajada de un botón en Android |
 | `motionDuration.quick` | 150 ms | Cierre de un diálogo; la tarjeta de un panel al cerrarse; salida de un control de fila |
-| `motionDuration.fast` | 250 ms | Cambio de pestaña, apertura de un diálogo o de la tarjeta de un panel, pliegue del espacio de un panel, píldora de la barra Material, acordeón, cambio de icono |
+| `motionDuration.fast` | 250 ms | Cambio de pestaña, apertura de un diálogo o de la tarjeta de un panel, pliegue del espacio de un panel, acordeón, cambio de icono |
 | `motionDuration.medium` | 350 ms | Cierre de un aviso flotante |
 | `motionDuration.slow` | 400 ms | Un bloque que llega a una pantalla ya visible (`Entrance kind="section"`) |
 | `motionDuration.emphasis` | 500 ms | Momentos únicos de énfasis: la barra de progreso que crece |
@@ -265,6 +271,7 @@ Fallback arquitectural idéntico visualmente mediante `expo-blur`:
 4. **`AppTextInput` + `KeyboardAwareScrollView`:**
    - Auto-scroll inteligente: los inputs ubicados en la mitad superior de la pantalla no sufren saltos innecesarios.
    - Los inputs ocultos por el teclado se desplazan con una holgura limpia de 24pt sin generar vacíos gigantes.
+   - Teclado y formato universal en iOS y Android: los campos de texto abren con mayúscula inicial activa (`autoCapitalize="sentences"`, salvo correo/contraseña/numéricos) y los campos numéricos enteros abren directamente el teclado numérico (`number-pad` / `inputMode="numeric"`) con separación automática de miles por puntos (`1.000`, `100.000`, `1.000.000`).
 5. **Curva del mes (`MonthlyCurveSection`):**
    - Sustituye en Resumen a la lista del checklist y a las tarjetas `Control Deudas` y `Control Ahorros`. Una cifra en `heroCurrency`, una línea luminosa sobre una cuadrícula de puntos y un selector de cinco métricas: **Flujo, Ingresos, Gastos, Ahorros y Deudas**. Ver [ADR 0008](docs/decisions/0008-monthly-curve-replaces-tubes.md).
    - Se dibuja una serie a la vez, con su propia escala desde cero. La línea sólida llega hasta hoy y la punteada proyecta el cierre si se completa lo pendiente. Deudas solo baja con abonos reales.
@@ -305,14 +312,14 @@ Fallback arquitectural idéntico visualmente mediante `expo-blur`:
 
 ## 10. Pieles por Plataforma (iOS · Android · Web)
 
-Decisiones en los ADR [0010](docs/decisions/0010-platform-skins-and-responsive-layout.md) y [0011](docs/decisions/0011-web-redesign-and-vector-curve.md). La piel se resuelve en `src/design-system/platform/platformSkin.ts` y sus tokens viven en `src/design-system/tokens.ts` (`palettesBySkin`, `radiusBySkin`, `typographyBySkin`, `platformSkins`).
+Decisiones en los ADR [0010](docs/decisions/0010-platform-skins-and-responsive-layout.md), [0011](docs/decisions/0011-web-redesign-and-vector-curve.md) y [0024](docs/decisions/0024-android-floating-dock-flat-indicator.md). La piel se resuelve en `src/design-system/platform/platformSkin.ts` y sus tokens viven en `src/design-system/tokens.ts` (`palettesBySkin`, `radiusBySkin`, `typographyBySkin`, `platformSkins`).
 
 ### 10.1 Qué cambia y qué no
 
 | | iOS | Android | Web |
 | :--- | :--- | :--- | :--- |
 | Material | Liquid Glass: tinte translúcido + blur + borde especular | Material 3: contenedor tonal **opaco**; la variante elevada sube un tono y usa `elevation: 2` | Tarjeta plana, línea de 1 px, sin sombra |
-| Navegación | Dock flotante con lente líquido | Barra superior + barra de navegación anclada con indicador en píldora | Cabecera opaca con línea; palabras desde 840 px, barra al pie por debajo |
+| Navegación | Dock flotante con lente líquido | Barra superior + el mismo dock flotante, opaco y con píldora plana (ADR 0024) | Cabecera opaca con línea; palabras desde 840 px, barra al pie por debajo |
 | Toque | Se hunde y atenúa con resorte (escala 0,97, opacidad 0,82) | Se hunde y atenúa igual, con curva y sin sobrepaso; sin ripple | Hover (140 ms) y pulsación (90 ms, escala 0,985), sin rebote |
 | Botón principal | Cápsula de vidrio | Relleno con el acento, totalmente redondeado | El único botón relleno con el acento, radio 4 |
 | Radios `xs / sm / md / lg / xl / pill` | 6 / 10 / 16 / 22 / 28 / 999 | 4 / 8 / 12 / 16 / 28 / 999 | 2 / 4 / 6 / 8 / 8 / 4 |
@@ -322,7 +329,7 @@ Decisiones en los ADR [0010](docs/decisions/0010-platform-skins-and-responsive-l
 
 **No cambia entre pieles:** los datos, los flujos, el significado de los colores semánticos, el espaciado (§4.1), los números tabulares y los `testID`.
 
-**Prohibido fuera de iOS:** `BlurView`, superficies translúcidas, borde especular, lente y dock flotante. Los tokens `colors.glass.*` conservan el nombre, pero en Android y Web son rellenos opacos y `blurIntensity` es 0.
+**Prohibido fuera de iOS:** `BlurView`, superficies translúcidas, borde especular y lente. El dock flotante es de iOS y de Android; Web no lo usa. Los tokens `colors.glass.*` conservan el nombre, pero en Android y Web son rellenos opacos y `blurIntensity` es 0.
 
 ### 10.2 Token de acento (`colors.accent`)
 
@@ -330,23 +337,25 @@ El único color de acción de cada piel: selección de navegación, foco y botó
 
 | Token | iOS oscuro / claro | Android oscuro / claro | Web oscuro / claro |
 | :--- | :--- | :--- | :--- |
-| `accent.primary` | `#388AF6` / `#245F9F` | `#8CD5B4` / `#1B6B51` | `#256F82` / `#256F82` |
-| `accent.onPrimary` | `#0D0F12` / `#FFFFFF` | `#003827` / `#FFFFFF` | `#FFFFFF` / `#FFFFFF` |
-| `accent.container` | `rgba(79,143,234,0.16)` / `rgba(36,95,159,0.14)` | `#1F4F3E` / `#CDE9DB` | `rgba(95,179,198,0.16)` / `rgba(37,111,130,0.14)` |
-| `accent.text` | `#5C9DF2` / `#245F9F` | `#8CD5B4` / `#1B6B51` | `#5FB3C6` / `#1D5F70` |
+| `accent.primary` | `#388AF6` / `#245F9F` | `#388AF6` / `#245F9F` | `#256F82` / `#256F82` |
+| `accent.onPrimary` | `#0D0F12` / `#FFFFFF` | `#0D0F12` / `#FFFFFF` | `#FFFFFF` / `#FFFFFF` |
+| `accent.container` | `rgba(79,143,234,0.16)` / `rgba(36,95,159,0.14)` | `rgba(79,143,234,0.16)` / `rgba(36,95,159,0.14)` | `rgba(95,179,198,0.16)` / `rgba(37,111,130,0.14)` |
+| `accent.text` | `#5C9DF2` / `#245F9F` | `#5C9DF2` / `#245F9F` | `#5FB3C6` / `#1D5F70` |
 
 ### 10.3 Piel Android (Material 3)
 
+Comparte los colores de la piel iOS (oscuro y claro) sobre superficies tonales **opacas** (`surfaceTint` y `surfaceElevatedTint` equivalen al vidrio de iOS aplanado sobre `background.primary`, sin `BlurView` ni translucidez).
+
 | Token | Oscuro | Claro |
 | :--- | :--- | :--- |
-| `background.primary` | `#101411` | `#F6FBF4` |
-| `background.secondary` | `#181D19` | `#EFF5EE` |
-| `background.elevated` | `#1E2420` | `#E9EFE8` |
-| `glass.surfaceTint` (contenedor) | `#1A201C` | `#EAF0E9` |
-| `glass.surfaceElevatedTint` | `#232925` | `#E2E9E1` |
-| `text.primary / secondary / muted` | `#E0E4DD` / `#C0C9BF` / `#939C92` | `#171D19` / `#404943` / `#566058` |
+| `background.primary` | `#0D0F12` | `#E7E6E0` |
+| `background.secondary` | `#14171C` | `#DCDBD3` |
+| `background.elevated` | `#1B1F26` | `#EFECE3` |
+| `glass.surfaceTint` (contenedor) | `#15181E` | `#EEEAE0` |
+| `glass.surfaceElevatedTint` | `#1D222B` | `#F7F4EC` |
+| `text.primary / secondary / muted` | `#F4F5F7` / `#9BA3AF` / `#7A8291` | `#12151B` / `#4E5562` / `#565E6E` |
 
-Contraste medido (primario / secundario / atenuado): sobre la página **14,4 / 10,9 / 6,6** (oscuro) y **16,3 / 8,9 / 6,2** (claro); sobre tarjeta **12,9 / 9,7 / 5,8** y **14,8 / 8,1 / 5,7**. Texto sobre el acento: **7,7** y **6,4**.
+Contraste medido (primario / secundario / atenuado): sobre la página **17,6 / 7,5 / 5,0** (oscuro) y **14,6 / 6,0 / 5,2** (claro); sobre tarjeta **16,3 / 7,0 / 4,6** y **15,2 / 6,2 / 5,4**. Texto sobre el acento: **5,6** y **6,5**.
 
 Escala tipográfica (Roboto del sistema, sin `fontFamily` forzada):
 
@@ -362,7 +371,7 @@ Escala tipográfica (Roboto del sistema, sin `fontFamily` forzada):
 | `caption` | 12 / 16 | 500 | 0,5 | Label medium |
 | `micro` | 11 / 16 | 500 | 0,5 | Label small |
 
-Componentes: barra de navegación de 80 dp, opaca (`background.elevated`), en el flujo del layout, con `insets.bottom` propio; indicador de 56 × 32 con `accent.container`; la píldora existe solo en el destino seleccionado (el estado nunca depende de una animación).
+Componentes: dock flotante (el de iOS, ADR 0024), cápsula opaca de `glass.surfaceElevatedTint` con línea `glass.specularBorder`, a 16 dp del borde inferior más `insets.bottom`; pestañas de 54 dp de alto (objetivo táctil de 48 dp, cápsula total de 62 dp); selección con una píldora plana de `accent.container` e icono y etiqueta en `accent.primary` (contraste con la píldora: **3,7** en oscuro y **4,8** en claro). El contenido reserva 96 dp más `insets.bottom` al final del scroll (18 dp de aire libre por encima del dock).
 
 ### 10.4 Piel Web (sistema `design-taste-frontend`)
 
@@ -418,8 +427,8 @@ Reglas propias de la Web:
 | :--- | :--- |
 | iOS oscuro | `#4F8FEA` `#2BB3A6` `#E5A84B` `#E07A9A` `#9D7FE6` `#9CC45A` |
 | iOS claro | `#245F9F` `#0F7A70` `#8F5206` `#A8345F` `#5F3DA6` `#5A6E12` |
-| Android oscuro | `#6FA4F0` `#4FC3B5` `#E5A84B` `#E88AA6` `#AD93EA` `#A5CB66` |
-| Android claro | `#245F9F` `#0B6E66` `#8F5206` `#A8345F` `#5F3DA6` `#556A10` |
+| Android oscuro | `#4F8FEA` `#2BB3A6` `#E5A84B` `#E07A9A` `#9D7FE6` `#9CC45A` |
+| Android claro | `#245F9F` `#0F7A70` `#8F5206` `#A8345F` `#5F3DA6` `#5A6E12` |
 | Web oscuro | `#6FA4F0` `#5FB3C6` `#E5A84B` `#E08FB8` `#A5CB66` `#C2B89A` |
 | Web claro | `#1F5590` `#0E6B5E` `#7A4504` `#8A3A66` `#4C5E0E` `#5E574C` |
 

@@ -88,8 +88,9 @@ describe('platform/widgets — contrato WidgetSnapshotV2', () => {
 
   it('rechaza decimales, meses inválidos, campos extra y tendencias que no acaban en el mes', () => {
     const valid = buildWidgetSnapshot(goldenInput());
+    // Zod 4 describe el entero inválido como "expected int".
     expect(() => widgetSnapshotV2Schema.parse({ ...valid, netCashFlow: 1080000.5 })).toThrow(
-      /safe integer|integer/
+      /expected int/
     );
     expect(() => widgetSnapshotV2Schema.parse({ ...valid, monthKey: '2026-13' })).toThrow(
       /Invalid monthKey/

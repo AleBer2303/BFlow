@@ -6,13 +6,15 @@ import {
   InMemoryBudgetRepository,
 } from '../../../data/repositories/budgetRepository';
 import { BFlowThemeProvider } from '../../../design-system/theme/ThemeContext';
+import { formatMonthKeyLabelEs, toAppMonthKey } from '../../../domain';
+import * as accountEmailActions from '../../../platform/auth/accountEmailActions';
 import * as authAdapter from '../../../platform/auth/authAdapter';
+import { __resetAuthRateLimiterForTests } from '../../../platform/auth/authRateLimiter';
 import {
   loadPersistedSession,
   savePersistedSession,
   type BFlowAuthUser,
 } from '../../../platform/auth/authAdapter';
-import { peekVerificationCode } from '../../../platform/auth/verificationCodeService';
 import {
   loadPersistedAccount,
   savePersistedAccount,
@@ -54,9 +56,11 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
 
     // Password visibility toggle must allow viewing password while typing with minimalist eye icons
     expect(screen.getByTestId('auth-password-input').props.secureTextEntry).toBe(true);
+    expect(screen.getByTestId('auth-password-input').props.autoCapitalize).toBe('none');
     expect(screen.getByTestId('icon-eye-closed')).toBeTruthy();
     fireEvent.press(screen.getByTestId('auth-password-visibility-toggle'));
     expect(screen.getByTestId('auth-password-input').props.secureTextEntry).toBe(false);
+    expect(screen.getByTestId('auth-password-input').props.autoCapitalize).toBe('none');
     expect(screen.getByTestId('icon-eye-open')).toBeTruthy();
     fireEvent.press(screen.getByTestId('auth-password-visibility-toggle'));
     expect(screen.getByTestId('auth-password-input').props.secureTextEntry).toBe(true);
@@ -65,9 +69,9 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     // Switch to Personal Registration ("Crear cuenta")
     fireEvent.press(screen.getByTestId('auth-mode-register'));
     expect(screen.getByText('Registra tus datos personales')).toBeTruthy();
-    expect(screen.getByTestId('auth-name-input')).toBeTruthy();
-    expect(screen.getByTestId('auth-phone-input')).toBeTruthy();
-    expect(screen.getByTestId('auth-goal-input')).toBeTruthy();
+    expect(screen.getByTestId('auth-name-input').props.autoCapitalize).toBe('words');
+    expect(screen.getByTestId('auth-phone-input').props.keyboardType).toBe('phone-pad');
+    expect(screen.getByTestId('auth-goal-input').props.autoCapitalize).toBe('sentences');
 
     // Confirm password visibility toggle also works with minimalist eye icons
     expect(screen.getByTestId('auth-confirm-password-input').props.secureTextEntry).toBe(true);
@@ -85,8 +89,8 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     // Fill personal fields and test mismatched password confirmation
     fireEvent.changeText(screen.getByTestId('auth-name-input'), 'Alejandro Bernal Garnica');
     fireEvent.changeText(screen.getByTestId('auth-phone-input'), '+57 300 123 4567');
-    fireEvent.changeText(screen.getByTestId('auth-email-input'), 'abernalg2303@gmail.com');
-    fireEvent.changeText(screen.getByTestId('auth-password-input'), 'secreto123');
+    fireEvent.changeText(screen.getByTestId('auth-email-input'), 'demo.owner@bflow.example');
+    fireEvent.changeText(screen.getByTestId('auth-password-input'), 'Secreto123!');
     fireEvent.changeText(screen.getByTestId('auth-confirm-password-input'), 'otraClave');
 
     fireEvent.press(screen.getByTestId('auth-primary-submit-button'));
@@ -98,7 +102,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
   it('persists user session with personal metadata and signs out back to the Auth Gate', async () => {
     const customUser: BFlowAuthUser = {
       uid: 'uid_alejandro_01',
-      email: 'abernalg2303@gmail.com',
+      email: 'demo.owner@bflow.example',
       displayName: 'Alejandro Bernal Garnica',
       phone: '+57 300 987 6543',
       financialGoal: 'Pagar CB300F y ahorrar para apartamento',
@@ -132,10 +136,10 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     expect(loadPersistedSession()).toBeNull();
   });
 
-  it('guarantees 100% account isolation when switching between a newly created user and abernalg2303@gmail.com', async () => {
+  it('guarantees 100% account isolation when switching between a newly created user and demo.owner@bflow.example', async () => {
     const ownerUser: BFlowAuthUser = {
       uid: 'uid_owner_abernalg',
-      email: 'abernalg2303@gmail.com',
+      email: 'demo.owner@bflow.example',
       displayName: 'Alejandro Bernal Garnica',
       authProvider: 'password',
       activeMonthKey: '2026-10',
@@ -150,7 +154,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       provider: 'local-demo',
     };
 
-    // 1. Start in owner account (abernalg2303@gmail.com) and verify canonical savings ($ 4.380.000)
+    // 1. Start in owner account (demo.owner@bflow.example) and verify canonical savings ($ 4.380.000)
     useBudgetStore.getState().setAuthUser(ownerUser);
     render(
       <BFlowThemeProvider initialMode="dark">
@@ -191,8 +195,8 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
         .savingsBucketsByMonth['2026-11']?.find((b) => b.id === 'savings')?.openingBalance
     ).toBe(12_500_000);
 
-    // 4. Sign out and log back into abernalg2303@gmail.com:
-    // Zero data from secondUser may remain, and abernalg2303@gmail.com must retain exact golden balances ($ 4.380.000)
+    // 4. Sign out and log back into demo.owner@bflow.example:
+    // Zero data from secondUser may remain, and demo.owner@bflow.example must retain exact golden balances ($ 4.380.000)
     act(() => {
       useBudgetStore.getState().clearWorkspaceSession();
     });
@@ -211,7 +215,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     const repo = new InMemoryBudgetRepository();
     const initialCloud = await repo.loadFullCloudAccount(
       'uid-owner-123',
-      'abernalg2303@gmail.com'
+      'demo.owner@bflow.example'
     );
 
     const motoDebt = initialCloud.debtsByMonth['2026-10']?.find(
@@ -247,7 +251,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     });
     const reloadedCloud = await repo.loadFullCloudAccount(
       'uid-owner-123',
-      'abernalg2303@gmail.com'
+      'demo.owner@bflow.example'
     );
     act(() => {
       useBudgetStore.getState().applyFullCloudAccount(reloadedCloud);
@@ -315,7 +319,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     expect(useBudgetStore.getState().availableMonths).toEqual(['2026-12', '2027-01']);
   });
 
-  it('defaults onboarding to Enero of the current year with 0 default funds, never re-prompts after blank setup, and allows editing/deleting any fund including Moto & Ahorros', async () => {
+  it('defaults onboarding to the current month with 0 default funds, never re-prompts after blank setup, and allows editing/deleting any fund including Moto & Ahorros', async () => {
     const repo = new InMemoryBudgetRepository(false);
     const newUser: BFlowAuthUser = {
       uid: 'uid-blank-new-user',
@@ -345,11 +349,13 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
 
     expect(screen.getByTestId('initial-account-setup-view')).toBeTruthy();
 
-    // 2. Default month must be Enero ('01') and current year (not Octubre 2026),
+    // 2. Default month must match the user's current month (not hardcoded Enero or Octubre 2026),
     // and Section 2 must have 0 pre-populated savings funds (no Fondo Moto, no Fondo Ahorros)
     expect(screen.queryByTestId('onboarding-bucket-balance-savings')).toBeNull();
     expect(screen.queryByTestId('onboarding-bucket-balance-moto')).toBeNull();
-    expect(screen.getByTestId('complete-initial-setup-button')).toHaveTextContent(/Enero \d{4}/);
+    expect(screen.getByTestId('complete-initial-setup-button')).toHaveTextContent(
+      `Guardar e Iniciar ${formatMonthKeyLabelEs(toAppMonthKey())}`
+    );
 
     // 3. Continue with everything in blank -> next sign-in must NOT ask for onboarding again
     await act(async () => {
@@ -368,10 +374,10 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     );
     expect(subsequentLoginLoad.needsOnboarding).toBe(false);
 
-    // 4. Switch to owner account (abernalg2303@gmail.com) and verify editing/deleting Fondo Moto & Fondo Ahorros
+    // 4. Switch to owner account (demo.owner@bflow.example) and verify editing/deleting Fondo Moto & Fondo Ahorros
     const ownerUser: BFlowAuthUser = {
       uid: 'uid-owner-123',
-      email: 'abernalg2303@gmail.com',
+      email: 'demo.owner@bflow.example',
       displayName: 'Alejandro Bernal',
       provider: 'firebase',
     };
@@ -383,17 +389,19 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     expect(screen.getByTestId('bucket-moto-card')).toBeTruthy();
     expect(screen.getByTestId('bucket-savings-card')).toBeTruthy();
 
-    // Edit Fondo Moto name and balance via Editar Fondos/Ahorros
-    fireEvent.press(screen.getByTestId('open-edit-opening-balance-button'));
-    fireEvent.changeText(screen.getByTestId('moto-bucket-name-input'), 'Fondo Moto Personal');
-    fireEvent.changeText(screen.getByTestId('moto-opening-balance-input'), '2000000');
+    // Edit Fondo Moto name and balance individually via Editar Fondo mode
+    fireEvent.press(screen.getByTestId('bucket-action-edit-button'));
+    fireEvent.press(screen.getByTestId('edit-savings-bucket-moto'));
+    fireEvent.changeText(screen.getByTestId('edit-bucket-name-input'), 'Fondo Moto Personal');
+    fireEvent.changeText(screen.getByTestId('edit-bucket-balance-input'), '2000000');
     await act(async () => {
-      fireEvent.press(screen.getByTestId('save-opening-balances-button'));
+      fireEvent.press(screen.getByTestId('save-edit-bucket-button'));
     });
     // The savings chart legend repeats the bucket name, so read it from the bucket card.
     expect(within(screen.getByTestId('bucket-moto-card')).getByText('Fondo Moto Personal')).toBeTruthy();
 
-    // Delete Fondo Moto and Fondo Ahorros
+    // Delete Fondo Moto and Fondo Ahorros individually via global Eliminar Fondo mode
+    fireEvent.press(screen.getByTestId('bucket-action-delete-button'));
     await act(async () => {
       fireEvent.press(screen.getByTestId('delete-savings-bucket-moto'));
     });
@@ -406,56 +414,344 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     expect(screen.getByTestId('empty-savings-buckets-card')).toBeTruthy();
   });
 
-  it('supports in-app password recovery using 6-digit verification code from the Login screen', async () => {
+  it('recovers the password from the Login screen with the reset link that Firebase emails (ADR 0025)', async () => {
     useBudgetStore.getState().requireAuthenticationGate();
+    const resetSpy = jest
+      .spyOn(accountEmailActions, 'sendPasswordResetLink')
+      .mockResolvedValue(undefined);
 
-    render(
-      <BFlowThemeProvider initialMode="dark">
-        <PhaseOneHomeScreen />
-      </BFlowThemeProvider>
-    );
+    try {
+      render(
+        <BFlowThemeProvider initialMode="dark">
+          <PhaseOneHomeScreen />
+        </BFlowThemeProvider>
+      );
 
-    expect(screen.getByTestId('auth-gate-screen')).toBeTruthy();
+      fireEvent.press(screen.getByTestId('auth-mode-recover'));
+      expect(screen.getByText('Recupera el acceso a tu cuenta')).toBeTruthy();
 
-    // Click "¿Olvidaste tu contraseña? Recuperar clave"
-    fireEvent.press(screen.getByTestId('auth-mode-recover'));
-    expect(screen.getByText('Recupera el acceso a tu cuenta')).toBeTruthy();
-    expect(
-      screen.getByText(/Escribe tu correo electrónico para enviarte un código de verificación de 6 dígitos/i)
-    ).toBeTruthy();
+      // Only the email is asked: there is no code and no password field in the app
+      expect(screen.queryByTestId('auth-password-input')).toBeNull();
+      expect(screen.queryByTestId('auth-recovery-code-input')).toBeNull();
 
-    // Enter email and request 6-digit verification code
-    fireEvent.changeText(screen.getByTestId('auth-email-input'), 'abernalg2303@gmail.com');
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('auth-primary-submit-button'));
+      // An invalid email never reaches Firebase
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('auth-primary-submit-button'));
+      });
+      expect(resetSpy).not.toHaveBeenCalled();
+      expect(screen.getByTestId('auth-error-banner')).toHaveTextContent(
+        'Escribe el correo electrónico con el que registraste tu cuenta.'
+      );
+
+      fireEvent.changeText(screen.getByTestId('auth-email-input'), 'demo.owner@bflow.example');
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('auth-primary-submit-button'));
+      });
+
+      expect(resetSpy).toHaveBeenCalledWith('demo.owner@bflow.example');
+
+      // Back in Login mode, with a message that does not reveal whether the account exists
+      expect(screen.getByText('Entra a tu cuenta personal')).toBeTruthy();
+      expect(screen.getByTestId('auth-status-banner')).toHaveTextContent(
+        /Si demo.owner@bflow.example tiene una cuenta en BFlow, recibirás un enlace/i
+      );
+      expect(screen.getByTestId('auth-email-input').props.value).toBe('demo.owner@bflow.example');
+    } finally {
+      resetSpy.mockRestore();
+    }
+  });
+
+  it('stays in recovery and shows the translated error when Firebase rejects the reset link', async () => {
+    useBudgetStore.getState().requireAuthenticationGate();
+    const resetSpy = jest
+      .spyOn(accountEmailActions, 'sendPasswordResetLink')
+      .mockRejectedValue(new Error('Firebase: Error (auth/network-request-failed).'));
+
+    try {
+      render(
+        <BFlowThemeProvider initialMode="dark">
+          <PhaseOneHomeScreen />
+        </BFlowThemeProvider>
+      );
+
+      fireEvent.press(screen.getByTestId('auth-mode-recover'));
+      fireEvent.changeText(screen.getByTestId('auth-email-input'), 'demo.owner@bflow.example');
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('auth-primary-submit-button'));
+      });
+
+      expect(screen.getByText('Recupera el acceso a tu cuenta')).toBeTruthy();
+      expect(screen.getByTestId('auth-error-banner')).toHaveTextContent(
+        'Error de conexión. Revisa tu internet e intenta nuevamente.'
+      );
+    } finally {
+      resetSpy.mockRestore();
+    }
+  });
+
+  describe('email verification gate (ADR 0025)', () => {
+    const unverifiedUser: BFlowAuthUser = {
+      uid: 'uid_unverified_account_01',
+      email: 'nueva.cuenta@correo.com',
+      displayName: 'Cuenta Nueva',
+      authProvider: 'password',
+      emailVerified: false,
+      emailVerificationRequired: true,
+      provider: 'firebase',
+    };
+
+    it('holds a newly registered account on the verification screen until Firebase reports the email as verified', async () => {
+      const refreshSpy = jest.spyOn(accountEmailActions, 'refreshAccountIdentity');
+      const resendSpy = jest
+        .spyOn(accountEmailActions, 'sendVerificationEmail')
+        .mockResolvedValue(undefined);
+      const loadSpy = jest
+        .spyOn(FirestoreBudgetRepository.prototype, 'loadFullCloudAccount')
+        .mockRejectedValue(new Error('sin conexión'));
+
+      try {
+        act(() => {
+          useBudgetStore.getState().setAuthUser(unverifiedUser);
+        });
+
+        render(
+          <BFlowThemeProvider initialMode="dark">
+            <PhaseOneHomeScreen />
+          </BFlowThemeProvider>
+        );
+
+        // Neither the workspace nor the sign-in form: only the verification gate
+        expect(screen.getByTestId('email-verification-screen')).toBeTruthy();
+        expect(screen.getByTestId('email-verification-address')).toHaveTextContent(
+          'nueva.cuenta@correo.com'
+        );
+        expect(screen.queryByTestId('workspace-tab-summary')).toBeNull();
+        expect(screen.queryByTestId('auth-gate-screen')).toBeNull();
+
+        // Still unverified in Firebase: the gate stays and explains why
+        refreshSpy.mockResolvedValueOnce(unverifiedUser);
+        await act(async () => {
+          fireEvent.press(screen.getByTestId('email-verification-check-button'));
+        });
+        expect(screen.getByTestId('email-verification-error-banner')).toHaveTextContent(
+          /aún no aparece verificado/i
+        );
+        // An unverified account never reads its budget from Firestore (ADR 0026)
+        expect(loadSpy).not.toHaveBeenCalled();
+
+        // The verification email can be sent again
+        await act(async () => {
+          fireEvent.press(screen.getByTestId('email-verification-resend-button'));
+        });
+        expect(resendSpy).toHaveBeenCalledTimes(1);
+        expect(screen.getByTestId('email-verification-status-banner')).toHaveTextContent(
+          /nuevo enlace de verificación a nueva.cuenta@correo.com/i
+        );
+
+        // The user opened the link: the gate gives way to the workspace
+        refreshSpy.mockResolvedValueOnce({
+          ...unverifiedUser,
+          emailVerified: true,
+          emailVerificationRequired: false,
+        });
+        await act(async () => {
+          fireEvent.press(screen.getByTestId('email-verification-check-button'));
+        });
+        expect(screen.queryByTestId('email-verification-screen')).toBeNull();
+        expect(screen.getByTestId('workspace-tab-summary')).toBeTruthy();
+        expect(useBudgetStore.getState().authUser?.emailVerified).toBe(true);
+        // Verified: the budget is loaded now, once
+        expect(loadSpy).toHaveBeenCalledTimes(1);
+      } finally {
+        refreshSpy.mockRestore();
+        resendSpy.mockRestore();
+        loadSpy.mockRestore();
+      }
     });
 
-    // Form switches to verify step with 6-digit code input
-    expect(screen.getByText('Restablecer contraseña')).toBeTruthy();
-    expect(screen.getByTestId('auth-recovery-code-input')).toBeTruthy();
-    expect(screen.getByTestId('auth-password-input')).toBeTruthy();
-    expect(screen.getByTestId('auth-confirm-password-input')).toBeTruthy();
+    it('lets the user sign out from the verification screen back to the Auth Gate', async () => {
+      act(() => {
+        useBudgetStore.getState().setAuthUser(unverifiedUser);
+      });
 
-    // Retrieve the active 6-digit code generated for this email
-    const generatedCode = peekVerificationCode('abernalg2303@gmail.com');
-    expect(generatedCode).toMatch(/^\d{6}$/);
+      render(
+        <BFlowThemeProvider initialMode="dark">
+          <PhaseOneHomeScreen />
+        </BFlowThemeProvider>
+      );
 
-    // Enter the code and new password
-    fireEvent.changeText(screen.getByTestId('auth-recovery-code-input'), generatedCode!);
-    fireEvent.changeText(screen.getByTestId('auth-password-input'), 'nuevaClaveBFlow99');
-    fireEvent.changeText(screen.getByTestId('auth-confirm-password-input'), 'nuevaClaveBFlow99');
-
-    // Submit password reset internally in the app
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('auth-primary-submit-button'));
+      fireEvent.press(screen.getByTestId('email-verification-sign-out-button'));
+      expect(await screen.findByTestId('auth-gate-screen')).toBeTruthy();
+      expect(screen.queryByTestId('email-verification-screen')).toBeNull();
     });
 
-    // Switches back to Login mode with success status banner
-    expect(screen.getByText('Entra a tu cuenta personal')).toBeTruthy();
-    expect(screen.getByTestId('auth-status-banner')).toHaveTextContent(
-      /Contraseña actualizada exitosamente/i
-    );
-    expect(screen.getByTestId('auth-email-input').props.value).toBe('abernalg2303@gmail.com');
+    it('does not gate accounts exempt from verification: older, Google or local sessions', () => {
+      const exemptUsers: BFlowAuthUser[] = [
+        { ...unverifiedUser, emailVerificationRequired: false },
+        { ...unverifiedUser, emailVerified: undefined, emailVerificationRequired: undefined },
+        { ...unverifiedUser, provider: 'local-demo' },
+      ];
+
+      for (const user of exemptUsers) {
+        act(() => {
+          useBudgetStore.getState().setAuthUser(user);
+        });
+        const view = render(
+          <BFlowThemeProvider initialMode="dark">
+            <PhaseOneHomeScreen />
+          </BFlowThemeProvider>
+        );
+        expect(screen.queryByTestId('email-verification-screen')).toBeNull();
+        expect(screen.getByTestId('workspace-tab-summary')).toBeTruthy();
+        view.unmount();
+      }
+    });
+  });
+
+  it('saves the profile to Firestore from the account window and reverts it when the cloud rejects it', async () => {
+    const cloudUser: BFlowAuthUser = {
+      uid: 'uid_cloud_test_profile_window',
+      email: 'demo.owner@bflow.example',
+      displayName: 'Alejandro Bernal',
+      financialGoal: 'Meta anterior',
+      authProvider: 'password',
+      emailVerified: true,
+      provider: 'firebase',
+    };
+    const saveSpy = jest
+      .spyOn(FirestoreBudgetRepository.prototype, 'saveUserProfile')
+      .mockResolvedValue(undefined);
+    const syncNameSpy = jest
+      .spyOn(authAdapter, 'syncAuthDisplayName')
+      .mockResolvedValue(undefined);
+
+    try {
+      act(() => {
+        useBudgetStore.getState().setAuthUser(cloudUser);
+      });
+      render(
+        <BFlowThemeProvider initialMode="dark">
+          <PhaseOneHomeScreen />
+        </BFlowThemeProvider>
+      );
+      fireEvent.press(screen.getByTestId('workspace-tab-account'));
+      fireEvent.press(await screen.findByTestId('open-profile-settings-button'));
+
+      // Saved: Firestore receives both fields and the account card shows the new name
+      fireEvent.changeText(screen.getByTestId('profile-input-name'), 'Alejandro Bernal G.');
+      fireEvent.changeText(screen.getByTestId('profile-input-goal'), 'Viaje a Japón');
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('save-profile-settings-button'));
+      });
+
+      expect(saveSpy).toHaveBeenCalledWith(cloudUser.uid, {
+        displayName: 'Alejandro Bernal G.',
+        financialGoal: 'Viaje a Japón',
+      });
+      expect(screen.getByTestId('profile-success-banner')).toHaveTextContent(
+        'Perfil actualizado correctamente'
+      );
+      expect(screen.getByTestId('authenticated-user-name')).toHaveTextContent(
+        'Hola, Alejandro Bernal G.'
+      );
+
+      // Rejected by the server: the name goes back and the form says why
+      saveSpy.mockRejectedValueOnce(
+        Object.assign(new Error('Missing or insufficient permissions.'), {
+          code: 'permission-denied',
+        })
+      );
+      fireEvent.changeText(screen.getByTestId('profile-input-name'), 'Nombre Rechazado');
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('save-profile-settings-button'));
+      });
+
+      expect(screen.getByTestId('profile-error-banner')).toHaveTextContent(
+        'No se pudo guardar tu perfil en la nube. Inténtalo de nuevo.'
+      );
+      expect(screen.getByTestId('authenticated-user-name')).toHaveTextContent(
+        'Hola, Alejandro Bernal G.'
+      );
+      expect(useBudgetStore.getState().authUser?.displayName).toBe('Alejandro Bernal G.');
+    } finally {
+      saveSpy.mockRestore();
+      syncNameSpy.mockRestore();
+    }
+  });
+
+  it('routes the account email actions to Firebase Auth only for real accounts', async () => {
+    const resetSpy = jest
+      .spyOn(accountEmailActions, 'sendPasswordResetLink')
+      .mockResolvedValue(undefined);
+    const changeSpy = jest
+      .spyOn(accountEmailActions, 'requestEmailChange')
+      .mockResolvedValue(undefined);
+
+    try {
+      const realUser: BFlowAuthUser = {
+        uid: 'uid_account_emails_01',
+        email: 'cuenta.real@correo.com',
+        displayName: 'Cuenta Real',
+        authProvider: 'password',
+        emailVerified: true,
+        emailVerificationRequired: false,
+        provider: 'firebase',
+      };
+      act(() => {
+        useBudgetStore.getState().setAuthUser(realUser);
+      });
+
+      const view = render(
+        <BFlowThemeProvider initialMode="dark">
+          <PhaseOneHomeScreen />
+        </BFlowThemeProvider>
+      );
+      fireEvent.press(screen.getByTestId('workspace-tab-account'));
+      fireEvent.press(await screen.findByTestId('open-profile-settings-button'));
+
+      // Password reset goes to the account email, never to one typed on screen
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('send-password-reset-button'));
+      });
+      expect(resetSpy).toHaveBeenCalledWith('cuenta.real@correo.com');
+      expect(screen.getByTestId('security-success-banner')).toHaveTextContent(
+        /cuenta.real@correo.com/
+      );
+
+      // Email change: new address plus the current password
+      fireEvent.changeText(screen.getByTestId('change-email-input'), 'Otro.Correo@correo.com');
+      fireEvent.changeText(screen.getByTestId('change-email-password-input'), 'claveActual1');
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('request-email-change-button'));
+      });
+      expect(changeSpy).toHaveBeenCalledWith('otro.correo@correo.com', 'claveActual1');
+      view.unmount();
+
+      // A local session (showcase mode, demo owner) has no Firebase account to email.
+      // The wait between reset emails belongs to the device: it is over by now.
+      __resetAuthRateLimiterForTests();
+      resetSpy.mockClear();
+      act(() => {
+        useBudgetStore.getState().setAuthUser(authAdapter.DEMO_OWNER_USER);
+      });
+      render(
+        <BFlowThemeProvider initialMode="dark">
+          <PhaseOneHomeScreen />
+        </BFlowThemeProvider>
+      );
+      fireEvent.press(screen.getByTestId('workspace-tab-account'));
+      fireEvent.press(await screen.findByTestId('open-profile-settings-button'));
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('send-password-reset-button'));
+      });
+      expect(resetSpy).not.toHaveBeenCalled();
+      expect(screen.getByTestId('security-error-banner')).toHaveTextContent(
+        'Esta acción solo está disponible con una cuenta real de BFlow.'
+      );
+    } finally {
+      resetSpy.mockRestore();
+      changeSpy.mockRestore();
+    }
   });
 
   it('deduplicates concurrent cloud account synchronization calls to prevent duplicate Firestore queries', async () => {
@@ -463,7 +759,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
 
     const mockUser: BFlowAuthUser = {
       uid: 'uid_test_dedup_01',
-      email: 'abernalg2303@gmail.com',
+      email: 'demo.owner@bflow.example',
       displayName: 'Alejandro Bernal',
       authProvider: 'password',
       provider: 'local-demo',
@@ -490,7 +786,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
         </BFlowThemeProvider>
       );
 
-      fireEvent.changeText(screen.getByTestId('auth-email-input'), 'abernalg2303@gmail.com');
+      fireEvent.changeText(screen.getByTestId('auth-email-input'), 'demo.owner@bflow.example');
       fireEvent.changeText(screen.getByTestId('auth-password-input'), 'claveValida123');
 
       await act(async () => {
@@ -543,11 +839,11 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       const repo = new InMemoryBudgetRepository();
       const cloudAccount = await repo.loadFullCloudAccount(
         'uid_signout_cleanup_01',
-        'abernalg2303@gmail.com'
+        'demo.owner@bflow.example'
       );
       const user: BFlowAuthUser = {
         uid: 'uid_signout_cleanup_01',
-        email: 'abernalg2303@gmail.com',
+        email: 'demo.owner@bflow.example',
         displayName: 'Alejandro Bernal Garnica',
         authProvider: 'password',
         provider: 'local-demo',
@@ -615,7 +911,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     try {
       const ownerUser: BFlowAuthUser = {
         uid: 'uid_real_owner_iphone',
-        email: 'abernalg2303@gmail.com',
+        email: 'demo.owner@bflow.example',
         displayName: 'Alejandro Bernal Garnica',
         authProvider: 'password',
         activeMonthKey: '2026-11',
@@ -728,7 +1024,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       act(() => {
         capturedAuthCallback!({
           uid: 'uid_fast_immediate',
-          email: 'abernalg2303@gmail.com',
+          email: 'demo.owner@bflow.example',
           displayName: 'Alejandro',
           providerData: [],
         });

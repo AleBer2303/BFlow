@@ -70,6 +70,14 @@ jobs:
       - name: Lint check
         run: npm run lint
 
+      - name: Cache Jest transform cache
+        uses: actions/cache@v4
+        with:
+          path: .jest-cache
+          key: ${{ runner.os }}-jest-${{ hashFiles('package-lock.json', 'babel.config.js', 'jest.config.js', 'tsconfig.json') }}
+          restore-keys: |
+            ${{ runner.os }}-jest-
+
       - name: Run Jest test suite with domain coverage threshold
         run: npm test -- --coverage --ci
 

@@ -11,19 +11,20 @@
     import React, { useMemo, useState } from 'react';
     import { View } from 'react-native';
     import {
+  AdaptiveSelectField,
   animateNextLayout,
   AppPressable,
   AppText,
   AppTextInput,
   CurrencyText,
   GlassSurface,
-  IosWheelPickerModal,
   MIN_TOUCH_TARGET_PT,
   StatusBadge,
   useBFlowTheme,
 } from '../../../design-system';
     import {
       formatCurrency,
+      formatGroupedIntegerInput,
       formatMonthKeyLabelEs,
       toAppMonthKey,
       type ConceptGroup,
@@ -57,7 +58,8 @@
     }: InitialAccountSetupViewProps): React.JSX.Element {
       const { colors, spacing, radius } = useBFlowTheme();
 
-      const currentYear = toAppMonthKey().slice(0, 4);
+      const currentMonthKey = toAppMonthKey();
+      const currentYear = currentMonthKey.slice(0, 4);
       const currentYearNum = Number.parseInt(currentYear, 10);
       const minYearNum = currentYearNum - 50;
 
@@ -72,7 +74,7 @@
       const initialMk =
         defaultMonthKey && /^\d{4}-(0[1-9]|1[0-2])$/.test(defaultMonthKey)
           ? defaultMonthKey
-          : `${currentYear}-01`;
+          : currentMonthKey;
       const initialYear = initialMk.slice(0, 4);
       const [selectedYear, setSelectedYear] = useState(() => {
         const parsed = Number.parseInt(initialYear, 10);
@@ -82,8 +84,6 @@
         return currentYear;
       });
       const [selectedMonth, setSelectedMonth] = useState(initialMk.slice(5, 7));
-      const [isYearPickerOpen, setIsYearPickerOpen] = useState(false);
-      const [isMonthDropdownOpen, setIsMonthDropdownOpen] = useState(false);
 
       const computedMonthKey = `${selectedYear}-${selectedMonth}`;
       const activeMonthOption =
@@ -313,108 +313,31 @@
               </View>
 
               <View style={{ flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' }}>
-                {/* Year Picker Trigger */}
-                <View style={{ flex: 1, minWidth: 120, gap: spacing.xxs }}>
-                  <AppText variant="caption" color={colors.text.secondary}>
-                    Año
-                  </AppText>
-                  <AppPressable
-                    testID="onboarding-year-dropdown-trigger"
-                    accessibilityRole="button"
-                    accessibilityLabel={`Año actual: ${selectedYear}. Toca para abrir el selector de año.`}
-                    onPress={() => setIsYearPickerOpen(true)}
-                    style={{
-                      minHeight: 48,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                    }}
-                  >
-                    <AppText
-                      testID="onboarding-year-input"
-                      variant="body"
-                      style={{ fontWeight: '600' }}
-                    >
-                      {selectedYear}
-                    </AppText>
-                    <AppText
-                      variant="caption"
-                      color={colors.text.secondary}
-                      style={{ marginLeft: spacing.xs }}
-                    >
-                      ▼
-                    </AppText>
-                  </AppPressable>
-                </View>
+                <AdaptiveSelectField
+                  label="Año"
+                  title="Año de Inicio"
+                  options={yearOptions}
+                  selectedValue={selectedYear}
+                  onSelect={setSelectedYear}
+                  triggerTestID="onboarding-year-dropdown-trigger"
+                  valueTestID="onboarding-year-input"
+                  pickerTestID="onboarding-year-picker"
+                  accessibilityLabel={`Año actual: ${selectedYear}. Toca para abrir el selector de año.`}
+                  containerStyle={{ flex: 1, minWidth: 120 }}
+                />
 
-                {/* Month Picker Trigger */}
-                <View style={{ flex: 1.6, minWidth: 160, gap: spacing.xxs }}>
-                  <AppText variant="caption" color={colors.text.secondary}>
-                    Mes de inicio
-                  </AppText>
-                  <AppPressable
-                    testID="onboarding-month-dropdown-trigger"
-                    accessibilityRole="button"
-                    accessibilityLabel={`Mes actual: ${activeMonthOption.label}. Toca para abrir el selector.`}
-                    onPress={() => setIsMonthDropdownOpen(true)}
-                    style={{
-                      minHeight: 48,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                    }}
-                  >
-                    <AppText variant="body" style={{ fontWeight: '600' }}>
-                      {activeMonthOption.label}
-                    </AppText>
-                    <AppText
-                      variant="caption"
-                      color={colors.text.secondary}
-                      style={{ marginLeft: spacing.xs }}
-                    >
-                      ▼
-                    </AppText>
-                  </AppPressable>
-                </View>
+                <AdaptiveSelectField
+                  label="Mes de inicio"
+                  title="Mes de Inicio"
+                  options={MONTH_OPTIONS}
+                  selectedValue={selectedMonth}
+                  onSelect={setSelectedMonth}
+                  triggerTestID="onboarding-month-dropdown-trigger"
+                  pickerTestID="onboarding-month-picker"
+                  accessibilityLabel={`Mes actual: ${activeMonthOption.label}. Toca para abrir el selector.`}
+                  containerStyle={{ flex: 1.6, minWidth: 160 }}
+                />
               </View>
-
-              {/* iOS Native-Style Wheel Picker Modal: Year (currentYear - 50 to currentYear) */}
-              <IosWheelPickerModal
-                visible={isYearPickerOpen}
-                title="Año de Inicio"
-                options={yearOptions}
-                selectedValue={selectedYear}
-                onConfirm={(chosenYear) => {
-                  setSelectedYear(chosenYear);
-                  setIsYearPickerOpen(false);
-                }}
-                onCancel={() => setIsYearPickerOpen(false)}
-                testID="onboarding-year-picker"
-              />
-
-              {/* iOS Native-Style Wheel Picker Modal: Month */}
-              <IosWheelPickerModal
-                visible={isMonthDropdownOpen}
-                title="Mes de Inicio"
-                options={MONTH_OPTIONS}
-                selectedValue={selectedMonth}
-                onConfirm={(chosenMonth) => {
-                  setSelectedMonth(chosenMonth);
-                  setIsMonthDropdownOpen(false);
-                }}
-                onCancel={() => setIsMonthDropdownOpen(false)}
-                testID="onboarding-month-picker"
-              />
             </View>
           </GlassSurface>
 
@@ -461,9 +384,13 @@
                     </AppText>
                     <AppTextInput
                       testID={`onboarding-bucket-balance-${bucket.id}`}
-                      value={bucket.openingBalanceCop > 0 ? String(bucket.openingBalanceCop) : ''}
+                      value={
+                        bucket.openingBalanceCop > 0
+                          ? formatGroupedIntegerInput(bucket.openingBalanceCop)
+                          : ''
+                      }
                       onChangeText={(txt) => handleUpdateBucketBalance(bucket.id ?? 'savings', txt)}
-                      keyboardType="numeric"
+                      keyboardType="number-pad"
                       placeholder="Saldo $ (0)"
                       style={{
                         flex: 1,
@@ -544,7 +471,7 @@
                       testID="onboarding-new-bucket-balance-input"
                       value={newBucketBalance}
                       onChangeText={setNewBucketBalance}
-                      keyboardType="numeric"
+                      keyboardType="number-pad"
                       placeholder="Saldo inicial $"
                       style={{
                         flex: 1,
@@ -728,7 +655,7 @@
                       testID="onboarding-debt-balance-input"
                       value={debtBalance}
                       onChangeText={setDebtBalance}
-                      keyboardType="numeric"
+                      keyboardType="number-pad"
                       placeholder="Saldo actual $"
                       style={{
                         flex: 1,
@@ -738,7 +665,7 @@
                       testID="onboarding-debt-installment-input"
                       value={debtInstallment}
                       onChangeText={setDebtInstallment}
-                      keyboardType="numeric"
+                      keyboardType="number-pad"
                       placeholder="Cuota mensual $"
                       style={{
                         flex: 1,
@@ -981,7 +908,7 @@
                       testID="onboarding-income-amount-input"
                       value={incAmount}
                       onChangeText={setIncAmount}
-                      keyboardType="numeric"
+                      keyboardType="number-pad"
                       placeholder="Valor $"
                       style={{
                         flex: 1,
@@ -1230,7 +1157,7 @@
                       testID="onboarding-expense-amount-input"
                       value={expAmount}
                       onChangeText={setExpAmount}
-                      keyboardType="numeric"
+                      keyboardType="number-pad"
                       placeholder="Valor $"
                       style={{
                         flex: 1,
@@ -1581,7 +1508,7 @@
                       testID="onboarding-provision-amount-input"
                       value={provAmount}
                       onChangeText={setProvAmount}
-                      keyboardType="numeric"
+                      keyboardType="number-pad"
                       placeholder="Costo $"
                       style={{
                         flex: 1,
@@ -1595,7 +1522,7 @@
                         testID="onboarding-provision-months-input"
                         value={provMonths}
                         onChangeText={setProvMonths}
-                        keyboardType="numeric"
+                        keyboardType="number-pad"
                         placeholder="12"
                         style={{
                           width: 90,

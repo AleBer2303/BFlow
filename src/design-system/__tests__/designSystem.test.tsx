@@ -110,6 +110,97 @@ describe('design-system & PhaseOneHomeScreen (RNTL)', () => {
     expect(inputRef.current).toBeTruthy();
   });
 
+  it.each(['ios', 'android', 'web'] as const)(
+    'enforces initial capitalization on text inputs and number-pad + thousands dots on numeric inputs (%s skin)',
+    (skin) => {
+      const onAmountChange = jest.fn();
+      const onRateChange = jest.fn();
+      const onTextChange = jest.fn();
+
+      function ControlledHarness() {
+        const [amount, setAmount] = React.useState('1000');
+        const [rate, setRate] = React.useState('0.9');
+        const [label, setLabel] = React.useState('');
+
+        return (
+          <BFlowThemeProvider initialMode="dark" skin={skin}>
+            <AppTextInput
+              testID="harness-text-input"
+              value={label}
+              onChangeText={(txt) => {
+                setLabel(txt);
+                onTextChange(txt);
+              }}
+              placeholder="Concepto"
+            />
+            <AppTextInput
+              testID="harness-email-input"
+              value=""
+              onChangeText={() => {}}
+              keyboardType="email-address"
+            />
+            <AppTextInput
+              testID="harness-password-input"
+              value=""
+              onChangeText={() => {}}
+              secureTextEntry
+            />
+            <AppTextInput
+              testID="harness-numeric-input"
+              value={amount}
+              onChangeText={(txt) => {
+                setAmount(txt);
+                onAmountChange(txt);
+              }}
+              keyboardType="numeric"
+            />
+            <AppTextInput
+              testID="harness-decimal-input"
+              value={rate}
+              onChangeText={(txt) => {
+                setRate(txt);
+                onRateChange(txt);
+              }}
+              keyboardType="decimal-pad"
+            />
+          </BFlowThemeProvider>
+        );
+      }
+
+      render(<ControlledHarness />);
+
+      const textInput = screen.getByTestId('harness-text-input');
+      const emailInput = screen.getByTestId('harness-email-input');
+      const passwordInput = screen.getByTestId('harness-password-input');
+      const numericInput = screen.getByTestId('harness-numeric-input');
+      const decimalInput = screen.getByTestId('harness-decimal-input');
+
+      expect(textInput.props.autoCapitalize).toBe('sentences');
+      expect(emailInput.props.autoCapitalize).toBe('none');
+      expect(passwordInput.props.autoCapitalize).toBe('none');
+
+      // "numeric" normalizes to "number-pad" so iOS & Android open the numeric keypad directly.
+      expect(numericInput.props.keyboardType).toBe('number-pad');
+      expect(numericInput.props.inputMode).toBe('numeric');
+      expect(numericInput.props.autoCapitalize).toBe('none');
+      expect(numericInput.props.value).toBe('1.000');
+
+      fireEvent.changeText(numericInput, '100000');
+      expect(onAmountChange).toHaveBeenLastCalledWith('100.000');
+      expect(screen.getByTestId('harness-numeric-input').props.value).toBe('100.000');
+
+      fireEvent.changeText(numericInput, '1000000');
+      expect(onAmountChange).toHaveBeenLastCalledWith('1.000.000');
+      expect(screen.getByTestId('harness-numeric-input').props.value).toBe('1.000.000');
+
+      // Decimal fields keep decimal-pad and do not get reformatted as integer thousands.
+      expect(decimalInput.props.keyboardType).toBe('decimal-pad');
+      expect(decimalInput.props.value).toBe('0.9');
+      fireEvent.changeText(decimalInput, '12.5');
+      expect(onRateChange).toHaveBeenLastCalledWith('12.5');
+    }
+  );
+
   it('validates DESIGN.md token specifications for neutral minimal palettes, typography and kinematics', () => {
     // Dark mode warm obsidian luxury foundation
     expect(palettes.dark.background.primary).toBe('#0D0F12');

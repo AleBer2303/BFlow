@@ -156,7 +156,7 @@ Para permitir el desarrollo diario sin fricción en **Windows 11 sin Mac local**
 
 ## 🎨 Sistema de Diseño Visual: Liquid Glass & SF Pro
 
-> **Multiplataforma con tres pieles (ADR 0010 y 0011).** Lo que sigue describe la piel **iOS**. **Android** usa Material 3 (superficies tonales opacas, barra de navegación anclada; sin Liquid Glass ni ripple) y **Web** un sistema plano (paleta arena y negro con acento petróleo, tipografía Geist, cabecera fija, composición de escritorio a dos columnas y curva del mes vectorial animada, ADR 0012). La curva del mes es una escena three.js solo en iOS; Android usa la misma curva vectorial animada que Web, con gesto táctil (ADR 0014). Los tokens de cada piel y el contrato responsive están en `DESIGN.md` §10 y §11.
+> **Multiplataforma con tres pieles (ADR 0010 y 0011).** Lo que sigue describe la piel **iOS**. **Android** usa Material 3 (superficies tonales opacas, el mismo dock flotante con una píldora plana en lugar del lente, ADR 0024; sin Liquid Glass ni ripple) y **Web** un sistema plano (paleta arena y negro con acento petróleo, tipografía Geist, cabecera fija, composición de escritorio a dos columnas y curva del mes vectorial animada, ADR 0012). La curva del mes es una escena three.js solo en iOS; Android usa la misma curva vectorial animada que Web, con gesto táctil (ADR 0014). Los tokens de cada piel y el contrato responsive están en `DESIGN.md` §10 y §11.
 
 Documentado a profundidad en [`DESIGN.md`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/DESIGN.md) y centralizado en [`src/design-system/tokens.ts`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/src/design-system/tokens.ts):
 
@@ -231,8 +231,8 @@ BFlow/
 │   └── workflows/                # CI/CD (ci.yml, build-ios.yml, build-android.yml, e2e.yml, release.yml)
 ├── assets/                       # Iconos y splash screens de la aplicación
 ├── docs/
-│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0023)
-│   ├── guides/                   # Guías operativas (firma con iloader, validación multiplataforma)
+│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0029)
+│   ├── guides/                   # Guías operativas (firma con iloader, validación multiplataforma, seguridad de Firebase Auth)
 │   └── Improvements/             # Guías de auditoría de rendimiento
 ├── fixtures/                     # Datos dorados de prueba (october-2026.json)
 ├── scripts/                      # Scripts de utilidad (linting, guardias CI, start-demo.mjs del modo vitrina)
@@ -241,16 +241,16 @@ BFlow/
 │   ├── data/                     # Repositorios Firestore, esquemas Zod, seeds
 │   │   ├── firebase/             # Configuración Firebase SDK, persistencia Auth por plataforma y emulador
 │   │   ├── mappers/              # Esquemas de validación Zod
-│   │   ├── repositories/         # budgetRepository.ts (acceso a datos)
+│   │   ├── repositories/         # budgetRepository.ts (acceso a datos) y historyWindow.ts (historial archivado en la carga completa, ADR 0028)
 │   │   └── seed/                 # Carga de datos iniciales de octubre 2026
 │   ├── design-system/            # Tokens por piel (iOS / Android / Web), tema, componentes base y movimiento (motion/)
 │   │   ├── components/           # AppPressable, AppText, CurrencyText, ResponsiveColumns…
 │   │   │   ├── charts/           # Gráficos animados SVG: barras, línea y dona (ADR 0020)
-│   │   │   └── navigation/       # Dock iOS, barra Material (Android), cabecera y barra Web
+│   │   │   └── navigation/       # Pestañas compartidas, cabecera y barra Web (el dock de iOS y Android está en components/)
 │   │   ├── layout/               # Contrato responsive (useResponsiveLayout) y ancho de cifras
 │   │   ├── platform/             # Resolución de la piel y preferencia de Reducir Movimiento
 │   │   └── theme/                # BFlowThemeProvider / useBFlowTheme
-│   ├── domain/                   # 100% PURO: Fórmulas matemáticas, checklist, deudas, ahorros
+│   ├── domain/                   # 100% PURO: Fórmulas matemáticas, checklist, deudas, ahorros, política de contraseñas
 │   │   ├── analytics/            # Series de los gráficos: historial de 6 meses, distribución, comparativa
 │   │   ├── budget/               # Cálculos de ingresos, gastos y flujos netos
 │   │   ├── checklist/            # Reglas de disponibilidad, progreso y autogeneración
@@ -263,22 +263,21 @@ BFlow/
 │   │   └── savings/              # Fondos de ahorro y proyecciones
 │   ├── features/                 # Pantallas y componentes por dominio funcional
 │   │   ├── analytics/            # Cierre de mes, historial y sección «Gráficos»
-│   │   ├── auth/                 # Login, registro, perfil y recuperación
+│   │   ├── auth/                 # Login, registro con política de contraseñas, verificación de correo, perfil y recuperación
 │   │   ├── budget/               # Resumen mensual y modal de agregar movimiento
 │   │   ├── checklist/            # Lista de movimientos y filtros
-│   │   ├── debts/                # Amortización de deudas, abonos y gráfico de evolución
+│   │   ├── debts/                # Amortización de deudas, abonos, formulario de deuda (DebtForm) y gráfico de evolución
 │   │   ├── onboarding/           # Configuración inicial de usuario nuevo
-│   │   ├── savings/              # Tarjetas de fondos, provisión moto y gráfico de evolución
+│   │   ├── savings/              # Tarjetas de fondos, provisiones, sus formularios (SavingsBucketForms, ProvisionItemForm) y gráfico de evolución
 │   │   ├── shell/                # WorkspaceShell: cabecera, columna y navegación de cada piel
-│   │   └── summary/              # Resumen y curva del mes: three.js (iOS), SVG animado (Android, Web y respaldo de iOS)
+│   │   └── summary/              # Resumen y curva del mes: three.js (iOS; el cargador .android no lo importa), SVG animado (Android, Web y respaldo de iOS)
 │   └── platform/                 # Adaptadores Modo A vs Modo B
-│       ├── auth/                 # Adaptador de autenticación y códigos de 6 dígitos
+│       ├── auth/                 # Adaptador de autenticación y correos de cuenta de Firebase Auth (verificación, contraseña, cambio de correo; ADR 0025) y límites de uso: 5 intentos de contraseña y esperas entre envíos (ADR 0026)
 │       ├── glass/                # GlassSurface: vidrio (iOS), tonal (Android), plano (Web)
 │       ├── haptics/              # Servicio unificado de vibración háptica
 │       ├── insets/               # Áreas seguras (borde a borde en Android)
-│       ├── mail/                 # Integración de correos transaccionales vía Resend API
 │       ├── mode/                 # Detección de entorno (runtimeMode.ts) y modo vitrina (demoMode.ts)
-│       ├── storage/              # Persistencia KV síncrona cifrada (AES-256 + HMAC-SHA256, expo-secure-store + expo-sqlite/kv-store en iOS/Android, localStorage cifrado en Web) y caché v2
+│       ├── storage/              # Persistencia KV síncrona cifrada (AES-256 + HMAC-SHA256, expo-secure-store + expo-sqlite/kv-store en iOS/Android, localStorage cifrado en Web con el token en sessionStorage; CSPRNG de WebCrypto o expo-crypto, ADR 0027) y caché v2
 │       ├── system/               # Fondo de la ventana nativa / documento HTML según el tema
 │       └── widgets/              # Serialización y puente de sincronización con WidgetKit
 ├── plugins/                      # Config plugins locales del prebuild (reglas keep de R8 para Android, ADR 0013)
@@ -314,19 +313,30 @@ BFlow/
    ```bash
    npm ci --legacy-peer-deps
    ```
-   *(El script postinstall aplicará automáticamente el parche de almacenamiento para extensiones nativas. Este paso también instala `three`, `expo-gl`, `expo-sqlite` y `expo-secure-store`, usados por la escena 3D de Resumen y la persistencia local nativa cifrada con Keychain/Keystore + `expo-sqlite/kv-store`; todos vienen incluidos en Expo Go y no requieren configuración adicional).*
+   *(El script postinstall aplicará automáticamente el parche de almacenamiento para extensiones nativas. Este paso también instala `three`, `expo-gl`, `expo-sqlite`, `expo-secure-store` y `expo-crypto`, usados por la escena 3D de Resumen y la persistencia local nativa cifrada con Keychain/Keystore + `expo-sqlite/kv-store` (llaves e IV generados con el CSPRNG nativo); todos vienen incluidos en Expo Go y no requieren configuración adicional).*
 
 3. **Configurar variables de entorno:**
    ```bash
    cp .env.example .env
    ```
-   *(Los valores predeterminados de Firebase ya apuntan al proyecto configurado `bflow-deaeb`).*
+   Rellena en `.env` la configuración de tu proyecto de Firebase (Consola de Firebase → Configuración del proyecto → Tus apps). El código no trae ningún proyecto por defecto (ADR 0027):
+
+   | Variable | Obligatoria | Uso |
+   | :--- | :--- | :--- |
+   | `EXPO_PUBLIC_FIREBASE_API_KEY`, `EXPO_PUBLIC_FIREBASE_PROJECT_ID`, `EXPO_PUBLIC_FIREBASE_APP_ID` | Sí | Sin ellas la app no se conecta a Firebase y lo indica al iniciar sesión |
+   | `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN`, `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET`, `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | No | Resto de la configuración del cliente (`AUTH_DOMAIN` hace falta para entrar con Google en Web) |
+   | `EXPO_PUBLIC_OWNER_SEED_EMAIL` | No | Correo de la cuenta que recibe la semilla de octubre de 2026; vacío, todas las cuentas arrancan sin datos |
+   | `EXPO_PUBLIC_LOCAL_CIPHER_PEPPER` | No | Palabra secreta del cifrado local (ADR 0016) |
+
+   Los tests y `npm run web:demo` no necesitan ninguna: usan un proyecto ficticio sin conexión. Los workflows de build leen las mismas variables de GitHub (Settings → Secrets and variables → Actions → Variables) y fallan si faltan las obligatorias.
 
 4. **Ejecutar verificaciones de calidad:**
    ```bash
    npm run typecheck       # Verificación estricta de TypeScript (0 errores)
    npm run lint            # Linting y chequeo de arquitectura
    npm test                # Suite de tests unitarios, de integración y funcionales por plataforma
+   npm run test:domain     # Solo la lógica contable de src/domain
+   npm run test:changed    # Solo los tests afectados por los cambios sin confirmar
    ```
 
 5. **Iniciar el servidor de desarrollo:**
@@ -356,17 +366,16 @@ BFlow/
 Toda la automatización de BFlow se ejecuta en **GitHub Actions**:
 
 ### 1. `ci.yml` (Puerta de Enlace de Calidad en Linux)
-Se ejecuta en cada `push` a las ramas `main` o `develop`, y en cada Pull Request:
-- Comprueba paridad con el fixture de Excel (`scripts/extract-excel-fixture.mjs`).
-- Evalúa la guardia heurística: cualquier cambio en `src/` debe incluir tests nuevos o actualizados (`scripts/check-src-tests-guard.mjs`).
-- Ejecuta `npm run typecheck`, `npm run lint` y `npm test -- --coverage`.
+Se ejecuta en cada `push` a las ramas `main` o `develop`, y en cada Pull Request hacia `main` (con `concurrency` cancelando ejecuciones obsoletas):
+- Comprueba paridad con el fixture dorado (`scripts/verify-phase0-fixture.test.mjs`) y las guardias de release y workflows (`scripts/release.test.mjs`, `scripts/workflow-guards.test.mjs`).
+- Evalúa la guardia heurística en PRs: cualquier cambio en `src/` debe incluir tests nuevos o actualizados (`scripts/check-src-tests-guard.mjs`).
+- Ejecuta `npm run typecheck`, `npm run lint`, restaura/guarda `.jest-cache` con `actions/cache@v4` y corre `npm test -- --coverage --ci`.
 
-### 2. `build-ios.yml` (Compilación Nativa en macOS Gratuito)
-Se ejecuta en cada `push` a `main` o al crear una etiqueta de versión `v*`:
-- Utiliza un runner **`macos-26`** de GitHub Actions con Xcode 26+ (Swift 6.2+).
-- Genera el proyecto nativo mediante `npx expo prebuild --platform ios --clean`.
-- Compila con `xcodebuild` deshabilitando temporalmente la firma de código.
-- Empaqueta el bundle en `BFlow-unsigned.ipa` y lo publica automáticamente en **GitHub Releases**.
+### 2. `build-ios.yml` y `build-android.yml` (Compilación Nativa Optimizada, ADR 0029)
+Se ejecutan en `push` a `main` (ignorando cambios exclusivos en `docs/**` y `*.md` mediante `paths-ignore`), en tags `v*`, bajo demanda (`workflow_dispatch`) o como workflows reutilizables desde `release.yml`:
+- **Sin triple ejecución de tests en `main`:** en `push` a `main`, ambos workflows omiten su `quality-gate` interno (ya cubierto por `ci.yml`); en tags `v*` y `workflow_dispatch` sí ejecutan `quality-gate` con caché `.jest-cache`. Todos mantienen `concurrency` con `cancel-in-progress: true`.
+- **iOS (`build-ios.yml` en `macos-26`):** genera el proyecto nativo con `npx expo prebuild --platform ios --clean --no-install`, cachea CocoaPods por `hashFiles('ios/Podfile', 'package-lock.json')`, habilita `ccache` (`~/Library/Caches/ccache`, `USE_CCACHE=1`), compila con `xcodebuild` (`COMPILER_INDEX_STORE_ENABLE=NO`, sin firma) y empaqueta `BFlow-unsigned.ipa`.
+- **Android (`build-android.yml` en `ubuntu-latest`):** configura JDK 17 y Gradle (`gradle/actions/setup-gradle@v4`), genera el proyecto nativo y compila `BFlow-test.apk` y `BFlow.aab` en **una sola invocación de Gradle** (`./gradlew assembleRelease bundleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a`) con `org.gradle.caching=true` y `org.gradle.parallel=true`.
 
 ### 3. Instalación en iPhone con `iloader` (Ciclo de 7 Días)
 Sigue la guía detallada en [`docs/guides/iloader-signing-guide.md`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/docs/guides/iloader-signing-guide.md):
@@ -416,25 +425,6 @@ Como parte de la evaluación técnica exhaustiva requerida antes de un lanzamien
    - *Falta:* Integración de Sentry Expo o Firebase Crashlytics para capturar excepciones no controladas en dispositivos de usuarios finales.
 6. **Cumplimiento Legal de Tiendas (Política de Privacidad y Borrado de Cuenta):**
    - *Falta:* Publicar `PRIVACY_POLICY.md` en web pública y habilitar la eliminación completa del usuario en Firebase Auth conforme a la directriz 5.1.1(v) de Apple.
-
----
-
-## 🔑 Variables de Entorno
-
-Configurables en el archivo `.env` local (basado en `.env.example`):
-
-| Variable | Descripción | Valor Predeterminado / Ejemplo |
-| :--- | :--- | :--- |
-| `EXPO_PUBLIC_FIREBASE_API_KEY` | Llave pública de Firebase Web Client | `AIzaSy...` (Proyecto `bflow-deaeb`) |
-| `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN` | Dominio de autenticación de Firebase | `bflow-deaeb.firebaseapp.com` |
-| `EXPO_PUBLIC_FIREBASE_PROJECT_ID` | Identificador de proyecto Firebase | `bflow-deaeb` |
-| `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET` | Bucket de almacenamiento | `bflow-deaeb.firebasestorage.app` |
-| `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`| Sender ID para mensajería | `1021469032737` |
-| `EXPO_PUBLIC_FIREBASE_APP_ID` | App ID asignado en Firebase Console | `1:1021469032737:web:8656ad9e4871ddb6ffce73` |
-| `EXPO_PUBLIC_RESEND_API_KEY` | API Key de Resend para correos reales | Opcional (si falta, simula en consola en desarrollo) |
-| `EXPO_PUBLIC_RESEND_FROM_EMAIL` | Dirección remitente autorizada en Resend| `BFlow <onboarding@resend.dev>` |
-| `EXPO_PUBLIC_LOCAL_CIPHER_PEPPER` | Semilla/palabra secreta de aplicación combinada con el token de 256 bits de `expo-secure-store` para derivar la llave AES-256 local (ADR 0016) | Opcional (incluye semilla criptográfica integrada por defecto) |
-| `EXPO_PUBLIC_BFLOW_DEMO` | Modo vitrina local: sesión demo con el seed, sin Firebase, y `?skin=` / `?theme=` en la URL | Vacío (lo activa `npm run web:demo`). **Nunca** definirlo en builds reales |
 
 ---
 

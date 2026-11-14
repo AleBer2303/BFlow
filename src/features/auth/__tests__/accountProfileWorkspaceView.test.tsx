@@ -2,7 +2,112 @@ import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { BFlowThemeProvider } from '../../../design-system/theme/ThemeContext';
 import { AccountProfileWorkspaceView } from '../components/AccountProfileWorkspaceView';
+import { PLATFORM_SKIN_IDS } from '../../../design-system/tokens';
 import type { BFlowAuthUser } from '../../../platform/auth/authAdapter';
+import {
+  __resetAuthRateLimiterForTests,
+  recordFailedAuthAttempt,
+} from '../../../platform/auth/authRateLimiter';
+
+/** Counts renders of the account screen's status badge: the profile forms have none here. */
+const mockStatusBadgeRender = jest.fn();
+jest.mock('../../../design-system/components/StatusBadge', () => {
+  const ReactLib = jest.requireActual('react') as typeof import('react');
+  const actual = jest.requireActual(
+    '../../../design-system/components/StatusBadge'
+  ) as typeof import('../../../design-system/components/StatusBadge');
+  return {
+    ...actual,
+    StatusBadge: (props: React.ComponentProps<typeof actual.StatusBadge>) => {
+      mockStatusBadgeRender();
+      return ReactLib.createElement(actual.StatusBadge, props);
+    },
+  };
+});
+
+describe.each(PLATFORM_SKIN_IDS)('AccountProfileWorkspaceView form state on %s skin', (skin) => {
+  const user: BFlowAuthUser = {
+    uid: 'usr_form_state',
+    email: 'persona@bflow.app',
+    displayName: 'Persona Prueba',
+    financialGoal: 'Fondo de emergencia',
+    authProvider: 'password',
+    activeMonthKey: '2026-10',
+    provider: 'local-demo',
+  };
+
+  function renderAccount() {
+    const onUpdateProfile = jest.fn();
+    const onRequestEmailChange = jest.fn();
+    render(
+      <BFlowThemeProvider skin={skin} initialMode="dark">
+        <AccountProfileWorkspaceView
+          authUser={user}
+          syncStatusMessage="En línea"
+          isSyncing={false}
+          onSignOut={jest.fn()}
+          onUpdateProfile={onUpdateProfile}
+          onRequestEmailChange={onRequestEmailChange}
+          onSendPasswordReset={jest.fn()}
+        />
+      </BFlowThemeProvider>
+    );
+    return { onUpdateProfile, onRequestEmailChange };
+  }
+
+  beforeEach(() => {
+    __resetAuthRateLimiterForTests();
+  });
+
+  it('typing in the profile window does not re-render the account screen behind it', async () => {
+    const { onUpdateProfile, onRequestEmailChange } = renderAccount();
+    fireEvent.press(screen.getByTestId('open-profile-settings-button'));
+    mockStatusBadgeRender.mockClear();
+
+    fireEvent.changeText(screen.getByTestId('profile-input-name'), 'Persona Nueva');
+    fireEvent.changeText(screen.getByTestId('profile-input-goal'), 'Viaje');
+    fireEvent.changeText(screen.getByTestId('change-email-input'), 'nueva@bflow.app');
+    fireEvent.changeText(screen.getByTestId('change-email-password-input'), 'Clave#2026');
+    fireEvent.press(screen.getByTestId('change-email-password-toggle'));
+    expect(mockStatusBadgeRender).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('save-profile-settings-button'));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('request-email-change-button'));
+    });
+
+    expect(onUpdateProfile).toHaveBeenCalledWith({
+      displayName: 'Persona Nueva',
+      financialGoal: 'Viaje',
+    });
+    expect(onRequestEmailChange).toHaveBeenCalledWith('nueva@bflow.app', 'Clave#2026');
+    expect(mockStatusBadgeRender).not.toHaveBeenCalled();
+  });
+
+  it('the window reopens with the saved profile, empty email fields and no messages', () => {
+    renderAccount();
+    fireEvent.press(screen.getByTestId('open-profile-settings-button'));
+    fireEvent.changeText(screen.getByTestId('profile-input-name'), '');
+    fireEvent.changeText(screen.getByTestId('change-email-input'), 'sin-arroba');
+    fireEvent.press(screen.getByTestId('save-profile-settings-button'));
+    fireEvent.press(screen.getByTestId('request-email-change-button'));
+    expect(screen.getByTestId('profile-error-banner')).toHaveTextContent('Escribe tu nombre.');
+    expect(screen.getByTestId('email-error-banner')).toHaveTextContent(
+      'Escribe el nuevo correo electrónico.'
+    );
+
+    fireEvent.press(screen.getByTestId('close-profile-settings-modal'));
+    fireEvent.press(screen.getByTestId('open-profile-settings-button'));
+
+    expect(screen.getByTestId('profile-input-name').props.value).toBe('Persona Prueba');
+    expect(screen.getByTestId('profile-input-goal').props.value).toBe('Fondo de emergencia');
+    expect(screen.getByTestId('change-email-input').props.value).toBe('');
+    expect(screen.queryByTestId('profile-error-banner')).toBeNull();
+    expect(screen.queryByTestId('email-error-banner')).toBeNull();
+  });
+});
 
 describe('AccountProfileWorkspaceView', () => {
   const mockUser: BFlowAuthUser = {
@@ -15,6 +120,10 @@ describe('AccountProfileWorkspaceView', () => {
     activeMonthKey: '2026-10',
     provider: 'local-demo',
   };
+
+  beforeEach(() => {
+    __resetAuthRateLimiterForTests();
+  });
 
   it('renders user details, initials monogram, and financial goal', () => {
     const onSignOut = jest.fn();
@@ -72,9 +181,11 @@ describe('AccountProfileWorkspaceView', () => {
     const goalInput = screen.getByTestId('profile-input-goal');
     expect(goalInput.props.placeholder).toBe('Ej. Ahorro para un proyecto personal');
 
+    // The sign-in email is not a profile field: it only changes through its own card
+    expect(screen.queryByTestId('profile-input-email')).toBeNull();
+
     // Update fields inside the dedicated window
     fireEvent.changeText(screen.getByTestId('profile-input-name'), 'Alejandro Bernal G.');
-    fireEvent.changeText(screen.getByTestId('profile-input-email'), 'abernal.nuevo@bflow.app');
     fireEvent.changeText(goalInput, 'Viaje a Japón y CB300F');
 
     await act(async () => {
@@ -83,7 +194,6 @@ describe('AccountProfileWorkspaceView', () => {
 
     expect(onUpdateProfile).toHaveBeenCalledWith({
       displayName: 'Alejandro Bernal G.',
-      email: 'abernal.nuevo@bflow.app',
       financialGoal: 'Viaje a Japón y CB300F',
     });
 
@@ -92,63 +202,441 @@ describe('AccountProfileWorkspaceView', () => {
     expect(screen.queryByTestId('profile-settings-modal')).toBeNull();
   });
 
-  it('allows user to request 6-digit verification code and update password internally inside the dedicated window', async () => {
-    const onSignOut = jest.fn();
-    const onRequestPasswordResetCode = jest.fn();
-    const onConfirmPasswordResetWithCode = jest.fn();
+  describe('saving the profile to the cloud', () => {
+    function renderProfileForm(onUpdateProfile: jest.Mock) {
+      render(
+        <BFlowThemeProvider initialMode="dark">
+          <AccountProfileWorkspaceView
+            authUser={mockUser}
+            syncStatusMessage="En línea"
+            isSyncing={false}
+            onSignOut={jest.fn()}
+            onUpdateProfile={onUpdateProfile}
+          />
+        </BFlowThemeProvider>
+      );
+      fireEvent.press(screen.getByTestId('open-profile-settings-button'));
+    }
 
-    render(
-      <BFlowThemeProvider initialMode="dark">
-        <AccountProfileWorkspaceView
-          authUser={mockUser}
-          syncStatusMessage="En línea"
-          isSyncing={false}
-          onSignOut={onSignOut}
-          onRequestPasswordResetCode={onRequestPasswordResetCode}
-          onConfirmPasswordResetWithCode={onConfirmPasswordResetWithCode}
-        />
-      </BFlowThemeProvider>
+    const save = async () => {
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('save-profile-settings-button'));
+      });
+    };
+
+    it('confirms the save once the profile is stored', async () => {
+      const onUpdateProfile = jest.fn().mockResolvedValue('saved');
+      renderProfileForm(onUpdateProfile);
+
+      fireEvent.changeText(screen.getByTestId('profile-input-name'), 'Alejandro Bernal G.');
+      await save();
+
+      expect(screen.getByTestId('profile-success-banner')).toHaveTextContent(
+        'Perfil actualizado correctamente'
+      );
+      expect(screen.queryByTestId('profile-error-banner')).toBeNull();
+    });
+
+    it('says the change waits for a connection when it was queued on the device', async () => {
+      renderProfileForm(jest.fn().mockResolvedValue('queued'));
+
+      fireEvent.changeText(screen.getByTestId('profile-input-goal'), 'Meta sin red');
+      await save();
+
+      expect(screen.getByTestId('profile-success-banner')).toHaveTextContent(
+        'Perfil guardado en este dispositivo. Se sincronizará al conectar.'
+      );
+    });
+
+    it('shows the reason and restores the saved values when the cloud rejects the change', async () => {
+      renderProfileForm(
+        jest
+          .fn()
+          .mockRejectedValue(new Error('No se pudo guardar tu perfil en la nube. Inténtalo de nuevo.'))
+      );
+
+      fireEvent.changeText(screen.getByTestId('profile-input-name'), 'Nombre Rechazado');
+      fireEvent.changeText(screen.getByTestId('profile-input-goal'), 'Meta rechazada');
+      await save();
+
+      expect(screen.getByTestId('profile-error-banner')).toHaveTextContent(
+        'No se pudo guardar tu perfil en la nube. Inténtalo de nuevo.'
+      );
+      expect(screen.queryByTestId('profile-success-banner')).toBeNull();
+      expect(screen.getByTestId('profile-input-name').props.value).toBe('Alejandro Bernal');
+      expect(screen.getByTestId('profile-input-goal').props.value).toBe(
+        'Comprar CB300F y fondo de paz'
+      );
+    });
+
+    it('asks for a name instead of saving an empty one', async () => {
+      const onUpdateProfile = jest.fn();
+      renderProfileForm(onUpdateProfile);
+
+      fireEvent.changeText(screen.getByTestId('profile-input-name'), '   ');
+      await save();
+
+      expect(onUpdateProfile).not.toHaveBeenCalled();
+      expect(screen.getByTestId('profile-error-banner')).toHaveTextContent('Escribe tu nombre.');
+    });
+
+    it('limits both fields to the lengths that firestore.rules accepts', () => {
+      renderProfileForm(jest.fn());
+
+      expect(screen.getByTestId('profile-input-name').props.maxLength).toBe(120);
+      expect(screen.getByTestId('profile-input-goal').props.maxLength).toBe(240);
+    });
+  });
+
+  describe('account emails sent by Firebase Authentication (ADR 0025)', () => {
+    function renderProfileWindow(
+      props: Partial<React.ComponentProps<typeof AccountProfileWorkspaceView>> = {},
+      skin?: 'android' | 'web'
+    ) {
+      render(
+        <BFlowThemeProvider initialMode="dark" skin={skin}>
+          <AccountProfileWorkspaceView
+            authUser={mockUser}
+            syncStatusMessage="En línea"
+            isSyncing={false}
+            onSignOut={jest.fn()}
+            {...props}
+          />
+        </BFlowThemeProvider>
+      );
+      fireEvent.press(screen.getByTestId('open-profile-settings-button'));
+    }
+
+    it('requests the password reset link for the account email, with no code or password typed in the app', async () => {
+      const onSendPasswordReset = jest.fn();
+      renderProfileWindow({ onSendPasswordReset });
+
+      expect(screen.getByTestId('account-password-card')).toBeTruthy();
+      expect(screen.queryByTestId('security-verification-code-input')).toBeNull();
+      expect(screen.queryByTestId('security-new-password-input')).toBeNull();
+
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('send-password-reset-button'));
+      });
+
+      expect(onSendPasswordReset).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('security-success-banner')).toHaveTextContent(
+        /Enviamos a abernal@bflow.app un enlace para definir una nueva contraseña/i
+      );
+    });
+
+    it('shows the reason when the password reset link cannot be sent', async () => {
+      const onSendPasswordReset = jest
+        .fn()
+        .mockRejectedValue(new Error('Error de conexión. Revisa tu internet e intenta nuevamente.'));
+      renderProfileWindow({ onSendPasswordReset });
+
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('send-password-reset-button'));
+      });
+
+      expect(screen.getByTestId('security-error-banner')).toHaveTextContent(
+        'Error de conexión. Revisa tu internet e intenta nuevamente.'
+      );
+      expect(screen.queryByTestId('security-success-banner')).toBeNull();
+    });
+
+    it('validates the email change before asking Firebase for the confirmation link', async () => {
+      const onRequestEmailChange = jest.fn();
+      renderProfileWindow({ onRequestEmailChange });
+
+      expect(screen.getByTestId('account-email-current')).toHaveTextContent('abernal@bflow.app');
+
+      const submit = async () => {
+        await act(async () => {
+          fireEvent.press(screen.getByTestId('request-email-change-button'));
+        });
+      };
+
+      await submit();
+      expect(screen.getByTestId('email-error-banner')).toHaveTextContent(
+        'Escribe el nuevo correo electrónico.'
+      );
+
+      fireEvent.changeText(screen.getByTestId('change-email-input'), ' ABERNAL@bflow.app ');
+      await submit();
+      expect(screen.getByTestId('email-error-banner')).toHaveTextContent(
+        'Ese ya es el correo de tu cuenta.'
+      );
+
+      fireEvent.changeText(screen.getByTestId('change-email-input'), 'abernal.nuevo@bflow.app');
+      await submit();
+      expect(screen.getByTestId('email-error-banner')).toHaveTextContent(
+        'Escribe tu contraseña actual para confirmar el cambio.'
+      );
+      expect(onRequestEmailChange).not.toHaveBeenCalled();
+    });
+
+    it('sends the new email and the current password, then explains that the change applies after opening the link', async () => {
+      const onRequestEmailChange = jest.fn();
+      renderProfileWindow({ onRequestEmailChange });
+
+      fireEvent.changeText(screen.getByTestId('change-email-input'), ' Abernal.Nuevo@bflow.app ');
+      fireEvent.changeText(screen.getByTestId('change-email-password-input'), 'claveActual123');
+
+      // The current password can be revealed while typing
+      expect(screen.getByTestId('change-email-password-input').props.secureTextEntry).toBe(true);
+      fireEvent.press(screen.getByTestId('change-email-password-toggle'));
+      expect(screen.getByTestId('change-email-password-input').props.secureTextEntry).toBe(false);
+
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('request-email-change-button'));
+      });
+
+      expect(onRequestEmailChange).toHaveBeenCalledWith('abernal.nuevo@bflow.app', 'claveActual123');
+      expect(screen.getByTestId('email-success-banner')).toHaveTextContent(
+        /Enviamos un enlace de confirmación a abernal.nuevo@bflow.app/i
+      );
+      // The account email on screen does not change until the link is opened
+      expect(screen.getByTestId('account-email-current')).toHaveTextContent('abernal@bflow.app');
+      expect(screen.getByTestId('change-email-password-input').props.value).toBe('');
+    });
+
+    it('keeps the form and shows the reason when the email change is rejected', async () => {
+      const onRequestEmailChange = jest
+        .fn()
+        .mockRejectedValue(new Error('La contraseña actual no es correcta.'));
+      renderProfileWindow({ onRequestEmailChange });
+
+      fireEvent.changeText(screen.getByTestId('change-email-input'), 'abernal.nuevo@bflow.app');
+      fireEvent.changeText(screen.getByTestId('change-email-password-input'), 'claveMala');
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('request-email-change-button'));
+      });
+
+      expect(screen.getByTestId('email-error-banner')).toHaveTextContent(
+        'La contraseña actual no es correcta.'
+      );
+      expect(screen.getByTestId('change-email-input').props.value).toBe('abernal.nuevo@bflow.app');
+    });
+
+    it('shows the verification state and lets an unverified account ask for the verification email', async () => {
+      const onSendEmailVerification = jest.fn();
+      renderProfileWindow({
+        authUser: { ...mockUser, emailVerified: false },
+        onSendEmailVerification,
+      });
+
+      expect(screen.getByTestId('account-email-status-badge')).toHaveTextContent('Sin verificar');
+
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('send-email-verification-button'));
+      });
+
+      expect(onSendEmailVerification).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId('email-success-banner')).toHaveTextContent(
+        /Enviamos un enlace de verificación a abernal@bflow.app/i
+      );
+    });
+
+    it('marks a verified email and hides the verification button', () => {
+      renderProfileWindow({ authUser: { ...mockUser, emailVerified: true } });
+
+      expect(screen.getByTestId('account-email-status-badge')).toHaveTextContent('Verificado');
+      expect(screen.queryByTestId('send-email-verification-button')).toBeNull();
+    });
+
+    it('offers neither email change nor password reset to an account that signs in with Google', () => {
+      renderProfileWindow({ authUser: { ...mockUser, authProvider: 'google.com' } });
+
+      expect(screen.getByTestId('account-email-card')).toBeTruthy();
+      expect(screen.queryByTestId('change-email-input')).toBeNull();
+      expect(screen.queryByTestId('account-password-card')).toBeNull();
+    });
+
+    it.each(['android', 'web'] as const)(
+      'offers the same email and password actions on the %s skin',
+      async (skin) => {
+        const onSendPasswordReset = jest.fn();
+        const onRequestEmailChange = jest.fn();
+        renderProfileWindow({ onSendPasswordReset, onRequestEmailChange }, skin);
+
+        fireEvent.changeText(screen.getByTestId('change-email-input'), 'otro@bflow.app');
+        fireEvent.changeText(screen.getByTestId('change-email-password-input'), 'claveActual123');
+        await act(async () => {
+          fireEvent.press(screen.getByTestId('request-email-change-button'));
+        });
+        await act(async () => {
+          fireEvent.press(screen.getByTestId('send-password-reset-button'));
+        });
+
+        expect(onRequestEmailChange).toHaveBeenCalledWith('otro@bflow.app', 'claveActual123');
+        expect(onSendPasswordReset).toHaveBeenCalledTimes(1);
+      }
+    );
+  });
+
+  describe('usage limits (ADR 0026)', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    function elapse(milliseconds: number) {
+      act(() => {
+        jest.advanceTimersByTime(milliseconds);
+      });
+    }
+
+    function renderAccount(
+      props: Partial<React.ComponentProps<typeof AccountProfileWorkspaceView>> = {},
+      skin?: 'ios' | 'android' | 'web'
+    ) {
+      return render(
+        <BFlowThemeProvider initialMode="dark" skin={skin}>
+          <AccountProfileWorkspaceView
+            authUser={mockUser}
+            syncStatusMessage="En línea"
+            isSyncing={false}
+            onSignOut={jest.fn()}
+            {...props}
+          />
+        </BFlowThemeProvider>
+      );
+    }
+
+    it.each(['ios', 'android', 'web'] as const)(
+      'waits 30 s between manual syncs and counts down on the button (%s)',
+      (skin) => {
+        const onManualSync = jest.fn();
+        renderAccount({ onManualSync }, skin);
+        const sync = () => screen.getByTestId('manual-sync-button');
+        expect(sync()).toHaveTextContent('Sincronizar datos ahora');
+
+        fireEvent.press(sync());
+        expect(onManualSync).toHaveBeenCalledTimes(1);
+        expect(sync()).toBeDisabled();
+        expect(sync()).toHaveTextContent('Podrás sincronizar de nuevo en 30 s');
+
+        fireEvent.press(sync());
+        expect(onManualSync).toHaveBeenCalledTimes(1);
+
+        elapse(10_000);
+        expect(sync()).toHaveTextContent('Podrás sincronizar de nuevo en 20 s');
+
+        elapse(20_000);
+        expect(sync()).not.toBeDisabled();
+        fireEvent.press(sync());
+        expect(onManualSync).toHaveBeenCalledTimes(2);
+      }
     );
 
-    // Open dedicated window
-    fireEvent.press(screen.getByTestId('open-profile-settings-button'));
-    expect(screen.getByTestId('profile-settings-modal')).toBeTruthy();
+    it('keeps the sync wait after leaving the Account tab and coming back', () => {
+      const onManualSync = jest.fn();
+      const view = renderAccount({ onManualSync });
+      fireEvent.press(screen.getByTestId('manual-sync-button'));
+      view.unmount();
 
-    // Security & Password card is present inside the dedicated window
-    expect(screen.getByTestId('account-password-card')).toBeTruthy();
-    expect(screen.getByText('Seguridad y Contraseña')).toBeTruthy();
-
-    // Request 6-digit verification code
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('request-password-code-button'));
+      elapse(5_000);
+      renderAccount({ onManualSync });
+      expect(screen.getByTestId('manual-sync-button')).toBeDisabled();
+      expect(screen.getByTestId('manual-sync-button')).toHaveTextContent(
+        'Podrás sincronizar de nuevo en 25 s'
+      );
     });
 
-    expect(onRequestPasswordResetCode).toHaveBeenCalledWith('abernal@bflow.app');
-    expect(screen.getByText(/Código de 6 dígitos enviado/i)).toBeTruthy();
+    it.each(['ios', 'android', 'web'] as const)(
+      'waits 60 s between password reset links and between verification emails (%s)',
+      async (skin) => {
+        const onSendPasswordReset = jest.fn();
+        const onSendEmailVerification = jest.fn();
+        renderAccount(
+          {
+            authUser: { ...mockUser, emailVerified: false },
+            onSendPasswordReset,
+            onSendEmailVerification,
+          },
+          skin
+        );
+        fireEvent.press(screen.getByTestId('open-profile-settings-button'));
+        const reset = () => screen.getByTestId('send-password-reset-button');
+        const verify = () => screen.getByTestId('send-email-verification-button');
 
-    // Verification code and new password inputs now visible
-    expect(screen.getByTestId('security-verification-code-input')).toBeTruthy();
-    expect(screen.getByTestId('security-new-password-input')).toBeTruthy();
-    expect(screen.getByTestId('security-confirm-password-input')).toBeTruthy();
+        await act(async () => {
+          fireEvent.press(reset());
+        });
+        expect(reset()).toBeDisabled();
+        expect(reset()).toHaveTextContent('Podrás pedir otro enlace en 60 s');
+        // Each email has its own wait.
+        expect(verify()).not.toBeDisabled();
 
-    // Fill verification code and matching passwords
-    fireEvent.changeText(screen.getByTestId('security-verification-code-input'), '543210');
-    fireEvent.changeText(screen.getByTestId('security-new-password-input'), 'miNuevaClave123');
-    fireEvent.changeText(screen.getByTestId('security-confirm-password-input'), 'miNuevaClave123');
+        elapse(20_000);
+        await act(async () => {
+          fireEvent.press(verify());
+        });
+        expect(verify()).toBeDisabled();
+        expect(verify()).toHaveTextContent('Podrás reenviarlo en 60 s');
+        expect(reset()).toHaveTextContent('Podrás pedir otro enlace en 40 s');
 
-    // Toggle password visibility
-    fireEvent.press(screen.getByTestId('security-password-toggle'));
-    fireEvent.press(screen.getByTestId('security-confirm-password-toggle'));
+        await act(async () => {
+          fireEvent.press(reset());
+          fireEvent.press(verify());
+        });
+        expect(onSendPasswordReset).toHaveBeenCalledTimes(1);
+        expect(onSendEmailVerification).toHaveBeenCalledTimes(1);
 
-    // Confirm internal password update
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('security-submit-password-button'));
-    });
+        elapse(40_000);
+        expect(reset()).not.toBeDisabled();
+        expect(reset()).toHaveTextContent('Restablecer contraseña');
+        expect(verify()).toHaveTextContent('Podrás reenviarlo en 20 s');
+      }
+    );
 
-    expect(onConfirmPasswordResetWithCode).toHaveBeenCalledWith(
-      'abernal@bflow.app',
-      '543210',
-      'miNuevaClave123'
+    it.each(['ios', 'android', 'web'] as const)(
+      'locks the email change after the fifth wrong password and offers the reset (%s)',
+      async (skin) => {
+        const wrongPassword = 'La contraseña actual no es correcta. Te quedan 4 intentos antes de un bloqueo de 15 min.';
+        // What the platform does: every rejected password is counted on the device.
+        const onRequestEmailChange = jest.fn(async () => {
+          recordFailedAuthAttempt('reauth_email_change');
+          throw new Error(wrongPassword);
+        });
+        renderAccount({ onRequestEmailChange }, skin);
+        fireEvent.press(screen.getByTestId('open-profile-settings-button'));
+        const submit = () => screen.getByTestId('request-email-change-button');
+        const attempt = async () => {
+          fireEvent.changeText(screen.getByTestId('change-email-input'), 'nuevo@bflow.app');
+          fireEvent.changeText(screen.getByTestId('change-email-password-input'), 'claveMala');
+          await act(async () => {
+            fireEvent.press(submit());
+          });
+        };
+
+        await attempt();
+        expect(screen.getByTestId('email-error-banner')).toHaveTextContent(wrongPassword);
+        expect(submit()).not.toBeDisabled();
+
+        await attempt();
+        await attempt();
+        await attempt();
+        await attempt();
+        expect(onRequestEmailChange).toHaveBeenCalledTimes(5);
+        expect(submit()).toBeDisabled();
+        expect(submit()).toHaveTextContent('Podrás intentarlo en 15 min');
+        expect(screen.getByTestId('email-error-banner')).toHaveTextContent(
+          /el cambio de correo queda bloqueado 15 min en este dispositivo.*restablécela desde la tarjeta Contraseña/
+        );
+        // The way out stays available.
+        expect(screen.getByTestId('send-password-reset-button')).not.toBeDisabled();
+
+        elapse(61_000);
+        expect(submit()).toHaveTextContent('Podrás intentarlo en 13 min 59 s');
+
+        await attempt();
+        expect(onRequestEmailChange).toHaveBeenCalledTimes(5);
+
+        elapse(14 * 60_000);
+        expect(submit()).not.toBeDisabled();
+        expect(submit()).toHaveTextContent('Enviar enlace de confirmación');
+        expect(screen.queryByTestId('email-error-banner')).toBeNull();
+      }
     );
   });
 

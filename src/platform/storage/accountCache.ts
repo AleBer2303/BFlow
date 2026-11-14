@@ -59,6 +59,10 @@ function isValidFullCloudAccountData(value: unknown): value is FullCloudAccountD
   );
 }
 
+function hasSameKeyCount(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  return Object.keys(a).length === Object.keys(b).length;
+}
+
 /**
  * Checks if two FullCloudAccountData payloads have equivalent domain data,
  * ignoring timestamps or volatile UI states.
@@ -71,12 +75,20 @@ export function isEquivalentCloudAccount(
   if (a === b) return true;
 
   try {
+    // O(1) checks first: most syncs end here without serializing anything.
     if (a.activeMonthKey !== b.activeMonthKey) return false;
     if (Boolean(a.needsOnboarding) !== Boolean(b.needsOnboarding)) return false;
     if (a.availableMonths.length !== b.availableMonths.length) return false;
     if (a.concepts.length !== b.concepts.length) return false;
     if (a.entries.length !== b.entries.length) return false;
     if (a.debtPayments.length !== b.debtPayments.length) return false;
+    if (!hasSameKeyCount(a.debtsByMonth, b.debtsByMonth)) return false;
+    if (!hasSameKeyCount(a.savingsBucketsByMonth, b.savingsBucketsByMonth)) return false;
+    if (!hasSameKeyCount(a.closedSnapshots, b.closedSnapshots)) return false;
+
+    // Every cloud write stamps a new `dataRevision` (ADR 0018), so two payloads of the same
+    // shape that carry the same revision hold the same cloud data.
+    if (a.dataRevision && a.dataRevision === b.dataRevision) return true;
 
     return (
       JSON.stringify(a.availableMonths) === JSON.stringify(b.availableMonths) &&
@@ -146,9 +158,13 @@ export function savePersistedAccount(
     const existingEnvelope = readValidatedEnvelope(uid);
     const resolvedRevision =
       dataRevision ?? data.dataRevision ?? existingEnvelope?.dataRevision;
+    // Saves made from the store do not carry the marker: keep the one of the last cloud load.
+    const resolvedHistorySyncedAt =
+      data.historySyncedAt ?? existingEnvelope?.data.historySyncedAt;
     const cleanData: FullCloudAccountData = {
       ...data,
       ...(resolvedRevision ? { dataRevision: resolvedRevision } : {}),
+      ...(resolvedHistorySyncedAt ? { historySyncedAt: resolvedHistorySyncedAt } : {}),
     };
     const envelope: PersistedAccountEnvelope = {
       schemaVersion: ACCOUNT_CACHE_SCHEMA_VERSION,

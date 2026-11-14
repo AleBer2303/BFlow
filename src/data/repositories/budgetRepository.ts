@@ -13,6 +13,7 @@
 import {
   collection,
   doc,
+  getCountFromServer,
   getDoc,
   getDocs,
   query,
@@ -51,6 +52,12 @@ import {
   isCacheFreshWithin24Hours,
   updatePersistedAccountRevision,
 } from '../../platform/storage/accountCache';
+import { resolveOwnerSeedEmails } from '../../platform/mode/ownerSeedEmail';
+import {
+  planArchivedHistory,
+  resolveArchivedEntries,
+  type ArchivedHistoryPlan,
+} from './historyWindow';
 import {
   parseConceptFromFirestore,
   parseDebtFromFirestore,
@@ -92,6 +99,8 @@ export interface FullCloudAccountData {
   closedSnapshots: Record<string, MonthSnapshot>;
   needsOnboarding?: boolean;
   dataRevision?: string;
+  /** When this data last received everything the cloud had (ISO); see historyWindow.ts. */
+  historySyncedAt?: string;
 }
 
 export function generateDataRevision(): string {
@@ -117,10 +126,7 @@ export interface ToggleEntryCompletionResult {
   updatedDebtPayment?: DebtPayment;
 }
 
-const OWNER_CANONICAL_EMAILS = new Set([
-  'abernalg2303@gmail.com',
-  'abernalg2303gmail.com',
-]);
+const OWNER_SEED_EMAILS = resolveOwnerSeedEmails();
 
 function safeParseList<T>(
   rawDocs: ReadonlyArray<{ data: () => unknown }>,
@@ -139,7 +145,7 @@ function safeParseList<T>(
 
 export function isOwnerCanonicalEmail(email?: string | null): boolean {
   if (!email) return false;
-  return OWNER_CANONICAL_EMAILS.has(email.trim().toLowerCase());
+  return OWNER_SEED_EMAILS.has(email.trim().toLowerCase());
 }
 
 export const EMPTY_PROVISION_PLAN: IdealMotoPlan = {
@@ -221,6 +227,7 @@ export interface BudgetRepository {
   saveProvisionPlan(uid: string, plan: IdealMotoPlan): Promise<void>;
   saveInitialAccountSetup(uid: string, payload: InitialAccountSetupPayload): Promise<void>;
   saveActiveMonthKey(uid: string, monthKey: string): Promise<void>;
+  saveUserProfile(uid: string, profile: UserProfileFields): Promise<void>;
   resetFullAccountInCloud(uid: string, newStartMonthKey: string): Promise<void>;
   reopenMonthInCloud(uid: string, monthKey: string): Promise<void>;
   deleteMonthInCloud(uid: string, monthKey: string, fallbackMonthKey: string): Promise<void>;
@@ -230,6 +237,13 @@ export interface BudgetRepository {
     closingMonthKey: string,
     result: CloseMonthResult
   ): Promise<void>;
+}
+
+/** Campos del perfil que el usuario edita en Cuenta → Actualizar datos (`users/{uid}`). */
+export interface UserProfileFields {
+  displayName: string;
+  /** Vacío borra la meta. */
+  financialGoal: string;
 }
 
 function reconstructClosedMonthBalances(
@@ -335,6 +349,7 @@ export class InMemoryBudgetRepository implements BudgetRepository {
   private resetUsers = new Set<string>();
   private onboardedUsers = new Set<string>();
   private activeMonthByUser = new Map<string, string>();
+  private profilesByUser = new Map<string, UserProfileFields>();
 
   constructor(autoSeedDefaultUser = true) {
     const seed = buildOctober2026SeedPayload();
@@ -893,6 +908,15 @@ export class InMemoryBudgetRepository implements BudgetRepository {
     this.activeMonthByUser.set(uid, monthKey);
   }
 
+  async saveUserProfile(uid: string, profile: UserProfileFields): Promise<void> {
+    this.profilesByUser.set(uid, { ...profile });
+  }
+
+  /** Perfil guardado con `saveUserProfile` (solo para pruebas). */
+  getUserProfile(uid: string): UserProfileFields | undefined {
+    return this.profilesByUser.get(uid);
+  }
+
   async resetFullAccountInCloud(uid: string, newStartMonthKey: string): Promise<void> {
     this.concepts.clear();
     this.entries.clear();
@@ -1018,7 +1042,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       return { seeded: false, monthKey: existingActive };
     }
 
-    // Only the canonical owner account (abernalg2303@gmail.com) gets the October 2026 seed.
+    // Only the owner seed account (EXPO_PUBLIC_OWNER_SEED_EMAIL) gets the October 2026 seed.
     // All other users start clean and configure their account on first login.
     if (!isOwnerCanonicalEmail(resolvedEmail)) {
       return { seeded: false, monthKey: existingActive };
@@ -1228,6 +1252,14 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       }
     }
 
+    // ADR 0028: with enough closed months in the cache, the old history is not downloaded
+    // again; only the recent months, what changed since the last load and a count to verify.
+    const historySyncedAt = new Date().toISOString();
+    const historyPlan = options?.isRegistration
+      ? null
+      : planArchivedHistory(options?.cachedAccount);
+    const entriesCollection = collection(this.db, 'users', uid, 'entries');
+
     let [
       userSnap,
       conceptsSnap,
@@ -1237,15 +1269,17 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       bucketsSnap,
       planSnap,
       snapshotsSnap,
+      archivedHistoryProbe,
     ] = await Promise.all([
       preloadedUserSnap ? Promise.resolve(preloadedUserSnap) : getDoc(userDocRef),
       getDocs(collection(this.db, 'users', uid, 'concepts')),
-      getDocs(collection(this.db, 'users', uid, 'entries')),
+      historyPlan ? Promise.resolve(null) : getDocs(entriesCollection),
       getDocs(collection(this.db, 'users', uid, 'debts')),
       getDocs(collection(this.db, 'users', uid, 'debtPayments')),
       getDocs(collection(this.db, 'users', uid, 'savingsBuckets')),
       getDoc(doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal')),
       getDocs(collection(this.db, 'users', uid, 'monthSnapshots')),
+      historyPlan ? this.readArchivedHistoryProbe(uid, historyPlan) : Promise.resolve(null),
     ]);
 
     let userData = (userSnap.exists() ? userSnap.data() : undefined) as
@@ -1311,6 +1345,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
             getDoc(doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal')),
             getDocs(collection(this.db, 'users', uid, 'monthSnapshots')),
           ]);
+          archivedHistoryProbe = null;
           userData = userSnap.exists() ? userSnap.data() : undefined;
         }
       }
@@ -1327,7 +1362,41 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     const concepts = safeParseList(conceptsSnap.docs, parseConceptFromFirestore).sort(
       (a, b) => a.order - b.order
     );
-    const entries = safeParseList(entriesSnap.docs, parseMonthEntryFromFirestore);
+    const closedSnapshots: Record<string, MonthSnapshot> = {};
+    for (const snapDoc of snapshotsSnap.docs) {
+      try {
+        const parsed = parseMonthSnapshotFromFirestore(snapDoc.data());
+        closedSnapshots[parsed.monthKey] = parsed;
+      } catch {
+        // Ignore malformed snapshot doc
+      }
+    }
+
+    const archivedEntries =
+      historyPlan && archivedHistoryProbe && options?.cachedAccount
+        ? resolveArchivedEntries({
+            plan: historyPlan,
+            cachedEntries: options.cachedAccount.entries,
+            cachedSnapshots: options.cachedAccount.closedSnapshots,
+            remoteSnapshots: closedSnapshots,
+            changedEntries: safeParseList(
+              archivedHistoryProbe.changedSnap.docs,
+              parseMonthEntryFromFirestore
+            ),
+            remoteArchivedCount: archivedHistoryProbe.archivedCount,
+          })
+        : null;
+    let entries: MonthEntry[];
+    if (archivedEntries && archivedHistoryProbe) {
+      entries = [
+        ...archivedEntries,
+        ...safeParseList(archivedHistoryProbe.recentSnap.docs, parseMonthEntryFromFirestore),
+      ];
+    } else {
+      // No usable cache (or the cloud changed under it): the whole collection, as before.
+      const fullEntriesSnap = entriesSnap ?? (await getDocs(entriesCollection));
+      entries = safeParseList(fullEntriesSnap.docs, parseMonthEntryFromFirestore);
+    }
     const currentDebts = safeParseList(debtsSnap.docs, parseDebtFromFirestore);
     const debtPayments = safeParseList(paymentsSnap.docs, parseDebtPaymentFromFirestore);
 
@@ -1414,16 +1483,6 @@ export class FirestoreBudgetRepository implements BudgetRepository {
         provisionPlan = parseIdealMotoPlanFromFirestore(planSnap.data());
       } catch {
         // Keep fallback provisionPlan
-      }
-    }
-
-    const closedSnapshots: Record<string, MonthSnapshot> = {};
-    for (const snapDoc of snapshotsSnap.docs) {
-      try {
-        const parsed = parseMonthSnapshotFromFirestore(snapDoc.data());
-        closedSnapshots[parsed.monthKey] = parsed;
-      } catch {
-        // Ignore malformed snapshot doc
       }
     }
 
@@ -1801,7 +1860,27 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       closedSnapshots,
       needsOnboarding,
       ...(resolvedDataRevision ? { dataRevision: resolvedDataRevision } : {}),
+      historySyncedAt,
     };
+  }
+
+  /**
+   * Reads for a load that reuses the cached old history (ADR 0028): the entries from the
+   * cutoff month on, the entries written since the last load, and how many entries the
+   * cloud holds before the cutoff. Null if any of them fails; the caller then reads everything.
+   */
+  private async readArchivedHistoryProbe(uid: string, plan: ArchivedHistoryPlan) {
+    try {
+      const entriesCollection = collection(this.db, 'users', uid, 'entries');
+      const [recentSnap, changedSnap, archivedCountSnap] = await Promise.all([
+        getDocs(query(entriesCollection, where('monthKey', '>=', plan.cutoffMonthKey))),
+        getDocs(query(entriesCollection, where('updatedAt', '>', plan.changedSinceIso))),
+        getCountFromServer(query(entriesCollection, where('monthKey', '<', plan.cutoffMonthKey))),
+      ]);
+      return { recentSnap, changedSnap, archivedCount: archivedCountSnap.data().count };
+    } catch {
+      return null;
+    }
   }
 
   async toggleEntryCompletion(
@@ -2509,6 +2588,18 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       () => {},
       {
         activeMonthKey: monthKey,
+      }
+    );
+  }
+
+  /** Guarda el nombre y la meta en `users/{uid}`, por la misma vía que el resto (ADR 0018). */
+  async saveUserProfile(uid: string, profile: UserProfileFields): Promise<void> {
+    await this.commitUserDataMutationBatch(
+      uid,
+      () => {},
+      {
+        displayName: profile.displayName,
+        financialGoal: profile.financialGoal,
       }
     );
   }

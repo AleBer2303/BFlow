@@ -37,7 +37,7 @@ Toda mutación en los slices de Zustand se desacopla mediante un ejecutor centra
 
 ### 2.3. Política de Conflictos: Last-Write-Wins (LWW) e Idempotencia
 - **IDs Deterministas:** Los movimientos mensuales (`MonthEntry`) emplean claves compuestas deterministas `${monthKey}_${conceptId}` o UUIDs persistidos; los abonos a deudas y conceptos tienen identificadores inmutables.
-- **Operaciones Idempotentes:** Las operaciones de la cola (`save_or_update_entry`, `save_debt`, `save_provision_plan`, `save_savings_bucket`) aplican documentos completos o `merge: true`, por lo que reintentos múltiples sobre la misma clave producen el mismo estado final sin duplicaciones.
+- **Operaciones Idempotentes:** Las operaciones de la cola (`save_or_update_entry`, `save_debt`, `save_provision_plan`, `save_savings_bucket`, `save_user_profile`) aplican documentos completos o `merge: true`, por lo que reintentos múltiples sobre la misma clave producen el mismo estado final sin duplicaciones.
 - **Operaciones No Seguras para Modo Offline:** Operaciones destructivas masivas como `resetFullAccountInCloud` (reseteo total de la cuenta en la nube) requieren confirmación en línea explícita o se ejecutan de forma atómica; si no hay red, se informa al usuario para evitar inconsistencias en el catálogo histórico.
 
 ### 2.4. Protección de Sincronización en Segundo Plano (R-09)

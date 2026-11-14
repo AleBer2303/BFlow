@@ -21,7 +21,7 @@
  * Use it for every interactive element in `src/features/` and `src/app/`.
  */
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Platform,
@@ -179,24 +179,16 @@ export function shouldSinkOnPress(
 }
 
 function buildSinkPressStyle(
-  progress: Animated.Value,
-  restingStyle: ViewStyle | undefined,
+  opacity: Animated.AnimatedInterpolation<number>,
+  scale: Animated.AnimatedInterpolation<number> | undefined,
+  restingTransform: ViewStyle['transform'] | undefined,
   reducedMotion: boolean
 ) {
-  const restingOpacity = typeof restingStyle?.opacity === 'number' ? restingStyle.opacity : 1;
-  const opacity = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [restingOpacity, restingOpacity * pressSinkMotion.dimOpacity],
-  });
-  if (reducedMotion) {
+  if (reducedMotion || !scale) {
     return { opacity };
   }
-  const scale = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, pressSinkMotion.scale],
-  });
-  const restingTransform = Array.isArray(restingStyle?.transform) ? restingStyle.transform : [];
-  return { opacity, transform: [...restingTransform, { scale }] };
+  const baseTransform = Array.isArray(restingTransform) ? restingTransform : [];
+  return { opacity, transform: [...baseTransform, { scale }] };
 }
 
 export const AppPressable = React.forwardRef<AppPressableElement, AppPressableProps>(
@@ -237,9 +229,14 @@ export const AppPressable = React.forwardRef<AppPressableElement, AppPressablePr
       [onHoverOut]
     );
 
-    const restingStyle = StyleSheet.flatten(
-      typeof style === 'function' ? style(RESTING_STATE) : style
-    ) as ViewStyle | undefined;
+    const hasStatefulStyle = typeof style === 'function';
+    const staticRestingStyle = useMemo(
+      () => (hasStatefulStyle ? undefined : (StyleSheet.flatten(style) as ViewStyle | undefined)),
+      [hasStatefulStyle, style]
+    );
+    const restingStyle = hasStatefulStyle
+      ? (StyleSheet.flatten(style(RESTING_STATE)) as ViewStyle | undefined)
+      : staticRestingStyle;
     const targetFix = resolveTouchTargetFix(restingStyle, minTarget);
     const ariaState = toWebAriaState(rest.accessibilityState);
     // Material asks for 48dp where the app's base control is 44: 2dp of slop bridges it.
@@ -264,9 +261,43 @@ export const AppPressable = React.forwardRef<AppPressableElement, AppPressablePr
       !IS_MOTION_STATIC &&
       shouldSinkOnPress(restingStyle, pressEffect, Boolean(disabled));
 
-    if (sinksOnPress) {
-      const hasStatefulStyle = typeof style === 'function';
-      const animatePress = (toValue: number) => {
+    const restingOpacity = typeof restingStyle?.opacity === 'number' ? restingStyle.opacity : 1;
+    const restingTransform = Array.isArray(restingStyle?.transform)
+      ? restingStyle.transform
+      : undefined;
+
+    const sinkOpacity = useMemo(
+      () =>
+        sinksOnPress
+          ? pressProgress.interpolate({
+              inputRange: [0, 1],
+              outputRange: [restingOpacity, restingOpacity * pressSinkMotion.dimOpacity],
+            })
+          : undefined,
+      [sinksOnPress, pressProgress, restingOpacity]
+    );
+
+    const sinkScale = useMemo(
+      () =>
+        sinksOnPress && !reducedMotion
+          ? pressProgress.interpolate({
+              inputRange: [0, 1],
+              outputRange: [1, pressSinkMotion.scale],
+            })
+          : undefined,
+      [sinksOnPress, reducedMotion, pressProgress]
+    );
+
+    const sinkPressStyle = useMemo(
+      () =>
+        sinksOnPress && sinkOpacity
+          ? buildSinkPressStyle(sinkOpacity, sinkScale, restingTransform, reducedMotion)
+          : undefined,
+      [sinksOnPress, sinkOpacity, sinkScale, restingTransform, reducedMotion]
+    );
+
+    const animatePress = useCallback(
+      (toValue: number) => {
         if (reducedMotion) {
           Animated.timing(pressProgress, {
             toValue,
@@ -290,17 +321,29 @@ export const AppPressable = React.forwardRef<AppPressableElement, AppPressablePr
           easing: toEasing(motionBySkin.android.enter),
           useNativeDriver: USE_NATIVE_DRIVER,
         }).start();
-      };
-      const handlePressIn = (event: GestureResponderEvent) => {
+      },
+      [feedback, pressProgress, reducedMotion]
+    );
+
+    const handleSinkPressIn = useCallback(
+      (event: GestureResponderEvent) => {
         animatePress(1);
         if (hasStatefulStyle) setSinkPressed(true);
         onPressIn?.(event);
-      };
-      const handlePressOut = (event: GestureResponderEvent) => {
+      },
+      [animatePress, hasStatefulStyle, onPressIn]
+    );
+
+    const handleSinkPressOut = useCallback(
+      (event: GestureResponderEvent) => {
         animatePress(0);
         if (hasStatefulStyle) setSinkPressed(false);
         onPressOut?.(event);
-      };
+      },
+      [animatePress, hasStatefulStyle, onPressOut]
+    );
+
+    if (sinksOnPress) {
       // An animated component takes a style value, not a callback: the pressed state is
       // tracked here for the few controls that restyle themselves while pressed.
       const baseStyle = hasStatefulStyle
@@ -315,9 +358,9 @@ export const AppPressable = React.forwardRef<AppPressableElement, AppPressablePr
           hitSlop={hitSlop ?? defaultHitSlop}
           onHoverIn={onHoverIn}
           onHoverOut={onHoverOut}
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
-          style={[baseStyle, buildSinkPressStyle(pressProgress, restingStyle, reducedMotion)]}
+          onPressIn={handleSinkPressIn}
+          onPressOut={handleSinkPressOut}
+          style={[baseStyle, sinkPressStyle]}
           {...ariaState}
           {...rest}
         />

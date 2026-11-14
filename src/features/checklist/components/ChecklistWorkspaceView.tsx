@@ -110,7 +110,7 @@ interface ChecklistRowItemProps {
  * Fades back out before unmounting. Timing and travel come from the `control` motion spec.
  * Animation is skipped under Jest.
  */
-function ActionRevealSlot({
+export function ActionRevealSlot({
   visible,
   gap,
   children,
@@ -124,27 +124,40 @@ function ActionRevealSlot({
   const { open, close } = resolvePresenceSpec({ skin, reducedMotion }, 'control');
   const progress = useRef(new Animated.Value(visible ? 1 : 0)).current;
   const [mounted, setMounted] = useState(visible);
+  // Only animate out after the slot has actually been opened; mounting with `visible={false}`
+  // must stay completely inert so opening Checklist never triggers 24-40 JS animations at once.
+  const hasBeenVisibleRef = useRef(visible);
 
   useEffect(() => {
-    if (skipMotion) return;
+    if (skipMotion) return undefined;
     if (visible) {
+      hasBeenVisibleRef.current = true;
       setMounted(true);
-      Animated.timing(progress, {
+      const anim = Animated.timing(progress, {
         toValue: 1,
         duration: open.durationMs,
         easing: toEasing(open.easing),
         useNativeDriver: false,
-      }).start();
-    } else {
-      Animated.timing(progress, {
-        toValue: 0,
-        duration: close.durationMs,
-        easing: toEasing(close.easing),
-        useNativeDriver: false,
-      }).start(({ finished }) => {
-        if (finished) setMounted(false);
       });
+      anim.start();
+      return () => anim.stop();
     }
+    if (!hasBeenVisibleRef.current) {
+      return undefined;
+    }
+    const anim = Animated.timing(progress, {
+      toValue: 0,
+      duration: close.durationMs,
+      easing: toEasing(close.easing),
+      useNativeDriver: false,
+    });
+    anim.start(({ finished }) => {
+      if (finished) {
+        hasBeenVisibleRef.current = false;
+        setMounted(false);
+      }
+    });
+    return () => anim.stop();
     // The spec only changes with the skin or the Reduce Motion setting, never mid-reveal.
   }, [visible, skipMotion, progress]); // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -12,13 +12,13 @@
  */
 
 import * as SecureStore from 'expo-secure-store';
-import AsyncStorage from 'expo-sqlite/kv-store';
 import * as FirebaseAuthModule from 'firebase/auth';
 import { inMemoryPersistence, type Persistence } from 'firebase/auth';
 import {
   decryptRawStringFromStorage,
   encryptRawStringForStorage,
 } from '../../platform/storage/persistentStorageAdapter';
+import { getOptionalSqliteKvStore } from '../../platform/storage/sqliteKvStore';
 import { isEncryptedStoragePayload } from '../../platform/storage/storageCipher';
 
 export interface FirebaseReactNativeAsyncStorage {
@@ -37,8 +37,36 @@ function toSecureStoreKey(key: string): string {
   return key.replace(/[^a-zA-Z0-9._-]/g, '_');
 }
 
+function createMemoryAsyncStorage(): FirebaseReactNativeAsyncStorage {
+  const memory = new Map<string, string>();
+  return {
+    async getItem(key: string): Promise<string | null> {
+      return memory.get(key) ?? null;
+    },
+    async setItem(key: string, value: string): Promise<void> {
+      memory.set(key, value);
+    },
+    async removeItem(key: string): Promise<void> {
+      memory.delete(key);
+    },
+  };
+}
+
+function createLazySqliteOrMemoryFallback(): FirebaseReactNativeAsyncStorage {
+  const memoryFallback = createMemoryAsyncStorage();
+  const resolveStore = (): FirebaseReactNativeAsyncStorage => {
+    const sqlite = getOptionalSqliteKvStore();
+    return sqlite && typeof sqlite.getItem === 'function' ? sqlite : memoryFallback;
+  };
+  return {
+    getItem: (key) => resolveStore().getItem(key),
+    setItem: (key, value) => resolveStore().setItem(key, value),
+    removeItem: (key) => resolveStore().removeItem(key),
+  };
+}
+
 export function createEncryptedNativeAuthStorage(
-  fallbackKvStore: FirebaseReactNativeAsyncStorage = AsyncStorage
+  fallbackKvStore: FirebaseReactNativeAsyncStorage = createLazySqliteOrMemoryFallback()
 ): FirebaseReactNativeAsyncStorage {
   return {
     async getItem(key: string): Promise<string | null> {
@@ -125,7 +153,7 @@ export function createEncryptedNativeAuthStorage(
 }
 
 export const encryptedNativeAuthStorage: FirebaseReactNativeAsyncStorage =
-  createEncryptedNativeAuthStorage(AsyncStorage);
+  createEncryptedNativeAuthStorage();
 
 type GetReactNativePersistenceFn = (
   storage: FirebaseReactNativeAsyncStorage

@@ -6,7 +6,8 @@
  *   - iOS & Android (`storageBackend.native.ts`): `expo-secure-store` (Keychain/Keystore)
  *     for the generated 256-bit secret token and session keys + `expo-sqlite/kv-store`
  *     for the encrypted budget cache.
- *   - Web & Tests (`storageBackend.ts`): `localStorage`.
+ *   - Web & Tests (`storageBackend.ts`): `localStorage` for ciphertext and `sessionStorage`
+ *     for the secret token (ADR 0027).
  * - Encrypts all persisted values with AES-256-CTR + HMAC-SHA256 (`enc:v1:<iv>:<cipher>:<mac>`)
  *   using a key derived from the application passphrase/pepper + the generated 256-bit
  *   device secret token (`storageCipher.ts`).
@@ -43,8 +44,11 @@ function isValidSecretToken(token: string | null | undefined): token is string {
 
 /**
  * Retrieves the active 256-bit device secret token from memory or persistent storage
- * (`expo-secure-store` on iOS/Android, `localStorage` on Web), generating and persisting
+ * (`expo-secure-store` on iOS/Android, `sessionStorage` on Web), generating and persisting
  * a new 256-bit token if none exists yet.
+ *
+ * Throws `SecureRandomUnavailableError` when the runtime has no CSPRNG (ADR 0027): callers
+ * then keep the value in memory and write nothing to disk.
  */
 export function getOrCreateDeviceSecretToken(): string {
   if (isValidSecretToken(inMemorySecretToken)) {
@@ -74,12 +78,24 @@ export function getOrCreateDeviceSecretToken(): string {
 /**
  * Rotates the 256-bit device secret token (called on sign-out or full account reset),
  * cryptographically invalidating any previously encrypted ciphertext residues.
+ *
+ * Without a CSPRNG there is no new token: the old one is discarded anyway, so the residues
+ * stay unreadable, and `null` is returned.
  */
-export function rotateDeviceSecretToken(): string {
-  const nextToken = generateSecretToken256();
+export function rotateDeviceSecretToken(): string | null {
+  let nextToken: string | null = null;
+  try {
+    nextToken = generateSecretToken256();
+  } catch {
+    // No secure random source: fall through and drop the current token
+  }
   inMemorySecretToken = nextToken;
   try {
-    activeBackend.setItem(DEVICE_SECRET_TOKEN_KEY, nextToken);
+    if (nextToken === null) {
+      activeBackend.removeItem(DEVICE_SECRET_TOKEN_KEY);
+    } else {
+      activeBackend.setItem(DEVICE_SECRET_TOKEN_KEY, nextToken);
+    }
   } catch {
     // Ignore storage error
   }

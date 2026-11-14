@@ -10,9 +10,6 @@ import {
   AppPressable,
   AppText,
   FormMessage,
-  AppTextInput,
-  EyeIcon,
-  EyeOffIcon,
   GlassSurface,
   MIN_TOUCH_TARGET_PT,
   type PlatformSkinId,
@@ -21,11 +18,10 @@ import {
   useBFlowTheme,
 } from '../../../design-system';
 import type { BFlowAuthUser } from '../../../platform/auth/authAdapter';
+import { getCooldownRemainingMs, startCooldown } from '../../../platform/auth/authRateLimiter';
 import { useSafeInsets } from '../../../platform/insets/useSafeInsets';
-import {
-  confirmPasswordResetWithCode as defaultConfirmPasswordReset,
-  requestPasswordResetCode as defaultRequestPasswordResetCode,
-} from '../../../platform/auth/verificationCodeService';
+import { useCountdown } from '../hooks/useCountdown';
+import { AccountEmailForm, ProfileDetailsForm } from './AccountProfileForms';
 
 /** Edition shown beside the version: the material of the running platform skin. */
 const APP_EDITION_LABEL: Record<PlatformSkinId, string> = {
@@ -40,26 +36,29 @@ export interface AccountProfileWorkspaceViewProps {
   isSyncing: boolean;
   onSignOut: () => void;
   onManualSync?: () => void;
+  /**
+   * Guarda el nombre y la meta. Resuelve `queued` si el cambio quedó en el dispositivo a la
+   * espera de conexión y rechaza con un mensaje para el usuario si no se pudo guardar.
+   */
   onUpdateProfile?: (updates: {
     displayName?: string;
-    email?: string;
     financialGoal?: string;
-  }) => Promise<void> | void;
-  onSendPasswordReset?: (email: string) => Promise<void> | void;
-  onRequestPasswordResetCode?: (email: string) => Promise<void> | void;
-  onConfirmPasswordResetWithCode?: (
-    email: string,
-    code: string,
-    newPassword: string
-  ) => Promise<void> | void;
+  }) => Promise<'saved' | 'queued' | void> | void;
+  /** Envía al correo de la cuenta el enlace para definir una nueva contraseña (ADR 0025). */
+  onSendPasswordReset?: () => Promise<void> | void;
+  /** Pide el cambio de correo: Firebase envía un enlace de confirmación al correo nuevo. */
+  onRequestEmailChange?: (newEmail: string, currentPassword: string) => Promise<void> | void;
+  /** Envía el correo de verificación a una cuenta que aún no lo ha verificado. */
+  onSendEmailVerification?: () => Promise<void> | void;
   onResetFullAccount?: () => void;
   testID?: string;
 }
 
 /**
  * Account & Profile workspace screen.
- * Displays user identity, allows editing user name, email, financial goal,
- * requesting password reset, executing account reset, and signing out.
+ * Displays user identity, allows editing user name and financial goal, changing the sign-in
+ * email, requesting a password reset (both through Firebase Authentication emails, ADR 0025),
+ * executing account reset, and signing out.
  * Technical details are removed; only a discrete app version watermark remains at the end.
  */
 export function AccountProfileWorkspaceView({
@@ -70,32 +69,43 @@ export function AccountProfileWorkspaceView({
   onManualSync,
   onUpdateProfile,
   onSendPasswordReset,
-  onRequestPasswordResetCode,
-  onConfirmPasswordResetWithCode,
+  onRequestEmailChange,
+  onSendEmailVerification,
   onResetFullAccount,
   testID = 'account-profile-workspace-view',
 }: AccountProfileWorkspaceViewProps): React.JSX.Element {
   const { colors, radius, spacing, skin } = useBFlowTheme();
   const insets = useSafeInsets();
 
-  // Profile form state
-  const [displayName, setDisplayName] = useState(authUser.displayName ?? '');
-  const [email, setEmail] = useState(authUser.email ?? '');
-  const [financialGoal, setFinancialGoal] = useState(authUser.financialGoal ?? '');
+  // The profile and email forms own their field state (R-17); a new key resets them each
+  // time the window opens.
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [profileSuccessMsg, setProfileSuccessMsg] = useState<string | null>(null);
+  const [profileFormsKey, setProfileFormsKey] = useState(0);
   const [confirmingAccountReset, setConfirmingAccountReset] = useState(false);
 
-  // Security & 6-Digit Verification State
-  const [securityStep, setSecurityStep] = useState<'idle' | 'code-sent'>('idle');
-  const [verificationCode, setVerificationCode] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmNewPassword, setConfirmNewPassword] = useState('');
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
-  const [securityError, setSecurityError] = useState<string | null>(null);
-  const [securitySuccess, setSecuritySuccess] = useState<string | null>(null);
-  const [isSecurityLoading, setIsSecurityLoading] = useState(false);
+  // Contraseña
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [isPasswordBusy, setIsPasswordBusy] = useState(false);
+
+  // Límites de uso (ADR 0026): espera entre sincronizaciones y entre enlaces de contraseña.
+  const syncCooldown = useCountdown(() => getCooldownRemainingMs('manual_sync'));
+  const passwordResetCooldown = useCountdown(() => getCooldownRemainingMs('password_reset_email'));
+  const isSyncWaiting = syncCooldown.secondsLeft > 0;
+  const isPasswordResetWaiting = passwordResetCooldown.secondsLeft > 0;
+
+  const isPasswordAccount = authUser.authProvider !== 'google.com';
+
+  const secondaryButtonStyle = {
+    minHeight: MIN_TOUCH_TARGET_PT,
+    borderRadius: radius.pill,
+    borderCurve: 'continuous',
+    backgroundColor: colors.glass.surfaceTint,
+    borderWidth: 1,
+    borderColor: colors.glass.subtleBorder,
+    justifyContent: 'center',
+    alignItems: 'center',
+  } as const;
 
   const userInitials = (authUser.displayName ?? 'BF')
     .split(' ')
@@ -104,76 +114,33 @@ export function AccountProfileWorkspaceView({
     .map((word) => word[0]?.toUpperCase() ?? '')
     .join('');
 
-  const handleSaveProfile = async () => {
-    if (!onUpdateProfile) return;
-    await onUpdateProfile({
-      displayName: displayName.trim(),
-      email: email.trim(),
-      financialGoal: financialGoal.trim(),
-    });
-    setProfileSuccessMsg('Perfil actualizado correctamente');
-    setTimeout(() => setProfileSuccessMsg(null), 3000);
+  const handleManualSync = () => {
+    if (!onManualSync) return;
+    onManualSync();
+    startCooldown('manual_sync');
+    syncCooldown.refresh();
   };
 
-  const handleRequestVerificationCode = async () => {
-    const targetEmail = (email.trim() || authUser.email || '').trim();
-    if (!targetEmail || !targetEmail.includes('@')) {
-      setSecurityError('Escribe un correo electrónico válido para enviar el código.');
-      return;
-    }
-    setSecurityError(null);
-    setIsSecurityLoading(true);
+  const handleSendPasswordReset = async () => {
+    if (!onSendPasswordReset) return;
+    setPasswordError(null);
+    setPasswordSuccess(null);
+    setIsPasswordBusy(true);
     try {
-      if (onRequestPasswordResetCode) {
-        await onRequestPasswordResetCode(targetEmail);
-      } else if (onSendPasswordReset) {
-        await onSendPasswordReset(targetEmail);
-      } else {
-        await defaultRequestPasswordResetCode(targetEmail);
-      }
-      setSecurityStep('code-sent');
-      setSecuritySuccess(`Código de 6 dígitos enviado exitosamente a ${targetEmail}.`);
+      await onSendPasswordReset();
+      startCooldown('password_reset_email');
+      passwordResetCooldown.refresh();
+      setPasswordSuccess(
+        `Enviamos a ${authUser.email ?? 'tu correo'} un enlace para definir una nueva contraseña. Revisa también el correo no deseado.`
+      );
     } catch (err) {
-      setSecurityError(err instanceof Error ? err.message : 'Error al solicitar el código.');
+      setPasswordError(
+        err instanceof Error
+          ? err.message
+          : 'No fue posible enviar el enlace para restablecer la contraseña.'
+      );
     } finally {
-      setIsSecurityLoading(false);
-    }
-  };
-
-  const handleConfirmPasswordChange = async () => {
-    const targetEmail = (email.trim() || authUser.email || '').trim();
-    setSecurityError(null);
-
-    if (verificationCode.trim().length < 6) {
-      setSecurityError('Escribe el código de 6 dígitos recibido en tu correo.');
-      return;
-    }
-    if (newPassword.length < 6) {
-      setSecurityError('La nueva contraseña debe tener al menos 6 caracteres.');
-      return;
-    }
-    if (newPassword !== confirmNewPassword) {
-      setSecurityError('Las dos contraseñas no coinciden.');
-      return;
-    }
-
-    setIsSecurityLoading(true);
-    try {
-      if (onConfirmPasswordResetWithCode) {
-        await onConfirmPasswordResetWithCode(targetEmail, verificationCode.trim(), newPassword);
-      } else {
-        await defaultConfirmPasswordReset(targetEmail, verificationCode.trim(), newPassword);
-      }
-      setSecuritySuccess('✓ Contraseña actualizada correctamente en tu cuenta.');
-      setSecurityStep('idle');
-      setVerificationCode('');
-      setNewPassword('');
-      setConfirmNewPassword('');
-      setTimeout(() => setSecuritySuccess(null), 4000);
-    } catch (err) {
-      setSecurityError(err instanceof Error ? err.message : 'Error al cambiar la contraseña.');
-    } finally {
-      setIsSecurityLoading(false);
+      setIsPasswordBusy(false);
     }
   };
 
@@ -251,10 +218,15 @@ export function AccountProfileWorkspaceView({
 
             {onManualSync ? (
               <AppPressable
+                testID="manual-sync-button"
                 accessibilityRole="button"
-                accessibilityLabel="Sincronizar ahora"
-                onPress={onManualSync}
-                disabled={isSyncing}
+                accessibilityLabel={
+                  isSyncWaiting
+                    ? `Podrás sincronizar de nuevo en ${syncCooldown.secondsLeft} segundos`
+                    : 'Sincronizar ahora'
+                }
+                onPress={handleManualSync}
+                disabled={isSyncing || isSyncWaiting}
                 style={{
                   minHeight: 40,
                   borderRadius: radius.pill,
@@ -266,7 +238,11 @@ export function AccountProfileWorkspaceView({
                 }}
               >
                 <AppText variant="caption" color={colors.text.primary}>
-                  {isSyncing ? 'Sincronizando datos...' : 'Sincronizar datos ahora'}
+                  {isSyncing
+                    ? 'Sincronizando datos...'
+                    : isSyncWaiting
+                      ? `Podrás sincronizar de nuevo en ${syncCooldown.secondsLeft} s`
+                      : 'Sincronizar datos ahora'}
                 </AppText>
               </AppPressable>
             ) : null}
@@ -280,7 +256,7 @@ export function AccountProfileWorkspaceView({
               <View style={{ gap: 2 }}>
                 <AppText variant="headline">Configuración de Perfil</AppText>
                 <AppText variant="caption" color={colors.text.secondary}>
-                  Actualiza tu nombre de usuario, correo de acceso y tu meta de ahorro personal.
+                  Actualiza tu nombre, tu meta de ahorro, tu correo de acceso y tu contraseña.
                 </AppText>
               </View>
 
@@ -289,10 +265,9 @@ export function AccountProfileWorkspaceView({
                 accessibilityRole="button"
                 accessibilityLabel="Actualizar mis datos de perfil"
                 onPress={() => {
-                  setDisplayName(authUser.displayName ?? '');
-                  setEmail(authUser.email ?? '');
-                  setFinancialGoal(authUser.financialGoal ?? '');
-                  setProfileSuccessMsg(null);
+                  setProfileFormsKey((key) => key + 1);
+                  setPasswordError(null);
+                  setPasswordSuccess(null);
                   setIsProfileModalOpen(true);
                 }}
                 style={{
@@ -479,293 +454,54 @@ export function AccountProfileWorkspaceView({
                 <View style={{ width: 70 }} />
               </View>
 
-              {/* Form Card */}
-              <GlassSurface elevated testID="account-profile-form-card">
-                <View style={{ gap: spacing.sm }}>
-                  <AppText variant="headline">Datos de tu Perfil</AppText>
-                  <AppText variant="caption" color={colors.text.secondary}>
-                    Actualiza la información con la que te identificas, tu correo de acceso y tu meta personal.
-                  </AppText>
+              <ProfileDetailsForm
+                key={`profile-${profileFormsKey}`}
+                authUser={authUser}
+                onUpdateProfile={onUpdateProfile}
+              />
 
-                  <View style={{ gap: spacing.xs, marginTop: spacing.xxs }}>
-                    <AppText variant="micro" color={colors.text.muted}>
-                      Nombre de usuario / Mostrar como
-                    </AppText>
-                    <AppTextInput
-                      testID="profile-input-name"
-                      placeholder="Tu nombre completo"
-                      value={displayName}
-                      onChangeText={setDisplayName}
-                    />
+              {/* Correo de acceso: verificación y cambio, con los correos de Firebase Auth */}
+              <AccountEmailForm
+                key={`email-${profileFormsKey}`}
+                authUser={authUser}
+                onRequestEmailChange={onRequestEmailChange}
+                onSendEmailVerification={onSendEmailVerification}
+              />
 
-                    <AppText variant="micro" color={colors.text.muted}>
-                      Correo electrónico
+              {/* Contraseña: enlace de restablecimiento de Firebase Auth */}
+              {isPasswordAccount ? (
+                <GlassSurface elevated testID="account-password-card">
+                  <View style={{ gap: spacing.sm }}>
+                    <AppText variant="headline">Contraseña</AppText>
+                    <AppText variant="caption" color={colors.text.secondary}>
+                      {`Enviaremos a ${authUser.email ?? 'tu correo'} un enlace para definir una nueva contraseña. Después tendrás que iniciar sesión nuevamente.`}
                     </AppText>
-                    <AppTextInput
-                      testID="profile-input-email"
-                      placeholder="tu.correo@ejemplo.com"
-                      value={email}
-                      onChangeText={setEmail}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                    />
 
-                    <AppText variant="micro" color={colors.text.muted}>
-                      Meta financiera personal
-                    </AppText>
-                    <AppTextInput
-                      testID="profile-input-goal"
-                      placeholder="Ej. Ahorro para un proyecto personal"
-                      value={financialGoal}
-                      onChangeText={setFinancialGoal}
+                    <FormMessage
+                      message={passwordSuccess}
+                      tone="success"
+                      testID="security-success-banner"
                     />
+                    <FormMessage message={passwordError} testID="security-error-banner" />
+
+                    <AppPressable
+                      testID="send-password-reset-button"
+                      accessibilityRole="button"
+                      disabled={isPasswordBusy || isPasswordResetWaiting}
+                      onPress={handleSendPasswordReset}
+                      style={secondaryButtonStyle}
+                    >
+                      <AppText variant="caption" color={colors.text.primary} style={{ fontWeight: '600' }}>
+                        {isPasswordBusy
+                          ? 'Enviando enlace...'
+                          : isPasswordResetWaiting
+                            ? `Podrás pedir otro enlace en ${passwordResetCooldown.secondsLeft} s`
+                            : 'Restablecer contraseña'}
+                      </AppText>
+                    </AppPressable>
                   </View>
-
-                  <FormMessage message={profileSuccessMsg} tone="success" />
-
-                  <AppPressable
-                    testID="save-profile-settings-button"
-                    accessibilityRole="button"
-                    accessibilityLabel="Guardar cambios de perfil"
-                    onPress={handleSaveProfile}
-                    style={{
-                      minHeight: MIN_TOUCH_TARGET_PT,
-                      borderRadius: radius.pill,
-                      borderCurve: 'continuous',
-                      backgroundColor: colors.glass.surfaceElevatedTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.specularBorder,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      marginTop: spacing.xs,
-                    }}
-                  >
-                    <AppText variant="caption" color={colors.text.primary} style={{ fontWeight: '600' }}>
-                      Guardar Cambios de Perfil
-                    </AppText>
-                  </AppPressable>
-                </View>
-              </GlassSurface>
-
-              {/* Security & Password Card with 6-Digit Email Verification */}
-              <GlassSurface elevated testID="account-password-card">
-                <View style={{ gap: spacing.sm }}>
-                  <AppText variant="headline">Seguridad y Contraseña</AppText>
-                  <AppText variant="caption" color={colors.text.secondary}>
-                    Por seguridad bancaria, para cambiar tu contraseña enviaremos un código de verificación de 6 dígitos a tu correo. El cambio se realiza internamente en la app.
-                  </AppText>
-
-                  <FormMessage message={securitySuccess} tone="success" testID="security-success-banner" />
-
-                  <FormMessage message={securityError} testID="security-error-banner" />
-
-                  {securityStep === 'idle' ? (
-                    <View style={{ gap: spacing.xs }}>
-                      <View style={{ gap: 2 }}>
-                        <AppText variant="micro" color={colors.text.muted}>
-                          Correo verificado para recibir el código:
-                        </AppText>
-                        <AppText variant="caption" color={colors.text.primary} style={{ fontWeight: '600' }}>
-                          {email.trim() || authUser.email || 'tu-correo@ejemplo.com'}
-                        </AppText>
-                      </View>
-
-                      <AppPressable
-                        testID="request-password-code-button"
-                        accessibilityRole="button"
-                        accessibilityLabel="Enviar código de verificación de 6 dígitos"
-                        disabled={isSecurityLoading}
-                        onPress={handleRequestVerificationCode}
-                        style={{
-                          minHeight: MIN_TOUCH_TARGET_PT,
-                          borderRadius: radius.pill,
-                          borderCurve: 'continuous',
-                          backgroundColor: colors.glass.surfaceTint,
-                          borderWidth: 1,
-                          borderColor: colors.glass.subtleBorder,
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                          marginTop: spacing.xxs,
-                        }}
-                      >
-                        <AppText variant="caption" color={colors.text.primary} style={{ fontWeight: '600' }}>
-                          {isSecurityLoading ? 'Enviando código...' : 'Enviar Código de 6 Dígitos al Correo'}
-                        </AppText>
-                      </AppPressable>
-
-                      {/* Fallback alias button for backward compatibility with existing tests */}
-                      <AppPressable
-                        testID="send-password-reset-button"
-                        accessibilityRole="button"
-                        accessibilityLabel="Restablecer contraseña"
-                        onPress={handleRequestVerificationCode}
-                        style={{ display: 'none' }}
-                      />
-                    </View>
-                  ) : (
-                    <View style={{ gap: spacing.xs }}>
-                      <AppText variant="micro" color={colors.text.muted}>
-                        Código de verificación de 6 dígitos
-                      </AppText>
-                      <AppTextInput
-                        testID="security-verification-code-input"
-                        placeholder="Ej: 123456 o pega el código"
-                        value={verificationCode}
-                        onChangeText={setVerificationCode}
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                      />
-
-                      <AppText variant="micro" color={colors.text.muted}>
-                        Nueva contraseña
-                      </AppText>
-                      <View
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          borderRadius: radius.md,
-                          borderCurve: 'continuous',
-                          backgroundColor: colors.glass.surfaceTint,
-                          borderWidth: 1,
-                          borderColor: colors.glass.subtleBorder,
-                        }}
-                      >
-                        <AppTextInput
-                          testID="security-new-password-input"
-                          placeholder="Mínimo 6 caracteres"
-                          value={newPassword}
-                          onChangeText={setNewPassword}
-                          secureTextEntry={!showNewPassword}
-                          style={{ flex: 1, backgroundColor: 'transparent', borderWidth: 0 }}
-                        />
-                        <AppPressable
-                          testID="security-password-toggle"
-                          accessibilityRole="button"
-                          accessibilityLabel={showNewPassword ? 'Ocultar nueva contraseña' : 'Ver nueva contraseña'}
-                          onPress={() => setShowNewPassword((p) => !p)}
-                          style={{
-                            minHeight: MIN_TOUCH_TARGET_PT,
-                            minWidth: MIN_TOUCH_TARGET_PT,
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            paddingHorizontal: spacing.sm,
-                          }}
-                        >
-                          {showNewPassword ? (
-                            <EyeIcon size={20} color={colors.text.secondary} />
-                          ) : (
-                            <EyeOffIcon size={20} color={colors.text.secondary} />
-                          )}
-                        </AppPressable>
-                      </View>
-
-                      <AppText variant="micro" color={colors.text.muted}>
-                        Confirmar nueva contraseña
-                      </AppText>
-                      <View
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          borderRadius: radius.md,
-                          borderCurve: 'continuous',
-                          backgroundColor: colors.glass.surfaceTint,
-                          borderWidth: 1,
-                          borderColor: colors.glass.subtleBorder,
-                        }}
-                      >
-                        <AppTextInput
-                          testID="security-confirm-password-input"
-                          placeholder="Repite la nueva contraseña"
-                          value={confirmNewPassword}
-                          onChangeText={setConfirmNewPassword}
-                          secureTextEntry={!showConfirmNewPassword}
-                          style={{ flex: 1, backgroundColor: 'transparent', borderWidth: 0 }}
-                        />
-                        <AppPressable
-                          testID="security-confirm-password-toggle"
-                          accessibilityRole="button"
-                          accessibilityLabel={
-                            showConfirmNewPassword
-                              ? 'Ocultar confirmación de nueva contraseña'
-                              : 'Ver confirmación de nueva contraseña'
-                          }
-                          onPress={() => setShowConfirmNewPassword((p) => !p)}
-                          style={{
-                            minHeight: MIN_TOUCH_TARGET_PT,
-                            minWidth: MIN_TOUCH_TARGET_PT,
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            paddingHorizontal: spacing.sm,
-                          }}
-                        >
-                          {showConfirmNewPassword ? (
-                            <EyeIcon size={20} color={colors.text.secondary} />
-                          ) : (
-                            <EyeOffIcon size={20} color={colors.text.secondary} />
-                          )}
-                        </AppPressable>
-                      </View>
-
-                      <AppPressable
-                        testID="security-submit-password-button"
-                        accessibilityRole="button"
-                        accessibilityLabel="Cambiar contraseña internamente"
-                        disabled={isSecurityLoading}
-                        onPress={handleConfirmPasswordChange}
-                        style={{
-                          minHeight: MIN_TOUCH_TARGET_PT,
-                          borderRadius: radius.pill,
-                          borderCurve: 'continuous',
-                          backgroundColor: colors.glass.surfaceElevatedTint,
-                          borderWidth: 1,
-                          borderColor: colors.glass.specularBorder,
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                          marginTop: spacing.xs,
-                        }}
-                      >
-                        <AppText variant="caption" color={colors.text.primary} style={{ fontWeight: '600' }}>
-                          {isSecurityLoading ? 'Actualizando contraseña...' : 'Confirmar Cambio de Contraseña'}
-                        </AppText>
-                      </AppPressable>
-
-                      <View
-                        style={{
-                          flexDirection: 'row',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          marginTop: spacing.xxs,
-                        }}
-                      >
-                        <AppPressable
-                          testID="security-resend-code-button"
-                          accessibilityRole="button"
-                          onPress={handleRequestVerificationCode}
-                          style={{ minHeight: MIN_TOUCH_TARGET_PT, justifyContent: 'center' }}
-                        >
-                          <AppText variant="caption" color={colors.text.secondary}>
-                            Reenviar código
-                          </AppText>
-                        </AppPressable>
-
-                        <AppPressable
-                          testID="security-cancel-code-button"
-                          accessibilityRole="button"
-                          onPress={() => {
-                            setSecurityStep('idle');
-                            setSecurityError(null);
-                          }}
-                          style={{ minHeight: MIN_TOUCH_TARGET_PT, justifyContent: 'center' }}
-                        >
-                          <AppText variant="caption" color={colors.text.muted}>
-                            Cancelar
-                          </AppText>
-                        </AppPressable>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              </GlassSurface>
+                </GlassSurface>
+              ) : null}
             </ScrollView>
           </KeyboardAvoidingView>
         </View>

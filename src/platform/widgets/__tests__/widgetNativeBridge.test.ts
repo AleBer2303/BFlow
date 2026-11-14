@@ -99,6 +99,24 @@ describe('widgetAdapter.native — iOS (App Group)', () => {
     expect(storage.reloadWidget).toHaveBeenCalledTimes(1);
   });
 
+  it('si el contenido no cambió, ni siquiera valida ni serializa el snapshot', async () => {
+    const storage = iosStorage();
+    const adapter = loadAdapter('ios', { ExtensionStorage: storage });
+    const snapshot = goldenSnapshot();
+    await adapter.syncWidgetSnapshot(snapshot);
+
+    // Mismo contenido con una fecha que el contrato rechazaría: si se validara, lanzaría.
+    const unchanged = { ...snapshot, updatedAtIso: 42 } as unknown as WidgetSnapshotV2;
+    const second = await adapter.syncWidgetSnapshot(unchanged);
+
+    expect(second).toMatchObject({ synced: true, skippedRedundantWrite: true });
+    expect(storage.setSecureFile).toHaveBeenCalledTimes(1); // solo la primera escritura
+    // Un cambio real sí se valida.
+    await expect(
+      adapter.syncWidgetSnapshot({ ...unchanged, monthKey: '2026-11' })
+    ).rejects.toThrow();
+  });
+
   it('informa el error si el módulo nativo falla y reintenta en la siguiente llamada', async () => {
     const storage = iosStorage();
     storage.reloadWidget.mockImplementationOnce(() => {

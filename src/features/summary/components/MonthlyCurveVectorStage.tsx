@@ -23,7 +23,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent, type ViewProps } from 'react-native';
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
-import { useBFlowTheme } from '../../../design-system';
+import {
+  IS_MOTION_STATIC,
+  scheduleAfterTabTransition,
+  useBFlowTheme,
+  useIsTabActive,
+  type CancellableTask,
+} from '../../../design-system';
 import { MONTHLY_CURVE_METRIC_IDS } from '../../../domain/overview/monthlyCurve';
 import { formatCurrency } from '../../../domain/money/money';
 import {
@@ -47,6 +53,7 @@ export type VectorStageInteraction = 'pointer' | 'touch';
 
 export interface MonthlyCurveVectorStageProps extends MonthlyCurveStageProps {
   interaction?: VectorStageInteraction;
+  isActive?: boolean;
 }
 
 const LINE_WIDTH_PT = 2;
@@ -96,20 +103,44 @@ function readPointerX(event: StagePointerEvent): number | null {
   return typeof x === 'number' && Number.isFinite(x) ? x : null;
 }
 
-/** Drives the animator: one frame per display refresh while it moves, none at rest. */
-function useAnimatedFrame(animator: VectorCurveAnimator) {
+/**
+ * Drives the animator: one frame per display refresh while it moves, none at rest.
+ * Stops immediately when the enclosing tab is inactive and defers startup after tab
+ * transitions so 60fps SVG redraws never contend with Android view mounting.
+ */
+function useAnimatedFrame(animator: VectorCurveAnimator, isActive: boolean) {
   const [frame, setFrame] = useState<VectorCurveFrame | null>(() => animator.getFrame());
   const handleRef = useRef<number | null>(null);
+  const deferredRef = useRef<CancellableTask | null>(null);
   const lastTimestampRef = useRef<number | null>(null);
+  const isActiveRef = useRef(isActive);
+  isActiveRef.current = isActive;
+  const wasActiveRef = useRef(isActive);
+
+  const cancelPendingFrames = useCallback(() => {
+    if (deferredRef.current !== null) {
+      deferredRef.current.cancel();
+      deferredRef.current = null;
+    }
+    if (handleRef.current !== null) {
+      cancelAnimationFrame(handleRef.current);
+      handleRef.current = null;
+    }
+    lastTimestampRef.current = null;
+  }, []);
 
   const step = useCallback(
     (timestamp: number) => {
       handleRef.current = null;
+      if (!isActiveRef.current) {
+        lastTimestampRef.current = null;
+        return;
+      }
       const seconds = resolveFrameSeconds(timestamp, lastTimestampRef.current);
       lastTimestampRef.current = timestamp;
       const isMoving = animator.advance(seconds);
       setFrame(animator.getFrame());
-      if (isMoving) {
+      if (isMoving && isActiveRef.current) {
         handleRef.current = requestAnimationFrame(step);
       } else {
         lastTimestampRef.current = null;
@@ -119,23 +150,48 @@ function useAnimatedFrame(animator: VectorCurveAnimator) {
   );
 
   /** Shows the new state right away and keeps animating from there (once there is a size). */
-  const invalidate = useCallback(() => {
-    const next = animator.getFrame();
-    setFrame(next);
-    if (next !== null && handleRef.current === null) {
-      handleRef.current = requestAnimationFrame(step);
-    }
-  }, [animator, step]);
-
-  useEffect(
-    () => () => {
-      if (handleRef.current !== null) {
-        cancelAnimationFrame(handleRef.current);
-        handleRef.current = null;
+  const invalidate = useCallback(
+    (immediate = false) => {
+      const next = animator.getFrame();
+      setFrame(next);
+      if (next === null || !isActiveRef.current) {
+        return;
+      }
+      if (immediate || IS_MOTION_STATIC) {
+        if (deferredRef.current !== null) {
+          deferredRef.current.cancel();
+          deferredRef.current = null;
+        }
+        if (handleRef.current === null) {
+          handleRef.current = requestAnimationFrame(step);
+        }
+        return;
+      }
+      if (handleRef.current === null && deferredRef.current === null) {
+        deferredRef.current = scheduleAfterTabTransition(() => {
+          deferredRef.current = null;
+          if (isActiveRef.current && handleRef.current === null) {
+            handleRef.current = requestAnimationFrame(step);
+          }
+        });
       }
     },
-    []
+    [animator, step]
   );
+
+  useEffect(() => {
+    if (!isActive) {
+      wasActiveRef.current = false;
+      cancelPendingFrames();
+      return;
+    }
+    if (!wasActiveRef.current) {
+      wasActiveRef.current = true;
+      invalidate();
+    }
+  }, [isActive, cancelPendingFrames, invalidate]);
+
+  useEffect(() => cancelPendingFrames, [cancelPendingFrames]);
 
   return { frame, invalidate };
 }
@@ -146,8 +202,11 @@ export default function MonthlyCurveVectorStage({
   reducedMotion,
   onScrub,
   interaction = 'pointer',
+  isActive: isActiveProp,
 }: MonthlyCurveVectorStageProps): React.JSX.Element {
   const { colors } = useBFlowTheme();
+  const isContextActive = useIsTabActive();
+  const isActive = isActiveProp ?? isContextActive;
   const metricColors = useMemo(
     () =>
       Object.fromEntries(
@@ -159,7 +218,7 @@ export default function MonthlyCurveVectorStage({
   const [animator] = useState(
     () => new VectorCurveAnimator({ curve, metricId, colors: metricColors, reducedMotion })
   );
-  const { frame, invalidate } = useAnimatedFrame(animator);
+  const { frame, invalidate } = useAnimatedFrame(animator, isActive);
 
   const [rawStop, setStop] = useState<CurveStop | null>(null);
   // Guards the render between a month change and the effect that clears the stop.
@@ -167,14 +226,14 @@ export default function MonthlyCurveVectorStage({
 
   const stopRef = useRef<CurveStop | null>(null);
   const applyStop = useCallback(
-    (next: CurveStop | null) => {
+    (next: CurveStop | null, immediate = true) => {
       if (stopRef.current === next) {
         return;
       }
       stopRef.current = next;
       setStop(next);
       animator.setStop(next);
-      invalidate();
+      invalidate(immediate);
       onScrub(next);
     },
     [animator, invalidate, onScrub]
@@ -202,13 +261,16 @@ export default function MonthlyCurveVectorStage({
 
   // A stop kept from another month would point at a day that no longer exists.
   useEffect(() => {
-    applyStop(null);
+    applyStop(null, false);
   }, [curve.monthKey, curve.cutoffDay, applyStop]);
 
   const widthRef = useRef(0);
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
       const { width, height } = event.nativeEvent.layout;
+      if (width <= 0 || height <= 0) {
+        return;
+      }
       widthRef.current = width;
       if (animator.setSize(width, height)) {
         invalidate();

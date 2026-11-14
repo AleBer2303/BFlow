@@ -17,7 +17,7 @@ import { useBudgetStore } from '../useBudgetStore';
 describe('Optimistic UI Rollback & Offline Queue (Phase 3: R-07, R-08, R-09)', () => {
   const testUser: BFlowAuthUser = {
     uid: 'uid_cloud_test_optimistic',
-    email: 'abernalg2303@gmail.com',
+    email: 'demo.owner@bflow.example',
     displayName: 'Alejandro Bernal',
     authProvider: 'password',
     provider: 'firebase',

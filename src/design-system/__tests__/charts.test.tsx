@@ -10,6 +10,7 @@ import { BarChart } from '../components/charts/BarChart';
 import { CHART_AXIS_GUTTER_PT, ChartCard, describeChartPoint } from '../components/charts/ChartParts';
 import { DonutChart, formatShare } from '../components/charts/DonutChart';
 import { LineChart } from '../components/charts/LineChart';
+import { TabVisibilityProvider } from '../motion/TabVisibilityContext';
 import { BFlowThemeProvider } from '../theme/ThemeContext';
 import { PLATFORM_SKIN_IDS, type PlatformSkinId } from '../tokens';
 
@@ -197,6 +198,51 @@ describe('BarChart', () => {
     const bar = hidden('flow-bar-received-1');
     expect(Number(bar.props.x) + Number(bar.props.width)).toBeLessThanOrEqual(WIDTH - CHART_AXIS_GUTTER_PT);
     expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('cancels the chart transition rAF when the enclosing tab becomes inactive', () => {
+    const cancelSpy = jest.spyOn(globalThis, 'cancelAnimationFrame');
+
+    try {
+      const view = render(
+        wrap(
+          <TabVisibilityProvider isActive>
+            <BarChart testID="flow" categories={MONTHS} categoryTitles={MONTH_TITLES} series={FLOW_SERIES} />
+          </TabVisibilityProvider>,
+          'android'
+        )
+      );
+      layoutPlot('flow');
+      expect(jest.getTimerCount()).toBeGreaterThan(0);
+
+      cancelSpy.mockClear();
+      view.rerender(
+        wrap(
+          <TabVisibilityProvider isActive={false}>
+            <BarChart testID="flow" categories={MONTHS} categoryTitles={MONTH_TITLES} series={FLOW_SERIES} />
+          </TabVisibilityProvider>,
+          'android'
+        )
+      );
+      layoutPlot('flow', 0);
+
+      expect(cancelSpy).toHaveBeenCalled();
+      expect(jest.getTimerCount()).toBe(0);
+
+      view.rerender(
+        wrap(
+          <TabVisibilityProvider isActive>
+            <BarChart testID="flow" categories={MONTHS} categoryTitles={MONTH_TITLES} series={FLOW_SERIES} />
+          </TabVisibilityProvider>,
+          'android'
+        )
+      );
+      elapse(SETTLE_MS);
+      expect(hidden('flow-bar-received-1')).toBeTruthy();
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      cancelSpy.mockRestore();
+    }
   });
 });
 

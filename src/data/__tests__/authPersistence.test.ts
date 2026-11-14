@@ -162,4 +162,57 @@ describe('Firebase Auth Persistence resolution & SecureStore Encryption (R-02 & 
       expect(resolveNativeAuthPersistence()).toBe(fallbackPersistence);
     });
   });
+
+  it('degrades gracefully to SecureStore + in-memory fallback when ExpoSQLite native module is missing (Android Expo Go)', async () => {
+    const secureStoreMap = new Map<string, string>();
+    const fakeSecureStore = {
+      AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 1,
+      getItem: jest.fn((key: string) => secureStoreMap.get(key) ?? null),
+      setItem: jest.fn((key: string, val: string) => {
+        secureStoreMap.set(key, val);
+      }),
+      getItemAsync: jest.fn(async (key: string) => secureStoreMap.get(key) ?? null),
+      setItemAsync: jest.fn(async (key: string, val: string) => {
+        secureStoreMap.set(key, val);
+      }),
+      deleteItemAsync: jest.fn(async (key: string) => {
+        secureStoreMap.delete(key);
+      }),
+    };
+    const fakePersistence: Persistence = { type: 'LOCAL' };
+    let capturedStorage: {
+      getItem(key: string): Promise<string | null>;
+      setItem(key: string, value: string): Promise<void>;
+      removeItem(key: string): Promise<void>;
+    } | null = null;
+
+    jest.isolateModules(() => {
+      jest.doMock('expo-secure-store', () => fakeSecureStore);
+      jest.doMock('expo-sqlite/kv-store', () => {
+        throw new Error("Cannot find native module 'ExpoSQLite'");
+      });
+      jest.doMock('firebase/auth', () => ({
+        inMemoryPersistence: { type: 'NONE' },
+        getReactNativePersistence: (storage: typeof capturedStorage) => {
+          capturedStorage = storage;
+          return fakePersistence;
+        },
+      }));
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { resolveFirebaseAuthPersistence: resolveNativeAuthPersistence } = require('../firebase/authPersistence.native') as {
+        resolveFirebaseAuthPersistence: () => Persistence;
+      };
+
+      expect(resolveNativeAuthPersistence()).toBe(fakePersistence);
+    });
+
+    expect(capturedStorage).not.toBeNull();
+    // Large payload (> 1,800 bytes) bypasses SecureStore and uses the in-memory fallback without throwing
+    const largePayload = JSON.stringify({ padding: 'x'.repeat(2500) });
+    await capturedStorage!.setItem('firebase:authUser:large', largePayload);
+    expect(await capturedStorage!.getItem('firebase:authUser:large')).toBe(largePayload);
+    await capturedStorage!.removeItem('firebase:authUser:large');
+    expect(await capturedStorage!.getItem('firebase:authUser:large')).toBeNull();
+  });
 });

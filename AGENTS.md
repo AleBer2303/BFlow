@@ -101,7 +101,7 @@ Es mandatorio crear un archivo ADR numerado (`docs/decisions/NNNN-<slug>.md`) an
 
 ## 7. Trabajo Multiplataforma: iOS · Android · Web (Regla Dura)
 
-BFlow se entrega en tres plataformas con **una piel cada una**: iOS (Liquid Glass), Android (Material 3) y Web (sistema plano). Decisiones en los ADR [0010](docs/decisions/0010-platform-skins-and-responsive-layout.md) y [0011](docs/decisions/0011-web-redesign-and-vector-curve.md); tokens y contrato responsive en `DESIGN.md` §10 y §11; pasos de validación en [`docs/guides/multiplatform-validation-guide.md`](docs/guides/multiplatform-validation-guide.md).
+BFlow se entrega en tres plataformas con **una piel cada una**: iOS (Liquid Glass), Android (Material 3) y Web (sistema plano). Decisiones en los ADR [0010](docs/decisions/0010-platform-skins-and-responsive-layout.md), [0011](docs/decisions/0011-web-redesign-and-vector-curve.md) y [0024](docs/decisions/0024-android-floating-dock-flat-indicator.md); tokens y contrato responsive en `DESIGN.md` §10 y §11; pasos de validación en [`docs/guides/multiplatform-validation-guide.md`](docs/guides/multiplatform-validation-guide.md).
 
 ### 7.1. Dónde vive la diferencia entre plataformas
 
@@ -112,7 +112,7 @@ BFlow se entrega en tres plataformas con **una piel cada una**: iOS (Liquid Glas
 
 ### 7.2. Liquid Glass es solo de iOS
 
-1. `expo-blur`, las superficies translúcidas, el borde especular, el lente y el dock flotante **no** aparecen en Android ni en Web. `npm run lint` rechaza cualquier import de `expo-blur` fuera de `GlassSurface` y `IosWheelPickerModal`, que lo condicionan a la piel iOS.
+1. `expo-blur`, las superficies translúcidas, el borde especular y el lente **no** aparecen en Android ni en Web. El dock flotante es de iOS y de Android (ADR 0024); en Android es opaco y marca la selección con una píldora plana, sin lente. Web no usa dock. `npm run lint` rechaza cualquier import de `expo-blur` fuera de `GlassSurface` y `IosWheelPickerModal`, que lo condicionan a la piel iOS.
 2. Las superficies se piden siempre con `<GlassSurface />`; nunca se construye una tarjeta a mano con `BlurView` o con un `rgba` translúcido.
 3. La piel Web no usa violeta ni lavanda, ni texto por debajo de 13 px, ni animaciones con rebote o ligadas al scroll.
 

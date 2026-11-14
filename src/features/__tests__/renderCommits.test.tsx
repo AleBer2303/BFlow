@@ -122,13 +122,12 @@ jest.mock('../../design-system', () => {
     mockBump('textInput');
     return ReactLib.createElement(OriginalInput, { ...props, ref });
   });
-  // Navigation of each skin: iOS dock, Android navigation bar, Web tab bar and header.
+  // Navigation of each skin: the dock (iOS and Android), Web tab bar and header.
   return {
     ...actual,
     AppPressable,
     AppTextInput,
     FloatingLiquidGlassDock: mockCountBody('nav', actual.FloatingLiquidGlassDock),
-    MaterialNavigationBar: mockCountBody('nav', actual.MaterialNavigationBar),
     WebTabBar: mockCountBody('nav', actual.WebTabBar),
     WebAppHeader: mockCountBody('webHeader', actual.WebAppHeader),
   };
@@ -277,6 +276,53 @@ describe('Fase 5: renders por acción', () => {
       expect(firstCommitEnd).toBeGreaterThanOrEqual(0);
       expect(firstCommit).not.toContain('checklist');
       expect(timeline.slice(firstCommitEnd + 1)).toContain('checklist');
+      expect(screen.getByTestId('checklist-workspace-view')).toBeTruthy();
+      expect(screen.getByTestId('workspace-tab-checklist')).toHaveProp(
+        'accessibilityState',
+        expect.objectContaining({ selected: true })
+      );
+    }
+  );
+
+  it.each(SKINS)(
+    'mantiene vivas las pestañas visitadas sin remontar filas en cambios rápidos consecutivos (piel %s)',
+    async (skin) => {
+      render(
+        <BFlowThemeProvider initialMode="dark" skin={skin}>
+          <PhaseOneHomeScreen />
+        </BFlowThemeProvider>
+      );
+      await act(async () => {});
+
+      // Visit checklist and debts once so both enter the keep-alive pool.
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('workspace-tab-checklist'));
+      });
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('workspace-tab-debts'));
+      });
+
+      const resetCounts = () => {
+        const counts = mockCounts();
+        for (const key of Object.keys(counts)) counts[key] = 0;
+        mockTimeline().length = 0;
+        return counts;
+      };
+
+      const counts = resetCounts();
+
+      // Rapidly switch between already-visited tabs (checklist -> summary -> debts -> checklist).
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('workspace-tab-checklist'));
+        fireEvent.press(screen.getByTestId('workspace-tab-summary'));
+        fireEvent.press(screen.getByTestId('workspace-tab-debts'));
+        fireEvent.press(screen.getByTestId('workspace-tab-checklist'));
+      });
+
+      // Returning to already-mounted tabs does not re-render heavy view trees or checklist rows.
+      expect(counts.checklist ?? 0).toBe(0);
+      expect(counts.debts ?? 0).toBe(0);
+      expect(counts.row ?? 0).toBe(0);
       expect(screen.getByTestId('checklist-workspace-view')).toBeTruthy();
       expect(screen.getByTestId('workspace-tab-checklist')).toHaveProp(
         'accessibilityState',

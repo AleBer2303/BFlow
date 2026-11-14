@@ -132,7 +132,7 @@ describe('platform skin resolution', () => {
 });
 
 describe('platform skin identity', () => {
-  it('declares a distinct material, navigation and press feedback per skin', () => {
+  it('declares a distinct material and press feedback per skin, and the dock on iOS and Android', () => {
     expect(platformSkins.ios).toMatchObject({
       surfaceMaterial: 'liquid-glass',
       navigation: 'floating-dock',
@@ -140,7 +140,7 @@ describe('platform skin identity', () => {
     });
     expect(platformSkins.android).toMatchObject({
       surfaceMaterial: 'tonal',
-      navigation: 'navigation-bar',
+      navigation: 'floating-dock',
       pressFeedback: 'sink',
     });
     expect(platformSkins.web).toMatchObject({
@@ -149,7 +149,8 @@ describe('platform skin identity', () => {
       pressFeedback: 'step',
     });
 
-    for (const field of ['surfaceMaterial', 'navigation', 'pressFeedback'] as const) {
+    // iOS and Android share the floating dock (ADR 0024); material and touch stay distinct.
+    for (const field of ['surfaceMaterial', 'pressFeedback'] as const) {
       expect(new Set(PLATFORM_SKIN_IDS.map((id) => platformSkins[id][field])).size).toBe(3);
     }
   });
@@ -172,12 +173,14 @@ describe('platform skin identity', () => {
     expect(typographyBySkin.ios).toBe(typography);
   });
 
-  it('gives every skin a different page, accent and radius family', () => {
+  it('gives every skin its own radius family and keeps Web visually distinct from mobile', () => {
     for (const mode of MODES) {
-      const pages = PLATFORM_SKIN_IDS.map((id) => palettesBySkin[id][mode].background.primary);
-      const accents = PLATFORM_SKIN_IDS.map((id) => palettesBySkin[id][mode].accent.primary);
-      expect(new Set(pages).size).toBe(3);
-      expect(new Set(accents).size).toBe(3);
+      expect(palettesBySkin.web[mode].background.primary).not.toBe(
+        palettesBySkin.ios[mode].background.primary
+      );
+      expect(palettesBySkin.web[mode].accent.primary).not.toBe(
+        palettesBySkin.ios[mode].accent.primary
+      );
     }
     expect(new Set(PLATFORM_SKIN_IDS.map((id) => radiusBySkin[id].lg)).size).toBe(3);
   });
@@ -248,6 +251,26 @@ describe('Android skin (Material 3)', () => {
     expect(typographyBySkin.android.caption.letterSpacing).toBe(0.5);
     // Roboto is the system face: no custom family is forced.
     expect(typographyBySkin.android.body.fontFamily).toBeUndefined();
+  });
+
+  it.each(MODES)('matches the iOS color palette with opaque surfaces (%s)', (mode) => {
+    const ios = palettesBySkin.ios[mode];
+    const android = palettesBySkin.android[mode];
+
+    expect(android.background).toEqual(ios.background);
+    expect(android.accent).toEqual(ios.accent);
+    expect(android.text.primary).toBe(ios.text.primary);
+    expect(android.text.secondary).toBe(ios.text.secondary);
+    expect(android.text.inverse).toBe(ios.text.inverse);
+    expect(android.glass.specularBorder).toBe(ios.glass.specularBorder);
+    expect(android.glass.subtleBorder).toBe(ios.glass.subtleBorder);
+    expect(android.glass.surfaceTint.toLowerCase()).toBe(
+      over(ios.glass.surfaceTint, ios.background.primary)
+    );
+    expect(android.glass.surfaceElevatedTint.toLowerCase()).toBe(
+      over(ios.glass.surfaceElevatedTint, ios.background.primary)
+    );
+    expect(android.chart).toEqual(ios.chart);
   });
 });
 

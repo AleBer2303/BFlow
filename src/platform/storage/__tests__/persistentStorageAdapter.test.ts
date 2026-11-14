@@ -144,7 +144,7 @@ describe('persistentStorageAdapter (Encrypted Persistence ADR 0015 & ADR 0016)',
 
     const sessionPayload = {
       uid: 'uid-native-1',
-      email: 'abernalg2303@gmail.com',
+      email: 'demo.owner@bflow.example',
       displayName: 'Alejandro Bernal',
     };
     persistentStorage.setItem('bflow.auth.session.v1', sessionPayload);
@@ -152,7 +152,7 @@ describe('persistentStorageAdapter (Encrypted Persistence ADR 0015 & ADR 0016)',
     const rawOnDisk = disk.get('bflow.auth.session.v1');
     expect(rawOnDisk).toBeDefined();
     expect(isEncryptedStoragePayload(rawOnDisk!)).toBe(true);
-    expect(rawOnDisk).not.toContain('abernalg2303@gmail.com');
+    expect(rawOnDisk).not.toContain('demo.owner@bflow.example');
     expect(decryptRawStringFromStorage(rawOnDisk!)).toBe(JSON.stringify(sessionPayload));
 
     // Simulate closing the app / cold restart: wipe the in-memory Map
@@ -305,7 +305,7 @@ describe('storageBackend.native (expo-secure-store + expo-sqlite/kv-store)', () 
       // 1. Session key goes directly to expo-secure-store (Keychain/Keystore), NOT SQLite
       persistentStorage.setItem('bflow.auth.session.v1', {
         uid: 'uid_secure_1',
-        email: 'abernalg2303@gmail.com',
+        email: 'demo.owner@bflow.example',
       });
       expect(mockSecureSetItem).toHaveBeenCalled();
       expect(secureKeychain.has('bflow.auth.session.v1')).toBe(true);
@@ -330,7 +330,7 @@ describe('storageBackend.native (expo-secure-store + expo-sqlite/kv-store)', () 
       );
       expect(loadedSession).toEqual({
         uid: 'uid_secure_1',
-        email: 'abernalg2303@gmail.com',
+        email: 'demo.owner@bflow.example',
       });
 
       const loadedBudget = persistentStorage.getItem<{ balanceCop: number }>(
@@ -348,6 +348,59 @@ describe('storageBackend.native (expo-secure-store + expo-sqlite/kv-store)', () 
       persistentStorage.setItem('another_key', 'value');
       persistentStorage.clear();
       expect(mockClearSync).toHaveBeenCalled();
+    });
+  });
+
+  it('keeps SecureStore working and falls back to in-memory storage when ExpoSQLite native module is missing', () => {
+    const secureKeychain = new Map<string, string>();
+    const mockSecureGetItem = jest.fn((key: string) => secureKeychain.get(key) ?? null);
+    const mockSecureSetItem = jest.fn((key: string, value: string) => {
+      secureKeychain.set(key, value);
+    });
+    const mockSecureDeleteItemAsync = jest.fn(async (key: string) => {
+      secureKeychain.delete(key);
+    });
+
+    jest.isolateModules(() => {
+      jest.doMock('expo-secure-store', () => ({
+        AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 1,
+        getItem: mockSecureGetItem,
+        setItem: mockSecureSetItem,
+        deleteItemAsync: mockSecureDeleteItemAsync,
+      }));
+      jest.doMock('expo-sqlite/kv-store', () => {
+        throw new Error("Cannot find native module 'ExpoSQLite'");
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { storageBackend: nativeBackend } = require('../storageBackend.native') as {
+        storageBackend: RawStorageBackend;
+      };
+
+      __setStorageBackendForTests(nativeBackend);
+
+      // Session keys still persist in SecureStore
+      persistentStorage.setItem('bflow.auth.session.v1', { uid: 'uid_expo_go' });
+      expect(secureKeychain.has('bflow.auth.session.v1')).toBe(true);
+
+      // Account cache falls back to in-memory Map without throwing
+      persistentStorage.setItem('bflow.account.cache.v2.uid_expo_go', { balanceCop: 500_000 });
+      __resetMemoryCacheForTests();
+
+      expect(
+        persistentStorage.getItem<{ uid: string }>('bflow.auth.session.v1')
+      ).toEqual({ uid: 'uid_expo_go' });
+      expect(
+        persistentStorage.getItem<{ balanceCop: number }>('bflow.account.cache.v2.uid_expo_go')
+      ).toEqual({ balanceCop: 500_000 });
+
+      persistentStorage.removeItem('bflow.account.cache.v2.uid_expo_go');
+      __resetMemoryCacheForTests();
+      expect(
+        persistentStorage.getItem('bflow.account.cache.v2.uid_expo_go')
+      ).toBeNull();
+
+      persistentStorage.clear();
     });
   });
 });

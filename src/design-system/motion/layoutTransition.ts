@@ -1,15 +1,21 @@
 /**
  * src/design-system/motion/layoutTransition.ts
  *
- * Animates the NEXT layout change (a row added to a list, an accordion opening) with the
- * system layout animator. One reversible motion, the same both ways. It does nothing on Web,
- * where there is no layout animator, nor with Reduce Motion, where the layout changes at once.
+ * Animates the NEXT layout change (an accordion opening or closing) with the system layout
+ * animator. Omit `delete` so swapped triggers vanish immediately instead of fading out over
+ * incoming content. Does nothing on Web, where there is no layout animator, nor with Reduce
+ * Motion, where the layout changes at once.
  */
 
 import { AccessibilityInfo, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { motionDuration } from '../tokens';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+const isNewArchitecture =
+  typeof globalThis !== 'undefined' &&
+  'nativeFabricUIManager' in globalThis &&
+  Boolean((globalThis as { nativeFabricUIManager?: unknown }).nativeFabricUIManager);
+
+if (Platform.OS === 'android' && !isNewArchitecture && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
@@ -35,9 +41,5 @@ export function animateNextLayout(): void {
       property: LayoutAnimation.Properties.opacity,
     },
     update: { type: LayoutAnimation.Types.easeInEaseOut },
-    delete: {
-      type: LayoutAnimation.Types.easeInEaseOut,
-      property: LayoutAnimation.Properties.opacity,
-    },
   });
 }

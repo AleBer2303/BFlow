@@ -32,7 +32,7 @@
 - **Base de Datos:** Google Cloud Firestore JS SDK `^11.10.0`.
 - **Proyecto Firebase:** `bflow-deaeb`.
 - **Región Cloud Firestore:** `nam5` (`us-central`).
-- **Autenticación:** Firebase Auth (Email/Contraseña) + Servicio de Verificación de 6 dígitos vía Resend API.
+- **Autenticación:** Firebase Auth (Email/Contraseña). Los correos de verificación, restablecimiento de contraseña y cambio de correo los envía Firebase Auth (ADR 0025; antes, códigos de 6 dígitos vía Resend API).
 - **Modelo de Datos:** Multi-inquilino aislado bajo `users/{uid}/...` (colecciones: `concepts`, `entries`, `debts`, `debtPayments`, `savingsBuckets`, `provisionPlans`, `monthSnapshots`).
 
 ### Librerías Clave & Estado
@@ -207,6 +207,69 @@ Para reproducir estas mediciones en cualquier momento en la rama `perf/baseline-
 - **Red 3G lenta / inestable:** *No medido en red 3G real.* Se validó mediante tests unitarios y de integración que las consultas duplicadas se eliminaron, que las peticiones tienen timeout de 10 s y que ante rechazos permanentes la interfaz revierte el estado optimista.
 - **Suite de Pruebas:** `[X] Correctas`. 21 test suites y 123 tests pasando al 100% en 10.6 segundos.
 - **Decisión Final:** `[X] Conservar`. Todos los cambios demostraron mejoras medibles, respetaron las invariantes contables y no introdujeron complejidad innecesaria.
+
+### 05 / Tiempo de la suite de Jest (Auditoría de producción, Fase 5)
+
+Medición del 2026-11-13 en Windows 11, 12 núcleos lógicos, Node del equipo, rama `audit/production-adjustments`. 71 suites y 894 tests antes y después. El tiempo es el `Time:` que informa Jest; entre ejecuciones idénticas varía ±10 s en este equipo.
+
+| Medida | Antes | Después |
+| :--- | :---: | :---: |
+| `npm test`, caché de transformación caliente | 82,7 s y 61,9 s (2 muestras) | mediana 49,6 s; de 41,8 s a 69,7 s (8 muestras) |
+| `npm test -- --coverage --ci`, caché caliente | sin medir | 53,8 s |
+| Primera ejecución con la caché vacía (`.jest-cache` nuevo) | sin medir | 82,7 s sin cobertura; 91,9 s con cobertura |
+| `vectorCurve.test.tsx` dentro de la suite completa | 78,4 s y 58,6 s | 16,8 s (6 workers); 2,7 s (4 workers) |
+| `vectorCurve.test.tsx`, suma de sus 27 tests | 54,5 s | menos de 1 s |
+| Cuadros que avanza `VectorCurveAnimator` en esa suite | 84.270 | 746 |
+| Commits de React del escenario en esa suite | 50 | 62 |
+| Cobertura de `src/domain/` | sin medir | 98,89 % sentencias, 98,94 % líneas |
+
+**Causa.** La suite de la curva era la más lenta y marcaba el tiempo total. No eran los renders del SVG: dentro de `act` React los agrupa, y el escenario hacía 50 commits en toda la suite. Con `jest.useFakeTimers()`, el `requestAnimationFrame` de pruebas de React Native es `setTimeout(callback, 0)`, y los timers falsos lo disparan una vez por milisegundo simulado: 1.001 cuadros por segundo (medido), cada uno recalculando todas las rutas de la curva. Cada `elapse(10_000)` sobre una curva en movimiento costaba unos 7.200 cuadros.
+
+**Cambios.**
+
+1. `vectorCurve.test.tsx` instala un reloj de cuadros propio (`installFrameClock`): un cuadro cada 16 ms. `fastForward` recorre a 50 ms por cuadro (el máximo que acepta el animador, `CURVE_MAX_FRAME_SECONDS`) los tramos que ningún `expect` mira. `renderRestingStage` parte de una curva en reposo sin reproducir la entrada. Los tiempos de espera salen de `curveMotion.ts`: 7,5 s para la entrada con sus tres pulsos y 1,56 s para un morph o un planeo del marcador. No se quitó ningún test y se añadieron comprobaciones: el marcador sigue en camino un cuadro después del gesto, y el escenario no programa cuadros cuando el marcador llega.
+2. `jest.config.js`: `maxWorkers: '50%'` y `cacheDirectory: '<rootDir>/.jest-cache'` (ignorado en git). La configuración de Jest vive en `jest.config.js`; una sección `"jest"` en `package.json` haría fallar a Jest por configuración duplicada.
+3. `package.json`: `test:domain` (8,3 s según Jest, 93 tests) y `test:changed`.
+
+**Efecto de `maxWorkers`, medido después del cambio 1 con caché caliente.**
+
+| Workers | Tiempo total | Suma de los tiempos de las suites |
+| :---: | :---: | :---: |
+| 4 | 53,1 s | 190 s |
+| 6 (`50%`) | 52,2 s y 52,9 s | 282 s |
+| 8 | 55,1 s | 376 s |
+| 11 (el valor por defecto anterior) | 53,3 s y 53,7 s | 504 s |
+
+El tiempo total no cambia con el número de workers: cada suite tarda más cuantos más compiten. `50%` usa poco más de la mitad de CPU que el valor anterior para el mismo resultado. **No medido en GitHub Actions**, donde `50%` son 2 workers en lugar de 3.
+
+**Descartado con evidencia.** La auditoría pedía cortar en tests los bucles `requestAnimationFrame` de `useChartTransition`. Una sonda sobre `requestAnimationFrame` contó **0 llamadas** con timers reales en `workspacePlatforms`, `savingsAndMotoIdealView`, `debtsFunfamiView`, `chartsFlow`, `renderCommits`, `phase4Screens` y `designSystem`: en RNTL los gráficos no reciben `onLayout`, `enabled` es falso y el bucle no arranca. No se cambió `useChartTransition.ts`.
+
+**Pendiente.** Las demás suites con timers falsos y `requestAnimationFrame` (`charts.test.tsx` y las de gráficos) siguen a 1.000 cuadros por segundo simulado; juntas suman pocos segundos.
+
+### 06 / Por qué `workspacePlatforms.test.tsx` es ahora la suite más lenta
+
+Tras el apartado 05 es la suite más larga (27 s a 50 s según los workers). Se perfiló el 2026-11-13 con `node --cpu-prof` y Jest en un solo proceso. **No se cambió código: la causa está fuera del repositorio.**
+
+| Medida | Valor |
+| :--- | :---: |
+| La suite sola: tiempo total / suma de sus 54 tests | 28,4 s / 10,9 s |
+| Tiempo del proceso en llamadas al sistema de archivos | 63 % (23,2 s de 36,6 s) |
+| `open` al leer el código fuente de cada módulo (`jest-runtime`, `readFile`) | 8,6 s |
+| Leer la caché de transformación (`.jest-cache`) | 0,2 s |
+| React y `react-test-renderer` | 3,7 s |
+| Módulos que carga `app/index` (138 de `react-native`, 110 de `react-native-svg`, 133 propios) | 555 |
+| Módulos cargados antes de cada archivo de test (96 de `lodash`, del preset de `jest-expo`) | 164 |
+
+**Causa.** Abrir por primera vez un archivo `.js` tarda entre 5,6 ms y 12,6 ms en este equipo; la misma copia sin extensión, 0,10 ms, y una segunda apertura, de 0,1 ms a 0,5 ms. Es el análisis en acceso de la protección del equipo sobre los `.js`. Su caché dura poco: un proceso lanzado justo después abre los mismos archivos a 0,58 ms, y unos minutos más tarde vuelven a costar 7 ms. Jest lee el código fuente de cada módulo para calcular la clave de caché, así que cada ejecución paga ese análisis en frío.
+
+**Consecuencias.**
+
+- El coste no es de `workspacePlatforms`: lo paga la primera suite pesada de cada worker. En un mismo proceso, la primera suite tiene 17,5 s de sobrecarga y las dos siguientes (`phase4Screens`, `renderCommits`) 2,6 s y 1,5 s. Jest lanza primero las suites más largas, así que cada worker empieza por una.
+- Explica que el tiempo total no cambie con 4, 6, 8 u 11 workers (apartado 05).
+- `--workerThreads` no ayuda: 5 pares alternados dieron 42,6 s a 50,9 s con hilos (mediana 45,9 s) y 44,0 s a 69,7 s con procesos (mediana 47,0 s). No se adopta: es experimental y la diferencia cabe en el ruido.
+- Recortar el grafo de módulos no compensa: `react-native` y `react-native-svg` son necesarios para montar la app.
+
+**Lo que sí lo reduciría, fuera del repositorio.** Excluir la carpeta del proyecto (o `node_modules`) del análisis en acceso. Es un ajuste de seguridad del equipo y lo decide su propietario o el área de TI. **No se probó ni se midió.** En GitHub Actions (Linux) este coste no existe; allí los tiempos no están medidos.
 
 
 ---
@@ -476,10 +539,123 @@ Cambios de la rama `feature/phase-8-polish`, a partir de un inventario por lectu
 ### Pendiente, por orden de impacto estimado (sin medir)
 
 1. **Cifrado de la caché en JS puro y síncrono** (`storageCipher.ts`): AES-256-CTR y HMAC-SHA256 sobre toda la cuenta en el hilo de JS, al arrancar y en cada guardado. Medir en Hermes antes de cambiarlo.
-2. **Curva vectorial y gráficos con un `setState` por cuadro** (`MonthlyCurveVectorStage.tsx`, `useChartTransition.ts`): es la curva principal en Android y Web. Requiere Reanimated o props animadas de `react-native-svg`.
+2. **Curva vectorial y gráficos con un `setState` por cuadro** (`MonthlyCurveVectorStage.tsx`, `useChartTransition.ts`): mitigado al pausarse cuando la pestaña está oculta y diferir el arranque fuera de la ventana de transición en nativo, pero la animación activa sigue usando `setState` en JS (requiere Reanimated / props animadas de `react-native-svg`).
 3. **Un `BlurView` por tarjeta en iOS sobre fondo liso** (`GlassSurface.tsx`). Quitarlo cambia el material de la piel iOS y necesita ADR.
-4. **R-20:** volver a Resumen recrea el contexto GL y compila los shaders.
-5. **Snapshot del widget y resúmenes de dominio recalculados en cada mutación** (57 llamadas a `triggerWidgetSync`).
-6. **Animaciones de layout en el hilo de JS:** `RevealDown` (alto) y los botones de fila del Checklist (ancho).
-7. **R-22:** `three` se carga de forma estática al arrancar en nativo.
-8. **Formularios de Ahorros, Deudas y Cuenta** con su estado junto a las listas: cada tecla vuelve a pintar la vista entera.
+4. **Snapshot del widget y resúmenes de dominio recalculados en cada mutación** (57 llamadas a `triggerWidgetSync`).
+5. **Animación de altura de `RevealDown` en el hilo de JS** cuando se abre un panel.
+6. **R-22:** `three` se carga de forma estática al arrancar en nativo.
+7. **Formularios de Ahorros, Deudas y Cuenta** con su estado junto a las listas: cada tecla vuelve a pintar la vista entera.
+
+---
+
+## 18. Auditoría de Producción — Fase 3: Lag al cambiar rápido de pestañas en Android
+
+Intervención sobre las 5 causas raíz identificadas en [`docs/Improvements/AUDITS/auditoria_produccion_bflow.md`](docs/Improvements/AUDITS/auditoria_produccion_bflow.md) al alternar rápido entre pestañas en Android.
+
+### Cambios implementados
+
+1. **`ActionRevealSlot` inerte al montar cerrado (`src/features/checklist/components/ChecklistWorkspaceView.tsx`):** se añadió `hasBeenVisibleRef` para no disparar `Animated.timing(..., { useNativeDriver: false })` en el montaje inicial cuando `visible === false`. La animación de cierre solo corre tras haber estado abierto (`true -> false`).
+2. **Keep-alive perezoso de pestañas visitadas (`src/app/index.tsx`, `src/design-system/motion/TabVisibilityContext.tsx`):** en lugar de `<Entrance key={contentTab}>` (que destruía y reconstruía el árbol nativo completo en cada cambio), `WorkspaceTabKeepAlive` monta cada pestaña bajo demanda en `visitedTabs` y oculta las pestañas inactivas visitadas con `display: 'none'`, `pointerEvents="none"`, `importantForAccessibility="no-hide-descendants"`, `accessibilityElementsHidden` y `aria-hidden`, conservando `testID="workspace-tab-panel-<id>"` sin duplicar nodos visibles.
+3. **Bucles `requestAnimationFrame` desacoplados y pausables (`src/design-system/motion/motionRuntime.ts`, `MonthlyCurveVectorStage.tsx`, `MonthlyCurveSection.tsx`, `useChartTransition.ts`, `BarChart.tsx`, `LineChart.tsx`):**
+   - `scheduleAfterTabTransition` difiere el arranque en nativo (en RN 0.88.1 `InteractionManager` fue eliminado del núcleo de `react-native`, por lo que se usa aplazamiento cancelable alineado a `motionDuration.fast` = 250 ms; en Jest y Web ejecuta de forma síncrona).
+   - `MonthlyCurveVectorStage`, `CurveReadoutView` y `useChartTransition` leen `useIsTabActive()` (o prop `isActive`) y cancelan cualquier `requestAnimationFrame` / tarea diferida inmediatamente cuando la pestaña deja de estar activa, e ignoran eventos `onLayout` con ancho/alto `<= 0` mientras el slot está colapsado con `display: 'none'`.
+4. **Memoización de interpolaciones en `AppPressable` (`src/design-system/components/AppPressable.tsx`):** los nodos `.interpolate()` (`sinkOpacity`, `sinkScale`), el estilo compuesto `sinkPressStyle` y los handlers `animatePress`, `handleSinkPressIn` y `handleSinkPressOut` quedan memoizados con `useMemo`/`useCallback`.
+5. **Eliminación de trabajo de lente iOS y re-renders intra-tab en el dock de Android (`src/design-system/components/FloatingLiquidGlassDock.tsx`):**
+   - `lensMotion` (`buildLensGeometry`, `scaleY`, `glowOpacity`) retorna `null` en `!isLiquidGlass` (Android/Web); `flatTranslateX` se memoiza solo en `!isLiquidGlass`; `liftAnim`/`stretchAnim` no se actualizan en Android.
+   - Se eliminó `setDraggedIndex(initialIndex)` en `onPanResponderGrant` y se protegió `setDraggedIndex` contra actualizaciones redundantes cuando el índice bajo el dedo no cambia.
+
+### Evidencia observada en Jest / RNTL (sin dispositivo Android físico)
+
+| Verificación observada en Jest (`NODE_ENV=test` salvo mock de runtime activo) | Antes | Después | Archivo de test |
+| :--- | :---: | :---: | :--- |
+| Llamadas `Animated.timing` al montar `ActionRevealSlot` cerrado (`IS_MOTION_STATIC: false`) | 1 por slot en montaje inicial | **0** (solo 1 al abrir, 1 al cerrar tras abrir) | `src/features/checklist/__tests__/actionRevealSlot.test.tsx` |
+| Llamadas `.interpolate()` por re-render en `AppPressable` (`IS_MOTION_STATIC: false`) | 2 por cada re-render | **2** en montaje, **0** en re-renders posteriores | `src/design-system/__tests__/activeMotionRuntime.test.tsx` |
+| Nodos `Animated.multiply` / `Animated.subtract` de lente creados en `FloatingLiquidGlassDock` (`skin="android"`) | Construidos en cada render | **0** en montaje y re-render (`lensMotion === null`) | `src/design-system/__tests__/floatingLiquidGlassDock.test.tsx` |
+| Re-renders de `FloatingLiquidGlassDock` (`skin="android"`) en `onResponderGrant` + movimientos intra-tab | ≥ 1 en `grant` | **0** en `grant` y moves intra-tab; **1** al cruzar de tab; **0** `Animated.spring` | `src/design-system/__tests__/floatingLiquidGlassDock.test.tsx` |
+| Commits de `Checklist`, `Debts` y `row` al revisitar tabs en cambios rápidos (`checklist → summary → debts → checklist`, 3 pieles) | Remontaje completo en cada visita | **0** (`checklist: 0`, `debts: 0`, `row: 0`) | `src/features/__tests__/renderCommits.test.tsx` |
+| Timers/rAF activos tras ocultar `MonthlyCurveVectorStage` y `BarChart` con `TabVisibilityProvider isActive={false}` | Bucle continuaba hasta finalizar | **0** timers pendientes (`cancelAnimationFrame` ejecutado de inmediato) | `vectorCurve.test.tsx`, `charts.test.tsx` |
+| Conteos `BFLOW_RENDER_REPORT=1` (3 pieles): `syncMessage_x5` / `toggle_one_row.row` / `type_5_chars.row` | 0 / 1 / 0 | **0 / 1 / 0** (sin regresiones de aislamiento) | `src/features/__tests__/renderCommits.test.tsx` |
+
+### No medido
+
+- FPS reales, tiempo por frame en hilo JS/UI (ms) ni suavidad de gestos en dispositivo Android físico (Hermes release build): los resultados anteriores corresponden a conteos deterministas de renders, nodos animados y timers en Jest / React Native Testing Library.
+
+---
+
+## 19. Auditoría de Producción — Fase 4: bundle de Android, formularios, widgets e historial de Firestore
+
+Hallazgo AUD-07 de [`docs/Improvements/AUDITS/auditoria_produccion_bflow.md`](docs/Improvements/AUDITS/auditoria_produccion_bflow.md). Decisión de la carga acotada y del refresco de widgets en el [ADR 0028](docs/decisions/0028-archived-history-window-and-widget-sync-coalescing.md).
+
+### Bundle de Android sin three.js
+
+Medido en Windows 11 con el mismo árbol de trabajo, quitando y poniendo únicamente `MonthlyCurveStageLoader.android.tsx`:
+
+```bash
+npx expo export --platform android --output-dir <carpeta>
+```
+
+con `EXPO_PUBLIC_BFLOW_DEMO=1` en el entorno (modo vitrina, para no depender de las variables de Firebase).
+
+| Bundle Hermes (`_expo/static/js/android/entry-*.hbc`) | Bytes | |
+| :--- | ---: | :--- |
+| Antes (Android resolvía `MonthlyCurveStageLoader.tsx` → `MonthlyCurveStage` → `three`) | 7.657.437 | 7,66 MB |
+| Después (`MonthlyCurveStageLoader.android.tsx` no importa nada) | 5.403.577 | 5,40 MB |
+| **Diferencia** | **−2.253.860** | **−29,4 %** |
+
+iOS conserva la escena (`MonthlyCurveStageLoader.ios.tsx`) y Web el chunk diferido. `src/features/summary/__tests__/monthlyCurveStageLoader.test.tsx` falla si la variante de Android vuelve a cargar `three` o `expo-gl`.
+
+### Formularios con estado propio
+
+Contado en Jest/RNTL con un `StatusBadge` instrumentado (lo usan las tarjetas, no los formularios), en las tres pieles.
+
+| Acción | Antes | Después | Test |
+| :--- | :--- | :---: | :--- |
+| Escribir en los 5 campos de la deuda y cambiar el tipo de interés | La vista entera en cada tecla (los `useState` vivían en `DebtsFunfamiView`) | **0** renders de tarjetas | `debtsFunfamiView.test.tsx` |
+| Escribir en «Nuevo Fondo», en el editor de fondo o en la provisión | La vista entera en cada tecla (`SavingsAndMotoIdealView`) | **0** renders de fondos y provisiones | `savingsAndMotoIdealView.test.tsx` |
+| Escribir nombre, meta, correo nuevo y contraseña en la ventana de perfil | La pantalla de Cuenta entera en cada tecla | **0** renders de la pantalla de detrás | `accountProfileWorkspaceView.test.tsx` |
+
+El «antes» es la lectura del código anterior, no una medición: los `useState` de cada campo estaban en el componente de la vista. Los gráficos de Deudas y Ahorros ya eran hermanos de la vista en `DebtsTab` y `SavingsTab`, así que no se re-renderizaban al escribir; lo que se ahorra son las tarjetas.
+
+### Widgets y caché de la cuenta
+
+| Verificación | Antes | Después | Test |
+| :--- | :--- | :---: | :--- |
+| 3 llamadas a `triggerWidgetSync` en el mismo tick | 3 cálculos de `buildWidgetSnapshot` | **1**, con el último estado | `widgetCloudSync.test.ts` |
+| `syncWidgetSnapshot` nativo con contenido sin cambios | Validaba con Zod y serializaba antes de comparar | **0** validaciones y serializaciones | `widgetNativeBridge.test.ts` |
+| `isEquivalentCloudAccount` con cuentas de distinta forma (meses, deudas, fondos o snapshots de más) | Hasta 8 pares de `JSON.stringify` | **0** `JSON.stringify` | `accountCache.test.ts` |
+| `isEquivalentCloudAccount` con la misma forma y la misma `dataRevision` | 8 pares de `JSON.stringify` | **0** `JSON.stringify` | `accountCache.test.ts` |
+
+### Documentos de `entries` leídos en una carga completa
+
+Mismo criterio de conteo que el §15 (1 lectura por documento devuelto, mínimo 1 por consulta; el `count()` cuesta 1 lectura por cada 1.000 documentos). Solo cambia la colección `entries`; el resto de la carga se lee igual.
+
+| Cuenta (≈12 movimientos por mes, último mes abierto) | Antes | Después, caché al día | |
+| :--- | ---: | ---: | :--- |
+| 13 meses (12 cerrados) | 156 | 156 | Sin cambio: no hay historial archivado |
+| 20 meses (19 cerrados) | 240 | **158** | **Medido** en `archivedHistoryLoad.test.ts` (156 recientes + 1 consulta de cambios vacía + 1 conteo) |
+| 24 meses (23 cerrados) | 288 | 158 | Proyección con el mismo modelo |
+| 60 meses (59 cerrados) | 720 | 158 | Proyección con el mismo modelo |
+
+Si la caché no coincide con la nube (un borrado en un mes archivado, un mes reabierto, el conteo no disponible), la carga lee las tres consultas de la ventana **y además** la colección completa: es más cara que antes en ese caso.
+
+### Íconos PNG: sin cambios
+
+`assets/icon.png` y `assets/adaptive-icon.png` son el mismo archivo y pesan **890.512 bytes** cada uno (PNG RGB de 8 bits, 1.024 × 1.024, 181.438 colores), no los 1,77 MB que indica la auditoría. Pruebas con `sharp` 0.35.5 (libvips 8.18, libimagequant 2.4):
+
+| Variante | Bytes | PSNR frente al original |
+| :--- | ---: | :--- |
+| Actual | 890.512 | — |
+| Recompresión sin pérdida (zlib 9) | 1.719.732 | idéntico (más grande) |
+| Paleta de 256 colores, tramado 1,0 | 320.766 | 39,45 dB |
+| Paleta de 256 colores, tramado 0,5 | 298.196 | 39,91 dB |
+| Paleta de 256 colores, tramado 0,2 | 248.107 | 40,45 dB |
+
+La única variante por debajo de 250 KB deja bandas visibles en el degradado del resplandor (comparación ampliada al 200 %); las de tramado alto no llegan al objetivo y añaden grano. Como el objetivo de peso y «sin pérdida visual» no se cumplen a la vez con esta imagen, los archivos no se tocaron.
+
+### No medido
+
+- Tamaño del `.apk` o del `.aab`: solo se midió el bundle de JavaScript que exporta Metro. CI no compiló un release con este cambio.
+- Tiempo de arranque de Hermes en un dispositivo Android con y sin three.js.
+- Lecturas reales en Firestore: los conteos salen del SDK simulado. `getCountFromServer` y la consulta por `updatedAt` no se han ejecutado contra Firestore ni contra el emulador.
+- Tiempo por tecla en dispositivo al escribir en los formularios: los resultados son conteos de renders en Jest.
+- Si el peso de `icon.png` influye en el `.ipa` o el `.apk`: el prebuild de Expo genera los íconos de cada densidad a partir de ese archivo, y no se compiló ningún binario para comprobarlo.

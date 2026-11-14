@@ -1,21 +1,31 @@
-import React, { useCallback, useDeferredValue, useEffect, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import * as Linking from 'expo-linking';
-import { AppState } from 'react-native';
+import { AppState, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 import {
   cancelCloudWidgetSnapshotWrite,
   flushCloudWidgetSnapshotWrite,
 } from '../data/repositories/widgetSnapshotRepository';
-import { Entrance, hapticService, type HapticType } from '../design-system';
+import {
+  Entrance,
+  TabVisibilityProvider,
+  hapticService,
+  type HapticType,
+} from '../design-system';
 import { formatMonthKeyLabelEs } from '../domain';
 import { AnalyticsTab } from '../features/analytics/components/AnalyticsTab';
 import { AccountTab, type AccountTabProps } from '../features/auth/components/AccountTab';
 import { AuthScreen, type AuthScreenProps } from '../features/auth/components/AuthScreen';
+import { EmailVerificationScreen } from '../features/auth/components/EmailVerificationScreen';
 import {
   havePersistedAccountFieldsChanged,
   type PersistedAccountFields,
 } from '../features/budget/store/persistedAccountFields';
-import { useBudgetStore } from '../features/budget/store/useBudgetStore';
+import {
+  cancelPendingWidgetSync,
+  useBudgetStore,
+  type BFlowWorkspaceTab,
+} from '../features/budget/store/useBudgetStore';
 import { ChecklistTab } from '../features/checklist/components/ChecklistTab';
 import { DebtsTab } from '../features/debts/components/DebtsTab';
 import { InitialAccountSetupView } from '../features/onboarding/components/InitialAccountSetupView';
@@ -23,8 +33,16 @@ import { SavingsTab } from '../features/savings/components/SavingsTab';
 import { WorkspaceShell } from '../features/shell/components/WorkspaceShell';
 import { SummaryTab } from '../features/summary/components/SummaryTab';
 import {
+  hasPendingEmailChange,
+  refreshAccountIdentity,
+  requestEmailChange,
+  sendPasswordResetLink,
+  sendVerificationEmail,
+} from '../platform/auth/accountEmailActions';
+import {
   formatAuthError,
   registerWithPersonalProfile,
+  requiresEmailVerification,
   signInWithEmail,
   signOutCurrentUser,
   subscribeToAuthUser,
@@ -32,9 +50,10 @@ import {
   type RegisterPersonalAccountInput,
 } from '../platform/auth/authAdapter';
 import {
-  confirmPasswordResetWithCode,
-  requestPasswordResetCode,
-} from '../platform/auth/verificationCodeService';
+  getCooldownRemainingMs,
+  isAuthLockoutError,
+  startCooldown,
+} from '../platform/auth/authRateLimiter';
 import { isDemoModeEnabled } from '../platform/mode/demoMode';
 import { markPerf } from '../platform/perf/perfMarks';
 import {
@@ -51,6 +70,18 @@ import {
 const triggerHaptic = (type: HapticType) => {
   hapticService.trigger(type);
 };
+
+/**
+ * Correo de la cuenta de Firebase con sesión iniciada. Las sesiones locales (modo vitrina,
+ * tests) no tienen cuenta en Firebase Auth, así que no pueden pedir correos.
+ */
+function requireFirebaseAccountEmail(): string {
+  const user = useBudgetStore.getState().authUser;
+  if (!user || user.provider !== 'firebase' || !user.email) {
+    throw new Error('Esta acción solo está disponible con una cuenta real de BFlow.');
+  }
+  return user.email;
+}
 
 type AuthGateScreenProps = Omit<AuthScreenProps, 'isSubmitting' | 'statusMessage'> & {
   isAwaitingInitialHydration: boolean;
@@ -81,6 +112,83 @@ function AuthGateScreen({
     />
   );
 }
+
+const WORKSPACE_TAB_ORDER: readonly BFlowWorkspaceTab[] = [
+  'summary',
+  'checklist',
+  'debts',
+  'savings',
+  'analytics',
+  'account',
+];
+
+const HIDDEN_TAB_SLOT_STYLE = { display: 'none' } as const;
+
+interface WorkspaceTabKeepAliveProps {
+  activeTab: BFlowWorkspaceTab;
+  accountTabProps: AccountTabProps;
+}
+
+/**
+ * Lazy keep-alive for workspace tabs: each visited tab mounts inside `<Entrance>` once
+ * and remains mounted hidden (`display: 'none'`, hidden from touch & screen readers) when
+ * switching tabs, avoiding massive Android native view teardown/rebuild on rapid switches.
+ */
+const WorkspaceTabKeepAlive = React.memo(function WorkspaceTabKeepAlive({
+  activeTab,
+  accountTabProps,
+}: WorkspaceTabKeepAliveProps): React.JSX.Element {
+  const [visitedTabs, setVisitedTabs] = useState<Partial<Record<BFlowWorkspaceTab, true>>>(() => ({
+    [activeTab]: true,
+  }));
+
+  if (!visitedTabs[activeTab]) {
+    setVisitedTabs((prev) => (prev[activeTab] ? prev : { ...prev, [activeTab]: true }));
+  }
+
+  const renderTabContent = (tab: BFlowWorkspaceTab): React.JSX.Element => {
+    switch (tab) {
+      case 'summary':
+        return <SummaryTab />;
+      case 'checklist':
+        return <ChecklistTab />;
+      case 'debts':
+        return <DebtsTab />;
+      case 'savings':
+        return <SavingsTab />;
+      case 'analytics':
+        return <AnalyticsTab />;
+      case 'account':
+        return <AccountTab {...accountTabProps} />;
+    }
+  };
+
+  return (
+    <View testID="workspace-tab-content">
+      {WORKSPACE_TAB_ORDER.map((tab) => {
+        if (!visitedTabs[tab]) {
+          return null;
+        }
+        const isActive = tab === activeTab;
+        return (
+          <View
+            key={tab}
+            testID={`workspace-tab-panel-${tab}`}
+            style={isActive ? undefined : HIDDEN_TAB_SLOT_STYLE}
+            pointerEvents={isActive ? 'auto' : 'none'}
+            accessibilityElementsHidden={!isActive}
+            importantForAccessibility={isActive ? 'auto' : 'no-hide-descendants'}
+            aria-hidden={!isActive}
+          >
+            <TabVisibilityProvider isActive={isActive}>
+              <Entrance kind="screen">{renderTabContent(tab)}</Entrance>
+            </TabVisibilityProvider>
+          </View>
+        );
+      })}
+    </View>
+  );
+});
 
 /**
  * Orchestrator: authentication gate, session and persistence effects, shell and dock.
@@ -119,6 +227,8 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
   const activeMonthLabel = formatMonthKeyLabelEs(activeMonthKey);
 
   const syncInFlightRef = React.useRef<Map<string, Promise<void>>>(new Map());
+  // Cuenta creada en esta sesión cuyo presupuesto se prepara al verificar el correo.
+  const registrationAwaitingVerificationRef = React.useRef<string | null>(null);
 
   const syncUserCloudAccount = useCallback(
     async (
@@ -155,13 +265,16 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
       return;
     }
     const { authUser: initialUser, setAuthUser } = useBudgetStore.getState();
-    if (initialUser) {
+    // Una cuenta sin verificar no lee ni escribe el presupuesto en Firestore (ADR 0026).
+    if (initialUser && !requiresEmailVerification(initialUser)) {
       void syncUserCloudAccount(initialUser);
     }
     const unsubscribe = subscribeToAuthUser((restoredUser) => {
       if (restoredUser) {
         setAuthUser(restoredUser);
-        void syncUserCloudAccount(restoredUser);
+        if (!requiresEmailVerification(restoredUser)) {
+          void syncUserCloudAccount(restoredUser);
+        }
       } else {
         setAuthUser(null);
       }
@@ -234,6 +347,17 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         void syncActiveWidget().then(() => flushCloudWidgetSnapshotWrite());
       } else if (nextAppState === 'active') {
         void flushOfflineWrites();
+        // Tras pedir un cambio de correo, al volver se comprueba si ya se confirmó: Firebase
+        // revoca la sesión y el SDK la cierra, sin esperar a que venza el token.
+        if (hasPendingEmailChange()) {
+          void refreshAccountIdentity()
+            .then((refreshed) => {
+              if (refreshed) {
+                useBudgetStore.getState().setAuthUser(refreshed);
+              }
+            })
+            .catch(() => undefined);
+        }
       }
     });
 
@@ -253,10 +377,16 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         const user = await signInWithEmail(email, password);
         setAuthUser(user);
         triggerHaptic('success');
+        if (requiresEmailVerification(user)) {
+          // La puerta de verificación decide cuándo se carga el presupuesto.
+          setSyncStatus('Verifica tu correo para entrar a tu presupuesto.', false);
+          return;
+        }
         await syncUserCloudAccount(user, { isRegistration: false });
       } catch (err) {
         const msg = formatAuthError(err, 'No fue posible iniciar sesión.');
-        setAuthErrorMessage(msg);
+        // Bloqueado por intentos: la pantalla muestra su propio aviso con la cuenta atrás.
+        setAuthErrorMessage(isAuthLockoutError(err) ? null : msg);
         setSyncStatus(msg, false);
       }
     },
@@ -273,6 +403,11 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         const user = await registerWithPersonalProfile(input);
         setAuthUser(user);
         triggerHaptic('success');
+        if (requiresEmailVerification(user)) {
+          registrationAwaitingVerificationRef.current = user.uid;
+          setSyncStatus('Cuenta creada. Verifica tu correo para entrar a tu presupuesto.', false);
+          return;
+        }
         await syncUserCloudAccount(user, { isRegistration: true });
       } catch (err) {
         const msg = formatAuthError(err, 'No fue posible crear tu cuenta.');
@@ -283,62 +418,56 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     [syncUserCloudAccount]
   );
 
+  // Recuperación desde el inicio de sesión: Firebase Auth envía el enlace (ADR 0025).
+  // La pantalla muestra el resultado; aquí solo se refleja el progreso.
   const handleSendPasswordRecovery = useCallback(async (email: string) => {
     const { setSyncStatus } = useBudgetStore.getState();
     setAuthErrorMessage(null);
     setAuthStatusMessage(null);
-    setSyncStatus('Enviando código de verificación...', true);
+    setSyncStatus('Enviando enlace de restablecimiento...', true);
     try {
-      const res = await requestPasswordResetCode(email);
-      setAuthStatusMessage(res.message);
-      setSyncStatus('Código de verificación enviado.', false);
+      await sendPasswordResetLink(email);
+      setSyncStatus('Enlace de restablecimiento enviado.', false);
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : 'No fue posible enviar el código de recuperación.';
-      setAuthErrorMessage(msg);
+      const msg = formatAuthError(
+        err,
+        'No fue posible enviar el enlace para restablecer la contraseña.'
+      );
       setSyncStatus(msg, false);
+      throw new Error(msg);
     }
   }, []);
 
-  const handleRequestPasswordResetCode = useCallback(async (email: string) => {
-    const { setSyncStatus } = useBudgetStore.getState();
-    setAuthErrorMessage(null);
-    setAuthStatusMessage(null);
-    setSyncStatus('Enviando código de verificación de 6 dígitos...', true);
+  const handleResendVerificationEmail = useCallback(async () => {
+    triggerHaptic('light');
     try {
-      const res = await requestPasswordResetCode(email);
-      setAuthStatusMessage(res.message);
-      setSyncStatus('Código enviado a tu correo.', false);
+      await sendVerificationEmail();
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : 'No fue posible enviar el código de verificación.';
-      setAuthErrorMessage(msg);
-      setSyncStatus(msg, false);
-      throw err;
+      throw new Error(formatAuthError(err, 'No fue posible enviar el correo de verificación.'));
     }
   }, []);
 
-  const handleConfirmPasswordResetWithCode = useCallback(
-    async (email: string, code: string, newPassword: string) => {
-      const { setSyncStatus } = useBudgetStore.getState();
-      setAuthErrorMessage(null);
-      setAuthStatusMessage(null);
-      setSyncStatus('Actualizando contraseña internamente...', true);
-      try {
-        const res = await confirmPasswordResetWithCode(email, code, newPassword);
-        setAuthStatusMessage(res.message);
-        setSyncStatus('Contraseña actualizada correctamente.', false);
-        triggerHaptic('success');
-      } catch (err) {
-        const msg =
-          err instanceof Error ? err.message : 'No fue posible actualizar la contraseña.';
-        setAuthErrorMessage(msg);
-        setSyncStatus(msg, false);
-        throw err;
+  const handleCheckEmailVerification = useCallback(async (): Promise<boolean> => {
+    try {
+      const refreshed = await refreshAccountIdentity();
+      if (!refreshed) {
+        return false;
       }
-    },
-    []
-  );
+      useBudgetStore.getState().setAuthUser(refreshed);
+      const isVerified = !requiresEmailVerification(refreshed);
+      if (isVerified) {
+        triggerHaptic('success');
+        // El presupuesto se carga ahora. Solo la cuenta creada en esta sesión abre el
+        // asistente inicial; en las demás lo decide lo que ya haya en Firestore.
+        const isNewRegistration = registrationAwaitingVerificationRef.current === refreshed.uid;
+        registrationAwaitingVerificationRef.current = null;
+        void syncUserCloudAccount(refreshed, isNewRegistration ? { isRegistration: true } : undefined);
+      }
+      return isVerified;
+    } catch (err) {
+      throw new Error(formatAuthError(err, 'No fue posible comprobar la verificación.'));
+    }
+  }, [syncUserCloudAccount]);
 
   const handleSignOut = useCallback(async () => {
     const outgoingUid = useBudgetStore.getState().authUser?.uid;
@@ -351,6 +480,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     ]);
     cancelCloudWidgetSnapshotWrite();
     await signOutCurrentUser();
+    cancelPendingWidgetSync();
     clearWidgetData();
     if (outgoingUid) {
       clearPersistedAccount(outgoingUid);
@@ -365,38 +495,85 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
   const handleManualSync = useCallback(() => {
     const currentUser = useBudgetStore.getState().authUser;
     if (!currentUser) return;
+    // Una sincronización completa relee toda la cuenta: no se repite hasta pasar la espera.
+    if (getCooldownRemainingMs('manual_sync') > 0) return;
+    startCooldown('manual_sync');
     triggerHaptic('light');
     void syncUserCloudAccount(currentUser, { forceFullSync: true });
   }, [syncUserCloudAccount]);
 
   const handleUpdateProfile = useCallback<NonNullable<AccountTabProps['onUpdateProfile']>>(
     async (updates) => {
-      await useBudgetStore.getState().updateAuthUserProfile(updates);
+      const status = await useBudgetStore.getState().updateAuthUserProfile(updates);
+      if (status === 'rejected') {
+        // El store ya revirtió el cambio; el formulario muestra el motivo.
+        throw new Error('No se pudo guardar tu perfil en la nube. Inténtalo de nuevo.');
+      }
       triggerHaptic('success');
+      return status === 'queued' ? 'queued' : 'saved';
     },
     []
   );
 
-  const handleAccountSendPasswordReset = useCallback(
-    async (email: string) => {
+  const handleAccountSendPasswordReset = useCallback(async () => {
+    triggerHaptic('light');
+    try {
+      await sendPasswordResetLink(requireFirebaseAccountEmail());
+    } catch (err) {
+      throw new Error(
+        formatAuthError(err, 'No fue posible enviar el enlace para restablecer la contraseña.')
+      );
+    }
+  }, []);
+
+  const handleAccountRequestEmailChange = useCallback(
+    async (newEmail: string, currentPassword: string) => {
       triggerHaptic('light');
-      await handleSendPasswordRecovery(email);
+      try {
+        requireFirebaseAccountEmail();
+        await requestEmailChange(newEmail, currentPassword);
+      } catch (err) {
+        throw new Error(formatAuthError(err, 'No fue posible pedir el cambio de correo.'));
+      }
     },
-    [handleSendPasswordRecovery]
+    []
   );
 
-  const handleAccountRequestPasswordResetCode = useCallback(
-    async (email: string) => {
-      triggerHaptic('light');
-      await handleRequestPasswordResetCode(email);
-    },
-    [handleRequestPasswordResetCode]
-  );
+  const handleAccountSendEmailVerification = useCallback(async () => {
+    triggerHaptic('light');
+    try {
+      requireFirebaseAccountEmail();
+      await sendVerificationEmail();
+    } catch (err) {
+      throw new Error(formatAuthError(err, 'No fue posible enviar el correo de verificación.'));
+    }
+  }, []);
 
   const handleResetFullAccount = useCallback(() => {
     triggerHaptic('warning');
     void useBudgetStore.getState().resetFullAccount();
   }, []);
+
+  const accountTabProps = useMemo<AccountTabProps>(
+    () => ({
+      onSignOut: handleSignOut,
+      onManualSync: handleManualSync,
+      onUpdateProfile: handleUpdateProfile,
+      onSendPasswordReset: handleAccountSendPasswordReset,
+      onRequestEmailChange: handleAccountRequestEmailChange,
+      onSendEmailVerification: handleAccountSendEmailVerification,
+      onResetFullAccount: handleResetFullAccount,
+    }),
+    [
+      handleSignOut,
+      handleManualSync,
+      handleUpdateProfile,
+      handleAccountSendPasswordReset,
+      handleAccountRequestEmailChange,
+      handleAccountSendEmailVerification,
+      handleResetFullAccount,
+    ]
+  );
 
   // The navigation shows the new tab at once; the tab's content mounts as a transition. A
   // heavy tab (Checklist, most visible on Android) used to mount in the same frame as the
@@ -406,6 +583,19 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
 
   const isAwaitingInitialHydration =
     Boolean(authUser) && !isAccountHydrated && !needsOnboarding;
+
+  // PUERTA DE VERIFICACIÓN (ADR 0025): la cuenta recién creada no entra al presupuesto hasta
+  // abrir el enlace que envía Firebase Auth, y su presupuesto no se sincroniza hasta entonces.
+  if (authUser && requiresEmailVerification(authUser)) {
+    return (
+      <EmailVerificationScreen
+        email={authUser.email}
+        onResendVerification={handleResendVerificationEmail}
+        onCheckVerification={handleCheckEmailVerification}
+        onSignOut={handleSignOut}
+      />
+    );
+  }
 
   // AUTHENTICATION GATE: If no authenticated user session is active (or initial cloud hydration is in flight without local cache), render AuthScreen first
   if (!authUser || isAwaitingInitialHydration) {
@@ -417,8 +607,6 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         onSignInWithEmail={handleSignInWithEmail}
         onRegisterPersonalAccount={handleRegisterPersonalAccount}
         onSendPasswordRecovery={handleSendPasswordRecovery}
-        onRequestPasswordResetCode={handleRequestPasswordResetCode}
-        onConfirmPasswordResetWithCode={handleConfirmPasswordResetWithCode}
       />
     );
   }
@@ -439,25 +627,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
           }}
         />
       ) : (
-        // Keyed by tab: the incoming screen fades in and rises once, on the native driver.
-        <Entrance key={contentTab} kind="screen" testID="workspace-tab-content">
-          {contentTab === 'summary' ? <SummaryTab /> : null}
-          {contentTab === 'checklist' ? <ChecklistTab /> : null}
-          {contentTab === 'debts' ? <DebtsTab /> : null}
-          {contentTab === 'savings' ? <SavingsTab /> : null}
-          {contentTab === 'analytics' ? <AnalyticsTab /> : null}
-          {contentTab === 'account' ? (
-            <AccountTab
-              onSignOut={handleSignOut}
-              onManualSync={handleManualSync}
-              onUpdateProfile={handleUpdateProfile}
-              onSendPasswordReset={handleAccountSendPasswordReset}
-              onRequestPasswordResetCode={handleAccountRequestPasswordResetCode}
-              onConfirmPasswordResetWithCode={handleConfirmPasswordResetWithCode}
-              onResetFullAccount={handleResetFullAccount}
-            />
-          ) : null}
-        </Entrance>
+        <WorkspaceTabKeepAlive activeTab={contentTab} accountTabProps={accountTabProps} />
       )}
     </WorkspaceShell>
   );

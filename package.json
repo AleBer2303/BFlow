@@ -10,6 +10,8 @@
     "android": "expo start --android",
     "web": "expo start --web",
     "web:demo": "node scripts/start-demo.mjs",
+    "web:export": "npx expo export --platform web --clear",
+    "web:deploy": "npm run web:export && npx firebase-tools deploy --only hosting --project bflow-deaeb",
     "typecheck": "tsc --noEmit",
     "lint": "node scripts/lint-check.mjs",
     "test": "jest --watchAll=false",

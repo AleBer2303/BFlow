@@ -14,6 +14,8 @@ import {
   MIN_TOUCH_TARGET_PT,
   type PlatformSkinId,
   ResponsiveColumns,
+  ScrollDepthHero,
+  ScrollRevealSection,
   StatusBadge,
   useBFlowTheme,
 } from '../../../design-system';
@@ -149,7 +151,8 @@ export function AccountProfileWorkspaceView({
       {/* Wide windows: profile on the left, settings and the danger zone on the right. */}
       <ResponsiveColumns testID="account-panels">
         {/* 1. Primary Account & Cloud Profile Card */}
-        <GlassSurface elevated testID="authenticated-user-profile-card">
+        <ScrollDepthHero>
+          <GlassSurface elevated testID="authenticated-user-profile-card">
           <View style={{ gap: spacing.md }}>
             <View
               style={{
@@ -247,11 +250,13 @@ export function AccountProfileWorkspaceView({
               </AppPressable>
             ) : null}
           </View>
-        </GlassSurface>
+          </GlassSurface>
+        </ScrollDepthHero>
 
         <View style={{ gap: spacing.md }}>
           {/* 2. Account Configuration: Action Button to Open Dedicated Profile Update Window */}
-          <GlassSurface elevated testID="account-settings-card">
+          <ScrollRevealSection>
+            <GlassSurface elevated testID="account-settings-card">
             <View style={{ gap: spacing.xs }}>
               <View style={{ gap: 2 }}>
                 <AppText variant="headline">Configuración de Perfil</AppText>
@@ -292,10 +297,12 @@ export function AccountProfileWorkspaceView({
                 </AppText>
               </AppPressable>
             </View>
-          </GlassSurface>
+            </GlassSurface>
+          </ScrollRevealSection>
 
           {/* 4. Danger Zone: Reset Entire Account (Transferred from Cierre) */}
-          <GlassSurface elevated testID="reset-account-card">
+          <ScrollRevealSection>
+            <GlassSurface elevated testID="reset-account-card">
             <View style={{ gap: spacing.sm }}>
               <View>
                 <AppText variant="headline" color={colors.semantic.expense}>
@@ -386,7 +393,8 @@ export function AccountProfileWorkspaceView({
                 </View>
               )}
             </View>
-          </GlassSurface>
+            </GlassSurface>
+          </ScrollRevealSection>
         </View>
       </ResponsiveColumns>
 

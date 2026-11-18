@@ -16,6 +16,8 @@ import {
   motionDistance,
   motionDuration,
   motionScale,
+  scrollMotionBySkin,
+  springConfigs,
 } from '../tokens';
 
 const MAX_TOTAL_STAGGER_MS = 300;
@@ -56,6 +58,50 @@ describe('motion tokens', () => {
       expect(y1).toBeLessThanOrEqual(1);
       expect(y2).toBeLessThanOrEqual(1);
     }
+  });
+
+  it('defines scrollDockReveal spring with a crisp damping ratio around 0.70', () => {
+    const { damping, stiffness, mass } = springConfigs.scrollDockReveal;
+    const zeta = damping / (2 * Math.sqrt(stiffness * mass));
+    expect(zeta).toBeGreaterThan(0.62);
+    expect(zeta).toBeLessThan(0.78);
+  });
+
+  it('defines scrollMotionBySkin for every skin with content-first invariants', () => {
+    for (const skin of PLATFORM_SKIN_IDS) {
+      const spec = scrollMotionBySkin[skin];
+      expect(spec).toBeDefined();
+      expect(spec.sectionBottomMinOpacity).toBeGreaterThanOrEqual(0.7);
+      expect(spec.sectionTopMinOpacity).toBeGreaterThanOrEqual(0.7);
+    }
+
+    expect(scrollMotionBySkin.ios.enabled).toBe(true);
+    expect(scrollMotionBySkin.ios.usesSpringReveal).toBe(true);
+    expect(scrollMotionBySkin.ios.dockRevealDelta).toBeLessThan(
+      scrollMotionBySkin.ios.dockHideDelta
+    );
+
+    expect(scrollMotionBySkin.android.enabled).toBe(true);
+    expect(scrollMotionBySkin.android.usesSpringReveal).toBe(false);
+    expect(scrollMotionBySkin.android.overscrollMaxScale).toBe(1);
+    expect(scrollMotionBySkin.android.dockRevealDelta).toBeLessThan(
+      scrollMotionBySkin.android.dockHideDelta
+    );
+
+    expect(scrollMotionBySkin.web).toMatchObject({
+      enabled: false,
+      usesSpringReveal: false,
+      heroParallaxY: 0,
+      heroMinScale: 1,
+      overscrollMaxScale: 1,
+      overscrollMaxTranslateY: 0,
+      sectionBottomTravelY: 0,
+      sectionTopTravelY: 0,
+      sectionBottomScale: 1,
+      sectionTopScale: 1,
+      sectionBottomMinOpacity: 1,
+      sectionTopMinOpacity: 1,
+    });
   });
 });
 

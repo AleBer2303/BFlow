@@ -676,10 +676,10 @@ export const springConfigs = {
     stiffness: 160,
     mass: 1.1,
   },
-  /** Liquid lens settling on a tab: soft, with a barely perceptible overshoot. */
+  /** Liquid lens settling on a tab: soft, with a small overshoot (ζ ≈ 0,67, ~6 %). */
   liquidSettle: {
-    damping: 16,
-    stiffness: 170,
+    damping: 20,
+    stiffness: 220,
     mass: 1,
   },
   /** Flat selection pill of the dock (Android) settling on a tab: no overshoot. */
@@ -688,13 +688,141 @@ export const springConfigs = {
     stiffness: 170,
     mass: 1,
   },
-  /** Lens "lift" (grow) and velocity stretch: gentle and elastic. */
+  /** Lens "lift": the drop of glass swelling under the finger (quick, slightly elastic). */
   liquidLift: {
+    damping: 18,
+    stiffness: 320,
+    mass: 0.8,
+  },
+  /** Lens shrinking back on release: underdamped (ζ ≈ 0,5) so it wobbles once, like jelly. */
+  liquidRelease: {
     damping: 14,
-    stiffness: 190,
+    stiffness: 220,
     mass: 0.9,
   },
+  /** Lens following the finger while dragging: retargeted on every touch event on the UI thread. */
+  liquidFollow: {
+    damping: 29,
+    stiffness: 480,
+    mass: 0.7,
+  },
+  /** Velocity stretch of the lens (breathes with speed, never flickers). */
+  liquidStretch: {
+    damping: 20,
+    stiffness: 300,
+    mass: 0.6,
+  },
+  /** Dock capsule sinking under the finger: fast, no wobble. */
+  dockPressIn: {
+    damping: 22,
+    stiffness: 420,
+    mass: 0.6,
+  },
+  /** Dock capsule rebounding on release: one small overshoot past its resting size (ζ ≈ 0,4). */
+  dockRelease: {
+    damping: 11,
+    stiffness: 260,
+    mass: 0.7,
+  },
+  /** Floating dock returning on scroll up (iOS only, ADR 0031): crisp with a gentle settle (ζ ≈ 0.70). */
+  scrollDockReveal: {
+    damping: 20,
+    stiffness: 240,
+    mass: 0.85,
+  },
 } as const;
+
+/**
+ * Shape of the iOS Liquid Glass dock (ADR 0030). Scale factors are relative to the resting size;
+ * the springs that drive them are `springConfigs.liquid*` and `springConfigs.dock*`.
+ */
+export const liquidDockMotion = {
+  /** Dock capsule scale while pressed (it rebounds past 1 on release). */
+  pressScale: 0.975,
+  /** Lens growth when lifted: wider and taller than the dock, like the iOS 26 tab bar. */
+  liftScaleX: 1.18,
+  liftScaleY: 1.36,
+  /** Extra length / thinning of the lens at full drag speed. */
+  stretchScaleX: 0.16,
+  stretchScaleY: 0.08,
+  /** Drag speed (tabs per second) that reaches the full stretch. */
+  stretchFullSpeed: 8,
+  /** Overshoot (px) past the dock edge at which the wall squash peaks, and its minimum scale. */
+  squashDistance: 26,
+  squashMinScale: 0.84,
+  /** Icon growth under the lifted lens (through the icon's viewBox, never a bitmap scale). */
+  iconMagnify: 0.16,
+  /** Seconds of the system glass morph when the lens surface switches on (touch) and off. */
+  lensSurfaceMorphSeconds: 0.18,
+  /** Release velocity cap (tabs per second) handed to the settle spring. */
+  maxReleaseVelocity: 12,
+} as const;
+
+export interface LiquidDockPalette {
+  /** Tint of the native iOS 26 glass of the dock capsule. */
+  dockGlassTint: string;
+  /** Fill over the blur when native glass is not available (iOS < 26, Expo Go on old iOS). */
+  dockFallbackFill: string;
+  /** Opaque fill with Reduce Transparency on. */
+  dockOpaqueFill: string;
+  dockBorder: string;
+  dockBlurIntensity: number;
+  /** Resting selection pill (fades as the lens lifts). */
+  lensRestTint: string;
+  /** System glass style of the lens: `clear` shows what is behind it, `regular` is frosted. */
+  lensGlassStyle: 'clear' | 'regular';
+  /** Tint of the glass of the lens. */
+  lensGlassTint: string;
+  /** Tint of the lens' clear glass surface that refracts the icons while the lens is touched. */
+  lensSurfaceTint: string;
+  lensFallbackFill: string;
+  lensRimTop: string;
+  lensRimBottom: string;
+  /** Refraction glow and specular highlight, stronger while lifted. */
+  lensGlow: string;
+  lensSpecular: string;
+  shadowOpacity: number;
+}
+
+export const liquidDockPalette: Record<ThemeMode, LiquidDockPalette> = {
+  dark: {
+    dockGlassTint: 'rgba(22, 26, 34, 0.30)',
+    dockFallbackFill: 'rgba(30, 35, 45, 0.58)',
+    dockOpaqueFill: 'rgba(32, 38, 48, 1)',
+    dockBorder: 'rgba(255, 255, 255, 0.10)',
+    dockBlurIntensity: 50,
+    // Frosted grey, not clear white: on device a clear, white-tinted lens glared against the dark
+    // capsule. Neutral greys a little lighter than the capsule keep it readable but quiet.
+    lensRestTint: 'rgba(120, 126, 138, 0.14)',
+    lensGlassStyle: 'regular',
+    lensGlassTint: 'rgba(44, 48, 56, 0.55)',
+    lensSurfaceTint: 'rgba(44, 48, 56, 0.30)',
+    lensFallbackFill: 'rgba(110, 116, 128, 0.16)',
+    lensRimTop: 'rgba(255, 255, 255, 0.07)',
+    lensRimBottom: 'rgba(255, 255, 255, 0.025)',
+    lensGlow: 'rgba(140, 185, 255, 0.05)',
+    lensSpecular: 'rgba(255, 255, 255, 0.015)',
+    shadowOpacity: 0.32,
+  },
+  light: {
+    // iOS 26/27 look: the system glass does the work, our tints stay barely there and neutral.
+    dockGlassTint: 'rgba(255, 255, 255, 0.06)',
+    dockFallbackFill: 'rgba(250, 248, 242, 0.55)',
+    dockOpaqueFill: 'rgba(247, 244, 236, 1)',
+    dockBorder: 'rgba(255, 255, 255, 0.55)',
+    dockBlurIntensity: 50,
+    lensRestTint: 'rgba(20, 24, 32, 0.06)',
+    lensGlassStyle: 'clear',
+    lensGlassTint: 'rgba(255, 255, 255, 0.05)',
+    lensSurfaceTint: 'rgba(255, 255, 255, 0.03)',
+    lensFallbackFill: 'rgba(255, 255, 255, 0.28)',
+    lensRimTop: 'rgba(255, 255, 255, 0.6)',
+    lensRimBottom: 'rgba(0, 0, 0, 0.04)',
+    lensGlow: 'rgba(255, 255, 255, 0.12)',
+    lensSpecular: 'rgba(255, 255, 255, 0.22)',
+    shadowOpacity: 0.12,
+  },
+};
 
 /**
  * Motion scale shared by the three skins (transitions.dev tokens, DESIGN.md §6.4). A value is
@@ -783,5 +911,114 @@ export const motionBySkin: Record<PlatformSkinId, SkinMotion> = {
     exit: [0.2, 0.8, 0.2, 1],
     allowsOvershoot: false,
     dialogPresentation: 'dialog',
+  },
+};
+
+/**
+ * Scroll-driven choreography tokens across the three skins (ADR 0031).
+ * Defined for all three skins: iOS and Android drive UI-thread scroll transitions;
+ * Web opts out (`enabled: false`) per AGENTS.md §7.2 and DESIGN.md §10.4.
+ */
+export interface ScrollMotionSpec {
+  enabled: boolean;
+  dockHideDelta: number;
+  dockRevealDelta: number;
+  dockHideMinOffset: number;
+  dockMinOverflow: number;
+  dockBottomAutoReveal: number;
+  dockHiddenScale: number;
+  dockHideDurationMs: number;
+  dockRevealDurationMs: number;
+  usesSpringReveal: boolean;
+  heroParallaxY: number;
+  heroMinScale: number;
+  overscrollMaxScale: number;
+  overscrollMaxTranslateY: number;
+  sectionEntryBand: number;
+  sectionBottomTravelY: number;
+  sectionBottomScale: number;
+  sectionBottomMinOpacity: number;
+  sectionTopBand: number;
+  sectionTopTravelY: number;
+  sectionTopScale: number;
+  sectionTopMinOpacity: number;
+  sectionMaxScaleHeight: number;
+}
+
+export const scrollMotionBySkin: Record<PlatformSkinId, ScrollMotionSpec> = {
+  ios: {
+    enabled: true,
+    dockHideDelta: 28,
+    dockRevealDelta: 14,
+    dockHideMinOffset: 48,
+    dockMinOverflow: 120,
+    dockBottomAutoReveal: 48,
+    dockHiddenScale: 0.94,
+    dockHideDurationMs: 220,
+    dockRevealDurationMs: 260,
+    usesSpringReveal: true,
+    heroParallaxY: 16,
+    heroMinScale: 0.968,
+    overscrollMaxScale: 1.022,
+    overscrollMaxTranslateY: 6,
+    sectionEntryBand: 120,
+    sectionBottomTravelY: 16,
+    sectionBottomScale: 0.974,
+    sectionBottomMinOpacity: 0.82,
+    sectionTopBand: 96,
+    sectionTopTravelY: 10,
+    sectionTopScale: 0.984,
+    sectionTopMinOpacity: 0.86,
+    sectionMaxScaleHeight: 420,
+  },
+  android: {
+    enabled: true,
+    dockHideDelta: 28,
+    dockRevealDelta: 14,
+    dockHideMinOffset: 48,
+    dockMinOverflow: 120,
+    dockBottomAutoReveal: 48,
+    dockHiddenScale: 0.96,
+    dockHideDurationMs: 180,
+    dockRevealDurationMs: 250,
+    usesSpringReveal: false,
+    heroParallaxY: 10,
+    heroMinScale: 0.984,
+    overscrollMaxScale: 1,
+    overscrollMaxTranslateY: 0,
+    sectionEntryBand: 110,
+    sectionBottomTravelY: 12,
+    sectionBottomScale: 0.986,
+    sectionBottomMinOpacity: 0.72,
+    sectionTopBand: 88,
+    sectionTopTravelY: 8,
+    sectionTopScale: 0.992,
+    sectionTopMinOpacity: 0.80,
+    sectionMaxScaleHeight: 420,
+  },
+  web: {
+    enabled: false,
+    dockHideDelta: 0,
+    dockRevealDelta: 0,
+    dockHideMinOffset: 0,
+    dockMinOverflow: 0,
+    dockBottomAutoReveal: 0,
+    dockHiddenScale: 1,
+    dockHideDurationMs: 0,
+    dockRevealDurationMs: 0,
+    usesSpringReveal: false,
+    heroParallaxY: 0,
+    heroMinScale: 1,
+    overscrollMaxScale: 1,
+    overscrollMaxTranslateY: 0,
+    sectionEntryBand: 0,
+    sectionBottomTravelY: 0,
+    sectionBottomScale: 1,
+    sectionBottomMinOpacity: 1,
+    sectionTopBand: 0,
+    sectionTopTravelY: 0,
+    sectionTopScale: 1,
+    sectionTopMinOpacity: 1,
+    sectionMaxScaleHeight: 0,
   },
 };

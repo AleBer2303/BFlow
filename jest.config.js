@@ -3,6 +3,9 @@ module.exports = {
   preset: 'jest-expo',
   testMatch: ['**/__tests__/**/*.test.[jt]s?(x)'],
   testTimeout: 15000,
+  // Reanimated 4 and Worklets ship native-only entry points; their resolver picks the Jest build.
+  resolver: 'react-native-reanimated/jest/resolver.js',
+  setupFiles: ['<rootDir>/jest.setup.js'],
   // Half the logical cores. On the 12-core Windows machine the total time is the same with
   // 4, 6, 8 or 11 workers, but each suite and the CPU used grow with the worker count
   // (measurements in PERF_BASELINE.md §8, 05).

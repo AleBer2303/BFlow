@@ -8,7 +8,7 @@
 import React, { useCallback } from 'react';
 import { View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
-import { hapticService, useBFlowTheme } from '../../../design-system';
+import { ScrollRevealSection, hapticService, useBFlowTheme } from '../../../design-system';
 import {
   useActiveMonthKey,
   useBudgetSummary,
@@ -91,7 +91,9 @@ export const SavingsTab = React.memo(function SavingsTab(): React.JSX.Element {
         onSaveProvisionItem={handleSaveProvisionItem}
         onDeleteProvisionItem={handleDeleteProvisionItem}
       />
-      <SavingsTrendCharts history={history} />
+      <ScrollRevealSection>
+        <SavingsTrendCharts history={history} />
+      </ScrollRevealSection>
     </View>
   );
 });

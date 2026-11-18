@@ -26,6 +26,7 @@ import {
   DonutChart,
   LineChart,
   ResponsiveColumns,
+  ScrollRevealSection,
   useBFlowTheme,
   type ChartSeries,
 } from '../../../design-system';
@@ -146,114 +147,126 @@ export function AnalyticsChartsPanel({
       </View>
 
       <ResponsiveColumns testID="analytics-charts-grid">
-        <ChartCard title="Flujo de Dinero" testID="analytics-chart-cash-flow">
-          <BarChart
-            testID="cash-flow-chart"
-            categories={categories}
-            categoryTitles={titles}
-            series={cashFlowSeries}
-            showLegend={false}
-          />
-        </ChartCard>
-
-        <ChartCard
-          title="Distribución de gastos"
-          subtitle="Por concepto: lo pagado y lo que falta por pagar"
-          testID="analytics-chart-distribution"
-        >
-          <DonutChart
-            testID="distribution-chart"
-            totalLabel="Gastos del mes"
-            emptyLabel="Este mes todavía no tiene gastos."
-            slices={distribution.slices.map((slice, index) => ({
-              id: slice.id,
-              label: slice.label,
-              amount: slice.amount,
-              color: palette[index % palette.length] as string,
-            }))}
-          />
-        </ChartCard>
-
-        <ChartCard title="Balance mensual" testID="analytics-chart-balance">
-          <LineChart
-            testID="balance-chart"
-            categories={categories}
-            categoryTitles={titles}
-            series={balanceSeries}
-            area
-            showLegend={false}
-            readout="value"
-          />
-        </ChartCard>
-
-        <ChartCard
-          title="Previsto vs real"
-          subtitle="Lo planeado frente a lo que ya se movió"
-          testID="analytics-chart-plan-vs-actual"
-        >
-          <ChartSegmentedControl
-            testID="plan-vs-actual-kind"
-            accessibilityLabel="Comparar gastos o ingresos"
-            options={PLAN_OPTIONS}
-            value={planKind}
-            onChange={setPlanKind}
-          />
-          <BarChart
-            testID="plan-vs-actual-chart"
-            categories={categories}
-            categoryTitles={titles}
-            series={planSeries}
-            describeNote={(index) => {
-              const planned = planSeries[0]?.values[index] ?? 0;
-              const actual = planSeries[1]?.values[index] ?? 0;
-              return `Diferencia: ${formatSignedCurrency(actual - planned)}`;
-            }}
-          />
-        </ChartCard>
-
-        <ChartCard
-          title="Pagado vs pendiente"
-          subtitle={`Gastos de ${formatMonthKeyLabelEs(activeMonthKey)}`}
-          testID="analytics-chart-paid-pending"
-        >
-          <DonutChart
-            testID="paid-pending-chart"
-            totalLabel="Gastos del mes"
-            emptyLabel="Este mes todavía no tiene gastos."
-            slices={[
-              { id: 'paid', label: 'Pagado', amount: split.paid, color: colors.semantic.completed },
-              { id: 'pending', label: 'Pendiente', amount: split.pending, color: colors.semantic.pending },
-            ]}
-          />
-        </ChartCard>
-
-        <ChartCard
-          title={
-            comparison
-              ? `${formatMonthKeyLabelEs(comparison.currentMonthKey)} vs ${formatMonthKeyLabelEs(comparison.previousMonthKey)}`
-              : 'Este mes vs el anterior'
-          }
-          testID="analytics-chart-comparison"
-        >
-          {comparison ? (
+        <ScrollRevealSection>
+          <ChartCard title="Flujo de Dinero" testID="analytics-chart-cash-flow">
             <BarChart
-              testID="comparison-chart"
-              categories={comparison.rows.map((row) => row.label.split(' ')[0] ?? row.label)}
-              categoryTitles={comparison.rows.map((row) => row.label)}
-              series={comparisonSeries}
+              testID="cash-flow-chart"
+              categories={categories}
+              categoryTitles={titles}
+              series={cashFlowSeries}
+              showLegend={false}
+            />
+          </ChartCard>
+        </ScrollRevealSection>
+
+        <ScrollRevealSection>
+          <ChartCard
+            title="Distribución de gastos"
+            subtitle="Por concepto: lo pagado y lo que falta por pagar"
+            testID="analytics-chart-distribution"
+          >
+            <DonutChart
+              testID="distribution-chart"
+              totalLabel="Gastos del mes"
+              emptyLabel="Este mes todavía no tiene gastos."
+              slices={distribution.slices.map((slice, index) => ({
+                id: slice.id,
+                label: slice.label,
+                amount: slice.amount,
+                color: palette[index % palette.length] as string,
+              }))}
+            />
+          </ChartCard>
+        </ScrollRevealSection>
+
+        <ScrollRevealSection>
+          <ChartCard title="Balance mensual" testID="analytics-chart-balance">
+            <LineChart
+              testID="balance-chart"
+              categories={categories}
+              categoryTitles={titles}
+              series={balanceSeries}
+              area
+              showLegend={false}
+              readout="value"
+            />
+          </ChartCard>
+        </ScrollRevealSection>
+
+        <ScrollRevealSection>
+          <ChartCard
+            title="Previsto vs real"
+            subtitle="Lo planeado frente a lo que ya se movió"
+            testID="analytics-chart-plan-vs-actual"
+          >
+            <ChartSegmentedControl
+              testID="plan-vs-actual-kind"
+              accessibilityLabel="Comparar gastos o ingresos"
+              options={PLAN_OPTIONS}
+              value={planKind}
+              onChange={setPlanKind}
+            />
+            <BarChart
+              testID="plan-vs-actual-chart"
+              categories={categories}
+              categoryTitles={titles}
+              series={planSeries}
               describeNote={(index) => {
-                const row = comparison.rows[index];
-                return row ? `Diferencia: ${formatSignedCurrency(row.delta)}` : undefined;
+                const planned = planSeries[0]?.values[index] ?? 0;
+                const actual = planSeries[1]?.values[index] ?? 0;
+                return `Diferencia: ${formatSignedCurrency(actual - planned)}`;
               }}
             />
-          ) : (
-            <AppText variant="caption" color={colors.text.muted} testID="comparison-chart-empty">
-              {hasClosedMonths
-                ? 'No hay un mes anterior registrado para comparar.'
-                : 'Cuando cierres tu primer mes verás aquí la comparación con el anterior.'}
-            </AppText>
-          )}
-        </ChartCard>
+          </ChartCard>
+        </ScrollRevealSection>
+
+        <ScrollRevealSection>
+          <ChartCard
+            title="Pagado vs pendiente"
+            subtitle={`Gastos de ${formatMonthKeyLabelEs(activeMonthKey)}`}
+            testID="analytics-chart-paid-pending"
+          >
+            <DonutChart
+              testID="paid-pending-chart"
+              totalLabel="Gastos del mes"
+              emptyLabel="Este mes todavía no tiene gastos."
+              slices={[
+                { id: 'paid', label: 'Pagado', amount: split.paid, color: colors.semantic.completed },
+                { id: 'pending', label: 'Pendiente', amount: split.pending, color: colors.semantic.pending },
+              ]}
+            />
+          </ChartCard>
+        </ScrollRevealSection>
+
+        <ScrollRevealSection>
+          <ChartCard
+            title={
+              comparison
+                ? `${formatMonthKeyLabelEs(comparison.currentMonthKey)} vs ${formatMonthKeyLabelEs(comparison.previousMonthKey)}`
+                : 'Este mes vs el anterior'
+            }
+            testID="analytics-chart-comparison"
+          >
+            {comparison ? (
+              <BarChart
+                testID="comparison-chart"
+                categories={comparison.rows.map((row) => row.label.split(' ')[0] ?? row.label)}
+                categoryTitles={comparison.rows.map((row) => row.label)}
+                series={comparisonSeries}
+                describeNote={(index) => {
+                  const row = comparison.rows[index];
+                  return row ? `Diferencia: ${formatSignedCurrency(row.delta)}` : undefined;
+                }}
+              />
+            ) : (
+              <AppText variant="caption" color={colors.text.muted} testID="comparison-chart-empty">
+                {hasClosedMonths
+                  ? 'No hay un mes anterior registrado para comparar.'
+                  : 'Cuando cierres tu primer mes verás aquí la comparación con el anterior.'}
+              </AppText>
+            )}
+          </ChartCard>
+        </ScrollRevealSection>
       </ResponsiveColumns>
     </View>
   );

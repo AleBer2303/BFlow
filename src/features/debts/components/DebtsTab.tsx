@@ -8,7 +8,7 @@
 import React, { useCallback } from 'react';
 import { View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
-import { hapticService, useBFlowTheme } from '../../../design-system';
+import { ScrollRevealSection, hapticService, useBFlowTheme } from '../../../design-system';
 import { useActiveMonthKey, useDebtSummary } from '../../budget/hooks/useActiveMonthSummaries';
 import { useChartHistory } from '../../budget/hooks/useChartHistory';
 import { useBudgetStore } from '../../budget/store/useBudgetStore';
@@ -60,7 +60,9 @@ export const DebtsTab = React.memo(function DebtsTab(): React.JSX.Element {
         onUpdateDebt={handleUpdateDebt}
         onDeleteDebt={handleDeleteDebt}
       />
-      <DebtTrendChart history={history} projection={debtSummary.projection} />
+      <ScrollRevealSection>
+        <DebtTrendChart history={history} projection={debtSummary.projection} />
+      </ScrollRevealSection>
     </View>
   );
 });

@@ -36,6 +36,10 @@ import {
   type NativeSyntheticEvent,
   type ScrollViewProps,
 } from 'react-native';
+import Reanimated, {
+  type SharedValue,
+  type useAnimatedScrollHandler,
+} from 'react-native-reanimated';
 
 export interface KeyboardAwareContextValue {
   /**
@@ -86,6 +90,10 @@ export interface KeyboardAwareScrollViewProps extends ScrollViewProps {
    * Defaults to 24 points for a clean, natural iOS margin without empty voids.
    */
   extraScrollHeight?: number;
+  /** Optional UI-thread scroll handler from Reanimated `useAnimatedScrollHandler`. */
+  animatedScrollHandler?: ReturnType<typeof useAnimatedScrollHandler>;
+  /** Shared scroll Y offset kept in sync by `animatedScrollHandler` on the UI thread. */
+  scrollYShared?: SharedValue<number>;
 }
 
 export const KeyboardAwareScrollView = React.forwardRef<
@@ -95,6 +103,8 @@ export const KeyboardAwareScrollView = React.forwardRef<
   {
     children,
     extraScrollHeight = 24,
+    animatedScrollHandler,
+    scrollYShared,
     keyboardShouldPersistTaps = 'handled',
     keyboardDismissMode = Platform.OS === 'ios' ? 'interactive' : 'on-drag',
     automaticallyAdjustKeyboardInsets = Platform.OS === 'ios',
@@ -209,7 +219,7 @@ export const KeyboardAwareScrollView = React.forwardRef<
         }
 
         if (Math.abs(delta) > 3) {
-          const currentScrollY = scrollYRef.current;
+          const currentScrollY = scrollYShared ? scrollYShared.value : scrollYRef.current;
           const targetScrollY = Math.max(0, currentScrollY + delta);
           innerScrollRef.current?.scrollTo({ y: targetScrollY, animated: true });
           scrollYRef.current = targetScrollY;
@@ -248,7 +258,8 @@ export const KeyboardAwareScrollView = React.forwardRef<
           (inputNode as any).measureLayout(
             innerScrollRef.current,
             (_x: number, contentY: number, _w: number, h: number) => {
-              const screenY = contentY - scrollYRef.current;
+              const currentScrollY = scrollYShared ? scrollYShared.value : scrollYRef.current;
+              const screenY = contentY - currentScrollY;
               handleScreenY(screenY, h);
             },
             () => {}
@@ -259,7 +270,7 @@ export const KeyboardAwareScrollView = React.forwardRef<
         }
       }
     },
-    [extraScrollHeight]
+    [extraScrollHeight, scrollYShared]
   );
 
   const registerInputFocus = useCallback(
@@ -317,37 +328,56 @@ export const KeyboardAwareScrollView = React.forwardRef<
     [registerInputFocus, isKeyboardVisible, keyboardHeight]
   );
 
+  const resolvedContentContainerStyle = [
+    contentContainerStyle,
+    Platform.OS !== 'ios' && isKeyboardVisible && keyboardHeight > 0
+      ? {
+          paddingBottom:
+            (typeof contentContainerStyle === 'object' &&
+            contentContainerStyle !== null &&
+            'paddingBottom' in contentContainerStyle
+              ? Number((contentContainerStyle as any).paddingBottom || 0)
+              : 0) +
+            keyboardHeight +
+            24,
+        }
+      : null,
+  ];
+
   return (
     <KeyboardAwareContext.Provider value={contextValue}>
       <ScrollLockContext.Provider value={scrollLockValue}>
-        <ScrollView
-          ref={innerScrollRef}
-          scrollEnabled={scrollEnabled && !isScrollLocked}
-          onScroll={handleScroll}
-          scrollEventThrottle={scrollEventThrottle}
-          keyboardShouldPersistTaps={keyboardShouldPersistTaps}
-          keyboardDismissMode={keyboardDismissMode}
-          automaticallyAdjustKeyboardInsets={automaticallyAdjustKeyboardInsets}
-          contentInsetAdjustmentBehavior={contentInsetAdjustmentBehavior}
-          contentContainerStyle={[
-            contentContainerStyle,
-            Platform.OS !== 'ios' && isKeyboardVisible && keyboardHeight > 0
-              ? {
-                  paddingBottom:
-                    (typeof contentContainerStyle === 'object' &&
-                    contentContainerStyle !== null &&
-                    'paddingBottom' in contentContainerStyle
-                      ? Number((contentContainerStyle as any).paddingBottom || 0)
-                      : 0) +
-                    keyboardHeight +
-                    24,
-                }
-              : null,
-          ]}
-          {...rest}
-        >
-          {children}
-        </ScrollView>
+        {animatedScrollHandler ? (
+          <Reanimated.ScrollView
+            ref={innerScrollRef as any}
+            scrollEnabled={scrollEnabled && !isScrollLocked}
+            onScroll={animatedScrollHandler}
+            scrollEventThrottle={8}
+            keyboardShouldPersistTaps={keyboardShouldPersistTaps}
+            keyboardDismissMode={keyboardDismissMode}
+            automaticallyAdjustKeyboardInsets={automaticallyAdjustKeyboardInsets}
+            contentInsetAdjustmentBehavior={contentInsetAdjustmentBehavior}
+            contentContainerStyle={resolvedContentContainerStyle}
+            {...(rest as any)}
+          >
+            {children}
+          </Reanimated.ScrollView>
+        ) : (
+          <ScrollView
+            ref={innerScrollRef}
+            scrollEnabled={scrollEnabled && !isScrollLocked}
+            onScroll={handleScroll}
+            scrollEventThrottle={scrollEventThrottle}
+            keyboardShouldPersistTaps={keyboardShouldPersistTaps}
+            keyboardDismissMode={keyboardDismissMode}
+            automaticallyAdjustKeyboardInsets={automaticallyAdjustKeyboardInsets}
+            contentInsetAdjustmentBehavior={contentInsetAdjustmentBehavior}
+            contentContainerStyle={resolvedContentContainerStyle}
+            {...rest}
+          >
+            {children}
+          </ScrollView>
+        )}
       </ScrollLockContext.Provider>
     </KeyboardAwareContext.Provider>
   );

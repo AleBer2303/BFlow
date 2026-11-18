@@ -29,6 +29,8 @@ import {
   resolvePresenceSpec,
   ResponsiveColumns,
   RevealDown,
+  ScrollDepthHero,
+  ScrollRevealSection,
   StatusBadge,
   toEasing,
   TrashBinIcon,
@@ -504,8 +506,9 @@ export function ChecklistWorkspaceView({
   return (
     <View style={{ gap: spacing.md }} testID="checklist-workspace-view">
       {/* Top Action Bar: Header + Full-Width Add Movement CTA + Segmented Filter */}
-      <GlassSurface elevated>
-        <View style={{ gap: spacing.sm }}>
+      <ScrollDepthHero>
+        <GlassSurface elevated>
+          <View style={{ gap: spacing.sm }}>
           <View
             style={{
               flexDirection: 'row',
@@ -621,7 +624,8 @@ export function ChecklistWorkspaceView({
             })}
           </View>
         </View>
-      </GlassSurface>
+        </GlassSurface>
+      </ScrollDepthHero>
 
       {/* Edit Existing Item Sheet */}
       <RevealDown visible={Boolean(editingEntryId)}>
@@ -654,7 +658,8 @@ export function ChecklistWorkspaceView({
       {/* Wide windows place income and expenses side by side; phones stack them. */}
       <ResponsiveColumns testID="checklist-sections">
         {/* Section 1: INGRESOS */}
-        <GlassSurface testID="checklist-incomes-section">
+        <ScrollRevealSection>
+          <GlassSurface testID="checklist-incomes-section">
           <View style={{ gap: spacing.sm }}>
             <View
               style={{
@@ -765,10 +770,12 @@ export function ChecklistWorkspaceView({
               )}
             </View>
           </View>
-        </GlassSurface>
+          </GlassSurface>
+        </ScrollRevealSection>
 
         {/* Section 2: GASTOS */}
-        <GlassSurface testID="checklist-expenses-section">
+        <ScrollRevealSection>
+          <GlassSurface testID="checklist-expenses-section">
           <View style={{ gap: spacing.sm }}>
             <View
               style={{
@@ -878,7 +885,8 @@ export function ChecklistWorkspaceView({
               )}
             </View>
           </View>
-        </GlassSurface>
+          </GlassSurface>
+        </ScrollRevealSection>
       </ResponsiveColumns>
     </View>
   );

@@ -7,7 +7,7 @@
  * 2. `src/app/` and `src/features/` must NEVER contain hardcoded hex colors (`#RRGGBB`); all colors come from `src/design-system/tokens.ts`.
  * 3. `src/` must not contain stray `console.log` statements.
  * 4. Mode B native-only modules are imported only from `.native.ts(x)` adapters under `src/platform/`.
- * 5. `expo-blur` (Liquid Glass) is imported only by the two components that gate it to the iOS skin.
+ * 5. `expo-blur` (Liquid Glass) is imported only by the components that gate it to the iOS skin.
  * 6. `src/app/` and `src/features/` use `AppPressable`, never React Native's `Pressable`.
  */
 
@@ -101,6 +101,8 @@ for (const filePath of files) {
   const blurAllowList = [
     'src/platform/glass/GlassSurface.tsx',
     'src/design-system/components/IosWheelPickerModal.tsx',
+    // Fallback of the iOS dock material on iOS < 26 (ADR 0030); Android never renders it.
+    'src/platform/glass/LiquidGlassMaterial.native.tsx',
   ];
   if (/from\s+['"]expo-blur['"]/.test(content) && !blurAllowList.includes(relPath)) {
     errors.push(

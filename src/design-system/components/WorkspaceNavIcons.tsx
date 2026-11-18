@@ -9,6 +9,12 @@ export interface WorkspaceNavIconProps {
   focused?: boolean;
   style?: ViewStyle;
   testID?: string;
+  /**
+   * Root Svg component. The iOS dock passes a Reanimated one and animates its viewBox
+   * (`svgProps.animatedProps`), so the icon is redrawn as a vector at every size.
+   */
+  svgComponent?: React.ComponentType<React.ComponentProps<typeof Svg> & Record<string, unknown>>;
+  svgProps?: Record<string, unknown>;
 }
 
 /**
@@ -20,14 +26,17 @@ export function SummaryNavIcon({
   focused = false,
   style,
   testID = 'nav-icon-summary',
+  svgComponent,
+  svgProps,
 }: WorkspaceNavIconProps): React.JSX.Element {
+  const SvgRoot = svgComponent ?? Svg;
   const { colors, mode } = useBFlowTheme();
   const strokeColor = color ?? (focused ? colors.text.primary : colors.text.muted);
   const strokeWidth = focused ? 2 : 1.7;
 
   return (
     <View testID={testID} style={[{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }, style]}>
-      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <SvgRoot width={size} height={size} viewBox="0 0 24 24" fill="none" {...svgProps}>
         <Rect
           x={3}
           y={3}
@@ -66,7 +75,7 @@ export function SummaryNavIcon({
           strokeWidth={strokeWidth}
           fill={focused && mode === 'dark' ? colors.glass.specularBorder : 'none'}
         />
-      </Svg>
+      </SvgRoot>
     </View>
   );
 }
@@ -80,14 +89,17 @@ export function ChecklistNavIcon({
   focused = false,
   style,
   testID = 'nav-icon-checklist',
+  svgComponent,
+  svgProps,
 }: WorkspaceNavIconProps): React.JSX.Element {
+  const SvgRoot = svgComponent ?? Svg;
   const { colors, mode } = useBFlowTheme();
   const strokeColor = color ?? (focused ? colors.text.primary : colors.text.muted);
   const strokeWidth = focused ? 2 : 1.7;
 
   return (
     <View testID={testID} style={[{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }, style]}>
-      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <SvgRoot width={size} height={size} viewBox="0 0 24 24" fill="none" {...svgProps}>
         <Path
           d="M9 6h11M9 12h11M9 18h11"
           stroke={strokeColor}
@@ -115,7 +127,7 @@ export function ChecklistNavIcon({
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-      </Svg>
+      </SvgRoot>
     </View>
   );
 }
@@ -129,14 +141,17 @@ export function DebtsNavIcon({
   focused = false,
   style,
   testID = 'nav-icon-debts',
+  svgComponent,
+  svgProps,
 }: WorkspaceNavIconProps): React.JSX.Element {
+  const SvgRoot = svgComponent ?? Svg;
   const { colors, mode } = useBFlowTheme();
   const strokeColor = color ?? (focused ? colors.text.primary : colors.text.muted);
   const strokeWidth = focused ? 2 : 1.7;
 
   return (
     <View testID={testID} style={[{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }, style]}>
-      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <SvgRoot width={size} height={size} viewBox="0 0 24 24" fill="none" {...svgProps}>
         <Rect
           x={2}
           y={5}
@@ -164,7 +179,7 @@ export function DebtsNavIcon({
           strokeWidth={strokeWidth}
           strokeLinecap="round"
         />
-      </Svg>
+      </SvgRoot>
     </View>
   );
 }
@@ -178,14 +193,17 @@ export function SavingsNavIcon({
   focused = false,
   style,
   testID = 'nav-icon-savings',
+  svgComponent,
+  svgProps,
 }: WorkspaceNavIconProps): React.JSX.Element {
+  const SvgRoot = svgComponent ?? Svg;
   const { colors, mode } = useBFlowTheme();
   const strokeColor = color ?? (focused ? colors.text.primary : colors.text.muted);
   const strokeWidth = focused ? 2 : 1.7;
 
   return (
     <View testID={testID} style={[{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }, style]}>
-      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <SvgRoot width={size} height={size} viewBox="0 0 24 24" fill="none" {...svgProps}>
         <Path
           d="M19 12c0-3.87-3.13-7-7-7a7.003 7.003 0 0 0-6.84 5.54C3.89 10.93 3 12.04 3 13.5 3 15.43 4.57 17 6.5 17H7v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2h2v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2.07c2.28-.9 3.9-3.08 4-5.68l.1-.25z"
           stroke={strokeColor}
@@ -206,7 +224,7 @@ export function SavingsNavIcon({
           r={0.9}
           fill={strokeColor}
         />
-      </Svg>
+      </SvgRoot>
     </View>
   );
 }
@@ -220,14 +238,17 @@ export function CierreNavIcon({
   focused = false,
   style,
   testID = 'nav-icon-cierre',
+  svgComponent,
+  svgProps,
 }: WorkspaceNavIconProps): React.JSX.Element {
+  const SvgRoot = svgComponent ?? Svg;
   const { colors, mode } = useBFlowTheme();
   const strokeColor = color ?? (focused ? colors.text.primary : colors.text.muted);
   const strokeWidth = focused ? 2 : 1.7;
 
   return (
     <View testID={testID} style={[{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }, style]}>
-      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <SvgRoot width={size} height={size} viewBox="0 0 24 24" fill="none" {...svgProps}>
         <Rect
           x={4}
           y={10}
@@ -251,7 +272,7 @@ export function CierreNavIcon({
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-      </Svg>
+      </SvgRoot>
     </View>
   );
 }
@@ -265,14 +286,17 @@ export function AccountNavIcon({
   focused = false,
   style,
   testID = 'nav-icon-account',
+  svgComponent,
+  svgProps,
 }: WorkspaceNavIconProps): React.JSX.Element {
+  const SvgRoot = svgComponent ?? Svg;
   const { colors, mode } = useBFlowTheme();
   const strokeColor = color ?? (focused ? colors.text.primary : colors.text.muted);
   const strokeWidth = focused ? 2 : 1.7;
 
   return (
     <View testID={testID} style={[{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }, style]}>
-      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <SvgRoot width={size} height={size} viewBox="0 0 24 24" fill="none" {...svgProps}>
         <Circle
           cx={12}
           cy={7.5}
@@ -287,7 +311,7 @@ export function AccountNavIcon({
           strokeWidth={strokeWidth}
           strokeLinecap="round"
         />
-      </Svg>
+      </SvgRoot>
     </View>
   );
 }

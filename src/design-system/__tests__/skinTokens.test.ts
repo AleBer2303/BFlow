@@ -13,6 +13,7 @@ import {
   platformSkins,
   radius,
   radiusBySkin,
+  scrollMotionBySkin,
   typography,
   typographyBySkin,
   type ColorPalette,
@@ -183,6 +184,15 @@ describe('platform skin identity', () => {
       );
     }
     expect(new Set(PLATFORM_SKIN_IDS.map((id) => radiusBySkin[id].lg)).size).toBe(3);
+  });
+
+  it('defines scroll choreography tokens for all three skins and disables scroll motion on Web', () => {
+    expect(Object.keys(scrollMotionBySkin).sort()).toEqual([...PLATFORM_SKIN_IDS].sort());
+    expect(scrollMotionBySkin.ios.enabled).toBe(true);
+    expect(scrollMotionBySkin.android.enabled).toBe(true);
+    expect(scrollMotionBySkin.web.enabled).toBe(false);
+    expect(scrollMotionBySkin.android.usesSpringReveal).toBe(false);
+    expect(scrollMotionBySkin.android.overscrollMaxScale).toBe(1);
   });
 });
 

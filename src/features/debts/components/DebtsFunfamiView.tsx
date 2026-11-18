@@ -22,6 +22,8 @@ import {
   ProgressFill,
   ResponsiveColumns,
   RevealDown,
+  ScrollDepthHero,
+  ScrollRevealSection,
   StatusBadge,
   TrashBinIcon,
   useBFlowTheme,
@@ -129,7 +131,8 @@ export function DebtsFunfamiView({
   return (
     <View style={{ gap: spacing.md }} testID="debts-funfami-view">
       {/* Hero Card: Total Deudas */}
-      <GlassSurface elevated testID="funfami-hero-card">
+      <ScrollDepthHero>
+        <GlassSurface elevated testID="funfami-hero-card">
         <View style={{ gap: spacing.sm }}>
           <View
             style={{
@@ -200,7 +203,8 @@ export function DebtsFunfamiView({
             </AppText>
           </View>
         </View>
-      </GlassSurface>
+        </GlassSurface>
+      </ScrollDepthHero>
 
       {/* Action Bar: "+ Nueva Deuda" + Global Edit & Delete Mode Buttons */}
       <View style={{ gap: spacing.sm }}>
@@ -346,7 +350,8 @@ export function DebtsFunfamiView({
       <ResponsiveColumns testID="debt-cards-grid">
         {/* Individual Active Obligations Breakdown */}
         {activeObligations.map((debt) => (
-          <GlassSurface key={debt.debtId} testID={`debt-card-${debt.debtId}`}>
+          <ScrollRevealSection key={debt.debtId}>
+            <GlassSurface testID={`debt-card-${debt.debtId}`}>
             <View style={{ gap: spacing.xs }}>
               <View
                 style={{
@@ -473,7 +478,8 @@ export function DebtsFunfamiView({
                 ) : null}
               </View>
             </View>
-          </GlassSurface>
+            </GlassSurface>
+          </ScrollRevealSection>
         ))}
       </ResponsiveColumns>
     </View>

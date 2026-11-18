@@ -46,8 +46,14 @@ import {
 } from '../../../platform/glass/LiquidGlassMaterial';
 import { hapticService } from '../../../platform/haptics/hapticService';
 import { IS_MOTION_STATIC } from '../../motion/motionRuntime';
+import { useScrollChoreography } from '../../motion/ScrollChoreographyContext';
 import { useBFlowTheme } from '../../theme/ThemeContext';
-import { liquidDockMotion, liquidDockPalette, springConfigs } from '../../tokens';
+import {
+  liquidDockMotion,
+  liquidDockPalette,
+  scrollMotionBySkin,
+  springConfigs,
+} from '../../tokens';
 import type { FloatingLiquidGlassDockProps } from '../FloatingLiquidGlassDock';
 import type { WorkspaceNavIconProps } from '../WorkspaceNavIcons';
 import { DockTabIcon } from './DockTabContent';
@@ -75,6 +81,7 @@ const LENS_INSET_V = DOCK_SURFACE_BORDER + DOCK_SURFACE_PADDING_V;
 const LENS_LEFT = DOCK_PADDING_H + LENS_MARGIN_H;
 const ICON_SIZE = 20;
 const LAST_INDEX = DOCK_TABS.length - 1;
+const DOCK_HIDDEN_SCALE_IOS = scrollMotionBySkin.ios.dockHiddenScale;
 
 const TAB_COUNT = DOCK_TABS.length;
 const PADDING_H = DOCK_PADDING_H;
@@ -225,7 +232,8 @@ interface LiquidDockTabProps {
   restColor: string;
   labelStyle: object;
   minTouchTarget: number;
-  onSelectIndex: (index: number) => void;
+  onPressInIndex: (index: number) => void;
+  onPressIndex: (index: number) => void;
 }
 
 /**
@@ -245,7 +253,8 @@ const LiquidDockTab = React.memo(function LiquidDockTab({
   restColor,
   labelStyle,
   minTouchTarget,
-  onSelectIndex,
+  onPressInIndex,
+  onPressIndex,
 }: LiquidDockTabProps): React.JSX.Element {
   const tint = isHighlighted ? accentColor : restColor;
   // viewBox of the 24-unit icon that shows it at the current size, centred.
@@ -264,7 +273,8 @@ const LiquidDockTab = React.memo(function LiquidDockTab({
         : { viewBox: ICON_REST_VIEWBOX, animatedProps: iconSvgProps },
     [iconSvgProps]
   );
-  const select = useCallback(() => onSelectIndex(index), [index, onSelectIndex]);
+  const handlePressIn = useCallback(() => onPressInIndex(index), [index, onPressInIndex]);
+  const handlePress = useCallback(() => onPressIndex(index), [index, onPressIndex]);
 
   return (
     <Pressable
@@ -274,8 +284,8 @@ const LiquidDockTab = React.memo(function LiquidDockTab({
       accessibilityState={{ selected: isSelected }}
       // react-native-web drops accessibilityState (see AppPressable).
       aria-selected={isSelected}
-      onPressIn={select}
-      onPress={select}
+      onPressIn={handlePressIn}
+      onPress={handlePress}
       style={{
         flex: 1,
         height: DOCK_TAB_HEIGHT,
@@ -308,13 +318,23 @@ const LiquidDockTab = React.memo(function LiquidDockTab({
 export const LiquidGlassDock = React.memo(function LiquidGlassDock({
   activeTab,
   onSelectTab,
+  onReselectActiveTab,
   bottomInset = 0,
   testID = 'floating-liquid-glass-dock',
 }: FloatingLiquidGlassDockProps): React.JSX.Element {
   const { colors, mode, radius, spacing, reducedMotion, skinSpec, typography } = useBFlowTheme();
+  const choreography = useScrollChoreography();
   const palette = liquidDockPalette[mode];
   const nativeGlass = isNativeLiquidGlassAvailable();
   const isStatic = IS_MOTION_STATIC || reducedMotion;
+  const fallbackHiddenSV = useSharedValue(0);
+  const dockHiddenSV = choreography?.dockHidden ?? fallbackHiddenSV;
+  const isScrollChoreoActive = Boolean(choreography?.active && !isStatic);
+  const scrollChoreoActiveSV = useSharedValue(isScrollChoreoActive);
+
+  useEffect(() => {
+    scrollChoreoActiveSV.value = isScrollChoreoActive;
+  }, [isScrollChoreoActive, scrollChoreoActiveSV]);
 
   const activeIndex = useMemo(() => {
     const idx = DOCK_TABS.findIndex((t) => t.id === activeTab);
@@ -347,11 +367,18 @@ export const LiquidGlassDock = React.memo(function LiquidGlassDock({
   activeTabRef.current = activeTab;
   const onSelectTabRef = useRef(onSelectTab);
   onSelectTabRef.current = onSelectTab;
+  const onReselectActiveTabRef = useRef(onReselectActiveTab);
+  onReselectActiveTabRef.current = onReselectActiveTab;
+  const revealDockRef = useRef(choreography?.revealDock);
+  revealDockRef.current = choreography?.revealDock;
   const isStaticRef = useRef(isStatic);
   isStaticRef.current = isStatic;
 
   // Keeps the lens on the tab just picked until the parent's activeTab catches up.
   const pendingReleaseIndexRef = useRef<number | null>(null);
+  // Tracks whether the current touch already triggered a tab switch on pressIn,
+  // so the trailing onPress does not treat the newly active tab as a reselect-to-top tap.
+  const justSelectedTabRef = useRef<BFlowWorkspaceTab | null>(null);
   // Tab drawn in the accent colour: follows the lens tab by tab, never in between.
   const [highlightIndex, setHighlightIndex] = useState(activeIndex);
   // The lens' glass surface over the icons is on only while the lens is touched.
@@ -372,22 +399,61 @@ export const LiquidGlassDock = React.memo(function LiquidGlassDock({
     springTo(position, activeIndex, springConfigs.liquidSettle, isStaticRef.current, 0);
   }, [activeIndex, activeIndexSV, dragging, hoverIndex, position]);
 
-  // Tap: select on touch-down (JS, through the tab's Pressable).
-  const handleSelectIndex = useCallback(
-    (index: number) => {
+  const selectTabAtIndex = useCallback(
+    (index: number, fromPressIn: boolean): boolean => {
       const clamped = Math.max(0, Math.min(LAST_INDEX, index));
       const targetTab = DOCK_TABS[clamped];
-      if (!targetTab || targetTab.id === activeTabRef.current) return;
-      if (pendingReleaseIndexRef.current === clamped) return;
+      if (!targetTab || targetTab.id === activeTabRef.current) return false;
+      if (pendingReleaseIndexRef.current === clamped) return false;
+      if (fromPressIn) {
+        justSelectedTabRef.current = targetTab.id;
+      }
       pendingReleaseIndexRef.current = clamped;
       hoverIndex.value = clamped;
       setHighlightIndex(clamped);
       hapticService.selection();
       springTo(position, clamped, springConfigs.liquidSettle, isStaticRef.current, 0);
       onSelectTabRef.current(targetTab.id);
+      return true;
     },
     [hoverIndex, position]
   );
+
+  // Tap: select on touch-down (JS, through the tab's Pressable).
+  const handlePressInIndex = useCallback(
+    (index: number) => {
+      const clamped = Math.max(0, Math.min(LAST_INDEX, index));
+      const targetTab = DOCK_TABS[clamped];
+      if (targetTab && targetTab.id === activeTabRef.current) {
+        justSelectedTabRef.current = null;
+        return;
+      }
+      selectTabAtIndex(index, true);
+    },
+    [selectTabAtIndex]
+  );
+
+  const handlePressIndex = useCallback(
+    (index: number) => {
+      const clamped = Math.max(0, Math.min(LAST_INDEX, index));
+      const targetTab = DOCK_TABS[clamped];
+      if (!targetTab) return;
+      if (justSelectedTabRef.current === targetTab.id) {
+        justSelectedTabRef.current = null;
+        return;
+      }
+      if (targetTab.id === activeTabRef.current && pendingReleaseIndexRef.current === null) {
+        onReselectActiveTabRef.current?.();
+        return;
+      }
+      selectTabAtIndex(index, false);
+    },
+    [selectTabAtIndex]
+  );
+
+  const notifyDockRevealed = useCallback(() => {
+    revealDockRef.current?.();
+  }, []);
 
   // Drag callbacks scheduled from the UI thread.
   const handleDragCross = useCallback((index: number) => {
@@ -426,6 +492,10 @@ export const LiquidGlassDock = React.memo(function LiquidGlassDock({
       const touched = tabIndexAt(event.x, dockWidthSV.value);
       hoverIndex.value = touched;
       scheduleOnRN(setLensTouched, true);
+      if (scrollChoreoActiveSV.value && !staticSV.value && dockHiddenSV.value > 0.01) {
+        dockHiddenSV.value = withSpring(0, springConfigs.scrollDockReveal);
+        scheduleOnRN(notifyDockRevealed);
+      }
       if (!staticSV.value) {
         springTo(press, 1, springConfigs.dockPressIn, false, 0);
         springTo(lift, 1, springConfigs.liquidLift, false, 0);
@@ -516,10 +586,21 @@ export const LiquidGlassDock = React.memo(function LiquidGlassDock({
 
   const tabWidth = tabWidthOf(dockWidth);
   const lensWidth = Math.max(0, tabWidth - LENS_MARGIN_H * 2);
+  const dockTravel = DOCK_CAPSULE_HEIGHT + DOCK_BOTTOM_OFFSET.ios + bottomInset + 24;
 
-  const dockStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 - (1 - liquidDockMotion.pressScale) * press.value }],
-  }));
+  // Never animate opacity on GlassView (ADR 0030 §2.4): retract via translateY + subtle scale only.
+  const dockStyle = useAnimatedStyle(() => {
+    const pressScale = 1 - (1 - liquidDockMotion.pressScale) * press.value;
+    const rawHidden = scrollChoreoActiveSV.value ? dockHiddenSV.value : 0;
+    const hidden = Number.isFinite(rawHidden) ? Math.min(1, Math.max(0, rawHidden)) : 0;
+    const hideScale = 1 - (1 - DOCK_HIDDEN_SCALE_IOS) * hidden;
+    return {
+      transform: [
+        { translateY: hidden * dockTravel },
+        { scale: pressScale * hideScale },
+      ],
+    };
+  }, [dockHiddenSV, dockTravel, press, scrollChoreoActiveSV]);
   const lensStyle = useAnimatedStyle(() => {
     const frame = lensTransformAt(position.value, lift.value, stretch.value, dockWidthSV.value);
     return {
@@ -736,7 +817,8 @@ export const LiquidGlassDock = React.memo(function LiquidGlassDock({
                 restColor={restColor}
                 labelStyle={labelStyle}
                 minTouchTarget={skinSpec.minTouchTarget}
-                onSelectIndex={handleSelectIndex}
+                onPressInIndex={handlePressInIndex}
+                onPressIndex={handlePressIndex}
               />
             ))}
           </View>

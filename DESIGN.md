@@ -172,6 +172,8 @@ export const springConfigs = {
   // La cápsula del dock se hunde (×0,975) y rebota al soltar (ζ 0,41)
   dockPressIn: { damping: 22, stiffness: 420, mass: 0.6 },
   dockRelease: { damping: 11, stiffness: 260, mass: 0.7 },
+  // El dock flotante reaparece al hacer scroll up en iOS (ADR 0031): asentamiento nítido (ζ 0,70)
+  scrollDockReveal: { damping: 20, stiffness: 240, mass: 0.85 },
 } as const;
 ```
 
@@ -192,6 +194,7 @@ export const springConfigs = {
 `BFlowThemeProvider` sigue el ajuste *Reducir Movimiento* del sistema (iOS, Android y Web) y lo entrega como `useBFlowTheme().reducedMotion`. Con el ajuste activo:
 - No hay traslación, escala, resorte ni sacudida. Queda un cambio de opacidad de `REDUCED_MOTION_DURATION_MS` (140 ms).
 - El lente y la píldora del dock saltan a su sitio; el lente no se infla ni se estira y la cápsula no se hunde. El acordeón del onboarding (`animateNextLayout`) cambia de una vez.
+- Se desactiva toda la coreografía ligada al scroll (`ScrollDepthHero`, `ScrollRevealSection` y retracción/retorno del dock); el contenido permanece estático y el dock visible.
 - Los gráficos y la curva del mes dibujan su estado final.
 
 ### 6.3 Matriz de Retroalimentación Háptica (`expo-haptics`):
@@ -250,7 +253,16 @@ Un movimiento nuevo no escribe milisegundos: pide su especificación a `src/desi
 - **`useReplayOnChange`:** un valor que se repite de 0 a 1 cuando cambia una clave. Lo usan el contador del Checklist (`StatusBadge pulseOnChange`, que se hincha un 10 %) y el botón de tema (el icono nuevo gira un cuarto de vuelta y crece).
 - **`animateNextLayout()`:** anima el siguiente cambio de layout (filas que se añaden, acordeones). No hace nada en Web.
 
-**Reglas:** cerrar es más rápido que abrir; un cierre nunca se retrasa; el sobrepaso es solo de iOS y solo en entradas; nada se mueve por el scroll.
+**Reglas:** cerrar es más rápido que abrir; un cierre nunca se retrasa; el sobrepaso es solo de iOS y solo en entradas; en la piel Web nada se mueve por el scroll y en iOS/Android la coreografía de scroll sigue §6.5.
+
+### 6.5 Coreografía de Scroll (iOS y Android, ADR 0031)
+
+En **iOS** y **Android**, el desplazamiento vertical corre íntegramente en el hilo de UI (Reanimated 4, `useAnimatedScrollHandler`), con cero `setState` y cero `scheduleOnRN` durante el scroll y con tokens en `scrollMotionBySkin` (`tokens.ts`). En **Web**, `scrollMotionBySkin.web.enabled` es `false` y todas las piezas ligadas al scroll renderizan su contenido sin transformaciones.
+
+- **Retracción direccional del dock (`scroll down` / `scroll up`):** tras superar `dockMinOverflow` (`120 pt/dp` desplazables) y `dockHideMinOffset` (`48 pt/dp`), un desplazamiento sostenido hacia abajo de `+28 pt/dp` retrae el dock fuera del borde inferior (`translateY` + ligera escala; en iOS sin animar opacidad de `GlassView`, `220 ms`; en Android con curva emphasized-accelerate `180 ms`). Al invertir hacia arriba `-14 pt/dp`, o al acercarse a `48 pt/dp` del inicio o del final, reaparece con `scrollDockReveal` en iOS o con emphasized-decelerate (`250 ms`) en Android.
+- **Tocar pestaña activa (`scroll-to-top`):** volver a tocar la pestaña ya seleccionada en el dock regresa suavemente al tope (`y = 0`) con `hapticService.selection()` solo si el desplazamiento superaba `4 pt/dp`.
+- **Profundidad de tarjeta hero (`ScrollDepthHero`) y entrada bidireccional (`ScrollRevealSection`):** el bloque principal aplica paralaje sutil al bajar (y leve estiramiento elástico `overscrollMaxScale: 1.022` en *pull-down* solo en iOS); las secciones inferiores entran suavemente tanto al aparecer por abajo (*scroll down*) como al regresar desde el borde superior (*scroll up*), dejando intacto el pliegue inicial y garantizando asentamiento completo al llegar al fondo o al tope.
+- **Memoria por pestaña:** `WorkspaceShell` guarda y restaura el offset vertical de cada pestaña visitada al alternar entre ellas.
 
 ---
 
@@ -344,6 +356,7 @@ Decisiones en los ADR [0010](docs/decisions/0010-platform-skins-and-responsive-l
 | Objetivo táctil | 44 pt | 48 dp | 44 px |
 | Curva del mes (`curveStage`) | `scene-3d`: escena three.js (respaldo: curva vectorial) | `vector`: curva vectorial (SVG) animada, gesto táctil | `vector`: curva vectorial (SVG) animada, puntero y teclado |
 | Gráficos (ADR 0020) | SVG animado en tarjeta de vidrio; toque | SVG animado en tarjeta tonal; toque | SVG animado en tarjeta plana; toque, puntero y teclado |
+| Scroll (ADR 0031) | Dock retráctil con resorte `scrollDockReveal` + *scroll-to-top* en pestaña activa, paralaje hero con *overscroll* elástico y secciones bidireccionales | Dock retráctil con curvas emphasized sin rebote + *scroll-to-top* en pestaña activa, paralaje suave y secciones bidireccionales | Sin animaciones ni rebote ligados al scroll |
 
 **No cambia entre pieles:** los datos, los flujos, el significado de los colores semánticos, el espaciado (§4.1), los números tabulares y los `testID`.
 

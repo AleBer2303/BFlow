@@ -20,6 +20,8 @@ import {
   PencilEditIcon,
   ResponsiveColumns,
   RevealDown,
+  ScrollDepthHero,
+  ScrollRevealSection,
   StatusBadge,
   TrashBinIcon,
   useBFlowTheme,
@@ -397,7 +399,8 @@ export function SavingsAndMotoIdealView({
       <ResponsiveColumns testID="savings-panels">
         <View style={{ gap: spacing.md }}>
           {/* Screen 08: Hero Card Total Ahorros */}
-          <GlassSurface elevated testID="savings-hero-card">
+          <ScrollDepthHero>
+            <GlassSurface elevated testID="savings-hero-card">
             <View style={{ gap: spacing.xs }}>
               <View
                 style={{
@@ -428,7 +431,8 @@ export function SavingsAndMotoIdealView({
                 {`Total proyectado tras pagar pendientes: ${formatCurrency(savingsSummary.totalProjectedAfterPendingExpenses)}`}
               </AppText>
             </View>
-          </GlassSurface>
+            </GlassSurface>
+          </ScrollDepthHero>
 
           {/* Add New Fund Button (directly below Total Ahorros Acumulados, above the funds list) */}
           <AppPressable
@@ -609,7 +613,8 @@ export function SavingsAndMotoIdealView({
         </View>
 
         {/* Provisions & Target Goals Card (User-Configurable CRUD) */}
-        <GlassSurface elevated testID="moto-ideal-card">
+        <ScrollRevealSection>
+          <GlassSurface elevated testID="moto-ideal-card">
           <View style={{ gap: spacing.sm }}>
             <View
               style={{
@@ -798,7 +803,8 @@ export function SavingsAndMotoIdealView({
               );
             })}
           </View>
-        </GlassSurface>
+          </GlassSurface>
+        </ScrollRevealSection>
       </ResponsiveColumns>
     </View>
   );

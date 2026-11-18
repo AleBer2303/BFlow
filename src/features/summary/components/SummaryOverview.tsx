@@ -19,6 +19,8 @@ import {
   AppText,
   CurrencyText,
   GlassSurface,
+  ScrollDepthHero,
+  ScrollRevealSection,
   StatusBadge,
   estimateTextWidth,
   minCardWidthForAmounts,
@@ -166,7 +168,7 @@ export function SummaryOverview({
 
   return (
     <View testID="summary-overview-stacked" style={{ gap: sectionGap }}>
-      {heroCard}
+      <ScrollDepthHero>{heroCard}</ScrollDepthHero>
       <View
         testID="summary-figure-cards"
         style={{ flexDirection: 'row', flexWrap: 'wrap', gap: sectionGap }}
@@ -174,7 +176,9 @@ export function SummaryOverview({
         {incomeCard}
         {expenseCard}
       </View>
-      <MonthlyCurveSection curve={curve} stageMaxWidth={layout.contentWidth} />
+      <ScrollRevealSection>
+        <MonthlyCurveSection curve={curve} stageMaxWidth={layout.contentWidth} />
+      </ScrollRevealSection>
     </View>
   );
 }

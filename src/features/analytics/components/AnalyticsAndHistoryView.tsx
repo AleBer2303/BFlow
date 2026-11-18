@@ -21,6 +21,8 @@ import {
   MIN_TOUCH_TARGET_PT,
   PencilEditIcon,
   ResponsiveColumns,
+  ScrollDepthHero,
+  ScrollRevealSection,
   StatusBadge,
   TrashBinIcon,
   useBFlowTheme,
@@ -253,7 +255,8 @@ export function AnalyticsAndHistoryView({
     <View style={{ gap: spacing.md }} testID="analytics-and-history-view">
       <ResponsiveColumns testID="analytics-panels">
         {/* 1. Main Month Close Card */}
-        <GlassSurface elevated testID="month-close-and-history-card">
+        <ScrollDepthHero>
+          <GlassSurface elevated testID="month-close-and-history-card">
           <View style={{ gap: spacing.md }}>
             {/* Header with Title and Month Status Badge */}
             <View
@@ -420,10 +423,12 @@ export function AnalyticsAndHistoryView({
               </AppText>
             </AppPressable>
           </View>
-        </GlassSurface>
+          </GlassSurface>
+        </ScrollDepthHero>
 
         {/* 2. Month History Card */}
-        <GlassSurface elevated testID="history-months-section">
+        <ScrollRevealSection>
+          <GlassSurface elevated testID="history-months-section">
           <View style={{ gap: spacing.md }}>
             {/* Section Header */}
             <View style={{ gap: spacing.xxs }}>
@@ -549,7 +554,8 @@ export function AnalyticsAndHistoryView({
               ))}
             </View>
           </View>
-        </GlassSurface>
+          </GlassSurface>
+        </ScrollRevealSection>
       </ResponsiveColumns>
     </View>
   );

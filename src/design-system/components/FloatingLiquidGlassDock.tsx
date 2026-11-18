@@ -21,6 +21,8 @@ export type { DockTabConfig, LensFrame, LensFrameInput } from './dock/dockGeomet
 export interface FloatingLiquidGlassDockProps {
   activeTab: BFlowWorkspaceTab;
   onSelectTab: (tab: BFlowWorkspaceTab) => void;
+  /** Called when the user taps the already-active tab (scrolls the workspace back to top). */
+  onReselectActiveTab?: () => void;
   /** System gesture / navigation area below the dock (Android draws edge to edge). */
   bottomInset?: number;
   testID?: string;

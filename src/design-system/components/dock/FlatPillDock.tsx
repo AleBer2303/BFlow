@@ -15,14 +15,18 @@ import {
   type LayoutChangeEvent,
   type PanResponderGestureState,
 } from 'react-native';
+import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import type { BFlowWorkspaceTab } from '../../../features/budget/store/useBudgetStore';
 import { GlassSurface } from '../../../platform/glass/GlassSurface';
 import { hapticService } from '../../../platform/haptics/hapticService';
+import { useScrollChoreography } from '../../motion/ScrollChoreographyContext';
 import { useBFlowTheme } from '../../theme/ThemeContext';
-import { springConfigs } from '../../tokens';
+import { scrollMotionBySkin, springConfigs } from '../../tokens';
 import type { FloatingLiquidGlassDockProps } from '../FloatingLiquidGlassDock';
 import { DockTabContent } from './DockTabContent';
 import {
   DOCK_BOTTOM_OFFSET,
+  DOCK_CAPSULE_HEIGHT,
   DOCK_MAX_WIDTH,
   DOCK_PADDING_H,
   DOCK_SURFACE_BORDER,
@@ -57,10 +61,20 @@ function runSpring(value: Animated.Value, toValue: number, config: SpringParams)
 export const FlatPillDock = React.memo(function FlatPillDock({
   activeTab,
   onSelectTab,
+  onReselectActiveTab,
   bottomInset = 0,
   testID = 'floating-liquid-glass-dock',
 }: FloatingLiquidGlassDockProps): React.JSX.Element {
   const { colors, mode, radius, spacing, reducedMotion, skinSpec } = useBFlowTheme();
+  const choreography = useScrollChoreography();
+  const fallbackHiddenSV = useSharedValue(0);
+  const dockHiddenSV = choreography?.dockHidden ?? fallbackHiddenSV;
+  const isScrollChoreographyActive = Boolean(choreography?.active);
+  const onReselectActiveTabRef = useRef(onReselectActiveTab);
+  onReselectActiveTabRef.current = onReselectActiveTab;
+  const revealDockRef = useRef(choreography?.revealDock);
+  revealDockRef.current = choreography?.revealDock;
+  const justSelectedTabRef = useRef<BFlowWorkspaceTab | null>(null);
   // Reduce Motion: the pill and the icons jump to their place, with no spring.
   const reducedMotionRef = useRef(reducedMotion);
   reducedMotionRef.current = reducedMotion;
@@ -131,13 +145,16 @@ export const FlatPillDock = React.memo(function FlatPillDock({
     });
   }, [activeIndex, draggedIndex, gliderAnim, settle, spring, tabScaleAnims]);
 
-  const handleSelectIndex = useCallback(
-    (index: number) => {
+  const selectTabAtIndex = useCallback(
+    (index: number, fromPressIn: boolean) => {
       const clamped = Math.max(0, Math.min(DOCK_TABS.length - 1, index));
       const targetTab = DOCK_TABS[clamped];
       if (!targetTab) return;
 
       if (targetTab.id !== activeTab) {
+        if (fromPressIn) {
+          justSelectedTabRef.current = targetTab.id;
+        }
         pendingReleaseIndexRef.current = clamped;
         visualIndexRef.current = clamped;
         hapticService.selection();
@@ -151,6 +168,37 @@ export const FlatPillDock = React.memo(function FlatPillDock({
       }
     },
     [activeTab, gliderAnim, onSelectTab, settle, spring, tabScaleAnims]
+  );
+
+  const handlePressInIndex = useCallback(
+    (index: number) => {
+      const clamped = Math.max(0, Math.min(DOCK_TABS.length - 1, index));
+      const targetTab = DOCK_TABS[clamped];
+      if (targetTab && targetTab.id === activeTab) {
+        justSelectedTabRef.current = null;
+        return;
+      }
+      selectTabAtIndex(index, true);
+    },
+    [activeTab, selectTabAtIndex]
+  );
+
+  const handlePressIndex = useCallback(
+    (index: number) => {
+      const clamped = Math.max(0, Math.min(DOCK_TABS.length - 1, index));
+      const targetTab = DOCK_TABS[clamped];
+      if (!targetTab) return;
+      if (justSelectedTabRef.current === targetTab.id) {
+        justSelectedTabRef.current = null;
+        return;
+      }
+      if (targetTab.id === activeTab && pendingReleaseIndexRef.current === null) {
+        onReselectActiveTabRef.current?.();
+        return;
+      }
+      selectTabAtIndex(index, false);
+    },
+    [activeTab, selectTabAtIndex]
   );
 
   // Continuous pill position (tab units) under the finger.
@@ -208,6 +256,7 @@ export const FlatPillDock = React.memo(function FlatPillDock({
         ) => Math.abs(g.dx) > 4,
         onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: (event: GestureResponderEvent, g: PanResponderGestureState) => {
+          revealDockRef.current?.();
           const currentX = event.nativeEvent.pageX ?? g.moveX ?? g.x0 + g.dx;
           const initialIndex = visualIndexRef.current;
           // Keep the pill where it is (no jump); it will track the finger from here.
@@ -323,6 +372,26 @@ export const FlatPillDock = React.memo(function FlatPillDock({
     [gliderAnim, tabWidth]
   );
 
+  const dockTravel = DOCK_CAPSULE_HEIGHT + DOCK_BOTTOM_OFFSET.android + bottomInset + 20;
+  const hiddenScale = scrollMotionBySkin.android.dockHiddenScale;
+  const scrollDockStyle = useAnimatedStyle(() => {
+    if (!isScrollChoreographyActive) {
+      return {
+        opacity: 1,
+        transform: [{ translateY: 0 }, { scale: 1 }],
+      };
+    }
+    const raw = dockHiddenSV.value;
+    const hidden = Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : 0;
+    return {
+      opacity: 1 - 0.15 * hidden,
+      transform: [
+        { translateY: hidden * dockTravel },
+        { scale: 1 - (1 - hiddenScale) * hidden },
+      ],
+    };
+  }, [dockHiddenSV, dockTravel, hiddenScale, isScrollChoreographyActive]);
+
   return (
     // Full-width anchor: an absolutely positioned view with left/right AND maxWidth pins to the
     // left edge, so the dock is centered by its parent instead (tablets, landscape, browsers).
@@ -338,23 +407,27 @@ export const FlatPillDock = React.memo(function FlatPillDock({
         zIndex: 999,
       }}
     >
-      <View
-        ref={dockRef}
-        testID={testID}
-        accessibilityRole="tablist"
-        style={{
-          width: '100%',
-          maxWidth: DOCK_MAX_WIDTH,
-          elevation: 8,
-          borderRadius: radius.pill,
-          shadowColor: '#000000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: mode === 'dark' ? 0.35 : 0.22,
-          shadowRadius: 12,
-        }}
-        onLayout={handleDockLayout}
-        {...panResponder.panHandlers}
+      <Reanimated.View
+        testID={`${testID}-scroll-frame`}
+        style={[{ width: '100%', alignItems: 'center' }, scrollDockStyle]}
       >
+        <View
+          ref={dockRef}
+          testID={testID}
+          accessibilityRole="tablist"
+          style={{
+            width: '100%',
+            maxWidth: DOCK_MAX_WIDTH,
+            elevation: 8,
+            borderRadius: radius.pill,
+            shadowColor: '#000000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: mode === 'dark' ? 0.35 : 0.22,
+            shadowRadius: 12,
+          }}
+          onLayout={handleDockLayout}
+          {...panResponder.panHandlers}
+        >
         <GlassSurface
           elevated
           noPadding
@@ -408,8 +481,8 @@ export const FlatPillDock = React.memo(function FlatPillDock({
                   accessibilityRole="tab"
                   accessibilityLabel={tab.label}
                   accessibilityState={{ selected: isSelected }}
-                  onPressIn={() => handleSelectIndex(idx)}
-                  onPress={() => handleSelectIndex(idx)}
+                  onPressIn={() => handlePressInIndex(idx)}
+                  onPress={() => handlePressIndex(idx)}
                   style={{
                     flex: 1,
                     height: DOCK_TAB_HEIGHT,
@@ -431,7 +504,8 @@ export const FlatPillDock = React.memo(function FlatPillDock({
             })}
           </View>
         </GlassSurface>
-      </View>
+        </View>
+      </Reanimated.View>
     </View>
   );
 });

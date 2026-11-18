@@ -724,6 +724,12 @@ export const springConfigs = {
     stiffness: 260,
     mass: 0.7,
   },
+  /** Floating dock returning on scroll up (iOS only, ADR 0031): crisp with a gentle settle (ζ ≈ 0.70). */
+  scrollDockReveal: {
+    damping: 20,
+    stiffness: 240,
+    mass: 0.85,
+  },
 } as const;
 
 /**
@@ -905,5 +911,114 @@ export const motionBySkin: Record<PlatformSkinId, SkinMotion> = {
     exit: [0.2, 0.8, 0.2, 1],
     allowsOvershoot: false,
     dialogPresentation: 'dialog',
+  },
+};
+
+/**
+ * Scroll-driven choreography tokens across the three skins (ADR 0031).
+ * Defined for all three skins: iOS and Android drive UI-thread scroll transitions;
+ * Web opts out (`enabled: false`) per AGENTS.md §7.2 and DESIGN.md §10.4.
+ */
+export interface ScrollMotionSpec {
+  enabled: boolean;
+  dockHideDelta: number;
+  dockRevealDelta: number;
+  dockHideMinOffset: number;
+  dockMinOverflow: number;
+  dockBottomAutoReveal: number;
+  dockHiddenScale: number;
+  dockHideDurationMs: number;
+  dockRevealDurationMs: number;
+  usesSpringReveal: boolean;
+  heroParallaxY: number;
+  heroMinScale: number;
+  overscrollMaxScale: number;
+  overscrollMaxTranslateY: number;
+  sectionEntryBand: number;
+  sectionBottomTravelY: number;
+  sectionBottomScale: number;
+  sectionBottomMinOpacity: number;
+  sectionTopBand: number;
+  sectionTopTravelY: number;
+  sectionTopScale: number;
+  sectionTopMinOpacity: number;
+  sectionMaxScaleHeight: number;
+}
+
+export const scrollMotionBySkin: Record<PlatformSkinId, ScrollMotionSpec> = {
+  ios: {
+    enabled: true,
+    dockHideDelta: 28,
+    dockRevealDelta: 14,
+    dockHideMinOffset: 48,
+    dockMinOverflow: 120,
+    dockBottomAutoReveal: 48,
+    dockHiddenScale: 0.94,
+    dockHideDurationMs: 220,
+    dockRevealDurationMs: 260,
+    usesSpringReveal: true,
+    heroParallaxY: 16,
+    heroMinScale: 0.968,
+    overscrollMaxScale: 1.022,
+    overscrollMaxTranslateY: 6,
+    sectionEntryBand: 120,
+    sectionBottomTravelY: 16,
+    sectionBottomScale: 0.974,
+    sectionBottomMinOpacity: 0.82,
+    sectionTopBand: 96,
+    sectionTopTravelY: 10,
+    sectionTopScale: 0.984,
+    sectionTopMinOpacity: 0.86,
+    sectionMaxScaleHeight: 420,
+  },
+  android: {
+    enabled: true,
+    dockHideDelta: 28,
+    dockRevealDelta: 14,
+    dockHideMinOffset: 48,
+    dockMinOverflow: 120,
+    dockBottomAutoReveal: 48,
+    dockHiddenScale: 0.96,
+    dockHideDurationMs: 180,
+    dockRevealDurationMs: 250,
+    usesSpringReveal: false,
+    heroParallaxY: 10,
+    heroMinScale: 0.984,
+    overscrollMaxScale: 1,
+    overscrollMaxTranslateY: 0,
+    sectionEntryBand: 110,
+    sectionBottomTravelY: 12,
+    sectionBottomScale: 0.986,
+    sectionBottomMinOpacity: 0.72,
+    sectionTopBand: 88,
+    sectionTopTravelY: 8,
+    sectionTopScale: 0.992,
+    sectionTopMinOpacity: 0.80,
+    sectionMaxScaleHeight: 420,
+  },
+  web: {
+    enabled: false,
+    dockHideDelta: 0,
+    dockRevealDelta: 0,
+    dockHideMinOffset: 0,
+    dockMinOverflow: 0,
+    dockBottomAutoReveal: 0,
+    dockHiddenScale: 1,
+    dockHideDurationMs: 0,
+    dockRevealDurationMs: 0,
+    usesSpringReveal: false,
+    heroParallaxY: 0,
+    heroMinScale: 1,
+    overscrollMaxScale: 1,
+    overscrollMaxTranslateY: 0,
+    sectionEntryBand: 0,
+    sectionBottomTravelY: 0,
+    sectionBottomScale: 1,
+    sectionBottomMinOpacity: 1,
+    sectionTopBand: 0,
+    sectionTopTravelY: 0,
+    sectionTopScale: 1,
+    sectionTopMinOpacity: 1,
+    sectionMaxScaleHeight: 0,
   },
 };

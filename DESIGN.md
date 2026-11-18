@@ -157,23 +157,41 @@ export const springConfigs = {
     stiffness: 160,
     mass: 1.1,
   },
-  // Lente líquido del dock: asentamiento suave con sobrepaso casi imperceptible
-  liquidSettle: { damping: 16, stiffness: 170, mass: 1 },
+  // Lente líquido del dock (iOS, ADR 0030): asentamiento con un sobrepaso pequeño (ζ 0,67)
+  liquidSettle: { damping: 20, stiffness: 220, mass: 1 },
   // Píldora plana del dock en Android: llega sin sobrepaso
   flatSettle: { damping: 28, stiffness: 170, mass: 1 },
-  // "Lift" (crece ×1.12 / ×1.06) y estiramiento elástico por velocidad (×1.2 / ×0.92)
-  liquidLift: { damping: 14, stiffness: 190, mass: 0.9 },
+  // El lente se infla bajo el dedo (×1,18 / ×1,36, más alto que el dock)
+  liquidLift: { damping: 18, stiffness: 320, mass: 0.8 },
+  // El lente se encoge al soltar con un rebote (ζ 0,5)
+  liquidRelease: { damping: 14, stiffness: 220, mass: 0.9 },
+  // El lente sigue al dedo; el resorte se recalcula en cada evento táctil (ζ 0,79)
+  liquidFollow: { damping: 29, stiffness: 480, mass: 0.7 },
+  // Estiramiento por velocidad (hasta +16 % de largo y −8 % de alto)
+  liquidStretch: { damping: 20, stiffness: 300, mass: 0.6 },
+  // La cápsula del dock se hunde (×0,975) y rebota al soltar (ζ 0,41)
+  dockPressIn: { damping: 22, stiffness: 420, mass: 0.6 },
+  dockRelease: { damping: 11, stiffness: 260, mass: 0.7 },
 } as const;
 ```
 
-**Lente del dock (Liquid Glass):** cápsula translúcida con borde superior especular, brillo curvo superior, sombra interior inferior y resplandor de refracción que aparece al levantarse bajo el dedo. Sigue la posición continua del dedo mediante suavizado exponencial por frame (sin reiniciar resortes en cada evento táctil) y solo hace *snap* al tab más cercano al soltar. En los extremos del dock el rebote se conserva, pero el recorrido se limita para que el lente (incluido su crecimiento por *lift*/estiramiento) nunca cruce el borde interior; el sobrepaso se convierte en una compresión horizontal (*squash* hasta ×0.84) como una gota contra la pared.
+**Dock de iOS (Liquid Glass, ADR 0030):** `LiquidGlassDock`, con Reanimated 4 y Gesture Handler 3: todo el movimiento corre en el hilo de UI, así que renderizar la pestaña nueva no le quita cuadros.
+
+- **Material** (`src/platform/glass/LiquidGlassMaterial`): `GlassView` del sistema en iOS 26+ (cápsula `regular`; lente `regular` en oscuro y `clear` en claro); `BlurView` con relleno translúcido en iOS anterior; relleno opaco con *Reducir transparencia*. Colores en `liquidDockPalette` (`tokens.ts`): neutros y apenas tintados, el vidrio del sistema hace el trabajo.
+- **Sin bordes propios sobre el vidrio del sistema:** la cápsula no recorta su vidrio ni le pone línea, y el lente no lleva borde ni brillo; el sistema pone los suyos. Solo el respaldo con `BlurView` conserva contorno y brillo.
+- **El vidrio no se funde:** ninguna capa de vidrio anima su opacidad. Se enciende y se apaga cambiando su estilo (`none` ⇄ `clear`) con la transición nativa.
+- **Al tocar:** la cápsula se hunde a ×0,975 y el lente se infla como una gota (×1,18 / ×1,36) que sobresale del dock. A la vez, la superficie de vidrio del lente (mismo marco y movimiento) se enciende por encima de los iconos y los refracta, como la barra de iOS 26/27. Al soltar, el lente se encoge con un rebote, la cápsula rebota un poco más allá de su tamaño y la superficie se apaga. En reposo el lente queda debajo de los iconos, que se ven sin distorsión.
+- **Al arrastrar:** el lente sigue al dedo con un resorte que se recalcula en cada evento sin perder velocidad, se estira con la velocidad y, al soltar, se asienta en la pestaña más cercana con el impulso del dedo. Un tic háptico por pestaña.
+- **Iconos:** el icono y la etiqueta pasan al color de acento de golpe en la pestaña bajo el lente, sin fundido. Bajo el lente inflado el icono crece hasta un 16 % (`iconMagnify`) según su distancia al lente, redibujado como vector: se anima su `viewBox`, nunca un `scale` (un SVG escalado o fundido se ve pixelado).
+- **En los extremos** el recorrido se limita para que el lente (inflado o estirado) nunca cruce el borde; el sobrepaso se convierte en compresión (hasta ×0,84) con un ligero abultamiento vertical (`lensTransformAt` en el hilo de UI, `computeLensFrame` en JS).
+- La selección por toque sigue en el `onPressIn` de cada pestaña (VoiceOver y tests); el gesto se activa a partir de 6 px en horizontal.
 
 **Píldora del dock (Android, ADR 0024):** el mismo dock, con una píldora plana de `accent.container` en lugar del lente. No tiene borde, brillo, sombra ni capas interiores, y no crece ni se estira bajo el dedo. Sigue el dedo con el mismo suavizado y se asienta con `flatSettle`, sin rebote; su recorrido termina en la primera y la última pestaña.
 
 ### 6.2 Soporte de Reducción de Movimiento (`prefers-reduced-motion`):
 `BFlowThemeProvider` sigue el ajuste *Reducir Movimiento* del sistema (iOS, Android y Web) y lo entrega como `useBFlowTheme().reducedMotion`. Con el ajuste activo:
 - No hay traslación, escala, resorte ni sacudida. Queda un cambio de opacidad de `REDUCED_MOTION_DURATION_MS` (140 ms).
-- El lente y la píldora del dock saltan a su sitio. El acordeón del onboarding (`animateNextLayout`) cambia de una vez.
+- El lente y la píldora del dock saltan a su sitio; el lente no se infla ni se estira y la cápsula no se hunde. El acordeón del onboarding (`animateNextLayout`) cambia de una vez.
 - Los gráficos y la curva del mes dibujan su estado final.
 
 ### 6.3 Matriz de Retroalimentación Háptica (`expo-haptics`):

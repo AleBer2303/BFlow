@@ -7,6 +7,7 @@ import {
   resolveEntranceSpec,
   resolvePresenceSpec,
   resolveStaggerDelay,
+  resolveTabSwitchSpec,
 } from '../motion/motionSpec';
 import {
   MOTION_STAGGER_MAX_ITEMS,
@@ -204,5 +205,45 @@ describe('dialog presentation', () => {
     expect(ios).toMatchObject({ distance: motionDistance.large, scale: 1 });
     expect(android).toMatchObject({ distance: 0, scale: motionScale.dialog });
     expect(web).toMatchObject({ distance: 0, scale: motionScale.dialog });
+  });
+});
+
+describe('resolveTabSwitchSpec', () => {
+  it('slides along the dock on iOS, signed by the direction', () => {
+    expect(resolveTabSwitchSpec({ skin: 'ios', reducedMotion: false }, 1)).toMatchObject({
+      axis: 'x',
+      distance: motionDistance.screenAxis,
+      scale: 1,
+      durationMs: motionDuration.fast,
+      easing: motionBySkin.ios.enter,
+    });
+    expect(resolveTabSwitchSpec({ skin: 'ios', reducedMotion: false }, -1).distance).toBe(
+      -motionDistance.screenAxis
+    );
+    expect(resolveTabSwitchSpec({ skin: 'ios', reducedMotion: false }, 0).distance).toBe(0);
+  });
+
+  it('is a fade-through on Android and a short rise on Web, whatever the direction', () => {
+    for (const direction of [-1, 0, 1] as const) {
+      expect(resolveTabSwitchSpec({ skin: 'android', reducedMotion: false }, direction)).toMatchObject({
+        axis: 'y',
+        distance: 0,
+        scale: motionScale.screen,
+        easing: motionBySkin.android.enter,
+      });
+      expect(resolveTabSwitchSpec({ skin: 'web', reducedMotion: false }, direction)).toMatchObject({
+        axis: 'y',
+        distance: motionDistance.base,
+        scale: 1,
+      });
+    }
+  });
+
+  it.each(PLATFORM_SKIN_IDS)('keeps only a short fade with Reduce Motion on %s', (skin) => {
+    expect(resolveTabSwitchSpec({ skin, reducedMotion: true }, 1)).toMatchObject({
+      distance: 0,
+      scale: 1,
+      durationMs: REDUCED_MOTION_DURATION_MS,
+    });
   });
 });

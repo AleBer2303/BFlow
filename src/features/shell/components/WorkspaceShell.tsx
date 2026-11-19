@@ -40,6 +40,7 @@ import {
   WebAppHeader,
   WebTabBar,
   hapticService,
+  motionDuration,
   scrollMotionBySkin,
   springConfigs,
   useBFlowTheme,
@@ -401,10 +402,15 @@ export function WorkspaceShell({
     directionSV.value = 0;
     revealDock();
 
-    const rafId = requestAnimationFrame(() => {
-      layoutListenersRef.current.forEach((listener) => listener());
-    });
-    return () => cancelAnimationFrame(rafId);
+    const notifyLayout = () => layoutListenersRef.current.forEach((listener) => listener());
+    const rafId = requestAnimationFrame(notifyLayout);
+    // Again once the incoming tab has settled (`TabTransition`), in case a section was
+    // measured while the tab was still sliding or growing into place.
+    const settledTimer = setTimeout(notifyLayout, motionDuration.fast);
+    return () => {
+      cancelAnimationFrame(rafId);
+      clearTimeout(settledTimer);
+    };
   }, [
     contentTab,
     accumulatedDeltaSV,

@@ -31,6 +31,7 @@ export * from './motion/ScrollDepthHero';
 export * from './motion/ScrollRevealSection';
 export * from './motion/TabVisibilityContext';
 export * from './motion/Entrance';
+export * from './motion/TabTransition';
 export * from './motion/layoutTransition';
 export * from './motion/useReplayOnChange';
 export * from './motion/CheckIndicator';

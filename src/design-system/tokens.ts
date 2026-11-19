@@ -859,6 +859,8 @@ export const motionDistance = {
   medium: 12,
   /** Toast or sheet rising from an edge. */
   large: 30,
+  /** Tab change along the navigation axis (iOS): the incoming tab slides in from its side. */
+  screenAxis: 24,
 } as const;
 
 /** The scale a surface animates FROM (or presses down to); it always settles at 1. */
@@ -867,6 +869,8 @@ export const motionScale = {
   menu: 0.97,
   menuClose: 0.99,
   hint: 0.98,
+  /** Tab change as a Material fade-through (Android): the incoming tab grows into place. */
+  screen: 0.96,
 } as const;
 
 /** Items past this index enter with the last staggered offset, so a long list is never late. */

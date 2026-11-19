@@ -29,13 +29,13 @@ import {
   ScrollRevealSection,
   useBFlowTheme,
   type ChartSeries,
+  useAmountPrivacy,
 } from '../../../design-system';
 import {
   buildExpenseDistribution,
   buildMonthComparison,
   buildPaidVsPendingSplit,
   formatMonthKeyLabelEs,
-  formatSignedCurrency,
   type MonthEntry,
   type MonthlyBudgetSummary,
   type MonthlyHistoryPoint,
@@ -66,6 +66,7 @@ export function AnalyticsChartsPanel({
   hasClosedMonths,
 }: AnalyticsChartsPanelProps): React.JSX.Element {
   const { colors, spacing } = useBFlowTheme();
+  const { formatSignedAmount } = useAmountPrivacy();
   const [planKind, setPlanKind] = useState<PlanKind>('expenses');
   const palette = colors.chart.categorical;
 
@@ -214,7 +215,7 @@ export function AnalyticsChartsPanel({
               describeNote={(index) => {
                 const planned = planSeries[0]?.values[index] ?? 0;
                 const actual = planSeries[1]?.values[index] ?? 0;
-                return `Diferencia: ${formatSignedCurrency(actual - planned)}`;
+                return `Diferencia: ${formatSignedAmount(actual - planned)}`;
               }}
             />
           </ChartCard>
@@ -255,7 +256,7 @@ export function AnalyticsChartsPanel({
                 series={comparisonSeries}
                 describeNote={(index) => {
                   const row = comparison.rows[index];
-                  return row ? `Diferencia: ${formatSignedCurrency(row.delta)}` : undefined;
+                  return row ? `Diferencia: ${formatSignedAmount(row.delta)}` : undefined;
                 }}
               />
             ) : (

@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Animated, View } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { hapticService } from '../../platform/haptics/hapticService';
+import { IS_MOTION_STATIC, toEasing } from '../motion/motionRuntime';
+import { resolvePresenceSpec } from '../motion/motionSpec';
 import { useReplayOnChange } from '../motion/useReplayOnChange';
+import { useAmountPrivacy } from '../privacy/AmountPrivacyContext';
 import { useBFlowTheme } from '../theme/ThemeContext';
 import { motionDuration } from '../tokens';
 import { AppPressable } from './AppPressable';
@@ -82,6 +85,109 @@ export function ThemeToggleIconButton({
           </Svg>
         </Animated.View>
       )}
+    </AppPressable>
+  );
+}
+
+const AnimatedLine = Animated.createAnimatedComponent(Line);
+
+/** Length of the eye's slash, from (3.5, 3.5) to (20.5, 20.5) in the 24-unit viewBox. */
+const EYE_SLASH_LENGTH = Math.hypot(17, 17);
+
+export interface AmountVisibilityIconButtonProps {
+  testID?: string;
+}
+
+/**
+ * Eye (open / closed) that hides or shows every amount in the app (`AmountPrivacyProvider`).
+ * Same touch target as `ThemeToggleIconButton`, but with no fill or border, so the eye sits
+ * directly on the card. Hiding draws the slash across the eye and showing erases it.
+ */
+export function AmountVisibilityIconButton({
+  testID = 'amount-visibility-toggle',
+}: AmountVisibilityIconButtonProps): React.JSX.Element {
+  const { colors, radius, minTouchTarget, skin, reducedMotion } = useBFlowTheme();
+  const { amountsHidden, toggleAmountsHidden } = useAmountPrivacy();
+  const strokeColor = colors.text.secondary;
+  // 1 = slash fully drawn (amounts hidden). The icon never scales or fades as a whole: a
+  // scaled or faded SVG is rasterised and looked pixelated on the iPhone. Only the slash's
+  // dash moves, so every frame is drawn as a vector at full quality.
+  const slash = useRef(new Animated.Value(amountsHidden ? 1 : 0)).current;
+
+  useEffect(() => {
+    const target = amountsHidden ? 1 : 0;
+    if (IS_MOTION_STATIC || reducedMotion) {
+      slash.setValue(target);
+      return undefined;
+    }
+    const { open, close } = resolvePresenceSpec({ skin, reducedMotion }, 'control');
+    const step = amountsHidden ? open : close;
+    const animation = Animated.timing(slash, {
+      toValue: target,
+      duration: step.durationMs,
+      easing: toEasing(step.easing),
+      // SVG stroke props are not supported by the native driver.
+      useNativeDriver: false,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [amountsHidden, reducedMotion, skin, slash]);
+
+  const slashDashOffset = slash.interpolate({
+    inputRange: [0, 1],
+    outputRange: [EYE_SLASH_LENGTH, 0],
+  });
+  // Round caps of an empty dash can leave a dot; the slash is transparent until it starts.
+  const slashOpacity = slash.interpolate({
+    inputRange: [0, 0.05, 1],
+    outputRange: [0, 1, 1],
+  });
+
+  return (
+    <AppPressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={amountsHidden ? 'Mostrar montos' : 'Ocultar montos'}
+      accessibilityState={{ selected: amountsHidden }}
+      onPressIn={() => hapticService.light()}
+      onPress={toggleAmountsHidden}
+      style={{
+        width: minTouchTarget,
+        height: minTouchTarget,
+        // Sin fondo ni borde: el ojo se dibuja directo sobre la tarjeta. El área táctil
+        // sigue siendo `minTouchTarget` y el radio solo da forma al anillo de foco en Web.
+        borderRadius: skin === 'web' ? radius.sm : radius.pill,
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      <View
+        testID={amountsHidden ? 'amount-visibility-icon-hidden' : 'amount-visibility-icon-visible'}
+      >
+        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+          <Path
+            d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"
+            stroke={strokeColor}
+            strokeWidth={1.8}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <Circle cx={12} cy={12} r={3} stroke={strokeColor} strokeWidth={1.8} />
+          <AnimatedLine
+            testID="amount-visibility-slash"
+            x1={3.5}
+            y1={3.5}
+            x2={20.5}
+            y2={20.5}
+            stroke={strokeColor}
+            strokeWidth={1.8}
+            strokeLinecap="round"
+            strokeDasharray={[EYE_SLASH_LENGTH, EYE_SLASH_LENGTH + 2]}
+            strokeDashoffset={slashDashOffset}
+            strokeOpacity={slashOpacity}
+          />
+        </Svg>
+      </View>
     </AppPressable>
   );
 }

@@ -36,9 +36,9 @@ import {
   TrashBinIcon,
   useBFlowTheme,
   usePrimaryActionLook,
+  useAmountPrivacy,
 } from '../../../design-system';
 import {
-  formatCurrency,
   type Concept,
   type ConceptGroup,
   type Debt,
@@ -213,6 +213,7 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
   onEdit,
   onDelete,
 }: ChecklistRowItemProps) {
+  const { formatAmount } = useAmountPrivacy();
   const isCompleted = entry.status === 'completed';
   const isRepeatable = Boolean(concept?.allowMultiplePerMonth);
 
@@ -243,7 +244,7 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
         testID={`checklist-workspace-item-${entry.id}`}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: isCompleted }}
-        accessibilityLabel={`${entry.conceptName}, ${formatCurrency(entry.actualAmount)}`}
+        accessibilityLabel={`${entry.conceptName}, ${formatAmount(entry.actualAmount)}`}
         onPress={handleRowPress}
         style={{
           flex: 1,
@@ -312,7 +313,7 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
           >
             {isCompleted
               ? `${entry.type === 'income' ? 'Recibido' : 'Pagado'}${entry.completedAt ? ` · ${entry.completedAt}` : ''}${entry.note ? ` · ${entry.note}` : ''}`
-              : `Pendiente · Previsto ${formatCurrency(entry.plannedAmount)}`}
+              : `Pendiente · Previsto ${formatAmount(entry.plannedAmount)}`}
           </AppText>
         </View>
 
@@ -391,6 +392,7 @@ export function ChecklistWorkspaceView({
   onDeleteEntry,
   onRemoveRepeatableEntry,
 }: ChecklistWorkspaceViewProps): React.JSX.Element {
+  const { formatAmount } = useAmountPrivacy();
   const { colors, spacing, radius, typography } = useBFlowTheme();
   const primaryAction = usePrimaryActionLook();
   const [filterMode, setFilterMode] = useState<ChecklistFilterMode>('all');
@@ -673,7 +675,7 @@ export function ChecklistWorkspaceView({
               <View style={{ gap: spacing.xxs, flexShrink: 1, minWidth: 0 }}>
                 <AppText variant="title2">Ingresos</AppText>
                 <AppText variant="caption" color={colors.semantic.income}>
-                  {`Recibido ${formatCurrency(budget.receivedIncome)} / Previsto ${formatCurrency(budget.plannedIncome)}`}
+                  {`Recibido ${formatAmount(budget.receivedIncome)} / Previsto ${formatAmount(budget.plannedIncome)}`}
                 </AppText>
               </View>
 
@@ -757,13 +759,13 @@ export function ChecklistWorkspaceView({
             </View>
 
             <AppText variant="caption" color={colors.text.secondary}>
-              {`Ingresos Fijos · Pendiente: ${formatCurrency(budget.incomeByGroup.fixed.pending)}`}
+              {`Ingresos Fijos · Pendiente: ${formatAmount(budget.incomeByGroup.fixed.pending)}`}
             </AppText>
             {fixedIncomes.map((entry) => renderEntryRow(entry, incomesEditMode, incomesDeleteMode))}
 
             <View style={{ paddingTop: spacing.xs, gap: spacing.xs }}>
               <AppText variant="caption" color={colors.text.secondary}>
-                {`Ingresos Variables · Recibido: ${formatCurrency(budget.incomeByGroup.variable.paid)}`}
+                {`Ingresos Variables · Recibido: ${formatAmount(budget.incomeByGroup.variable.paid)}`}
               </AppText>
               {variableIncomes.map((entry) =>
                 renderEntryRow(entry, incomesEditMode, incomesDeleteMode)
@@ -789,7 +791,7 @@ export function ChecklistWorkspaceView({
               <View style={{ gap: spacing.xxs, flexShrink: 1, minWidth: 0 }}>
                 <AppText variant="title2">Gastos</AppText>
                 <AppText variant="caption" color={colors.semantic.expense}>
-                  {`Pagado ${formatCurrency(budget.paidExpenses)} / Previsto ${formatCurrency(budget.plannedExpenses)}`}
+                  {`Pagado ${formatAmount(budget.paidExpenses)} / Previsto ${formatAmount(budget.plannedExpenses)}`}
                 </AppText>
               </View>
 
@@ -872,13 +874,13 @@ export function ChecklistWorkspaceView({
             </View>
 
             <AppText variant="caption" color={colors.text.secondary}>
-              {`Gastos Fijos (${formatCurrency(budget.expensesByGroup.fixed.paid)} pagados · ${formatCurrency(budget.expensesByGroup.fixed.pending)} pendientes)`}
+              {`Gastos Fijos (${formatAmount(budget.expensesByGroup.fixed.paid)} pagados · ${formatAmount(budget.expensesByGroup.fixed.pending)} pendientes)`}
             </AppText>
             {fixedExpenses.map((entry) => renderEntryRow(entry, expensesEditMode, expensesDeleteMode))}
 
             <View style={{ paddingTop: spacing.xs, gap: spacing.xs }}>
               <AppText variant="caption" color={colors.text.secondary}>
-                {`Gastos Variables (${formatCurrency(budget.expensesByGroup.variable.paid)} pagados · ${formatCurrency(budget.expensesByGroup.variable.pending)} pendientes)`}
+                {`Gastos Variables (${formatAmount(budget.expensesByGroup.variable.paid)} pagados · ${formatAmount(budget.expensesByGroup.variable.pending)} pendientes)`}
               </AppText>
               {variableExpenses.map((entry) =>
                 renderEntryRow(entry, expensesEditMode, expensesDeleteMode)

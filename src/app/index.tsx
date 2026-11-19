@@ -7,6 +7,7 @@ import {
   flushCloudWidgetSnapshotWrite,
 } from '../data/repositories/widgetSnapshotRepository';
 import {
+  AmountPrivacyProvider,
   TabTransition,
   type TabSwitchDirection,
   TabVisibilityProvider,
@@ -624,25 +625,28 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     );
   }
 
+  // Privacy mode (the eye in Summary) covers every amount of the workspace.
   return (
-    <WorkspaceShell
-      monthLabel={activeMonthLabel}
-      activeTab={activeTab}
-      contentTab={contentTab}
-      onSelectTab={setActiveTab}
-      showNavigation={!needsOnboarding}
-      pendingSyncCount={pendingOfflineWritesCount}
-    >
-      {needsOnboarding ? (
-        <InitialAccountSetupView
-          onCompleteSetup={(config) => {
-            void completeInitialAccountSetup(config);
-            void triggerHaptic('success');
-          }}
-        />
-      ) : (
-        <WorkspaceTabKeepAlive activeTab={contentTab} accountTabProps={accountTabProps} />
-      )}
-    </WorkspaceShell>
+    <AmountPrivacyProvider>
+      <WorkspaceShell
+        monthLabel={activeMonthLabel}
+        activeTab={activeTab}
+        contentTab={contentTab}
+        onSelectTab={setActiveTab}
+        showNavigation={!needsOnboarding}
+        pendingSyncCount={pendingOfflineWritesCount}
+      >
+        {needsOnboarding ? (
+          <InitialAccountSetupView
+            onCompleteSetup={(config) => {
+              void completeInitialAccountSetup(config);
+              void triggerHaptic('success');
+            }}
+          />
+        ) : (
+          <WorkspaceTabKeepAlive activeTab={contentTab} accountTabProps={accountTabProps} />
+        )}
+      </WorkspaceShell>
+    </AmountPrivacyProvider>
   );
 }

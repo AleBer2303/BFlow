@@ -20,6 +20,7 @@ import {
   useBFlowTheme,
   useIsTabActive,
   useResponsiveLayout,
+  useAmountPrivacy,
 } from '../../../design-system';
 import {
   MONTHLY_CURVE_METRIC_IDS,
@@ -144,8 +145,9 @@ function CurveReadoutView({
   reducedMotion,
 }: CurveReadoutViewProps): React.JSX.Element {
   const { colors, spacing } = useBFlowTheme();
+  const { formatAmount } = useAmountPrivacy();
   const isTabActive = useIsTabActive();
-  const readout = describeCurveReadout(curve, metricId, stop);
+  const readout = describeCurveReadout(curve, metricId, stop, formatAmount);
   const amount = useTweenedAmount(readout.amount, !reducedMotion && stop === null && isTabActive);
 
   return (
@@ -212,13 +214,14 @@ const MetricButton = React.memo(function MetricButton({
   onSelect,
 }: MetricButtonProps) {
   const { colors, spacing, radius } = useBFlowTheme();
+  const { formatAmount } = useAmountPrivacy();
 
   return (
     <TactilePressable
       testID={`monthly-curve-metric-${metricId}`}
       haptic="none"
       accessibilityState={{ selected: isSelected }}
-      accessibilityLabel={describeMetricAccessibility(curve, metricId)}
+      accessibilityLabel={describeMetricAccessibility(curve, metricId, formatAmount)}
       onPress={() => onSelect(metricId)}
       style={{
         flex: 1,
@@ -266,6 +269,7 @@ const MetricRow = React.memo(function MetricRow({
   onSelect,
 }: MetricRowProps) {
   const { colors, spacing, radius } = useBFlowTheme();
+  const { formatAmount } = useAmountPrivacy();
   const series = curve.series[metricId];
 
   return (
@@ -273,7 +277,7 @@ const MetricRow = React.memo(function MetricRow({
       testID={`monthly-curve-metric-${metricId}`}
       haptic="none"
       accessibilityState={{ selected: isSelected }}
-      accessibilityLabel={describeMetricAccessibility(curve, metricId)}
+      accessibilityLabel={describeMetricAccessibility(curve, metricId, formatAmount)}
       onPress={() => onSelect(metricId)}
       style={{
         minHeight: METRIC_BUTTON_MIN_HEIGHT_PT,

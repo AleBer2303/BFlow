@@ -17,6 +17,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Line, Rect } from 'react-native-svg';
+import { useAmountPrivacy } from '../../privacy/AmountPrivacyContext';
 import { useBFlowTheme } from '../../theme/ThemeContext';
 import {
   CHART_AXIS_GUTTER_PT,
@@ -210,6 +211,7 @@ export function BarChart({
   plotHeight = DEFAULT_PLOT_HEIGHT_PT,
   testID,
 }: BarChartProps): React.JSX.Element {
+  const { formatAmount } = useAmountPrivacy();
   const { spacing } = useBFlowTheme();
   const [width, setWidth] = useState(0);
   const isStacked = layout === 'stacked';
@@ -299,7 +301,8 @@ export function BarChart({
             describeChartPoint(
               categoryTitles[index] ?? '',
               series.map((item) => ({ label: item.label, value: item.values[index] ?? 0 })),
-              describeNote?.(index)
+              describeNote?.(index),
+              formatAmount
             )
           }
         />

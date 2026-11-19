@@ -29,9 +29,9 @@ import {
   useBFlowTheme,
   useIsTabActive,
   type CancellableTask,
+  useAmountPrivacy,
 } from '../../../design-system';
 import { MONTHLY_CURVE_METRIC_IDS } from '../../../domain/overview/monthlyCurve';
-import { formatCurrency } from '../../../domain/money/money';
 import {
   clampCurveStop,
   resolveCurveStop,
@@ -204,6 +204,7 @@ export default function MonthlyCurveVectorStage({
   interaction = 'pointer',
   isActive: isActiveProp,
 }: MonthlyCurveVectorStageProps): React.JSX.Element {
+  const { formatAmount } = useAmountPrivacy();
   const { colors } = useBFlowTheme();
   const isContextActive = useIsTabActive();
   const isActive = isActiveProp ?? isContextActive;
@@ -343,7 +344,7 @@ export default function MonthlyCurveVectorStage({
     );
   }
 
-  const readout = describeCurveReadout(curve, metricId, stop);
+  const readout = describeCurveReadout(curve, metricId, stop, formatAmount);
 
   return (
     <WebStageView
@@ -353,8 +354,8 @@ export default function MonthlyCurveVectorStage({
       tabIndex={0}
       accessibilityRole="adjustable"
       accessibilityLabel="Curva del mes. Usa las flechas izquierda y derecha para recorrerla día a día."
-      accessibilityValue={{ text: `${readout.label}: ${formatCurrency(readout.amount)}` }}
-      aria-valuetext={`${readout.label}: ${formatCurrency(readout.amount)}`}
+      accessibilityValue={{ text: `${readout.label}: ${formatAmount(readout.amount)}` }}
+      aria-valuetext={`${readout.label}: ${formatAmount(readout.amount)}`}
       onKeyDown={handleKeyDown}
       onPointerMove={handlePointer}
       onPointerDown={handlePointer}

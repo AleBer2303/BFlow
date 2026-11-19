@@ -85,6 +85,13 @@ Toda cifra monetaria implementa obligatoriamente `fontVariant: ['tabular-nums']`
 
 > **Regla de Tracking Óptico:** Los tamaños grandes (*Display*) usan tracking negativo cerrado (`-1.0` a `-0.4`) para máxima contundencia visual; los tamaños micro usan tracking expandido positivo (`+0.35`) para garantizar nitidez en pantallas Retina a 11pt.
 
+### 3.1 Modo privacidad (ocultar montos)
+
+- El ojo a la derecha del Flujo Neto (Resumen, `AmountVisibilityIconButton`) oculta o muestra **todos** los montos de la app, en todas las pestañas, a la vez. Es solo el icono sobre la tarjeta, sin fondo ni borde de botón, con el área táctil completa (`minTouchTarget`). Al ocultar se dibuja la raya sobre el ojo y al mostrar se borra (`strokeDashoffset`); el icono nunca se escala ni se funde entero, porque un SVG escalado o fundido se ve pixelado en el iPhone. El dispositivo recuerda la elección (`persistentStorage`, clave `bflow.preferences.amounts_hidden.v1`).
+- Un monto oculto es siempre la misma máscara (`HIDDEN_AMOUNT_TEXT`, `$ ••••••`; `•••` en los ejes de los gráficos): ni su largo ni su signo dicen nada de la cifra. Los lectores de pantalla tampoco la leen.
+- **Regla:** ningún componente escribe un monto con `formatCurrency`, `formatCurrencyCompact` ni `formatSignedCurrency`. Usa `CurrencyText` o los formateadores de `useAmountPrivacy()` (`formatAmount`, `formatAmountCompact`, `formatSignedAmount`), también en `accessibilityLabel`. Las funciones puras que componen textos con montos (`describeChartPoint`, `describeCurveReadout`, `describeMetricAccessibility`) reciben el formateador como parámetro.
+- No cubre los campos donde el usuario escribe un monto (formularios, onboarding) ni los widgets de la pantalla de inicio.
+
 ---
 
 ## 4. Espaciado y Geometría de Radios Continuos (Squircles)

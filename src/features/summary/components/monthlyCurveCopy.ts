@@ -52,6 +52,9 @@ const MONTH_ABBREVIATIONS = [
   'dic',
 ] as const;
 
+/** `formatCurrency`, or the privacy mask (`useAmountPrivacy().formatAmount`). */
+type AmountFormatter = (amount: number) => string;
+
 const INTERMEDIATE_TICK_DAYS = [1, 10, 20] as const;
 /** Closer than this, two day labels would overlap on a narrow phone. */
 const MIN_TICK_DISTANCE_DAYS = 4;
@@ -60,19 +63,25 @@ function formatDayLabel(curve: MonthlyCurve, day: number): string {
   return `${day} ${MONTH_ABBREVIATIONS[Number(curve.monthKey.slice(5, 7)) - 1]}`;
 }
 
-function describeDayChange(curve: MonthlyCurve, metricId: MonthlyCurveMetricId, day: number): string {
+function describeDayChange(
+  curve: MonthlyCurve,
+  metricId: MonthlyCurveMetricId,
+  day: number,
+  formatAmount: AmountFormatter
+): string {
   const { values } = curve.series[metricId];
   const change = (values[day] as number) - (values[day - 1] as number);
   if (change === 0) {
     return 'Sin cambios ese día';
   }
-  return `${change > 0 ? '+' : ''}${formatCurrency(change)} ese día`;
+  return `${change > 0 ? '+' : ''}${formatAmount(change)} ese día`;
 }
 
 export function describeCurveReadout(
   curve: MonthlyCurve,
   metricId: MonthlyCurveMetricId,
-  stop: CurveStop | null
+  stop: CurveStop | null,
+  formatAmount: AmountFormatter = formatCurrency
 ): CurveReadout {
   const { title } = METRIC_PRESENTATION[metricId];
   const series = curve.series[metricId];
@@ -89,7 +98,7 @@ export function describeCurveReadout(
     return {
       label: `${title} · ${formatDayLabel(curve, stop)}`,
       amount: series.values[stop] as number,
-      detail: describeDayChange(curve, metricId, stop),
+      detail: describeDayChange(curve, metricId, stop, formatAmount),
     };
   }
 
@@ -99,17 +108,18 @@ export function describeCurveReadout(
     label: `${title} · ${curve.isCurrentMonth ? `Hoy, ${dayLabel}` : dayLabel}`,
     amount: series.values[latestDay] as number,
     detail: curve.hasProjection
-      ? `Cierre previsto ${formatCurrency(series.projectedClose)}`
-      : describeDayChange(curve, metricId, latestDay),
+      ? `Cierre previsto ${formatAmount(series.projectedClose)}`
+      : describeDayChange(curve, metricId, latestDay, formatAmount),
   };
 }
 
 export function describeMetricAccessibility(
   curve: MonthlyCurve,
-  metricId: MonthlyCurveMetricId
+  metricId: MonthlyCurveMetricId,
+  formatAmount: AmountFormatter = formatCurrency
 ): string {
-  const readout = describeCurveReadout(curve, metricId, null);
-  return `${METRIC_PRESENTATION[metricId].title}: ${formatCurrency(readout.amount)}. ${readout.detail}`;
+  const readout = describeCurveReadout(curve, metricId, null, formatAmount);
+  return `${METRIC_PRESENTATION[metricId].title}: ${formatAmount(readout.amount)}. ${readout.detail}`;
 }
 
 export function buildCurveTicks(curve: MonthlyCurve): CurveTick[] {

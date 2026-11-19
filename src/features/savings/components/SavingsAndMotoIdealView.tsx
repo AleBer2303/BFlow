@@ -25,9 +25,9 @@ import {
   StatusBadge,
   TrashBinIcon,
   useBFlowTheme,
+  useAmountPrivacy,
 } from '../../../design-system';
 import {
-  formatCurrency,
   type IdealMotoPlan,
   type MonthlySavingsSummary,
   type MotoIdealComparisonSummary,
@@ -265,6 +265,7 @@ export function SavingsAndMotoIdealView({
   onSaveProvisionItem,
   onDeleteProvisionItem,
 }: SavingsAndMotoIdealViewProps): React.JSX.Element {
+  const { formatAmount } = useAmountPrivacy();
   const { colors, spacing, radius } = useBFlowTheme();
 
   // The forms own their field state (R-17); the view only knows which one is open and for
@@ -428,7 +429,7 @@ export function SavingsAndMotoIdealView({
               />
 
               <AppText variant="caption" color={colors.text.secondary}>
-                {`Total proyectado tras pagar pendientes: ${formatCurrency(savingsSummary.totalProjectedAfterPendingExpenses)}`}
+                {`Total proyectado tras pagar pendientes: ${formatAmount(savingsSummary.totalProjectedAfterPendingExpenses)}`}
               </AppText>
             </View>
             </GlassSurface>
@@ -529,10 +530,10 @@ export function SavingsAndMotoIdealView({
                       tone="reserve"
                     />
                     <AppText variant="micro" color={colors.text.secondary}>
-                      {`Saldo mes anterior: ${formatCurrency(savingsSummary.moto.openingBalance)}`}
+                      {`Saldo mes anterior: ${formatAmount(savingsSummary.moto.openingBalance)}`}
                     </AppText>
                     <AppText variant="micro" color={colors.semantic.income}>
-                      {`+ Aportes pagados: ${formatCurrency(savingsSummary.moto.paidContributionsThisMonth)}`}
+                      {`+ Aportes pagados: ${formatAmount(savingsSummary.moto.paidContributionsThisMonth)}`}
                     </AppText>
                   </View>
                 </GlassSurface>
@@ -566,10 +567,10 @@ export function SavingsAndMotoIdealView({
                       tone="income"
                     />
                     <AppText variant="micro" color={colors.text.secondary}>
-                      {`Saldo mes anterior: ${formatCurrency(savingsSummary.savings.openingBalance)} + Flujo Neto ${formatCurrency(savingsSummary.savings.netCashFlowContribution)}`}
+                      {`Saldo mes anterior: ${formatAmount(savingsSummary.savings.openingBalance)} + Flujo Neto ${formatAmount(savingsSummary.savings.netCashFlowContribution)}`}
                     </AppText>
                     <AppText variant="micro" color={colors.semantic.pending}>
-                      {`Tras pendientes: ${formatCurrency(savingsSummary.savings.projectedAfterPendingExpenses)}`}
+                      {`Tras pendientes: ${formatAmount(savingsSummary.savings.projectedAfterPendingExpenses)}`}
                     </AppText>
                   </View>
                 </GlassSurface>
@@ -593,7 +594,7 @@ export function SavingsAndMotoIdealView({
                   <AppText variant="headline">{cb.name}</AppText>
                   <CurrencyText amount={cb.currentBalance} variant="title2" tone="savings" />
                   <AppText variant="micro" color={colors.text.secondary}>
-                    {`Saldo anterior: ${formatCurrency(cb.openingBalance)} · + Aportes pagados: ${formatCurrency(cb.paidContributionsThisMonth)}`}
+                    {`Saldo anterior: ${formatAmount(cb.openingBalance)} · + Aportes pagados: ${formatAmount(cb.paidContributionsThisMonth)}`}
                   </AppText>
                 </View>
                 {renderBucketRowAction(cb.id, cb.name, cb.openingBalance)}
@@ -629,13 +630,13 @@ export function SavingsAndMotoIdealView({
                 <AppText variant="title2">Provisiones y Metas Programadas</AppText>
               </View>
               <StatusBadge
-                label={`Cuota ideal: ${formatCurrency(motoIdealSummary.excelRecurringMonthlyTotalCop)}/mes`}
+                label={`Cuota ideal: ${formatAmount(motoIdealSummary.excelRecurringMonthlyTotalCop)}/mes`}
                 status="provisions"
               />
             </View>
 
             <AppText variant="caption" color={colors.text.secondary}>
-              {`Total con metas: ${formatCurrency(motoIdealSummary.totalWithTargetGoalsCop)} · Aporte real este mes: ${formatCurrency(motoIdealSummary.actualMotoContributionCop)} (Brecha operativa: ${formatCurrency(motoIdealSummary.monthlyGapAgainstIdealCop)})`}
+              {`Total con metas: ${formatAmount(motoIdealSummary.totalWithTargetGoalsCop)} · Aporte real este mes: ${formatAmount(motoIdealSummary.actualMotoContributionCop)} (Brecha operativa: ${formatAmount(motoIdealSummary.monthlyGapAgainstIdealCop)})`}
             </AppText>
 
             <AppPressable
@@ -738,9 +739,9 @@ export function SavingsAndMotoIdealView({
                       <AppText variant="body">{item.displayName}</AppText>
                       <AppText variant="micro" color={colors.text.secondary}>
                         {item.periodMonths > 1
-                          ? `Ciclo: ${formatCurrency(item.cycleCostCop)} / ${item.periodMonths} meses`
+                          ? `Ciclo: ${formatAmount(item.cycleCostCop)} / ${item.periodMonths} meses`
                           : item.actualBudgetedAmountCop !== undefined
-                            ? `Vinculado en presupuesto · Real: ${formatCurrency(item.actualBudgetedAmountCop)}`
+                            ? `Vinculado en presupuesto · Real: ${formatAmount(item.actualBudgetedAmountCop)}`
                             : 'Provisión mensual directa'}
                       </AppText>
                     </View>
@@ -797,7 +798,7 @@ export function SavingsAndMotoIdealView({
                     </View>
                   </View>
                   <AppText variant="caption" color={colors.text.secondary}>
-                    {`Objetivo total: ${formatCurrency(goal.targetAmountCop)} · Cuota sugerida (${goal.monthsUntilTarget} meses): ${formatCurrency(goal.suggestedMonthlySavingCop)}/mes`}
+                    {`Objetivo total: ${formatAmount(goal.targetAmountCop)} · Cuota sugerida (${goal.monthsUntilTarget} meses): ${formatAmount(goal.suggestedMonthlySavingCop)}/mes`}
                   </AppText>
                 </View>
               );

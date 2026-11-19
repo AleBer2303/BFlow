@@ -27,10 +27,10 @@ import {
   StatusBadge,
   TrashBinIcon,
   useBFlowTheme,
+  useAmountPrivacy,
 } from '../../../design-system';
 import { confirmDestructive } from '../../../platform/dialogs/confirmDestructive';
 import {
-  formatCurrency,
   formatMonthKeyLabelEs,
   type DebtSummaryResult,
   type FunfamiDebtSummary,
@@ -61,6 +61,7 @@ export function DebtsFunfamiView({
   onUpdateDebt,
   onDeleteDebt,
 }: DebtsFunfamiViewProps): React.JSX.Element {
+  const { formatAmount } = useAmountPrivacy();
   const { colors, spacing, radius } = useBFlowTheme();
 
   const [dismissedBannerMonth, setDismissedBannerMonth] = useState<string | null>(null);
@@ -149,7 +150,7 @@ export function DebtsFunfamiView({
             <StatusBadge
               label={
                 debtSummary.appliedInstallmentThisMonth > 0
-                  ? `Abonado este mes: ${formatCurrency(debtSummary.appliedInstallmentThisMonth)}`
+                  ? `Abonado este mes: ${formatAmount(debtSummary.appliedInstallmentThisMonth)}`
                   : 'Sin abonos este mes'
               }
               status={debtSummary.appliedInstallmentThisMonth > 0 ? 'completed' : 'pending'}
@@ -164,7 +165,7 @@ export function DebtsFunfamiView({
           />
 
           <AppText variant="caption" color={colors.text.secondary}>
-            {`Apertura mes: ${formatCurrency(debtSummary.openingTotalDebt)} · Abono a capital: - ${formatCurrency(debtSummary.appliedInstallmentThisMonth)}`}
+            {`Apertura mes: ${formatAmount(debtSummary.openingTotalDebt)} · Abono a capital: - ${formatAmount(debtSummary.appliedInstallmentThisMonth)}`}
           </AppText>
 
           {/* Progress Bar */}
@@ -384,7 +385,7 @@ export function DebtsFunfamiView({
                 <StatusBadge
                   label={
                     debt.appliedPrincipalThisMonth > 0
-                      ? `Abono - ${formatCurrency(debt.appliedPrincipalThisMonth)}`
+                      ? `Abono - ${formatAmount(debt.appliedPrincipalThisMonth)}`
                       : 'Sin abono este mes'
                   }
                   status={debt.appliedPrincipalThisMonth > 0 ? 'completed' : 'info'}
@@ -401,7 +402,7 @@ export function DebtsFunfamiView({
               {/* Interest calculation feedback if rate > 0 */}
               {debt.monthlyInterestRate !== undefined && debt.monthlyInterestRate > 0 ? (
                 <AppText variant="micro" color={colors.semantic.debt}>
-                  {`Interés generado este mes (${debt.monthlyInterestRate}%): + ${formatCurrency(debt.accruedInterestThisMonth)}`}
+                  {`Interés generado este mes (${debt.monthlyInterestRate}%): + ${formatAmount(debt.accruedInterestThisMonth)}`}
                 </AppText>
               ) : null}
 
@@ -417,10 +418,10 @@ export function DebtsFunfamiView({
               >
                 <View>
                   <AppText variant="caption" color={colors.text.secondary}>
-                    {`Saldo apertura (${debtSummary.monthKey}): ${formatCurrency(debt.openingBalance)}`}
+                    {`Saldo apertura (${debtSummary.monthKey}): ${formatAmount(debt.openingBalance)}`}
                   </AppText>
                   <AppText variant="caption" color={colors.text.secondary}>
-                    {`Acreedor: ${debt.lender}${debt.monthlyInstallment && debt.monthlyInstallment > 0 ? ` · Cuota: ${formatCurrency(debt.monthlyInstallment)}/mes` : ''}`}
+                    {`Acreedor: ${debt.lender}${debt.monthlyInstallment && debt.monthlyInstallment > 0 ? ` · Cuota: ${formatAmount(debt.monthlyInstallment)}/mes` : ''}`}
                   </AppText>
                 </View>
 

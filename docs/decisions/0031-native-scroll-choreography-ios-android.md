@@ -44,7 +44,7 @@ Todo cálculo continuo cuadro a cuadro corre en el hilo nativo de UI mediante `u
 
 ### 2.3. Navegación, memoria de scroll y *scroll-to-top*
 
-- **Memoria por pestaña:** `WorkspaceShell` guarda el último `scrollY` de cada pestaña al cambiar de destino, restaura el offset guardado de la pestaña entrante (`animated: false`) y revela el dock automáticamente.
+- **Cada pestaña abre arriba (revisado el 2026-11-19):** al cambiar de destino, `WorkspaceShell` lleva el scroll a `y = 0` (`animated: false`) y revela el dock. La primera versión restauraba el offset guardado de cada pestaña y reaccionaba a `activeTab`; como el contenido llega con `useDeferredValue`, durante un cuadro se veía la pestaña saliente desplazada antes del cambio. Ahora el reinicio va en un `useLayoutEffect` atado a `contentTab` (la pestaña cuyo contenido está en pantalla) y ocurre en el mismo commit que cambia el contenido; abrir siempre arriba mantiene la cabecera en la misma posición en todas las pestañas.
 - **Volver arriba (*scroll-to-top*):** Volver a tocar la pestaña activa en el dock (`onReselectActiveTab`, protegido contra doble disparo tras `onPressIn` de cambio de pestaña) desplaza la vista suavemente a `y = 0` con `hapticService.selection()` solo si el usuario estaba desplazado (`scrollY > 4`).
 - **Compatibilidad con `KeyboardAwareScrollView`:** `checkAndScrollInput` lee `scrollYShared.value` cuando el scroll corre en UI thread, evitando desalineaciones al enfocar campos cerca del teclado.
 
@@ -83,7 +83,7 @@ Todo cálculo continuo cuadro a cuadro corre en el hilo nativo de UI mediante `u
 | `npm run typecheck`, `npm run lint` | 0 errores en TypeScript y cumplimiento arquitectónico (`AGENTS.md`). |
 | `npm run test:scripts` | Guardia de cierres de worklets (`worklet-closure-guard.test.mjs`), workflows y Maestro. |
 | Tests unitarios y paridad (`scrollChoreography.test.tsx`, `motionSpec.test.ts`, `skinTokens.test.ts`) | Estado direccional, histéresis, límites, NaN, paridad exacta JS ⇄ worklets y contratos de tokens por piel. |
-| Tests funcionales activos (`activeScrollChoreography.test.tsx`) | Simulación de scroll down / scroll up en `WorkspaceShell` sobre iOS, Android, Web y `reducedMotion`, ausencia explícita de cabecera sticky y barra de progreso, retracción/retorno del dock, `scroll-to-top` en pestaña activa y memoria por pestaña. |
+| Tests funcionales activos (`activeScrollChoreography.test.tsx`) | Simulación de scroll down / scroll up en `WorkspaceShell` sobre iOS, Android, Web y `reducedMotion`, ausencia explícita de cabecera sticky y barra de progreso, retracción/retorno del dock, `scroll-to-top` en pestaña activa, cada pestaña abre arriba y sin salto mientras el contenido diferido no ha cambiado. |
 | Regresión multiplataforma (`workspacePlatforms.test.tsx`, `floatingLiquidGlassDock.test.tsx`, `renderCommits.test.tsx`) | Sin `BlurView` fuera de iOS, `paddingBottom` e insets preservados, cero renders extra de navegación/checklist al cambiar `pendingSyncCount`. |
 
 **No verificado en hardware físico (`AGENTS.md` §5.4 y §7.6):** No se ejecutó en un iPhone físico con ProMotion a 120 Hz ni en un teléfono o emulador Android (sin SDK/dispositivo conectado en esta sesión). Quedan por confirmar en dispositivo real la suavidad a 120 fps de la retracción/retorno del dock, la percepción háptica de *scroll-to-top*, el estiramiento elástico de *overscroll* en iOS y el desplazamiento de borde en Android.

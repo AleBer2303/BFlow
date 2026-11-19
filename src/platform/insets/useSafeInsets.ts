@@ -4,7 +4,8 @@
  * System bar / cutout insets, safe to call without a provider (unit tests, isolated previews):
  * outside a `SafeAreaProvider` every edge is 0 instead of throwing.
  *
- * iOS screens already clear the status bar through `contentInsetAdjustmentBehavior`; Android
+ * Most iOS screens clear the status bar through `contentInsetAdjustmentBehavior`; the workspace
+ * shell turns that off and pads `top` itself, so its resting scroll offset is `y = 0`. Android
  * draws edge to edge, so the Android skin pads these insets itself.
  */
 

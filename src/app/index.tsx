@@ -615,6 +615,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     <WorkspaceShell
       monthLabel={activeMonthLabel}
       activeTab={activeTab}
+      contentTab={contentTab}
       onSelectTab={setActiveTab}
       showNavigation={!needsOnboarding}
       pendingSyncCount={pendingOfflineWritesCount}

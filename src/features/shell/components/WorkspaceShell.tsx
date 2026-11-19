@@ -16,7 +16,7 @@
  * foldable or a desktop browser never gets a stretched phone layout.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { Platform, View, type LayoutChangeEvent } from 'react-native';
 import {
   Easing,
@@ -52,6 +52,12 @@ export interface WorkspaceShellProps {
   /** "Octubre 2026" */
   monthLabel: string;
   activeTab: BFlowWorkspaceTab;
+  /**
+   * Tab whose content is on screen. It trails `activeTab` while the new tab mounts as a
+   * transition (`useDeferredValue` in `src/app/index.tsx`); the scroll returns to the top
+   * when this one changes, so the previous tab is never shown shifted. Defaults to `activeTab`.
+   */
+  contentTab?: BFlowWorkspaceTab;
   onSelectTab: (tab: BFlowWorkspaceTab) => void;
   /** Hidden while the account is being set up (onboarding). */
   showNavigation: boolean;
@@ -198,6 +204,7 @@ export function stepDockChromeOnUI(
 export function WorkspaceShell({
   monthLabel,
   activeTab,
+  contentTab = activeTab,
   onSelectTab,
   showNavigation,
   pendingSyncCount,
@@ -215,7 +222,7 @@ export function WorkspaceShell({
   // the end of the scroll content clear the system gesture area.
   const bottomSystemInset = isAndroid ? insets.bottom : 0;
   const showsWebTabBar = isWeb && showNavigation && layout.sizeClass !== 'expanded';
-  const activeTabLabel = WORKSPACE_TABS.find((tab) => tab.id === activeTab)?.label ?? '';
+  const contentTabLabel = WORKSPACE_TABS.find((tab) => tab.id === contentTab)?.label ?? '';
   const title = `BFlow · ${monthLabel}`;
   // Stable while the tab is unchanged, so the memoized web header can skip re-rendering.
   const webHeaderNavigation = useMemo(
@@ -231,8 +238,7 @@ export function WorkspaceShell({
   const contentColumnRef = useRef<React.ElementRef<typeof View> | null>(null);
   const layoutListenersRef = useRef<Set<() => void>>(new Set());
   const lastReportedContentHeightRef = useRef<number>(0);
-  const prevTabRef = useRef<BFlowWorkspaceTab>(activeTab);
-  const tabScrollOffsetsRef = useRef<Partial<Record<BFlowWorkspaceTab, number>>>({});
+  const prevContentTabRef = useRef<BFlowWorkspaceTab>(contentTab);
 
   const scrollY = useSharedValue(0);
   const viewportHeight = useSharedValue(0);
@@ -378,18 +384,19 @@ export function WorkspaceShell({
     [contentHeight, minOverflow, revealDock, viewportHeight]
   );
 
-  useEffect(() => {
-    const previousTab = prevTabRef.current;
-    if (previousTab === activeTab) {
+  // Every tab opens at the top, in the same commit that swaps the content: a layout effect runs
+  // before the frame is painted, so neither the outgoing tab nor the incoming one is drawn at a
+  // stale offset. Keyed on the rendered tab, not on the dock selection, which leads it by a
+  // transition.
+  useLayoutEffect(() => {
+    if (prevContentTabRef.current === contentTab) {
       return undefined;
     }
-    tabScrollOffsetsRef.current[previousTab] = Math.max(0, scrollY.value);
-    prevTabRef.current = activeTab;
-    const nextY = tabScrollOffsetsRef.current[activeTab] ?? 0;
+    prevContentTabRef.current = contentTab;
 
-    scrollRef.current?.scrollTo?.({ y: nextY, animated: false });
-    scrollY.value = nextY;
-    lastScrollYSV.value = nextY;
+    scrollRef.current?.scrollTo?.({ y: 0, animated: false });
+    scrollY.value = 0;
+    lastScrollYSV.value = 0;
     accumulatedDeltaSV.value = 0;
     directionSV.value = 0;
     revealDock();
@@ -399,7 +406,7 @@ export function WorkspaceShell({
     });
     return () => cancelAnimationFrame(rafId);
   }, [
-    activeTab,
+    contentTab,
     accumulatedDeltaSV,
     directionSV,
     lastScrollYSV,
@@ -452,8 +459,11 @@ export function WorkspaceShell({
   const contentGap = isWeb && layout.sizeClass !== 'compact' ? spacing.xl : spacing.md;
   const paddingTop = isWeb ? (layout.isWide ? spacing.xxxl : spacing.xxl) : spacing.xl;
   const dockClearance = isAndroid ? ANDROID_DOCK_CLEARANCE : IOS_DOCK_CLEARANCE;
+  // iOS turns the automatic content inset off (see the scroll view below), so the home
+  // indicator area is reserved here too; the dock itself still clears it on its own.
+  const bottomEdgeOffset = isIos ? insets.bottom : bottomSystemInset;
   const paddingBottom =
-    (showsDock ? dockClearance : isWeb ? spacing.huge : spacing.xl) + bottomSystemInset;
+    (showsDock ? dockClearance : isWeb ? spacing.huge : spacing.xl) + bottomEdgeOffset;
 
   return (
     <View testID="workspace-shell" style={{ flex: 1, backgroundColor: colors.background.primary }}>
@@ -469,12 +479,22 @@ export function WorkspaceShell({
           scrollYShared={scrollActive ? scrollY : undefined}
           onLayout={scrollActive ? handleScrollViewLayout : undefined}
           onContentSizeChange={scrollActive ? handleContentSizeChange : undefined}
+          // iOS: the status bar / notch area is reserved as content padding instead of an
+          // automatic content inset. With the automatic inset the resting offset is
+          // `y = -insets.top`, so `scrollTo({ y: 0 })` (tab switch, scroll-to-top) parked the
+          // title and the theme switch under the clock and the battery.
+          contentInsetAdjustmentBehavior={isIos ? 'never' : undefined}
           scrollIndicatorInsets={
-            isIos && showNavigation ? { bottom: dockClearance } : undefined
+            isIos
+              ? {
+                  top: insets.top,
+                  bottom: (showNavigation ? dockClearance : 0) + insets.bottom,
+                }
+              : undefined
           }
           contentContainerStyle={{
             paddingHorizontal: layout.gutter,
-            paddingTop: isAndroid ? 0 : paddingTop,
+            paddingTop: isAndroid ? 0 : paddingTop + topEdgeOffset,
             paddingBottom,
           }}
         >
@@ -583,7 +603,7 @@ export function WorkspaceShell({
                   columnGap: spacing.sm,
                 }}
               >
-                <AppText variant="title1">{activeTabLabel}</AppText>
+                <AppText variant="title1">{contentTabLabel}</AppText>
                 <AppText variant="title1" color={colors.text.muted}>
                   {monthLabel}
                 </AppText>

@@ -14,7 +14,8 @@ jest.mock('../motion/motionRuntime', () => {
 });
 
 import React, { useState } from 'react';
-import { AccessibilityInfo, ScrollView, Text, View } from 'react-native';
+import { AccessibilityInfo, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { BlurView } from 'expo-blur';
 import * as GlassEffect from 'expo-glass-effect';
@@ -198,7 +199,7 @@ describe('active UI-thread scroll choreography across skins', () => {
     expect(selectionSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('saves and restores per-tab scroll position and reveals the dock when switching tabs', () => {
+  it('opens every tab at the top and reveals the dock when switching tabs', () => {
     render(<Harness skin="ios" />);
     advanceFrames(64);
 
@@ -206,7 +207,7 @@ describe('active UI-thread scroll choreography across skins', () => {
     dispatchScroll(180);
     scrollToSpy.mockClear();
 
-    // Switch to checklist: outgoing scrollY (180) is saved; checklist opens at 0 and reveals dock.
+    // Switch to checklist: it opens at the top and the dock comes back.
     fireEvent(screen.getByTestId('workspace-tab-checklist'), 'pressIn');
     fireEvent.press(screen.getByTestId('workspace-tab-checklist'));
     advanceFrames(320);
@@ -216,14 +217,85 @@ describe('active UI-thread scroll choreography across skins', () => {
       transformOf(getAnimatedStyle(screen.getByTestId('liquid-glass-tab-bar'))).translateY
     ).toBeCloseTo(0, 2);
 
-    // Switch back to summary: restores saved offset (180) on both ScrollView and shared choreography state.
+    // Back to summary after scrolling checklist: summary also opens at the top, not at 180.
+    dispatchScroll(40);
+    dispatchScroll(260);
     scrollToSpy.mockClear();
     fireEvent(screen.getByTestId('workspace-tab-summary'), 'pressIn');
     fireEvent.press(screen.getByTestId('workspace-tab-summary'));
     advanceFrames(320);
 
-    expect(scrollToSpy).toHaveBeenCalledWith({ y: 180, animated: false });
-    expect(transformOf(getAnimatedStyle(screen.getByTestId('hero-depth-wrapper'))).translateY).toBeGreaterThan(0);
+    expect(scrollToSpy).toHaveBeenCalledTimes(1);
+    expect(scrollToSpy).toHaveBeenCalledWith({ y: 0, animated: false });
+    expect(transformOf(getAnimatedStyle(screen.getByTestId('hero-depth-wrapper'))).translateY).toBe(0);
+  });
+
+  it('pads the iOS status bar and home indicator areas itself, keeping the title below the notch and the content end clear of the dock', () => {
+    const topInset = 59;
+    const bottomInset = 34;
+    const renderShell = (top: number, bottom = top === 0 ? 0 : bottomInset) => (
+      <SafeAreaInsetsContext.Provider value={{ top, right: 0, bottom, left: 0 }}>
+        <BFlowThemeProvider skin="ios" initialMode="dark">
+          <WorkspaceShell
+            monthLabel="Octubre 2026"
+            activeTab="summary"
+            onSelectTab={() => undefined}
+            showNavigation
+          >
+            <View style={{ height: 2000 }} />
+          </WorkspaceShell>
+        </BFlowThemeProvider>
+      </SafeAreaInsetsContext.Provider>
+    );
+    const paddingOf = () =>
+      StyleSheet.flatten(screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle) as {
+        paddingTop: number;
+        paddingBottom: number;
+      };
+
+    const { rerender } = render(renderShell(0));
+    const base = paddingOf();
+    rerender(renderShell(topInset));
+
+    const scrollView = screen.UNSAFE_getByType(ScrollView);
+    expect(scrollView.props.contentInsetAdjustmentBehavior).toBe('never');
+    expect(paddingOf().paddingTop).toBe(base.paddingTop + topInset);
+    expect(paddingOf().paddingBottom).toBe(base.paddingBottom + bottomInset);
+    expect(scrollView.props.scrollIndicatorInsets).toEqual(
+      expect.objectContaining({ top: topInset })
+    );
+    expect(scrollView.props.scrollIndicatorInsets.bottom).toBeGreaterThan(bottomInset);
+  });
+
+  it('keeps the outgoing tab still until its deferred content is replaced, then resets to the top', () => {
+    const renderShell = (activeTab: BFlowWorkspaceTab, contentTab: BFlowWorkspaceTab) => (
+      <BFlowThemeProvider skin="ios" initialMode="dark">
+        <WorkspaceShell
+          monthLabel="Octubre 2026"
+          activeTab={activeTab}
+          contentTab={contentTab}
+          onSelectTab={() => undefined}
+          showNavigation
+        >
+          <View style={{ height: 2000 }} />
+        </WorkspaceShell>
+      </BFlowThemeProvider>
+    );
+    const { rerender } = render(renderShell('summary', 'summary'));
+    advanceFrames(64);
+    dispatchScroll(40);
+    dispatchScroll(300);
+    scrollToSpy.mockClear();
+
+    // The dock already shows checklist but summary is still on screen: no jump.
+    rerender(renderShell('checklist', 'summary'));
+    advanceFrames(32);
+    expect(scrollToSpy).not.toHaveBeenCalled();
+
+    // The checklist content arrives: the scroll returns to the top in that same commit.
+    rerender(renderShell('checklist', 'checklist'));
+    expect(scrollToSpy).toHaveBeenCalledTimes(1);
+    expect(scrollToSpy).toHaveBeenCalledWith({ y: 0, animated: false });
   });
 
   it('uses zero BlurView, renders no sticky header or progress bar, and retracts/reveals the flat Android dock', () => {

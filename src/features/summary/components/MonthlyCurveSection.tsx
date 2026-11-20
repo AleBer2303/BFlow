@@ -4,8 +4,8 @@
  * The Summary curve: a large readout, the stage and a native metric selector. The
  * selector is the accessible equivalent of the canvas and states every figure in words.
  *
- * El escenario lo decide la piel (`skinSpec.curveStage`): escena three.js en iOS y curva
- * vectorial animada en Android y Web (ADR 0012 y 0014).
+ * El escenario lo decide la piel (`skinSpec.curveStage`): escena three.js en las tres pieles
+ * (ADR 0032), con la curva vectorial animada como respaldo si la escena no puede dibujar.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';

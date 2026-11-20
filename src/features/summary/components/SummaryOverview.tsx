@@ -20,7 +20,6 @@ import {
   CurrencyText,
   GlassSurface,
   ScrollDepthHero,
-  ScrollRevealSection,
   StatusBadge,
   estimateTextWidth,
   minCardWidthForAmounts,
@@ -184,9 +183,11 @@ export function SummaryOverview({
         {incomeCard}
         {expenseCard}
       </View>
-      <ScrollRevealSection>
-        <MonthlyCurveSection curve={curve} stageMaxWidth={layout.contentWidth} />
-      </ScrollRevealSection>
+      {/*
+        The month curve is never wrapped in ScrollRevealSection: its opacity and scale reach the
+        3D GLView on iOS and composite the scene flat. It keeps its own entrance (ADR 0008).
+      */}
+      <MonthlyCurveSection curve={curve} stageMaxWidth={layout.contentWidth} />
     </View>
   );
 }

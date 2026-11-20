@@ -2,8 +2,10 @@
  * src/features/summary/scene/curveShaders.ts
  *
  * Unlit GLSL for the monthly curve, with no lights, textures or `discard`. Lengths are
- * in layout points. Ribbons output opaque colors and rely on MAX/MIN blending, so a
- * ribbon folding over itself on a tight corner never gets brighter.
+ * in layout points. The canvas is transparent, so whatever is behind it (the galaxy of
+ * ambient particles) shows through: every shader writes premultiplied color (rgb × alpha,
+ * alpha). Ribbons rely on MAX blending, so a ribbon folding over itself on a tight corner
+ * never gets brighter.
  */
 
 export const POINT_QUAD_PT = 88;
@@ -26,7 +28,6 @@ export const RIBBON_VERTEX_SHADER = /* glsl */ `
 
 export const RIBBON_FRAGMENT_SHADER = /* glsl */ `
   uniform vec3 uColor;
-  uniform vec3 uBackdrop;
   uniform float uHalfWidth;
   uniform float uCore;
   uniform float uGlow;
@@ -58,7 +59,7 @@ export const RIBBON_FRAGMENT_SHADER = /* glsl */ `
     alpha *= mix(1.0, 0.28, uDim * smoothstep(uScrubX, uScrubX + 6.0, vX));
 
     vec3 color = mix(uColor, vec3(1.0), uHot * core * 0.42);
-    gl_FragColor = vec4(mix(uBackdrop, color, alpha), 1.0);
+    gl_FragColor = vec4(color * alpha, alpha);
   }
 `;
 
@@ -78,7 +79,6 @@ export const AREA_VERTEX_SHADER = /* glsl */ `
 /** Dot grid fixed to the plane: brightest under the curve, fading towards the base. */
 export const AREA_FRAGMENT_SHADER = /* glsl */ `
   uniform vec3 uColor;
-  uniform vec3 uBackdrop;
   uniform float uReveal;
   uniform float uScrubX;
   uniform float uDim;
@@ -96,8 +96,9 @@ export const AREA_FRAGMENT_SHADER = /* glsl */ `
     float alpha = (dots * pow(vHeight, 1.7) + pow(vHeight, 3.0) * 0.12) * uStrength;
     alpha *= 1.0 - smoothstep(uReveal - 22.0, uReveal, vPlane.x);
     alpha *= mix(1.0, 0.22, uDim * smoothstep(uScrubX, uScrubX + 6.0, vPlane.x));
+    alpha = clamp(alpha, 0.0, 1.0);
 
-    gl_FragColor = vec4(mix(uBackdrop, uColor, alpha), 1.0);
+    gl_FragColor = vec4(uColor * alpha, alpha);
   }
 `;
 

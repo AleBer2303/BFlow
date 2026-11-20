@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, View } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { hapticService } from '../../platform/haptics/hapticService';
-import { IS_MOTION_STATIC, toEasing } from '../motion/motionRuntime';
+import { IS_MOTION_STATIC, USE_NATIVE_DRIVER, toEasing } from '../motion/motionRuntime';
 import { resolvePresenceSpec } from '../motion/motionSpec';
 import { useReplayOnChange } from '../motion/useReplayOnChange';
 import { useAmountPrivacy } from '../privacy/AmountPrivacyContext';
@@ -89,10 +89,13 @@ export function ThemeToggleIconButton({
   );
 }
 
-const AnimatedLine = Animated.createAnimatedComponent(Line);
-
-/** Length of the eye's slash, from (3.5, 3.5) to (20.5, 20.5) in the 24-unit viewBox. */
-const EYE_SLASH_LENGTH = Math.hypot(17, 17);
+/** Eye icon size on screen, drawn from a 24-unit viewBox. */
+const EYE_ICON_SIZE = 20;
+const EYE_UNIT = EYE_ICON_SIZE / 24;
+/** The slash runs from (3.5, 3.5) to (20.5, 20.5) of the viewBox, 1.8 units thick. */
+const EYE_SLASH_LENGTH = Math.hypot(17, 17) * EYE_UNIT;
+const EYE_SLASH_THICKNESS = 1.8 * EYE_UNIT;
+const EYE_SLASH_START = 3.5 * EYE_UNIT;
 
 export interface AmountVisibilityIconButtonProps {
   testID?: string;
@@ -109,9 +112,10 @@ export function AmountVisibilityIconButton({
   const { colors, radius, minTouchTarget, skin, reducedMotion } = useBFlowTheme();
   const { amountsHidden, toggleAmountsHidden } = useAmountPrivacy();
   const strokeColor = colors.text.secondary;
-  // 1 = slash fully drawn (amounts hidden). The icon never scales or fades as a whole: a
-  // scaled or faded SVG is rasterised and looked pixelated on the iPhone. Only the slash's
-  // dash moves, so every frame is drawn as a vector at full quality.
+  // 1 = slash fully drawn (amounts hidden). The eye is a still SVG: a scaled or faded SVG is
+  // rasterised and looked pixelated on the iPhone. The slash is a plain rounded View that
+  // grows from its top-left end (scaleX on the native driver), which stays crisp, and works on
+  // the web, where an animated SVG prop crashed react-native-svg.
   const slash = useRef(new Animated.Value(amountsHidden ? 1 : 0)).current;
 
   useEffect(() => {
@@ -126,18 +130,13 @@ export function AmountVisibilityIconButton({
       toValue: target,
       duration: step.durationMs,
       easing: toEasing(step.easing),
-      // SVG stroke props are not supported by the native driver.
-      useNativeDriver: false,
+      useNativeDriver: USE_NATIVE_DRIVER,
     });
     animation.start();
     return () => animation.stop();
   }, [amountsHidden, reducedMotion, skin, slash]);
 
-  const slashDashOffset = slash.interpolate({
-    inputRange: [0, 1],
-    outputRange: [EYE_SLASH_LENGTH, 0],
-  });
-  // Round caps of an empty dash can leave a dot; the slash is transparent until it starts.
+  // The rounded ends would leave a dot at scale 0; the slash is transparent until it starts.
   const slashOpacity = slash.interpolate({
     inputRange: [0, 0.05, 1],
     outputRange: [0, 1, 1],
@@ -164,7 +163,7 @@ export function AmountVisibilityIconButton({
       <View
         testID={amountsHidden ? 'amount-visibility-icon-hidden' : 'amount-visibility-icon-visible'}
       >
-        <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+        <Svg width={EYE_ICON_SIZE} height={EYE_ICON_SIZE} viewBox="0 0 24 24" fill="none">
           <Path
             d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"
             stroke={strokeColor}
@@ -173,20 +172,24 @@ export function AmountVisibilityIconButton({
             strokeLinejoin="round"
           />
           <Circle cx={12} cy={12} r={3} stroke={strokeColor} strokeWidth={1.8} />
-          <AnimatedLine
-            testID="amount-visibility-slash"
-            x1={3.5}
-            y1={3.5}
-            x2={20.5}
-            y2={20.5}
-            stroke={strokeColor}
-            strokeWidth={1.8}
-            strokeLinecap="round"
-            strokeDasharray={[EYE_SLASH_LENGTH, EYE_SLASH_LENGTH + 2]}
-            strokeDashoffset={slashDashOffset}
-            strokeOpacity={slashOpacity}
-          />
         </Svg>
+        <Animated.View
+          testID="amount-visibility-slash"
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            // Its left end sits on (3.5, 3.5) and it turns 45° about that end down to (20.5, 20.5).
+            left: EYE_SLASH_START,
+            top: EYE_SLASH_START - EYE_SLASH_THICKNESS / 2,
+            width: EYE_SLASH_LENGTH,
+            height: EYE_SLASH_THICKNESS,
+            borderRadius: EYE_SLASH_THICKNESS / 2,
+            backgroundColor: strokeColor,
+            opacity: slashOpacity,
+            transformOrigin: 'left center',
+            transform: [{ rotate: '45deg' }, { scaleX: slash }],
+          }}
+        />
       </View>
     </AppPressable>
   );

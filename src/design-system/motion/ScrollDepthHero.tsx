@@ -85,14 +85,7 @@ function ActiveScrollDepthHero({
     return {
       transform: [{ translateY: frame.translateY }, { scale: frame.scale }],
     };
-  }, [
-    enabled,
-    heroMinScale,
-    heroParallaxY,
-    overscrollMaxScale,
-    overscrollMaxTranslateY,
-    scrollY,
-  ]);
+  });
 
   return (
     <Reanimated.View testID={testID} style={[style, animatedStyle]}>

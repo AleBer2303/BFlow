@@ -302,14 +302,13 @@ describe('Android skin · Material 3 frame', () => {
     expect(paddingBottom - dockTopEdge).toBe(18);
   });
 
-  it('draws the month curve with animated vectors and never mounts a GL surface', () => {
+  it('draws the month curve with the three.js scene, like iOS (ADR 0032)', () => {
     renderApp('android');
 
-    // ADR 0014: the expo-gl surface did not refresh on Android, so the curve looked frozen.
-    expect(screen.UNSAFE_queryAllByType(GLView)).toHaveLength(0);
+    expect(screen.UNSAFE_queryAllByType(GLView)).toHaveLength(1);
     expect(
-      screen.getByTestId('monthly-curve-vector-stage', { includeHiddenElements: true })
-    ).toBeTruthy();
+      screen.queryByTestId('monthly-curve-vector-stage', { includeHiddenElements: true })
+    ).toBeNull();
   });
 
   it('centers a capped column on foldables and tablets', () => {
@@ -322,11 +321,11 @@ describe('Android skin · Material 3 frame', () => {
 });
 
 describe('Web skin · redesigned frame', () => {
-  it('draws the curve as vectors and never mounts a WebGL surface', () => {
+  it('draws the curve with the three.js scene, without glass or the dock lens', () => {
     renderApp('web');
 
-    expect(screen.getByTestId('monthly-curve-vector-stage')).toBeTruthy();
-    expect(screen.UNSAFE_queryAllByType(GLView)).toHaveLength(0);
+    expect(screen.UNSAFE_queryAllByType(GLView)).toHaveLength(1);
+    expect(screen.queryByTestId('monthly-curve-vector-stage')).toBeNull();
     expect(screen.UNSAFE_queryAllByType(BlurView)).toHaveLength(0);
     expect(screen.queryByTestId('dock-magnifying-lens')).toBeNull();
   });

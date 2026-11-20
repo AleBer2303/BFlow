@@ -5,6 +5,7 @@
 
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import PhaseOneHomeScreen from '../../app/index';
 import {
   AMOUNTS_HIDDEN_STORAGE_KEY,
@@ -76,20 +77,22 @@ describe('privacy mode for amounts', () => {
     expect(visibleAmountTexts().length).toBeGreaterThan(0);
   });
 
-  it('animates only the slash of the eye, never a scaled or faded icon', () => {
+  it('draws the slash as a plain view over a still eye, never an animated SVG', () => {
     renderWorkspace();
-    const visibleIcon = screen.getByTestId('amount-visibility-icon-visible');
-    expect(visibleIcon.props.style).toBeUndefined();
+    expect(screen.getByTestId('amount-visibility-icon-visible').props.style).toBeUndefined();
     const slash = () =>
-      screen.getByTestId('amount-visibility-slash', { includeHiddenElements: true });
-    expect(slash().props.strokeOpacity).toBe(0);
+      StyleSheet.flatten(
+        screen.getByTestId('amount-visibility-slash', { includeHiddenElements: true }).props.style
+      ) as { opacity: number; transform: Array<Record<string, unknown>> };
+    expect(slash().opacity).toBe(0);
+    expect(slash().transform).toContainEqual({ scaleX: 0 });
 
     fireEvent.press(screen.getByTestId('amount-visibility-toggle'));
 
     expect(screen.getByTestId('amount-visibility-icon-hidden').props.style).toBeUndefined();
-    expect(slash().props.strokeOpacity).toBe(1);
-    // The SVG mock reports a zero offset as null: the slash is fully drawn either way.
-    expect(Number(slash().props.strokeDashoffset ?? 0)).toBe(0);
+    expect(slash().opacity).toBe(1);
+    expect(slash().transform).toContainEqual({ rotate: '45deg' });
+    expect(slash().transform).toContainEqual({ scaleX: 1 });
   });
 
   it('remembers the choice on this device', () => {

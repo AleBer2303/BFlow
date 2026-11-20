@@ -8,27 +8,31 @@
  */
 
 import type { ExpoWebGLRenderingContext } from 'expo-gl';
+// Deep imports from three's ES modules instead of the 'three' entry: Metro does not
+// tree-shake, so the entry would bundle all of three.js (loaders, geometries, animation…).
+// These pull only what the curve uses, which keeps the Web chunk and the Hermes bundle small.
+import type { ColorRepresentation } from 'three';
 import {
-  BufferAttribute,
-  BufferGeometry,
-  Color,
-  ColorManagement,
+  AddEquation,
   CustomBlending,
   DynamicDrawUsage,
-  Group,
   LinearSRGBColorSpace,
-  MathUtils,
   MaxEquation,
-  Mesh,
-  MinEquation,
   OneFactor,
-  PerspectiveCamera,
-  PlaneGeometry,
-  Scene,
-  ShaderMaterial,
-  WebGLRenderer,
-  type ColorRepresentation,
-} from 'three';
+  OneMinusSrcAlphaFactor,
+} from 'three/src/constants.js';
+import { PerspectiveCamera } from 'three/src/cameras/PerspectiveCamera.js';
+import { BufferAttribute } from 'three/src/core/BufferAttribute.js';
+import { BufferGeometry } from 'three/src/core/BufferGeometry.js';
+import { PlaneGeometry } from 'three/src/geometries/PlaneGeometry.js';
+import { ShaderMaterial } from 'three/src/materials/ShaderMaterial.js';
+import { Color } from 'three/src/math/Color.js';
+import { ColorManagement } from 'three/src/math/ColorManagement.js';
+import * as MathUtils from 'three/src/math/MathUtils.js';
+import { Group } from 'three/src/objects/Group.js';
+import { Mesh } from 'three/src/objects/Mesh.js';
+import { WebGLRenderer } from 'three/src/renderers/WebGLRenderer.js';
+import { Scene } from 'three/src/scenes/Scene.js';
 import { springConfigs } from '../../../design-system/tokens';
 import type {
   MonthlyCurve,
@@ -136,7 +140,6 @@ type ColorUniform = { value: Color };
 interface RibbonUniforms {
   [uniform: string]: NumberUniform | ColorUniform;
   uColor: ColorUniform;
-  uBackdrop: ColorUniform;
   uScrubX: NumberUniform;
   uDim: NumberUniform;
   uHalfWidth: NumberUniform;
@@ -272,7 +275,6 @@ export class MonthlyCurveScene {
   private readonly areaGeometry = new BufferGeometry();
   private readonly areaUniforms = {
     uColor: this.color,
-    uBackdrop: this.backdrop,
     uScrubX: this.scrubX,
     uDim: this.dim,
     uReveal: { value: 0 },
@@ -556,6 +558,12 @@ export class MonthlyCurveScene {
         vertexShader: AREA_VERTEX_SHADER,
         fragmentShader: AREA_FRAGMENT_SHADER,
         uniforms: this.areaUniforms,
+        // Premultiplied "over": the dot grid is see-through on the transparent canvas.
+        transparent: true,
+        blending: CustomBlending,
+        blendEquation: AddEquation,
+        blendSrc: OneFactor,
+        blendDst: OneMinusSrcAlphaFactor,
         depthTest: false,
         depthWrite: false,
       })
@@ -585,7 +593,6 @@ export class MonthlyCurveScene {
 
     const uniforms: RibbonUniforms = {
       uColor: this.color,
-      uBackdrop: this.backdrop,
       uScrubX: this.scrubX,
       uDim: this.dim,
       uHalfWidth: { value: halfWidth },
@@ -603,7 +610,9 @@ export class MonthlyCurveScene {
         transparent: true,
         depthTest: false,
         depthWrite: false,
+        // Premultiplied MAX: a fold never brightens and the canvas stays transparent.
         blending: CustomBlending,
+        blendEquation: MaxEquation,
         blendSrc: OneFactor,
         blendDst: OneFactor,
       })
@@ -720,15 +729,11 @@ export class MonthlyCurveScene {
 
   private applyPalette(): void {
     const palette = this.palette;
-    this.renderer.setClearColor(palette.backdrop, 1);
+    // Transparent canvas: the page and the galaxy behind it show through (ADR 0032 §6).
+    // The backdrop color only cuts the ring around the marker.
+    this.renderer.setClearColor(palette.backdrop, 0);
     this.backdrop.value.set(palette.backdrop);
     this.toColor.set(palette.metrics[this.metricId]);
-
-    // Line colors are brighter than a dark page and darker than a light one.
-    const equation = palette.isDark ? MaxEquation : MinEquation;
-    this.glow.material.blendEquation = equation;
-    this.line.material.blendEquation = equation;
-    this.dash.material.blendEquation = equation;
 
     this.glow.uniforms.uGlow.value = palette.glowStrength;
     this.line.uniforms.uHot.value = palette.lineHeat;

@@ -568,33 +568,37 @@ describe('MonthlyCurveSection stage per skin', () => {
 
   const hidden = { includeHiddenElements: true } as const;
 
-  it('keeps the three.js stage on ios', () => {
-    renderSection('ios');
+  /**
+   * Jest never delivers a GL context, so past GL_CONTEXT_TIMEOUT_MS the 3D stage gives up and
+   * the vector curve takes its place: the same path a phone takes when the surface never comes.
+   */
+  function fallBackToVectors(): void {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    act(() => jest.advanceTimersByTime(GL_CONTEXT_TIMEOUT_MS));
+    warn.mockRestore();
+  }
+
+  // ADR 0032: the three skins draw the three.js scene; the vector curve is only the fallback.
+  it.each(['ios', 'android', 'web'] as const)('draws the three.js stage on %s', (skin) => {
+    renderSection(skin);
     expect(screen.UNSAFE_queryAllByType(GLView)).toHaveLength(1);
     expect(screen.queryByTestId('monthly-curve-vector-stage', hidden)).toBeNull();
   });
 
-  // ADR 0014: on Android the expo-gl surface did not refresh on screen, so the curve looked
-  // frozen. The Android skin draws it with the animated vectors and never opens a GL context.
-  it('draws the curve on Android with touch-driven vectors and never mounts a GL surface', () => {
-    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+  it('falls back to touch-driven vectors on Android when the GL surface never arrives', () => {
     renderSection('android');
+    fallBackToVectors();
 
     expect(screen.UNSAFE_queryAllByType(GLView)).toHaveLength(0);
     expect(screen.UNSAFE_getByType(MonthlyCurveVectorStage).props.interaction).toBe('touch');
-    // Like the canvas on iOS, it stays hidden from TalkBack: the metric buttons state the figures.
+    // Like the canvas, it stays hidden from TalkBack: the metric buttons state the figures.
     expect(screen.queryByTestId('monthly-curve-vector-stage')).toBeNull();
     expect(screen.getByTestId('monthly-curve-vector-stage', hidden)).toBeTruthy();
-
-    // It is the stage, not a fallback: nothing waits for a GL surface or reports a failure.
-    act(() => jest.advanceTimersByTime(GL_CONTEXT_TIMEOUT_MS));
-    expect(warn).not.toHaveBeenCalled();
-    expect(screen.UNSAFE_getByType(MonthlyCurveVectorStage)).toBeTruthy();
-    warn.mockRestore();
   });
 
-  it('animates on Android: the line draws in, the marker pulses and metrics morph', () => {
+  it('animates the Android fallback: the line draws in, the marker pulses and metrics morph', () => {
     renderSection('android');
+    fallBackToVectors();
     layoutStage();
     const line = () => screen.getByTestId('monthly-curve-vector-line', hidden).props.d as string;
 
@@ -622,8 +626,9 @@ describe('MonthlyCurveSection stage per skin', () => {
     expect(screen.getByTestId('monthly-curve-amount')).toHaveTextContent('$ 6.200.000');
   });
 
-  it('walks the month by touch on Android and keeps the readout in step', () => {
+  it('walks the month by touch on the Android fallback and keeps the readout in step', () => {
     renderSection('android');
+    fallBackToVectors();
     layoutStage();
     fastForward(REVEAL_MS);
 
@@ -638,8 +643,9 @@ describe('MonthlyCurveSection stage per skin', () => {
     expect(screen.getByText('Flujo neto · Hoy, 27 oct')).toBeTruthy();
   });
 
-  it('uses the vector stage on web and keeps the readout in step with it', () => {
+  it('falls back to the pointer-driven vectors on web and keeps the readout in step', () => {
     renderSection('web');
+    fallBackToVectors();
     expect(screen.UNSAFE_queryAllByType(GLView)).toHaveLength(0);
     expect(screen.UNSAFE_getByType(MonthlyCurveVectorStage).props.interaction).toBe('pointer');
 

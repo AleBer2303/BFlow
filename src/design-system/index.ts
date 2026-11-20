@@ -22,6 +22,8 @@ export * from './components/AppTextInput';
 export * from './components/TactilePressable';
 export * from './components/RevealDown';
 export * from './components/FormMessage';
+export * from './components/AmbientParticles';
+export * from './motion/ambientParticles';
 export * from './components/charts';
 export * from './motion/motionSpec';
 export * from './motion/motionRuntime';

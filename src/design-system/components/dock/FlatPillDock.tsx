@@ -390,7 +390,7 @@ export const FlatPillDock = React.memo(function FlatPillDock({
         { scale: 1 - (1 - hiddenScale) * hidden },
       ],
     };
-  }, [dockHiddenSV, dockTravel, hiddenScale, isScrollChoreographyActive]);
+  });
 
   return (
     // Full-width anchor: an absolutely positioned view with left/right AND maxWidth pins to the

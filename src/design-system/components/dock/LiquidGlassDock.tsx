@@ -600,7 +600,7 @@ export const LiquidGlassDock = React.memo(function LiquidGlassDock({
         { scale: pressScale * hideScale },
       ],
     };
-  }, [dockHiddenSV, dockTravel, press, scrollChoreoActiveSV]);
+  });
   const lensStyle = useAnimatedStyle(() => {
     const frame = lensTransformAt(position.value, lift.value, stretch.value, dockWidthSV.value);
     return {

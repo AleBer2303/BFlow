@@ -26,6 +26,7 @@ import {
   withTiming,
 } from 'react-native-reanimated';
 import {
+  AmbientParticles,
   AppText,
   DOCK_BOTTOM_OFFSET,
   DOCK_CAPSULE_HEIGHT,
@@ -473,6 +474,8 @@ export function WorkspaceShell({
 
   return (
     <View testID="workspace-shell" style={{ flex: 1, backgroundColor: colors.background.primary }}>
+      {/* Faint drifting dots behind the content (iOS and Android; nothing on Web). */}
+      <AmbientParticles />
       <ScrollChoreographyProvider value={choreographyValue}>
         {isWeb ? (
           <WebAppHeader layout={layout} contextLabel={monthLabel} navigation={webHeaderNavigation} />

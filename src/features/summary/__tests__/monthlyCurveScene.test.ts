@@ -1,5 +1,8 @@
 import type { ExpoWebGLRenderingContext } from 'expo-gl';
-import { BufferGeometry, Material, MaxEquation, MinEquation } from 'three';
+// The same ES modules the scene imports, so the prototypes spied on are the ones it uses.
+import { MaxEquation } from 'three/src/constants.js';
+import { BufferGeometry } from 'three/src/core/BufferGeometry.js';
+import { Material } from 'three/src/materials/Material.js';
 import { palettes } from '../../../design-system/tokens';
 import { curveXForDay } from '../scene/curveGeometry';
 import { MonthlyCurveScene, type MonthlyCurveSceneOptions } from '../scene/monthlyCurveScene';
@@ -311,16 +314,17 @@ describe('MonthlyCurveScene', () => {
     expect(scene.getSnapshot().pointX).toBeCloseTo(curveXForDay(27, 31, 450), 1);
   });
 
-  it('applies the theme to the clear color, the metric color and the blending', () => {
+  it('clears to a transparent canvas and keeps premultiplied MAX blending in both themes', () => {
     const { scene, renderer, callbacks, runUntilIdle } = createHarness();
     runUntilIdle();
     expect(scene.getSnapshot().blendEquation).toBe(MaxEquation);
 
     scene.setPalette(toScenePalette(palettes.light, 'light'));
 
-    expect(renderer.setClearColor).toHaveBeenLastCalledWith(palettes.light.background.primary, 1);
+    // Alpha 0: the galaxy behind the curve shows through on every skin.
+    expect(renderer.setClearColor).toHaveBeenLastCalledWith(palettes.light.background.primary, 0);
     expect(scene.getSnapshot().colorHex).toBe(palettes.light.semantic.income.toLowerCase());
-    expect(scene.getSnapshot().blendEquation).toBe(MinEquation);
+    expect(scene.getSnapshot().blendEquation).toBe(MaxEquation);
     expect(callbacks.size).toBe(1);
   });
 

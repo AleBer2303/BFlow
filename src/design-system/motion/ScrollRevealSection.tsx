@@ -250,24 +250,7 @@ function ActiveScrollRevealSection({
       opacity: frame.opacity,
       transform: [{ translateY: frame.translateY }, { scale: frame.scale }],
     };
-  }, [
-    contentHeight,
-    enabled,
-    scrollY,
-    sectionBottomMinOpacity,
-    sectionBottomScale,
-    sectionBottomTravelY,
-    sectionEntryBand,
-    sectionHeightSV,
-    sectionMaxScaleHeight,
-    sectionTopBand,
-    sectionTopMinOpacity,
-    sectionTopSV,
-    sectionTopScale,
-    sectionTopTravelY,
-    topEdgeOffset,
-    viewportHeight,
-  ]);
+  });
 
   return (
     <Reanimated.View ref={viewRef} testID={testID} onLayout={handleLayout} style={[style, animatedStyle]}>

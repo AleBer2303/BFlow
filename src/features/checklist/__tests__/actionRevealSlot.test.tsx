@@ -37,14 +37,16 @@ describe('ActionRevealSlot (active motion runtime)', () => {
       expect(timingSpy).not.toHaveBeenCalled();
       expect(screen.queryByTestId('slot-child')).toBeNull();
 
-      // 2. Opening transitions to visible=true and starts the opening animation.
+      // 2. Opening transitions to visible=true and starts the opening animation on the native driver.
       view.rerender(renderSlot(true));
       expect(timingSpy).toHaveBeenCalledTimes(1);
+      expect(timingSpy.mock.calls[0]?.[1]).toMatchObject({ useNativeDriver: true });
       expect(screen.getByTestId('slot-child')).toBeTruthy();
 
-      // 3. Closing after having been visible starts the closing animation and unmounts.
+      // 3. Closing after having been visible starts the closing animation on the native driver and unmounts.
       view.rerender(renderSlot(false));
       expect(timingSpy).toHaveBeenCalledTimes(2);
+      expect(timingSpy.mock.calls[1]?.[1]).toMatchObject({ useNativeDriver: true });
       act(() => {
         jest.advanceTimersByTime(500);
       });

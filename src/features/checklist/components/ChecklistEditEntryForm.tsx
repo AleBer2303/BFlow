@@ -9,15 +9,17 @@
 import React, { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import {
+  AdaptiveSelectField,
+  animateNextLayout,
   AppPressable,
   AppText,
-  FormMessage,
   AppTextInput,
-  CurrencyText,
+  FormMessage,
   GlassSurface,
   hapticService,
-  MIN_TOUCH_TARGET_PT,
+  HeroAmountField,
   useBFlowTheme,
+  usePrimaryActionLook,
 } from '../../../design-system';
 import {
   formatGroupedIntegerInput,
@@ -27,6 +29,8 @@ import {
   type SavingsBucket,
 } from '../../../domain';
 import type { EditEntryUpdates } from '../../budget/store/useBudgetStore';
+
+const NONE_OPTION_VALUE = '__none__';
 
 export interface ChecklistEditEntryFormProps {
   /** Live entry being edited; null if it disappeared while the editor was open. */
@@ -52,7 +56,9 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
   onEditEntry,
   onClose,
 }: ChecklistEditEntryFormProps): React.JSX.Element {
-  const { colors, spacing, radius } = useBFlowTheme();
+  const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
+  const primaryAction = usePrimaryActionLook();
+
   const [editNameInput, setEditNameInput] = useState(() => entry?.conceptName ?? '');
   const [editAmountInput, setEditAmountInput] = useState(() =>
     entry
@@ -69,14 +75,40 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
   const [editPersistMonthly, setEditPersistMonthly] = useState<boolean>(() =>
     concept ? concept.recurrence.kind === 'monthly' : true
   );
+  const [showMoreOptions, setShowMoreOptions] = useState<boolean>(false);
   const [editError, setEditError] = useState<string | null>(null);
 
-  const parsedEditHeroAmount = useMemo(() => {
-    const digits = editAmountInput.replace(/[^0-9]/g, '');
-    return digits ? Number(digits) : 0;
-  }, [editAmountInput]);
-
   const isEditingExpense = entry?.type !== 'income';
+
+  const debtOptions = useMemo(
+    () => [
+      { value: NONE_OPTION_VALUE, label: 'Sin deuda vinculada' },
+      ...debts.map((debt) => ({ value: debt.id, label: debt.name })),
+    ],
+    [debts]
+  );
+
+  const bucketOptions = useMemo(
+    () => [
+      { value: NONE_OPTION_VALUE, label: 'Sin fondo vinculado' },
+      ...savingsBuckets.map((bucket) => ({ value: bucket.id, label: bucket.name })),
+    ],
+    [savingsBuckets]
+  );
+
+  const optionalSummary = useMemo(() => {
+    const parts: string[] = [];
+    if (editNoteInput.trim()) parts.push('Nota');
+    if (isEditingExpense && editTargetDebtId) {
+      const debtName = debts.find((d) => d.id === editTargetDebtId)?.name;
+      if (debtName) parts.push(debtName);
+    }
+    if (isEditingExpense && editSavingsBucketId) {
+      const bucketName = savingsBuckets.find((b) => b.id === editSavingsBucketId)?.name;
+      if (bucketName) parts.push(bucketName);
+    }
+    return parts.join(' · ');
+  }, [debts, editNoteInput, editSavingsBucketId, editTargetDebtId, isEditingExpense, savingsBuckets]);
 
   const handleSaveEditEntry = () => {
     if (!entry) return;
@@ -114,9 +146,10 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
             flexDirection: 'row',
             justifyContent: 'space-between',
             alignItems: 'center',
+            gap: spacing.xs,
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexShrink: 1 }}>
             <AppText variant="title2">
               {isEditingExpense ? 'Editar Gasto' : 'Editar Ingreso'}
             </AppText>
@@ -145,9 +178,12 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
             testID="close-edit-entry-modal-button"
             accessibilityRole="button"
             accessibilityLabel="Cerrar modal de edición"
-            onPress={onClose}
+            onPress={() => {
+              hapticService.light();
+              onClose();
+            }}
             style={{
-              minHeight: 36,
+              minHeight: minTouchTarget,
               paddingHorizontal: spacing.md,
               borderRadius: radius.pill,
               backgroundColor: colors.glass.surfaceTint,
@@ -163,50 +199,31 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
           </AppPressable>
         </View>
 
-        {/* Hero Amount Input Card with Live Formatted Preview */}
-        <View
-          style={{
-            padding: spacing.md,
-            borderRadius: radius.lg,
-            backgroundColor: colors.glass.surfaceElevatedTint,
-            borderWidth: 1,
-            borderColor: colors.glass.specularBorder,
-            alignItems: 'center',
-            gap: spacing.xs,
+        {/* Single Interactive Hero Amount Input directly on the semantic red/green surface */}
+        <HeroAmountField
+          containerTestID="edit-entry-hero-amount"
+          inputTestID="edit-entry-amount-input"
+          label={isEditingExpense ? 'Monto a pagar' : 'Monto a recibir'}
+          tone={isEditingExpense ? 'expense' : 'income'}
+          value={editAmountInput}
+          onChangeText={(text) => {
+            setEditAmountInput(text);
+            if (editError) setEditError(null);
           }}
-        >
-          <AppText variant="caption" color={colors.text.secondary}>
-            {isEditingExpense ? 'Monto a pagar' : 'Monto a recibir'}
-          </AppText>
-          <CurrencyText
-            amount={parsedEditHeroAmount}
-            variant="heroCurrency"
-            tone={isEditingExpense ? 'expense' : 'income'}
-          />
-          <AppTextInput
-            testID="edit-entry-amount-input"
-            value={editAmountInput}
-            onChangeText={setEditAmountInput}
-            keyboardType="number-pad"
-            placeholder="0"
-            style={{
-              textAlign: 'center',
-              fontSize: 20,
-              width: '100%',
-              marginTop: spacing.xxs,
-            }}
-          />
-        </View>
+        />
 
         {/* Concept Name Input */}
-        <View style={{ gap: spacing.xxs }}>
+        <View style={{ gap: spacing.xs }}>
           <AppText variant="caption" color={colors.text.secondary}>
-            Nombre del ítem o movimiento:
+            Nombre del movimiento
           </AppText>
           <AppTextInput
             testID="edit-entry-name-input"
             value={editNameInput}
-            onChangeText={setEditNameInput}
+            onChangeText={(text) => {
+              setEditNameInput(text);
+              if (editError) setEditError(null);
+            }}
             placeholder={
               isEditingExpense
                 ? 'Ej. Supermercado, Alquiler, Gasolina...'
@@ -215,168 +232,16 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
           />
         </View>
 
-        {/* Note Input */}
-        <View style={{ gap: spacing.xxs }}>
-          <AppText variant="caption" color={colors.text.secondary}>
-            Nota opcional:
-          </AppText>
-          <AppTextInput
-            testID="edit-entry-note-input"
-            value={editNoteInput}
-            onChangeText={setEditNoteInput}
-            placeholder="Ej. Factura, referencia, detalle..."
-          />
-        </View>
-
-        {/* Adjustable Debt & Savings Linkage when editing an expense */}
-        {isEditingExpense ? (
-          <View style={{ gap: spacing.xs }}>
-            <AppText variant="micro" color={colors.text.secondary}>
-              Vincular pago a una deuda (opcional):
-            </AppText>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-              <AppPressable
-                testID="edit-entry-debt-none"
-                accessibilityRole="button"
-                onPress={() => {
-                  hapticService.selection();
-                  setEditTargetDebtId(null);
-                }}
-                style={{
-                  minHeight: 36,
-                  paddingHorizontal: spacing.sm,
-                  borderRadius: radius.pill,
-                  backgroundColor:
-                    editTargetDebtId === null
-                      ? colors.glass.surfaceElevatedTint
-                      : colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor:
-                    editTargetDebtId === null
-                      ? colors.glass.specularBorder
-                      : colors.glass.subtleBorder,
-                  justifyContent: 'center',
-                }}
-              >
-                <AppText variant="micro">Ninguna deuda</AppText>
-              </AppPressable>
-              {debts.map((debt) => {
-                const isLinked = editTargetDebtId === debt.id;
-                return (
-                  <AppPressable
-                    key={debt.id}
-                    testID={`edit-entry-debt-${debt.id}`}
-                    accessibilityRole="button"
-                    onPress={() => {
-                      hapticService.selection();
-                      setEditTargetDebtId(debt.id);
-                    }}
-                    style={{
-                      minHeight: 36,
-                      paddingHorizontal: spacing.sm,
-                      borderRadius: radius.pill,
-                      backgroundColor: isLinked
-                        ? colors.semantic.debtSoft
-                        : colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: isLinked
-                        ? colors.glass.specularBorder
-                        : colors.glass.subtleBorder,
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <AppText
-                      variant="micro"
-                      color={isLinked ? colors.semantic.debt : colors.text.primary}
-                    >
-                      {`→ ${debt.name}`}
-                    </AppText>
-                  </AppPressable>
-                );
-              })}
-            </View>
-
-            {savingsBuckets.length > 0 ? (
-              <>
-                <AppText variant="micro" color={colors.text.secondary}>
-                  Vincular gasto a un fondo de ahorro (opcional):
-                </AppText>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-                  <AppPressable
-                    testID="edit-entry-bucket-none"
-                    accessibilityRole="button"
-                    onPress={() => {
-                      hapticService.selection();
-                      setEditSavingsBucketId(null);
-                    }}
-                    style={{
-                      minHeight: 36,
-                      paddingHorizontal: spacing.sm,
-                      borderRadius: radius.pill,
-                      backgroundColor:
-                        editSavingsBucketId === null
-                          ? colors.glass.surfaceElevatedTint
-                          : colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor:
-                        editSavingsBucketId === null
-                          ? colors.glass.specularBorder
-                          : colors.glass.subtleBorder,
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <AppText variant="micro">Ningún fondo</AppText>
-                  </AppPressable>
-                  {savingsBuckets.map((bucket) => {
-                    const isLinked = editSavingsBucketId === bucket.id;
-                    return (
-                      <AppPressable
-                        key={bucket.id}
-                        testID={`edit-entry-bucket-${bucket.id}`}
-                        accessibilityRole="button"
-                        onPress={() => {
-                          hapticService.selection();
-                          setEditSavingsBucketId(bucket.id);
-                        }}
-                        style={{
-                          minHeight: 36,
-                          paddingHorizontal: spacing.sm,
-                          borderRadius: radius.pill,
-                          backgroundColor: isLinked
-                            ? colors.semantic.savingsSoft
-                            : colors.glass.surfaceTint,
-                          borderWidth: 1,
-                          borderColor: isLinked
-                            ? colors.glass.specularBorder
-                            : colors.glass.subtleBorder,
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <AppText
-                          variant="micro"
-                          color={isLinked ? colors.semantic.savings : colors.text.primary}
-                        >
-                          {`→ ${bucket.name}`}
-                        </AppText>
-                      </AppPressable>
-                    );
-                  })}
-                </View>
-              </>
-            ) : null}
-          </View>
-        ) : null}
-
         {/* Month-to-month persistence toggle */}
-        <View style={{ gap: spacing.xxs }}>
+        <View style={{ gap: spacing.xs }}>
           <AppText variant="caption" color={colors.text.secondary}>
-            Frecuencia:
+            Frecuencia
           </AppText>
           <View style={{ flexDirection: 'row', gap: spacing.xs }}>
             {(
               [
-                { value: true, label: 'Persiste cada mes' },
-                { value: false, label: 'Solo este mes' },
+                { value: true, label: 'Cada mes', a11y: 'Se repite cada mes' },
+                { value: false, label: 'Solo este mes', a11y: 'Solo este mes' },
               ] as const
             ).map((opt) => {
               const active = editPersistMonthly === opt.value;
@@ -385,26 +250,29 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
                   key={String(opt.value)}
                   testID={`edit-entry-persist-${opt.value ? 'monthly' : 'once'}`}
                   accessibilityRole="button"
+                  accessibilityLabel={opt.a11y}
+                  accessibilityState={{ selected: active }}
                   onPress={() => {
                     hapticService.selection();
                     setEditPersistMonthly(opt.value);
                   }}
                   style={{
                     flex: 1,
-                    minHeight: 38,
+                    minHeight: minTouchTarget,
                     borderRadius: radius.md,
+                    borderCurve: 'continuous',
                     backgroundColor: active
-                      ? colors.semantic.incomeSoft
+                      ? colors.accent.container
                       : colors.glass.surfaceTint,
                     borderWidth: 1,
-                    borderColor: active ? colors.glass.specularBorder : colors.glass.subtleBorder,
+                    borderColor: active ? colors.accent.primary : colors.glass.subtleBorder,
                     justifyContent: 'center',
                     alignItems: 'center',
                   }}
                 >
                   <AppText
-                    variant="micro"
-                    color={active ? colors.semantic.income : colors.text.secondary}
+                    variant="caption"
+                    color={active ? colors.accent.onContainer : colors.text.secondary}
                   >
                     {opt.label}
                   </AppText>
@@ -412,6 +280,112 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
               );
             })}
           </View>
+        </View>
+
+        {/* Progressive disclosure for optional note, debt and savings linkage */}
+        <View style={{ gap: spacing.xs }}>
+          <AppPressable
+            testID="edit-entry-more-options-toggle"
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showMoreOptions }}
+            onPress={() => {
+              hapticService.selection();
+              animateNextLayout();
+              setShowMoreOptions((prev) => !prev);
+            }}
+            style={{
+              minHeight: minTouchTarget,
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.xs,
+              borderRadius: radius.md,
+              borderCurve: 'continuous',
+              backgroundColor: colors.glass.surfaceTint,
+              borderWidth: 1,
+              borderColor:
+                showMoreOptions || optionalSummary
+                  ? colors.glass.specularBorder
+                  : colors.glass.subtleBorder,
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: spacing.xs,
+            }}
+          >
+            <View style={{ flex: 1, gap: spacing.xxs }}>
+              <AppText variant="caption" color={colors.text.primary}>
+                Más opciones
+              </AppText>
+              <AppText
+                variant="micro"
+                color={optionalSummary ? colors.accent.text : colors.text.secondary}
+                numberOfLines={1}
+              >
+                {optionalSummary ||
+                  (isEditingExpense
+                    ? 'Nota, vincular a deuda o fondo de ahorro'
+                    : 'Agregar nota opcional')}
+              </AppText>
+            </View>
+            <AppText variant="micro" color={colors.text.secondary}>
+              {showMoreOptions ? 'Ocultar' : 'Mostrar'}
+            </AppText>
+          </AppPressable>
+
+          {/* Rendered directly (without nested RevealDown) to keep opening/closing instant */}
+          {showMoreOptions ? (
+            <View
+              testID="edit-entry-more-options-panel"
+              style={{ gap: spacing.sm, paddingTop: spacing.xs }}
+            >
+              {/* Note Input */}
+              <View style={{ gap: spacing.xxs }}>
+                <AppText variant="caption" color={colors.text.secondary}>
+                  Nota opcional
+                </AppText>
+                <AppTextInput
+                  testID="edit-entry-note-input"
+                  value={editNoteInput}
+                  onChangeText={setEditNoteInput}
+                  placeholder="Ej. Factura, referencia, detalle..."
+                />
+              </View>
+
+              {/* Modern Adaptive Selectors for Debt & Savings Fund Linkage */}
+              {isEditingExpense && debts.length > 0 ? (
+                <AdaptiveSelectField
+                  label="Vincular pago a una deuda (opcional)"
+                  title="Vincular a deuda"
+                  options={debtOptions}
+                  selectedValue={editTargetDebtId ?? NONE_OPTION_VALUE}
+                  onSelect={(value) => {
+                    hapticService.selection();
+                    setEditTargetDebtId(value === NONE_OPTION_VALUE ? null : value);
+                  }}
+                  triggerTestID="edit-entry-debt-select"
+                  valueTestID="edit-entry-debt-value"
+                  pickerTestID="edit-entry-debt-picker"
+                  accessibilityLabel="Vincular pago a una deuda"
+                />
+              ) : null}
+
+              {isEditingExpense && savingsBuckets.length > 0 ? (
+                <AdaptiveSelectField
+                  label="Vincular gasto a un fondo de ahorro (opcional)"
+                  title="Vincular a fondo"
+                  options={bucketOptions}
+                  selectedValue={editSavingsBucketId ?? NONE_OPTION_VALUE}
+                  onSelect={(value) => {
+                    hapticService.selection();
+                    setEditSavingsBucketId(value === NONE_OPTION_VALUE ? null : value);
+                  }}
+                  triggerTestID="edit-entry-bucket-select"
+                  valueTestID="edit-entry-bucket-value"
+                  pickerTestID="edit-entry-bucket-picker"
+                  accessibilityLabel="Vincular gasto a un fondo de ahorro"
+                />
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         <FormMessage message={editError} />
@@ -422,17 +396,21 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
           onPress={handleSaveEditEntry}
           style={{
             width: '100%',
-            minHeight: MIN_TOUCH_TARGET_PT,
+            minHeight: minTouchTarget,
             borderRadius: radius.md,
             borderCurve: 'continuous',
-            backgroundColor: colors.glass.surfaceElevatedTint,
-            borderWidth: 1,
-            borderColor: colors.glass.specularBorder,
+            ...primaryAction.container,
             justifyContent: 'center',
             alignItems: 'center',
           }}
         >
-          <AppText variant="headline" color={colors.semantic.income}>
+          <AppText
+            variant="headline"
+            color={
+              primaryAction.labelColor ??
+              (isEditingExpense ? colors.semantic.expense : colors.semantic.income)
+            }
+          >
             Guardar Cambios
           </AppText>
         </AppPressable>

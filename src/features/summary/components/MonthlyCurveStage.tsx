@@ -51,7 +51,9 @@ const WEB_GL_VIEW_PROPS =
   Platform.OS === 'web'
     ? {
         webglContextAttributes: {
-          alpha: false,
+          // Transparent canvas: the galaxy behind the curve shows through (premultiplied).
+          alpha: true,
+          premultipliedAlpha: true,
           antialias: true,
           powerPreference: 'low-power',
         } satisfies WebGLContextAttributes,

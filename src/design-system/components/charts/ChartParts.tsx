@@ -10,7 +10,8 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { formatCurrency, formatCurrencyCompact } from '../../../domain/money/money';
+import { formatCurrency } from '../../../domain/money/money';
+import { useAmountPrivacy } from '../../privacy/AmountPrivacyContext';
 import { GlassSurface } from '../../../platform/glass/GlassSurface';
 import { hapticService } from '../../../platform/haptics/hapticService';
 import { useBFlowTheme } from '../../theme/ThemeContext';
@@ -136,6 +137,7 @@ export function ChartReadout({
   variant = 'rows',
   testID,
 }: ChartReadoutProps): React.JSX.Element {
+  const { formatAmount } = useAmountPrivacy();
   const { colors, spacing, radius } = useBFlowTheme();
   const first = rows[0];
   return (
@@ -145,7 +147,7 @@ export function ChartReadout({
       </AppText>
       {variant === 'value' ? (
         <AppText variant="title2" tabularNums color={colors.text.primary}>
-          {formatCurrency(first?.value ?? 0)}
+          {formatAmount(first?.value ?? 0)}
         </AppText>
       ) : (
         <View
@@ -160,7 +162,7 @@ export function ChartReadout({
                 {row.label}
               </AppText>
               <AppText variant="callout" tabularNums color={colors.text.primary}>
-                {formatCurrency(row.value)}
+                {formatAmount(row.value)}
               </AppText>
             </View>
           ))}
@@ -293,9 +295,10 @@ export function ChartTouchColumns({
 export function describeChartPoint(
   title: string,
   series: readonly { label: string; value: number }[],
-  note?: string
+  note?: string,
+  formatAmount: (amount: number) => string = formatCurrency
 ): string {
-  const figures = series.map((item) => `${item.label} ${formatCurrency(item.value)}`).join(', ');
+  const figures = series.map((item) => `${item.label} ${formatAmount(item.value)}`).join(', ');
   return [`${title}: ${figures}`, note].filter(Boolean).join('. ');
 }
 
@@ -308,6 +311,7 @@ export function ChartValueLabels({
   yFor: (tick: number) => number;
 }): React.JSX.Element {
   const { colors, spacing } = useBFlowTheme();
+  const { formatAmountCompact } = useAmountPrivacy();
   return (
     <>
       {ticks.map((tick) => (
@@ -324,7 +328,7 @@ export function ChartValueLabels({
             top: yFor(tick) - VALUE_LABEL_HALF_HEIGHT_PT,
           }}
         >
-          {formatCurrencyCompact(Math.round(tick))}
+          {formatAmountCompact(Math.round(tick))}
         </AppText>
       ))}
     </>

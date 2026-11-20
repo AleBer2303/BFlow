@@ -27,9 +27,9 @@ import {
   TrashBinIcon,
   useBFlowTheme,
   usePrimaryActionLook,
+  useAmountPrivacy,
 } from '../../../design-system';
 import {
-  formatCurrency,
   formatMonthKeyLabelEs,
   type ChecklistProgress,
   type Concept,
@@ -234,6 +234,7 @@ export function AnalyticsAndHistoryView({
   onDeleteOrRevertMonth,
   onResetOctoberSeed: _onResetOctoberSeed,
 }: AnalyticsAndHistoryViewProps): React.JSX.Element {
+  const { formatAmount } = useAmountPrivacy();
   const { colors, spacing, radius } = useBFlowTheme();
   const primaryAction = usePrimaryActionLook();
   const [historyActionMode, setHistoryActionMode] = useState<HistoryActionMode>(null);
@@ -340,7 +341,7 @@ export function AnalyticsAndHistoryView({
                   tone={(budget?.netCashFlow ?? 0) >= 0 ? 'income' : 'expense'}
                 />
                 <AppText variant="micro" color={colors.text.muted}>
-                  {`Proyectado: ${formatCurrency(budget?.projectedNetFlow ?? 0)}`}
+                  {`Proyectado: ${formatAmount(budget?.projectedNetFlow ?? 0)}`}
                 </AppText>
               </View>
 
@@ -394,7 +395,7 @@ export function AnalyticsAndHistoryView({
                   tone="reserve"
                 />
                 <AppText variant="micro" color={colors.text.muted}>
-                  {`${savingsSummary.moto.name || 'Reserva'}: ${formatCurrency(savingsSummary.moto.currentBalance)} · Ahorro: ${formatCurrency(savingsSummary.savings.currentBalance)}`}
+                  {`${savingsSummary.moto.name || 'Reserva'}: ${formatAmount(savingsSummary.moto.currentBalance)} · Ahorro: ${formatAmount(savingsSummary.savings.currentBalance)}`}
                 </AppText>
               </View>
             </View>

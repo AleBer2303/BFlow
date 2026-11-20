@@ -22,12 +22,21 @@ export interface WorkspaceTabConfig {
   label: string;
 }
 
-export const WORKSPACE_TABS: ReadonlyArray<WorkspaceTabConfig> = [
+/**
+ * Primary financial destinations shown in the floating dock (iOS/Android) and Web nav bar.
+ * `Cuenta` lives in the top-right header avatar button (ADR 0033).
+ */
+export const PRIMARY_WORKSPACE_TABS: ReadonlyArray<WorkspaceTabConfig> = [
   { id: 'summary', label: 'Resumen' },
   { id: 'checklist', label: 'Checklist' },
   { id: 'debts', label: 'Deudas' },
   { id: 'savings', label: 'Ahorros' },
   { id: 'analytics', label: 'Cierre' },
+];
+
+/** All workspace destinations, including `account`, for titles and lookup. */
+export const WORKSPACE_TABS: ReadonlyArray<WorkspaceTabConfig> = [
+  ...PRIMARY_WORKSPACE_TABS,
   { id: 'account', label: 'Cuenta' },
 ];
 

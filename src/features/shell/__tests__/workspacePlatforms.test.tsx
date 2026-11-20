@@ -159,17 +159,38 @@ describe.each(PLATFORM_SKIN_IDS)('core flows on the %s skin', (skin) => {
     expect(screen.getByTestId('golden-net-flow')).toHaveTextContent('$ 950.000');
   });
 
-  it('switches between dark and light and repaints with the skin palette', () => {
+  it('switches between dark and light from Account and repaints with the skin palette', () => {
     renderApp(skin);
 
     expect(styleOf('workspace-shell').backgroundColor).toBe(
       palettesBySkin[skin].dark.background.primary
     );
+    // Header now carries the Account avatar button; theme switch lives inside Account (ADR 0033).
+    expect(screen.queryByTestId('theme-toggle-button')).toBeNull();
+    expect(screen.getByTestId('account-header-avatar-icon')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('workspace-tab-account'));
+    expect(screen.getByTestId('account-appearance-card')).toBeTruthy();
     fireEvent.press(screen.getByTestId('theme-toggle-button'));
     expect(screen.getByTestId('theme-icon-moon')).toBeTruthy();
     expect(styleOf('workspace-shell').backgroundColor).toBe(
       palettesBySkin[skin].light.background.primary
     );
+  });
+
+  it('replaces the header Account icon with the user profile photo when registered', () => {
+    act(() => {
+      const current = useBudgetStore.getState().authUser;
+      if (current) {
+        useBudgetStore.setState({
+          authUser: { ...current, photoUrl: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==' },
+        });
+      }
+    });
+    renderApp(skin);
+
+    expect(screen.getByTestId('account-header-avatar-image')).toBeTruthy();
+    expect(screen.queryByTestId('account-header-avatar-icon')).toBeNull();
   });
 
   it('hides the navigation while the account is being set up', () => {
@@ -302,14 +323,13 @@ describe('Android skin · Material 3 frame', () => {
     expect(paddingBottom - dockTopEdge).toBe(18);
   });
 
-  it('draws the month curve with animated vectors and never mounts a GL surface', () => {
+  it('draws the month curve with the three.js scene, like iOS (ADR 0032)', () => {
     renderApp('android');
 
-    // ADR 0014: the expo-gl surface did not refresh on Android, so the curve looked frozen.
-    expect(screen.UNSAFE_queryAllByType(GLView)).toHaveLength(0);
+    expect(screen.UNSAFE_queryAllByType(GLView)).toHaveLength(1);
     expect(
-      screen.getByTestId('monthly-curve-vector-stage', { includeHiddenElements: true })
-    ).toBeTruthy();
+      screen.queryByTestId('monthly-curve-vector-stage', { includeHiddenElements: true })
+    ).toBeNull();
   });
 
   it('centers a capped column on foldables and tablets', () => {
@@ -322,11 +342,11 @@ describe('Android skin · Material 3 frame', () => {
 });
 
 describe('Web skin · redesigned frame', () => {
-  it('draws the curve as vectors and never mounts a WebGL surface', () => {
+  it('draws the curve with the three.js scene, without glass or the dock lens', () => {
     renderApp('web');
 
-    expect(screen.getByTestId('monthly-curve-vector-stage')).toBeTruthy();
-    expect(screen.UNSAFE_queryAllByType(GLView)).toHaveLength(0);
+    expect(screen.UNSAFE_queryAllByType(GLView)).toHaveLength(1);
+    expect(screen.queryByTestId('monthly-curve-vector-stage')).toBeNull();
     expect(screen.UNSAFE_queryAllByType(BlurView)).toHaveLength(0);
     expect(screen.queryByTestId('dock-magnifying-lens')).toBeNull();
   });

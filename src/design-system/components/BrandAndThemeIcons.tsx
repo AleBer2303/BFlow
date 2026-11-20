@@ -1,11 +1,79 @@
-import React from 'react';
-import { Animated, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Image, View } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { hapticService } from '../../platform/haptics/hapticService';
+import { IS_MOTION_STATIC, USE_NATIVE_DRIVER, toEasing } from '../motion/motionRuntime';
+import { resolvePresenceSpec } from '../motion/motionSpec';
 import { useReplayOnChange } from '../motion/useReplayOnChange';
+import { useAmountPrivacy } from '../privacy/AmountPrivacyContext';
 import { useBFlowTheme } from '../theme/ThemeContext';
 import { motionDuration } from '../tokens';
 import { AppPressable } from './AppPressable';
+import { AccountNavIcon } from './WorkspaceNavIcons';
+
+export interface AccountHeaderAvatarButtonProps {
+  /** User profile photo URI (compressed Data URI or HTTPS URL); falls back to AccountNavIcon. */
+  photoUrl?: string | null;
+  isSelected?: boolean;
+  onPress: () => void;
+  testID?: string;
+}
+
+/**
+ * Top-right header button for opening the Account workspace view (ADR 0033).
+ * Renders the user's profile photo when available, or the minimalist Account vector icon otherwise.
+ */
+export function AccountHeaderAvatarButton({
+  photoUrl,
+  isSelected = false,
+  onPress,
+  testID = 'workspace-tab-account',
+}: AccountHeaderAvatarButtonProps): React.JSX.Element {
+  const { colors, radius, minTouchTarget, skin } = useBFlowTheme();
+  const [failedPhotoUrl, setFailedPhotoUrl] = useState<string | null>(null);
+
+  const trimmedPhoto = typeof photoUrl === 'string' ? photoUrl.trim() : '';
+  const showPhoto = trimmedPhoto.length > 0 && failedPhotoUrl !== trimmedPhoto;
+
+  return (
+    <AppPressable
+      testID={testID}
+      accessibilityRole="tab"
+      accessibilityLabel="Cuenta"
+      accessibilityState={{ selected: isSelected }}
+      onPressIn={() => hapticService.selection()}
+      onPress={onPress}
+      style={{
+        width: minTouchTarget,
+        height: minTouchTarget,
+        borderRadius: skin === 'web' ? radius.sm : radius.pill,
+        backgroundColor: isSelected ? colors.accent.container : colors.glass.surfaceElevatedTint,
+        borderWidth: isSelected ? 1.5 : 1,
+        borderColor: isSelected ? colors.accent.primary : colors.glass.specularBorder,
+        overflow: 'hidden',
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      {showPhoto ? (
+        <Image
+          testID="account-header-avatar-image"
+          source={{ uri: trimmedPhoto }}
+          style={{ width: '100%', height: '100%' }}
+          resizeMode="cover"
+          onError={() => setFailedPhotoUrl(trimmedPhoto)}
+        />
+      ) : (
+        <AccountNavIcon
+          testID="account-header-avatar-icon"
+          size={20}
+          color={isSelected ? colors.accent.primary : colors.text.primary}
+          focused={isSelected}
+        />
+      )}
+    </AppPressable>
+  );
+}
 
 export interface ThemeToggleIconButtonProps {
   testID?: string;
@@ -82,6 +150,112 @@ export function ThemeToggleIconButton({
           </Svg>
         </Animated.View>
       )}
+    </AppPressable>
+  );
+}
+
+/** Eye icon size on screen, drawn from a 24-unit viewBox. */
+const EYE_ICON_SIZE = 20;
+const EYE_UNIT = EYE_ICON_SIZE / 24;
+/** The slash runs from (3.5, 3.5) to (20.5, 20.5) of the viewBox, 1.8 units thick. */
+const EYE_SLASH_LENGTH = Math.hypot(17, 17) * EYE_UNIT;
+const EYE_SLASH_THICKNESS = 1.8 * EYE_UNIT;
+const EYE_SLASH_START = 3.5 * EYE_UNIT;
+
+export interface AmountVisibilityIconButtonProps {
+  testID?: string;
+}
+
+/**
+ * Eye (open / closed) that hides or shows every amount in the app (`AmountPrivacyProvider`).
+ * Same touch target as `ThemeToggleIconButton`, but with no fill or border, so the eye sits
+ * directly on the card. Hiding draws the slash across the eye and showing erases it.
+ */
+export function AmountVisibilityIconButton({
+  testID = 'amount-visibility-toggle',
+}: AmountVisibilityIconButtonProps): React.JSX.Element {
+  const { colors, radius, minTouchTarget, skin, reducedMotion } = useBFlowTheme();
+  const { amountsHidden, toggleAmountsHidden } = useAmountPrivacy();
+  const strokeColor = colors.text.secondary;
+  // 1 = slash fully drawn (amounts hidden). The eye is a still SVG: a scaled or faded SVG is
+  // rasterised and looked pixelated on the iPhone. The slash is a plain rounded View that
+  // grows from its top-left end (scaleX on the native driver), which stays crisp, and works on
+  // the web, where an animated SVG prop crashed react-native-svg.
+  const slash = useRef(new Animated.Value(amountsHidden ? 1 : 0)).current;
+
+  useEffect(() => {
+    const target = amountsHidden ? 1 : 0;
+    if (IS_MOTION_STATIC || reducedMotion) {
+      slash.setValue(target);
+      return undefined;
+    }
+    const { open, close } = resolvePresenceSpec({ skin, reducedMotion }, 'control');
+    const step = amountsHidden ? open : close;
+    const animation = Animated.timing(slash, {
+      toValue: target,
+      duration: step.durationMs,
+      easing: toEasing(step.easing),
+      useNativeDriver: USE_NATIVE_DRIVER,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [amountsHidden, reducedMotion, skin, slash]);
+
+  // The rounded ends would leave a dot at scale 0; the slash is transparent until it starts.
+  const slashOpacity = slash.interpolate({
+    inputRange: [0, 0.05, 1],
+    outputRange: [0, 1, 1],
+  });
+
+  return (
+    <AppPressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={amountsHidden ? 'Mostrar montos' : 'Ocultar montos'}
+      accessibilityState={{ selected: amountsHidden }}
+      onPressIn={() => hapticService.light()}
+      onPress={toggleAmountsHidden}
+      style={{
+        width: minTouchTarget,
+        height: minTouchTarget,
+        // Sin fondo ni borde: el ojo se dibuja directo sobre la tarjeta. El área táctil
+        // sigue siendo `minTouchTarget` y el radio solo da forma al anillo de foco en Web.
+        borderRadius: skin === 'web' ? radius.sm : radius.pill,
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      <View
+        testID={amountsHidden ? 'amount-visibility-icon-hidden' : 'amount-visibility-icon-visible'}
+      >
+        <Svg width={EYE_ICON_SIZE} height={EYE_ICON_SIZE} viewBox="0 0 24 24" fill="none">
+          <Path
+            d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"
+            stroke={strokeColor}
+            strokeWidth={1.8}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <Circle cx={12} cy={12} r={3} stroke={strokeColor} strokeWidth={1.8} />
+        </Svg>
+        <Animated.View
+          testID="amount-visibility-slash"
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            // Its left end sits on (3.5, 3.5) and it turns 45° about that end down to (20.5, 20.5).
+            left: EYE_SLASH_START,
+            top: EYE_SLASH_START - EYE_SLASH_THICKNESS / 2,
+            width: EYE_SLASH_LENGTH,
+            height: EYE_SLASH_THICKNESS,
+            borderRadius: EYE_SLASH_THICKNESS / 2,
+            backgroundColor: strokeColor,
+            opacity: slashOpacity,
+            transformOrigin: 'left center',
+            transform: [{ rotate: '45deg' }, { scaleX: slash }],
+          }}
+        />
+      </View>
     </AppPressable>
   );
 }

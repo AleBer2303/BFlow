@@ -80,6 +80,46 @@ export function resolveEntranceSpec(
   };
 }
 
+/** Where the incoming tab sits in the dock relative to the outgoing one. */
+export type TabSwitchDirection = -1 | 0 | 1;
+
+export interface TabSwitchSpec extends TransitionSpec {
+  /**
+   * Axis of `distance`: `x` slides along the navigation (signed by the direction, so the tab
+   * enters from its side of the dock); `y` rises in place.
+   */
+  axis: 'x' | 'y';
+}
+
+/**
+ * A tab replacing another (dock or tab bar). Only the incoming tab moves: the outgoing one
+ * leaves at once, so the switch never waits on an exit.
+ *
+ * - ios:     shared axis. Fades in while sliding `motionDistance.screenAxis` from its side.
+ * - android: Material fade-through. Fades in while growing from `motionScale.screen`.
+ * - web:     fades in while rising `motionDistance.base`, as any content arriving.
+ */
+export function resolveTabSwitchSpec(
+  { skin, reducedMotion }: MotionContext,
+  direction: TabSwitchDirection
+): TabSwitchSpec {
+  if (reducedMotion) {
+    return { ...reducedSpec(), axis: 'y' };
+  }
+  const base = {
+    durationMs: motionDuration.fast,
+    delayMs: 0,
+    easing: motionBySkin[skin].enter,
+  };
+  if (skin === 'ios') {
+    return { ...base, axis: 'x', distance: motionDistance.screenAxis * direction, scale: 1 };
+  }
+  if (skin === 'android') {
+    return { ...base, axis: 'y', distance: 0, scale: motionScale.screen };
+  }
+  return { ...base, axis: 'y', distance: motionDistance.base, scale: 1 };
+}
+
 export interface PresenceSpec {
   open: TransitionSpec;
   /** Closing is quicker and quieter than opening, and is never delayed. */

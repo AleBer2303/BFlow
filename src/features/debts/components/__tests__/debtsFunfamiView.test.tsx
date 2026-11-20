@@ -5,9 +5,17 @@
 
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
-import { Alert, Dimensions } from 'react-native';
+import { Alert, Dimensions, StyleSheet } from 'react-native';
+import {
+  AmountPrivacyProvider,
+  HIDDEN_AMOUNT_TEXT,
+} from '../../../../design-system/privacy/AmountPrivacyContext';
 import { BFlowThemeProvider } from '../../../../design-system/theme/ThemeContext';
-import { PLATFORM_SKIN_IDS, type PlatformSkinId } from '../../../../design-system/tokens';
+import {
+  PLATFORM_SKIN_IDS,
+  palettesBySkin,
+  type PlatformSkinId,
+} from '../../../../design-system/tokens';
 import type { DebtSummaryResult } from '../../../../domain';
 import { DebtsFunfamiView } from '../DebtsFunfamiView';
 
@@ -273,6 +281,51 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView form state on %s skin', (skin
     expect(onUpdateDebt).toHaveBeenCalledWith(
       'debt_esp_ia',
       expect.objectContaining({ name: 'Posgrado', openingBalance: 3_600_000 })
+    );
+  });
+
+  it('uses single HeroAmountField in semantic debt tone, previews interest, and avoids card re-renders on form toggle', () => {
+    renderView(skin);
+    mockStatusBadgeRender.mockClear();
+
+    fireEvent.press(screen.getByTestId('debts-add-new-debt-button'));
+    // Opening the form must NOT re-render DebtHeroCard or DebtObligationCard.
+    expect(mockStatusBadgeRender).not.toHaveBeenCalled();
+
+    const heroStyle = StyleSheet.flatten(screen.getByTestId('debt-form-hero-amount').props.style);
+    const amountInput = screen.getByTestId('debt-form-amount-input');
+    const inputStyle = StyleSheet.flatten(amountInput.props.style);
+    expect(heroStyle.backgroundColor).toBe(palettesBySkin[skin].dark.semantic.debtSoft);
+    expect(inputStyle.color).toBe(palettesBySkin[skin].dark.semantic.debt);
+
+    fireEvent.changeText(amountInput, '1000000');
+    expect(screen.getByTestId('debt-form-amount-input').props.value).toBe('1.000.000');
+    expect(screen.queryByText('$ 1.000.000')).toBeNull();
+
+    fireEvent.changeText(screen.getByTestId('debt-form-interest-rate-input'), '2');
+    expect(screen.getByTestId('debt-form-interest-preview')).toHaveTextContent(
+      'Interés mensual aprox.: ~ $ 20.000'
+    );
+
+    fireEvent.press(screen.getByTestId('debts-add-new-debt-button'));
+    expect(mockStatusBadgeRender).not.toHaveBeenCalled();
+  });
+
+  it('masks debt interest preview when privacy mode hides amounts', () => {
+    render(
+      <BFlowThemeProvider skin={skin} initialMode="dark">
+        <AmountPrivacyProvider initialHidden>
+          <DebtsFunfamiView debtSummary={BASE_DEBT_SUMMARY} />
+        </AmountPrivacyProvider>
+      </BFlowThemeProvider>
+    );
+
+    fireEvent.press(screen.getByTestId('debts-add-new-debt-button'));
+    fireEvent.changeText(screen.getByTestId('debt-form-amount-input'), '1000000');
+    fireEvent.changeText(screen.getByTestId('debt-form-interest-rate-input'), '2');
+
+    expect(screen.getByTestId('debt-form-interest-preview')).toHaveTextContent(
+      `Interés mensual aprox.: ~ ${HIDDEN_AMOUNT_TEXT}`
     );
   });
 });

@@ -12,6 +12,7 @@ rules_version = '2';
 //      - uid: string (optional, immutable, == uid)
 //      - email: string | null (optional, <= 254 chars)
 //      - displayName: string | null (optional, <= 120 chars)
+//      - photoUrl: string | null (optional, '' | https:// <= 2048 chars | data:image/(jpeg|jpg|png|webp);base64,... <= 120000 chars)
 //      - phone: string | null (optional, <= 40 chars)
 //      - financialGoal: string | null (optional, <= 240 chars)
 //      - authProvider: 'password' | 'google.com' | 'local' | null (optional, <= 40 chars)
@@ -122,6 +123,21 @@ service cloud.firestore {
           data.savingsContribution.onlyWhenCompleted is bool);
     }
 
+    function isValidPhotoUrl(data) {
+      return !('photoUrl' in data) ||
+        data.photoUrl == null ||
+        data.photoUrl == '' ||
+        (data.photoUrl is string &&
+          data.photoUrl.size() <= 2048 &&
+          data.photoUrl.matches('^https://[^\\s]+$')) ||
+        (data.photoUrl is string &&
+          data.photoUrl.size() <= 120000 &&
+          ((data.photoUrl.size() > 23 && data.photoUrl[0:23] == 'data:image/jpeg;base64,') ||
+           (data.photoUrl.size() > 22 && data.photoUrl[0:22] == 'data:image/jpg;base64,') ||
+           (data.photoUrl.size() > 22 && data.photoUrl[0:22] == 'data:image/png;base64,') ||
+           (data.photoUrl.size() > 23 && data.photoUrl[0:23] == 'data:image/webp;base64,')));
+    }
+
     // ===============================================================
     // Domain Validators (Used in BOTH create and update)
     // ===============================================================
@@ -131,6 +147,7 @@ service cloud.firestore {
           'uid',
           'email',
           'displayName',
+          'photoUrl',
           'phone',
           'financialGoal',
           'authProvider',
@@ -146,6 +163,7 @@ service cloud.firestore {
         (!('uid' in data) || (data.uid is string && data.uid == uid)) &&
         isOptionalString(data, 'email', 254) &&
         isOptionalString(data, 'displayName', 120) &&
+        isValidPhotoUrl(data) &&
         isOptionalString(data, 'phone', 40) &&
         isOptionalString(data, 'financialGoal', 240) &&
         (!('authProvider' in data) ||

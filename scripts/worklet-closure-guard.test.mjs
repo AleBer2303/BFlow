@@ -74,3 +74,50 @@ test('the guard catches the pattern that aborted Expo Go', () => {
     fs.rmSync(sample, { force: true });
   }
 });
+
+/**
+ * Reanimated 4 ignores the dependency array of its animated hooks on native and logs
+ * "Dependencies should only be used on the web" once per hook in Expo Go. The Worklets plugin
+ * already tracks what each worklet captures, so no hook passes one.
+ */
+const ANIMATED_HOOK = /\b(useAnimatedStyle|useAnimatedProps|useDerivedValue|useAnimatedScrollHandler)\(/g;
+
+function animatedHooksWithDependencies(file) {
+  const source = fs.readFileSync(file, 'utf8');
+  const problems = [];
+  for (const match of source.matchAll(ANIMATED_HOOK)) {
+    let index = match.index + match[0].length;
+    let depth = 1;
+    let lastTopComma = -1;
+    while (depth > 0 && index < source.length) {
+      const char = source[index];
+      if ('([{'.includes(char)) depth += 1;
+      else if (')]}'.includes(char)) depth -= 1;
+      if (depth === 1 && char === ',') lastTopComma = index;
+      index += 1;
+    }
+    const tail = lastTopComma >= 0 ? source.slice(lastTopComma + 1, index - 1).trim() : '';
+    if (tail.startsWith('[')) {
+      const line = source.slice(0, match.index).split('\n').length;
+      problems.push(`${path.relative(rootDir, file)}:${line}: ${match[1]} has a dependency array`);
+    }
+  }
+  return problems;
+}
+
+test('no Reanimated hook passes a dependency array (ignored and warned on native)', () => {
+  const problems = walk(srcDir).flatMap(animatedHooksWithDependencies);
+  assert.deepEqual(problems, []);
+});
+
+/**
+ * Metro does not tree-shake, so importing values from the 'three' entry would bundle all of
+ * three.js. The curve imports three's ES modules one by one ('three/src/...'), which cut its
+ * Web chunk from 870 KB to 678 KB (ADR 0032 §6). Type-only imports cost nothing.
+ */
+test('no source file imports values from the whole three.js entry', () => {
+  const offenders = walk(srcDir)
+    .filter((file) => /^import\s+(?!type\b)[^;]*from\s+'three';/m.test(fs.readFileSync(file, 'utf8')))
+    .map((file) => path.relative(rootDir, file));
+  assert.deepEqual(offenders, []);
+});

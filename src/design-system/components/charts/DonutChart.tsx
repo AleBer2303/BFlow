@@ -12,7 +12,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { formatCurrency } from '../../../domain/money/money';
+import { useAmountPrivacy } from '../../privacy/AmountPrivacyContext';
 import { useBFlowTheme } from '../../theme/ThemeContext';
 import { AppPressable } from '../AppPressable';
 import { AppText } from '../Typography';
@@ -55,6 +55,7 @@ export function DonutChart({
   size = DEFAULT_SIZE_PT,
   testID,
 }: DonutChartProps): React.JSX.Element {
+  const { formatAmount } = useAmountPrivacy();
   const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
   const [isLaidOut, setIsLaidOut] = useState(false);
   const selection = useChartSelection<string>((id) =>
@@ -141,7 +142,7 @@ export function DonutChart({
             adjustsFontSizeToFit
             testID={`${testID}-center-value`}
           >
-            {formatCurrency(selected ? selected.amount : total)}
+            {formatAmount(selected ? selected.amount : total)}
           </AppText>
           {selected && total > 0 ? (
             <AppText variant="micro" color={colors.text.muted}>
@@ -166,7 +167,7 @@ export function DonutChart({
                 testID={`${testID}-slice-${slice.id}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isSelected }}
-                accessibilityLabel={`${slice.label}: ${formatCurrency(slice.amount)}, ${formatShare(share)} del total`}
+                accessibilityLabel={`${slice.label}: ${formatAmount(slice.amount)}, ${formatShare(share)} del total`}
                 onPress={() => selection.press(slice.id)}
                 onHoverIn={() => selection.hover(slice.id)}
                 onHoverOut={() => selection.hover(null)}

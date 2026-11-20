@@ -20,15 +20,15 @@ import {
   CurrencyText,
   GlassSurface,
   ScrollDepthHero,
-  ScrollRevealSection,
   StatusBadge,
   estimateTextWidth,
   minCardWidthForAmounts,
   useBFlowTheme,
   useResponsiveLayout,
+  AmountVisibilityIconButton,
+  useAmountPrivacy,
 } from '../../../design-system';
 import {
-  formatCurrency,
   type ChecklistProgress,
   type MonthlyBudgetSummary,
 } from '../../../domain';
@@ -51,13 +51,14 @@ export function SummaryOverview({
   checklist,
   curve,
 }: SummaryOverviewProps): React.JSX.Element {
+  const { formatAmount } = useAmountPrivacy();
   const { colors, spacing, typography } = useBFlowTheme();
   const layout = useResponsiveLayout();
   const isWide = layout.contentWidth >= SUMMARY_SPLIT_MIN_CONTENT_WIDTH;
   const sectionGap = layout.sizeClass === 'compact' ? spacing.md : layout.columnGap;
 
-  const plannedIncomeLine = `Previstos: ${formatCurrency(budget.plannedIncome)}`;
-  const pendingExpensesLine = `Pendientes: ${formatCurrency(budget.pendingExpenses)}`;
+  const plannedIncomeLine = `Previstos: ${formatAmount(budget.plannedIncome)}`;
+  const pendingExpensesLine = `Pendientes: ${formatAmount(budget.pendingExpenses)}`;
   const cardPadding = spacing.lg * 2;
   const figureCardMinWidth = Math.max(
     minCardWidthForAmounts(
@@ -104,15 +105,21 @@ export function SummaryOverview({
             status={checklist.isMonthComplete ? 'completed' : 'pending'}
           />
         </View>
-        <CurrencyText
-          testID="golden-net-flow"
-          amount={budget.netCashFlow}
-          variant="heroCurrency"
-          tone="income"
-          fitOneLine
-        />
+        <View
+          style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}
+        >
+          <CurrencyText
+            testID="golden-net-flow"
+            amount={budget.netCashFlow}
+            variant="heroCurrency"
+            tone="income"
+            fitOneLine
+            style={{ flex: 1, minWidth: 0 }}
+          />
+          <AmountVisibilityIconButton />
+        </View>
         <AppText variant="caption" color={colors.text.secondary}>
-          {`Flujo proyectado del mes: ${formatCurrency(budget.projectedNetFlow)}`}
+          {`Flujo proyectado del mes: ${formatAmount(budget.projectedNetFlow)}`}
         </AppText>
       </View>
     </GlassSurface>
@@ -176,9 +183,11 @@ export function SummaryOverview({
         {incomeCard}
         {expenseCard}
       </View>
-      <ScrollRevealSection>
-        <MonthlyCurveSection curve={curve} stageMaxWidth={layout.contentWidth} />
-      </ScrollRevealSection>
+      {/*
+        The month curve is never wrapped in ScrollRevealSection: its opacity and scale reach the
+        3D GLView on iOS and composite the scene flat. It keeps its own entrance (ADR 0008).
+      */}
+      <MonthlyCurveSection curve={curve} stageMaxWidth={layout.contentWidth} />
     </View>
   );
 }

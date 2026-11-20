@@ -225,6 +225,62 @@ describe('updateAuthUserProfile: el perfil se guarda en Firestore', () => {
     });
   });
 
+  it('saves, clears, rolls back, and replays photoUrl in Firestore and session (ADR 0033)', async () => {
+    const samplePhoto = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+    const saveSpy = jest
+      .spyOn(FirestoreBudgetRepository.prototype, 'saveUserProfile')
+      .mockResolvedValue(undefined);
+
+    const savedStatus = await useBudgetStore.getState().updateAuthUserProfile({
+      photoUrl: samplePhoto,
+    });
+    expect(savedStatus).toBe('synced');
+    expect(saveSpy).toHaveBeenCalledWith(cloudUser.uid, {
+      displayName: 'Alejandro Bernal',
+      financialGoal: 'Meta anterior',
+      photoUrl: samplePhoto,
+    });
+    expect(useBudgetStore.getState().authUser?.photoUrl).toBe(samplePhoto);
+    expect(loadPersistedSession()?.photoUrl).toBe(samplePhoto);
+
+    // Rejects invalid / unsafe URIs before touching Firestore.
+    saveSpy.mockClear();
+    const invalidStatus = await useBudgetStore.getState().updateAuthUserProfile({
+      photoUrl: 'data:image/svg+xml;base64,PHN2Zz4=',
+    });
+    expect(invalidStatus).toBe('rejected');
+    expect(saveSpy).not.toHaveBeenCalled();
+    expect(useBudgetStore.getState().authUser?.photoUrl).toBe(samplePhoto);
+
+    // Clearing the photo writes empty string to Firestore and removes photoUrl locally.
+    const clearedStatus = await useBudgetStore.getState().updateAuthUserProfile({
+      photoUrl: '',
+    });
+    expect(clearedStatus).toBe('synced');
+    expect(saveSpy).toHaveBeenCalledWith(cloudUser.uid, {
+      displayName: 'Alejandro Bernal',
+      financialGoal: 'Meta anterior',
+      photoUrl: '',
+    });
+    expect(useBudgetStore.getState().authUser?.photoUrl).toBeUndefined();
+
+    // Offline photo update queues and replays photoUrl when connection returns.
+    saveSpy.mockRejectedValueOnce(new Error('Firestore write timeout'));
+    const queuedStatus = await useBudgetStore.getState().updateAuthUserProfile({
+      photoUrl: samplePhoto,
+    });
+    expect(queuedStatus).toBe('queued');
+    const replaySave = jest.fn().mockResolvedValue(undefined);
+    await drainOfflineWriteQueue(cloudUser.uid, {
+      saveUserProfile: replaySave,
+    } as unknown as FirestoreBudgetRepository);
+    expect(replaySave).toHaveBeenCalledWith(cloudUser.uid, {
+      displayName: 'Alejandro Bernal',
+      financialGoal: 'Meta anterior',
+      photoUrl: samplePhoto,
+    });
+  });
+
   it('does nothing without a session', async () => {
     const saveSpy = jest.spyOn(FirestoreBudgetRepository.prototype, 'saveUserProfile');
     useBudgetStore.getState().requireAuthenticationGate();

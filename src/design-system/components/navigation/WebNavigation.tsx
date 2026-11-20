@@ -18,10 +18,10 @@ import { View } from 'react-native';
 import type { ResponsiveLayout } from '../../layout/responsiveLayout';
 import { useBFlowTheme } from '../../theme/ThemeContext';
 import { AppPressable } from '../AppPressable';
-import { ThemeToggleIconButton } from '../BrandAndThemeIcons';
+import { AccountHeaderAvatarButton, ThemeToggleIconButton } from '../BrandAndThemeIcons';
 import { AppText } from '../Typography';
 import {
-  WORKSPACE_TABS,
+  PRIMARY_WORKSPACE_TABS,
   WorkspaceTabIcon,
   type WorkspaceNavigationProps,
   type WorkspaceTabConfig,
@@ -42,10 +42,12 @@ export function resolveWebHeaderHeight(width: number): number {
 
 export interface WebAppHeaderProps {
   layout: ResponsiveLayout;
-  /** Month shown beside the theme switch ("Octubre 2026"). */
+  /** Month shown beside the right header control ("Octubre 2026"). */
   contextLabel?: string;
   /** When given (and the window is wide enough) the destinations render in the bar. */
   navigation?: WorkspaceNavigationProps;
+  /** User profile photo URI shown in the top-right Account button when workspace navigation is active. */
+  accountPhotoUrl?: string | null;
   themeToggleTestID?: string;
   testID?: string;
 }
@@ -151,6 +153,7 @@ export const WebAppHeader = React.memo(function WebAppHeader({
   layout,
   contextLabel,
   navigation,
+  accountPhotoUrl,
   themeToggleTestID = 'theme-toggle-button',
   testID = 'web-app-header',
 }: WebAppHeaderProps): React.JSX.Element {
@@ -195,7 +198,7 @@ export const WebAppHeader = React.memo(function WebAppHeader({
             accessibilityRole="tablist"
             style={{ flexDirection: 'row', alignItems: 'center' }}
           >
-            {WORKSPACE_TABS.map((tab) => (
+            {PRIMARY_WORKSPACE_TABS.map((tab) => (
               <HeaderWord
                 key={tab.id}
                 tab={tab}
@@ -226,7 +229,20 @@ export const WebAppHeader = React.memo(function WebAppHeader({
               {contextLabel}
             </AppText>
           ) : null}
-          <ThemeToggleIconButton testID={themeToggleTestID} />
+          {navigation ? (
+            <AccountHeaderAvatarButton
+              testID="workspace-tab-account"
+              photoUrl={accountPhotoUrl}
+              isSelected={navigation.activeTab === 'account'}
+              onPress={() => {
+                if (navigation.activeTab !== 'account') {
+                  navigation.onSelectTab('account');
+                }
+              }}
+            />
+          ) : (
+            <ThemeToggleIconButton testID={themeToggleTestID} />
+          )}
         </View>
       </View>
     </View>
@@ -244,7 +260,7 @@ export const WebTabBar = React.memo(function WebTabBar({
   testID = 'web-tab-bar',
 }: WebTabBarProps): React.JSX.Element {
   const { colors, spacing } = useBFlowTheme();
-  const cellWidth = layout.width / WORKSPACE_TABS.length;
+  const cellWidth = layout.width / PRIMARY_WORKSPACE_TABS.length;
   const showsLabels = cellWidth >= WEB_TAB_LABEL_MIN_CELL_WIDTH;
 
   return (
@@ -259,7 +275,7 @@ export const WebTabBar = React.memo(function WebTabBar({
         borderTopColor: colors.glass.subtleBorder,
       }}
     >
-      {WORKSPACE_TABS.map((tab) => {
+      {PRIMARY_WORKSPACE_TABS.map((tab) => {
         const isSelected = tab.id === activeTab;
         const tint = isSelected ? colors.text.primary : colors.text.secondary;
 

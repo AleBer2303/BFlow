@@ -16,6 +16,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, View } from 'react-native';
 import {
+  animateNextLayout,
   AppPressable,
   AppText,
   CheckIndicator,
@@ -34,11 +35,12 @@ import {
   StatusBadge,
   toEasing,
   TrashBinIcon,
+  USE_NATIVE_DRIVER,
   useBFlowTheme,
   usePrimaryActionLook,
+  useAmountPrivacy,
 } from '../../../design-system';
 import {
-  formatCurrency,
   type Concept,
   type ConceptGroup,
   type Debt,
@@ -107,14 +109,14 @@ interface ChecklistRowItemProps {
 }
 
 /**
- * Soft reveal for the per-row edit / delete buttons: the slot grows from zero width
- * while the button fades and glides in from the right, so the row never "jumps".
- * Fades back out before unmounting. Timing and travel come from the `control` motion spec.
+ * Soft reveal for the per-row edit / delete buttons: uses `USE_NATIVE_DRIVER` for opacity,
+ * slide, and scale while the parent triggers `animateNextLayout()` once per mode toggle,
+ * avoiding 24-40 concurrent JS-thread width animations.
  * Animation is skipped under Jest.
  */
 export function ActionRevealSlot({
   visible,
-  gap,
+  gap: _gap,
   children,
 }: {
   visible: boolean;
@@ -127,7 +129,7 @@ export function ActionRevealSlot({
   const progress = useRef(new Animated.Value(visible ? 1 : 0)).current;
   const [mounted, setMounted] = useState(visible);
   // Only animate out after the slot has actually been opened; mounting with `visible={false}`
-  // must stay completely inert so opening Checklist never triggers 24-40 JS animations at once.
+  // must stay completely inert so opening Checklist never triggers animations at once.
   const hasBeenVisibleRef = useRef(visible);
 
   useEffect(() => {
@@ -139,7 +141,7 @@ export function ActionRevealSlot({
         toValue: 1,
         duration: open.durationMs,
         easing: toEasing(open.easing),
-        useNativeDriver: false,
+        useNativeDriver: USE_NATIVE_DRIVER,
       });
       anim.start();
       return () => anim.stop();
@@ -151,7 +153,7 @@ export function ActionRevealSlot({
       toValue: 0,
       duration: close.durationMs,
       easing: toEasing(close.easing),
-      useNativeDriver: false,
+      useNativeDriver: USE_NATIVE_DRIVER,
     });
     anim.start(({ finished }) => {
       if (finished) {
@@ -169,32 +171,21 @@ export function ActionRevealSlot({
   return (
     <Animated.View
       style={{
-        width: progress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, MIN_TOUCH_TARGET_PT],
-        }),
-        marginLeft: progress.interpolate({ inputRange: [0, 1], outputRange: [-gap, 0] }),
-        overflow: 'hidden',
+        width: MIN_TOUCH_TARGET_PT,
         opacity: progress,
         justifyContent: 'center',
+        transform: [
+          {
+            translateX: progress.interpolate({
+              inputRange: [0, 1],
+              outputRange: [open.distance, 0],
+            }),
+          },
+          { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [open.scale, 1] }) },
+        ],
       }}
     >
-      <Animated.View
-        style={{
-          width: MIN_TOUCH_TARGET_PT,
-          transform: [
-            {
-              translateX: progress.interpolate({
-                inputRange: [0, 1],
-                outputRange: [open.distance, 0],
-              }),
-            },
-            { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [open.scale, 1] }) },
-          ],
-        }}
-      >
-        {children}
-      </Animated.View>
+      {children}
     </Animated.View>
   );
 }
@@ -213,6 +204,7 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
   onEdit,
   onDelete,
 }: ChecklistRowItemProps) {
+  const { formatAmount } = useAmountPrivacy();
   const isCompleted = entry.status === 'completed';
   const isRepeatable = Boolean(concept?.allowMultiplePerMonth);
 
@@ -243,7 +235,7 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
         testID={`checklist-workspace-item-${entry.id}`}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: isCompleted }}
-        accessibilityLabel={`${entry.conceptName}, ${formatCurrency(entry.actualAmount)}`}
+        accessibilityLabel={`${entry.conceptName}, ${formatAmount(entry.actualAmount)}`}
         onPress={handleRowPress}
         style={{
           flex: 1,
@@ -312,7 +304,7 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
           >
             {isCompleted
               ? `${entry.type === 'income' ? 'Recibido' : 'Pagado'}${entry.completedAt ? ` · ${entry.completedAt}` : ''}${entry.note ? ` · ${entry.note}` : ''}`
-              : `Pendiente · Previsto ${formatCurrency(entry.plannedAmount)}`}
+              : `Pendiente · Previsto ${formatAmount(entry.plannedAmount)}`}
           </AppText>
         </View>
 
@@ -374,6 +366,330 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
         </AppPressable>
       </ActionRevealSlot>
     </View>
+  );
+});
+
+interface ChecklistSectionsGridProps {
+  filteredEntries: readonly MonthEntry[];
+  conceptById: ReadonlyMap<string, Concept>;
+  debts: readonly Debt[];
+  savingsBuckets: readonly SavingsBucket[];
+  budget: MonthlyBudgetSummary;
+  incomesEditMode: boolean;
+  incomesDeleteMode: boolean;
+  expensesEditMode: boolean;
+  expensesDeleteMode: boolean;
+  onToggleIncomesEdit: () => void;
+  onToggleIncomesDelete: () => void;
+  onToggleExpensesEdit: () => void;
+  onToggleExpensesDelete: () => void;
+  onToggleEntry: (entry: MonthEntry) => void;
+  onOpenEditModal: (entry: MonthEntry) => void;
+  onDeleteEntry: (entry: MonthEntry) => void;
+}
+
+const ChecklistSectionsGrid = React.memo(function ChecklistSectionsGrid({
+  filteredEntries,
+  conceptById,
+  debts,
+  savingsBuckets,
+  budget,
+  incomesEditMode,
+  incomesDeleteMode,
+  expensesEditMode,
+  expensesDeleteMode,
+  onToggleIncomesEdit,
+  onToggleIncomesDelete,
+  onToggleExpensesEdit,
+  onToggleExpensesDelete,
+  onToggleEntry,
+  onOpenEditModal,
+  onDeleteEntry,
+}: ChecklistSectionsGridProps): React.JSX.Element {
+  const { formatAmount } = useAmountPrivacy();
+  const { colors, spacing, radius } = useBFlowTheme();
+
+  const debtById = useMemo(
+    () => new Map(debts.map((debt) => [debt.id, debt] as const)),
+    [debts]
+  );
+  const debtByGroupKey = useMemo(() => {
+    const map = new Map<string, Debt>();
+    for (const debt of debts) {
+      if (!map.has(debt.groupKey)) {
+        map.set(debt.groupKey, debt);
+      }
+    }
+    return map;
+  }, [debts]);
+  const bucketById = useMemo(
+    () => new Map(savingsBuckets.map((bucket) => [bucket.id, bucket] as const)),
+    [savingsBuckets]
+  );
+
+  const fixedIncomes = useMemo(
+    () => filteredEntries.filter((e) => e.type === 'income' && e.group === 'fixed'),
+    [filteredEntries]
+  );
+  const variableIncomes = useMemo(
+    () => filteredEntries.filter((e) => e.type === 'income' && e.group === 'variable'),
+    [filteredEntries]
+  );
+  const fixedExpenses = useMemo(
+    () => filteredEntries.filter((e) => e.type === 'expense' && e.group === 'fixed'),
+    [filteredEntries]
+  );
+  const variableExpenses = useMemo(
+    () => filteredEntries.filter((e) => e.type === 'expense' && e.group === 'variable'),
+    [filteredEntries]
+  );
+
+  const renderEntryRow = (entry: MonthEntry, isEditMode: boolean, isDeleteMode: boolean) => {
+    const concept = conceptById.get(entry.conceptId);
+    const linkedDebt = concept?.defaultTargetDebtId
+      ? debtById.get(concept.defaultTargetDebtId)
+      : concept?.linkedDebtGroup
+        ? debtByGroupKey.get(concept.linkedDebtGroup)
+        : undefined;
+    const linkedBucket = concept?.savingsContribution?.bucketId
+      ? bucketById.get(concept.savingsContribution.bucketId)
+      : undefined;
+
+    return (
+      <ChecklistRowItem
+        key={entry.id}
+        entry={entry}
+        concept={concept}
+        linkedDebt={linkedDebt}
+        linkedBucket={linkedBucket}
+        isEditMode={isEditMode}
+        isDeleteMode={isDeleteMode}
+        colors={colors}
+        spacing={spacing}
+        radius={radius}
+        onToggle={onToggleEntry}
+        onEdit={onOpenEditModal}
+        onDelete={onDeleteEntry}
+      />
+    );
+  };
+
+  return (
+    <ResponsiveColumns testID="checklist-sections">
+      {/* Section 1: INGRESOS */}
+      <ScrollRevealSection>
+        <GlassSurface testID="checklist-incomes-section">
+          <View style={{ gap: spacing.sm }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: spacing.xs,
+              }}
+            >
+              <View style={{ gap: spacing.xxs, flexShrink: 1, minWidth: 0 }}>
+                <AppText variant="title2">Ingresos</AppText>
+                <AppText variant="caption" color={colors.semantic.income}>
+                  {`Recibido ${formatAmount(budget.receivedIncome)} / Previsto ${formatAmount(budget.plannedIncome)}`}
+                </AppText>
+              </View>
+
+              {/* Incomes Section Action Controls: Editar & Eliminar */}
+              <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
+                <AppPressable
+                  testID="incomes-edit-action-button"
+                  accessibilityRole="button"
+                  accessibilityLabel="Editar ingresos"
+                  onPress={onToggleIncomesEdit}
+                  style={{
+                    minHeight: 34,
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: spacing.xxs,
+                    borderRadius: radius.pill,
+                    backgroundColor: incomesEditMode
+                      ? colors.glass.surfaceElevatedTint
+                      : colors.glass.surfaceTint,
+                    borderWidth: 1,
+                    borderColor: incomesEditMode
+                      ? colors.glass.specularBorder
+                      : colors.glass.subtleBorder,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: spacing.xxs,
+                  }}
+                >
+                  <PencilEditIcon
+                    size={14}
+                    color={incomesEditMode ? colors.semantic.income : colors.text.secondary}
+                  />
+                  <AppText
+                    variant="micro"
+                    color={incomesEditMode ? colors.semantic.income : colors.text.secondary}
+                  >
+                    {incomesEditMode ? 'Listo' : 'Editar'}
+                  </AppText>
+                </AppPressable>
+
+                <AppPressable
+                  testID="incomes-delete-action-button"
+                  accessibilityRole="button"
+                  accessibilityLabel="Eliminar ingresos"
+                  onPress={onToggleIncomesDelete}
+                  style={{
+                    minHeight: 34,
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: spacing.xxs,
+                    borderRadius: radius.pill,
+                    backgroundColor: incomesDeleteMode
+                      ? colors.semantic.expense
+                      : colors.semantic.expenseSoft,
+                    borderWidth: 1,
+                    borderColor: colors.semantic.expense,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: spacing.xxs,
+                  }}
+                >
+                  <TrashBinIcon
+                    size={14}
+                    color={incomesDeleteMode ? colors.text.inverse : colors.semantic.expense}
+                  />
+                  <AppText
+                    variant="micro"
+                    color={incomesDeleteMode ? colors.text.inverse : colors.semantic.expense}
+                  >
+                    {incomesDeleteMode ? 'Listo' : 'Eliminar'}
+                  </AppText>
+                </AppPressable>
+              </View>
+            </View>
+
+            <AppText variant="caption" color={colors.text.secondary}>
+              {`Ingresos Fijos · Pendiente: ${formatAmount(budget.incomeByGroup.fixed.pending)}`}
+            </AppText>
+            {fixedIncomes.map((entry) => renderEntryRow(entry, incomesEditMode, incomesDeleteMode))}
+
+            <View style={{ paddingTop: spacing.xs, gap: spacing.xs }}>
+              <AppText variant="caption" color={colors.text.secondary}>
+                {`Ingresos Variables · Recibido: ${formatAmount(budget.incomeByGroup.variable.paid)}`}
+              </AppText>
+              {variableIncomes.map((entry) =>
+                renderEntryRow(entry, incomesEditMode, incomesDeleteMode)
+              )}
+            </View>
+          </View>
+        </GlassSurface>
+      </ScrollRevealSection>
+
+      {/* Section 2: GASTOS */}
+      <ScrollRevealSection>
+        <GlassSurface testID="checklist-expenses-section">
+          <View style={{ gap: spacing.sm }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: spacing.xs,
+              }}
+            >
+              <View style={{ gap: spacing.xxs, flexShrink: 1, minWidth: 0 }}>
+                <AppText variant="title2">Gastos</AppText>
+                <AppText variant="caption" color={colors.semantic.expense}>
+                  {`Pagado ${formatAmount(budget.paidExpenses)} / Previsto ${formatAmount(budget.plannedExpenses)}`}
+                </AppText>
+              </View>
+
+              {/* Expenses Section Action Controls: Editar & Eliminar */}
+              <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
+                <AppPressable
+                  testID="expenses-edit-action-button"
+                  accessibilityRole="button"
+                  accessibilityLabel="Editar gastos"
+                  onPress={onToggleExpensesEdit}
+                  style={{
+                    minHeight: 34,
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: spacing.xxs,
+                    borderRadius: radius.pill,
+                    backgroundColor: expensesEditMode
+                      ? colors.glass.surfaceElevatedTint
+                      : colors.glass.surfaceTint,
+                    borderWidth: 1,
+                    borderColor: expensesEditMode
+                      ? colors.glass.specularBorder
+                      : colors.glass.subtleBorder,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: spacing.xxs,
+                  }}
+                >
+                  <PencilEditIcon
+                    size={14}
+                    color={expensesEditMode ? colors.semantic.income : colors.text.secondary}
+                  />
+                  <AppText
+                    variant="micro"
+                    color={expensesEditMode ? colors.semantic.income : colors.text.secondary}
+                  >
+                    {expensesEditMode ? 'Listo' : 'Editar'}
+                  </AppText>
+                </AppPressable>
+
+                <AppPressable
+                  testID="expenses-delete-action-button"
+                  accessibilityRole="button"
+                  accessibilityLabel="Eliminar gastos"
+                  onPress={onToggleExpensesDelete}
+                  style={{
+                    minHeight: 34,
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: spacing.xxs,
+                    borderRadius: radius.pill,
+                    backgroundColor: expensesDeleteMode
+                      ? colors.semantic.expense
+                      : colors.semantic.expenseSoft,
+                    borderWidth: 1,
+                    borderColor: colors.semantic.expense,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: spacing.xxs,
+                  }}
+                >
+                  <TrashBinIcon
+                    size={14}
+                    color={expensesDeleteMode ? colors.text.inverse : colors.semantic.expense}
+                  />
+                  <AppText
+                    variant="micro"
+                    color={expensesDeleteMode ? colors.text.inverse : colors.semantic.expense}
+                  >
+                    {expensesDeleteMode ? 'Listo' : 'Eliminar'}
+                  </AppText>
+                </AppPressable>
+              </View>
+            </View>
+
+            <AppText variant="caption" color={colors.text.secondary}>
+              {`Gastos Fijos (${formatAmount(budget.expensesByGroup.fixed.paid)} pagados · ${formatAmount(budget.expensesByGroup.fixed.pending)} pendientes)`}
+            </AppText>
+            {fixedExpenses.map((entry) => renderEntryRow(entry, expensesEditMode, expensesDeleteMode))}
+
+            <View style={{ paddingTop: spacing.xs, gap: spacing.xs }}>
+              <AppText variant="caption" color={colors.text.secondary}>
+                {`Gastos Variables (${formatAmount(budget.expensesByGroup.variable.paid)} pagados · ${formatAmount(budget.expensesByGroup.variable.pending)} pendientes)`}
+              </AppText>
+              {variableExpenses.map((entry) =>
+                renderEntryRow(entry, expensesEditMode, expensesDeleteMode)
+              )}
+            </View>
+          </View>
+        </GlassSurface>
+      </ScrollRevealSection>
+    </ResponsiveColumns>
   );
 });
 
@@ -464,44 +780,37 @@ export function ChecklistWorkspaceView({
     [onDeleteEntry, onRemoveRepeatableEntry]
   );
 
-  const renderEntryRow = (entry: MonthEntry, isEditMode: boolean, isDeleteMode: boolean) => {
-    const concept = conceptById.get(entry.conceptId);
-    const linkedDebt = concept?.defaultTargetDebtId
-      ? debts.find((d) => d.id === concept.defaultTargetDebtId)
-      : concept?.linkedDebtGroup
-        ? debts.find((d) => d.groupKey === concept.linkedDebtGroup)
-        : undefined;
-    const linkedBucket = concept?.savingsContribution?.bucketId
-      ? savingsBuckets.find((b) => b.id === concept.savingsContribution?.bucketId)
-      : undefined;
+  const handleToggleIncomesEdit = useCallback(() => {
+    hapticService.light();
+    animateNextLayout();
+    setIncomesEditMode((prev) => !prev);
+    setIncomesDeleteMode(false);
+  }, []);
 
-    return (
-      <ChecklistRowItem
-        key={entry.id}
-        entry={entry}
-        concept={concept}
-        linkedDebt={linkedDebt}
-        linkedBucket={linkedBucket}
-        isEditMode={isEditMode}
-        isDeleteMode={isDeleteMode}
-        colors={colors}
-        spacing={spacing}
-        radius={radius}
-        onToggle={onToggleEntry}
-        onEdit={handleOpenEditModal}
-        onDelete={handleDeleteEntry}
-      />
-    );
-  };
+  const handleToggleIncomesDelete = useCallback(() => {
+    animateNextLayout();
+    setIncomesDeleteMode((prev) => {
+      hapticService.trigger(prev ? 'light' : 'warning');
+      return !prev;
+    });
+    setIncomesEditMode(false);
+  }, []);
 
-  const fixedIncomes = filteredEntries.filter((e) => e.type === 'income' && e.group === 'fixed');
-  const variableIncomes = filteredEntries.filter(
-    (e) => e.type === 'income' && e.group === 'variable'
-  );
-  const fixedExpenses = filteredEntries.filter((e) => e.type === 'expense' && e.group === 'fixed');
-  const variableExpenses = filteredEntries.filter(
-    (e) => e.type === 'expense' && e.group === 'variable'
-  );
+  const handleToggleExpensesEdit = useCallback(() => {
+    hapticService.light();
+    animateNextLayout();
+    setExpensesEditMode((prev) => !prev);
+    setExpensesDeleteMode(false);
+  }, []);
+
+  const handleToggleExpensesDelete = useCallback(() => {
+    animateNextLayout();
+    setExpensesDeleteMode((prev) => {
+      hapticService.trigger(prev ? 'light' : 'warning');
+      return !prev;
+    });
+    setExpensesEditMode(false);
+  }, []);
 
   return (
     <View style={{ gap: spacing.md }} testID="checklist-workspace-view">
@@ -656,238 +965,24 @@ export function ChecklistWorkspaceView({
       </RevealDown>
 
       {/* Wide windows place income and expenses side by side; phones stack them. */}
-      <ResponsiveColumns testID="checklist-sections">
-        {/* Section 1: INGRESOS */}
-        <ScrollRevealSection>
-          <GlassSurface testID="checklist-incomes-section">
-          <View style={{ gap: spacing.sm }}>
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: spacing.xs,
-              }}
-            >
-              <View style={{ gap: spacing.xxs, flexShrink: 1, minWidth: 0 }}>
-                <AppText variant="title2">Ingresos</AppText>
-                <AppText variant="caption" color={colors.semantic.income}>
-                  {`Recibido ${formatCurrency(budget.receivedIncome)} / Previsto ${formatCurrency(budget.plannedIncome)}`}
-                </AppText>
-              </View>
-
-              {/* Incomes Section Action Controls: Editar & Eliminar */}
-              <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
-                <AppPressable
-                  testID="incomes-edit-action-button"
-                  accessibilityRole="button"
-                  accessibilityLabel="Editar ingresos"
-                  onPress={() => {
-                    hapticService.light();
-                    setIncomesEditMode((prev) => !prev);
-                    setIncomesDeleteMode(false);
-                  }}
-                  style={{
-                    minHeight: 34,
-                    paddingHorizontal: spacing.sm,
-                    paddingVertical: spacing.xxs,
-                    borderRadius: radius.pill,
-                    backgroundColor: incomesEditMode
-                      ? colors.glass.surfaceElevatedTint
-                      : colors.glass.surfaceTint,
-                    borderWidth: 1,
-                    borderColor: incomesEditMode
-                      ? colors.glass.specularBorder
-                      : colors.glass.subtleBorder,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: spacing.xxs,
-                  }}
-                >
-                  <PencilEditIcon
-                    size={14}
-                    color={incomesEditMode ? colors.semantic.income : colors.text.secondary}
-                  />
-                  <AppText
-                    variant="micro"
-                    color={incomesEditMode ? colors.semantic.income : colors.text.secondary}
-                  >
-                    {incomesEditMode ? 'Listo' : 'Editar'}
-                  </AppText>
-                </AppPressable>
-
-                <AppPressable
-                  testID="incomes-delete-action-button"
-                  accessibilityRole="button"
-                  accessibilityLabel="Eliminar ingresos"
-                  onPress={() => {
-                    // Entering the delete mode warns; leaving it is a plain tap.
-                    hapticService.trigger(incomesDeleteMode ? 'light' : 'warning');
-                    setIncomesDeleteMode((prev) => !prev);
-                    setIncomesEditMode(false);
-                  }}
-                  style={{
-                    minHeight: 34,
-                    paddingHorizontal: spacing.sm,
-                    paddingVertical: spacing.xxs,
-                    borderRadius: radius.pill,
-                    backgroundColor: incomesDeleteMode
-                      ? colors.semantic.expense
-                      : colors.semantic.expenseSoft,
-                    borderWidth: 1,
-                    borderColor: colors.semantic.expense,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: spacing.xxs,
-                  }}
-                >
-                  <TrashBinIcon
-                    size={14}
-                    color={incomesDeleteMode ? colors.text.inverse : colors.semantic.expense}
-                  />
-                  <AppText
-                    variant="micro"
-                    color={incomesDeleteMode ? colors.text.inverse : colors.semantic.expense}
-                  >
-                    {incomesDeleteMode ? 'Listo' : 'Eliminar'}
-                  </AppText>
-                </AppPressable>
-              </View>
-            </View>
-
-            <AppText variant="caption" color={colors.text.secondary}>
-              {`Ingresos Fijos · Pendiente: ${formatCurrency(budget.incomeByGroup.fixed.pending)}`}
-            </AppText>
-            {fixedIncomes.map((entry) => renderEntryRow(entry, incomesEditMode, incomesDeleteMode))}
-
-            <View style={{ paddingTop: spacing.xs, gap: spacing.xs }}>
-              <AppText variant="caption" color={colors.text.secondary}>
-                {`Ingresos Variables · Recibido: ${formatCurrency(budget.incomeByGroup.variable.paid)}`}
-              </AppText>
-              {variableIncomes.map((entry) =>
-                renderEntryRow(entry, incomesEditMode, incomesDeleteMode)
-              )}
-            </View>
-          </View>
-          </GlassSurface>
-        </ScrollRevealSection>
-
-        {/* Section 2: GASTOS */}
-        <ScrollRevealSection>
-          <GlassSurface testID="checklist-expenses-section">
-          <View style={{ gap: spacing.sm }}>
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: spacing.xs,
-              }}
-            >
-              <View style={{ gap: spacing.xxs, flexShrink: 1, minWidth: 0 }}>
-                <AppText variant="title2">Gastos</AppText>
-                <AppText variant="caption" color={colors.semantic.expense}>
-                  {`Pagado ${formatCurrency(budget.paidExpenses)} / Previsto ${formatCurrency(budget.plannedExpenses)}`}
-                </AppText>
-              </View>
-
-              {/* Expenses Section Action Controls: Editar & Eliminar */}
-              <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
-                <AppPressable
-                  testID="expenses-edit-action-button"
-                  accessibilityRole="button"
-                  accessibilityLabel="Editar gastos"
-                  onPress={() => {
-                    hapticService.light();
-                    setExpensesEditMode((prev) => !prev);
-                    setExpensesDeleteMode(false);
-                  }}
-                  style={{
-                    minHeight: 34,
-                    paddingHorizontal: spacing.sm,
-                    paddingVertical: spacing.xxs,
-                    borderRadius: radius.pill,
-                    backgroundColor: expensesEditMode
-                      ? colors.glass.surfaceElevatedTint
-                      : colors.glass.surfaceTint,
-                    borderWidth: 1,
-                    borderColor: expensesEditMode
-                      ? colors.glass.specularBorder
-                      : colors.glass.subtleBorder,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: spacing.xxs,
-                  }}
-                >
-                  <PencilEditIcon
-                    size={14}
-                    color={expensesEditMode ? colors.semantic.income : colors.text.secondary}
-                  />
-                  <AppText
-                    variant="micro"
-                    color={expensesEditMode ? colors.semantic.income : colors.text.secondary}
-                  >
-                    {expensesEditMode ? 'Listo' : 'Editar'}
-                  </AppText>
-                </AppPressable>
-
-                <AppPressable
-                  testID="expenses-delete-action-button"
-                  accessibilityRole="button"
-                  accessibilityLabel="Eliminar gastos"
-                  onPress={() => {
-                    hapticService.trigger(expensesDeleteMode ? 'light' : 'warning');
-                    setExpensesDeleteMode((prev) => !prev);
-                    setExpensesEditMode(false);
-                  }}
-                  style={{
-                    minHeight: 34,
-                    paddingHorizontal: spacing.sm,
-                    paddingVertical: spacing.xxs,
-                    borderRadius: radius.pill,
-                    backgroundColor: expensesDeleteMode
-                      ? colors.semantic.expense
-                      : colors.semantic.expenseSoft,
-                    borderWidth: 1,
-                    borderColor: colors.semantic.expense,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: spacing.xxs,
-                  }}
-                >
-                  <TrashBinIcon
-                    size={14}
-                    color={expensesDeleteMode ? colors.text.inverse : colors.semantic.expense}
-                  />
-                  <AppText
-                    variant="micro"
-                    color={expensesDeleteMode ? colors.text.inverse : colors.semantic.expense}
-                  >
-                    {expensesDeleteMode ? 'Listo' : 'Eliminar'}
-                  </AppText>
-                </AppPressable>
-              </View>
-            </View>
-
-            <AppText variant="caption" color={colors.text.secondary}>
-              {`Gastos Fijos (${formatCurrency(budget.expensesByGroup.fixed.paid)} pagados · ${formatCurrency(budget.expensesByGroup.fixed.pending)} pendientes)`}
-            </AppText>
-            {fixedExpenses.map((entry) => renderEntryRow(entry, expensesEditMode, expensesDeleteMode))}
-
-            <View style={{ paddingTop: spacing.xs, gap: spacing.xs }}>
-              <AppText variant="caption" color={colors.text.secondary}>
-                {`Gastos Variables (${formatCurrency(budget.expensesByGroup.variable.paid)} pagados · ${formatCurrency(budget.expensesByGroup.variable.pending)} pendientes)`}
-              </AppText>
-              {variableExpenses.map((entry) =>
-                renderEntryRow(entry, expensesEditMode, expensesDeleteMode)
-              )}
-            </View>
-          </View>
-          </GlassSurface>
-        </ScrollRevealSection>
-      </ResponsiveColumns>
+      <ChecklistSectionsGrid
+        filteredEntries={filteredEntries}
+        conceptById={conceptById}
+        debts={debts}
+        savingsBuckets={savingsBuckets}
+        budget={budget}
+        incomesEditMode={incomesEditMode}
+        incomesDeleteMode={incomesDeleteMode}
+        expensesEditMode={expensesEditMode}
+        expensesDeleteMode={expensesDeleteMode}
+        onToggleIncomesEdit={handleToggleIncomesEdit}
+        onToggleIncomesDelete={handleToggleIncomesDelete}
+        onToggleExpensesEdit={handleToggleExpensesEdit}
+        onToggleExpensesDelete={handleToggleExpensesDelete}
+        onToggleEntry={onToggleEntry}
+        onOpenEditModal={handleOpenEditModal}
+        onDeleteEntry={handleDeleteEntry}
+      />
     </View>
   );
 }

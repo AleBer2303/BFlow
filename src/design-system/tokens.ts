@@ -41,8 +41,9 @@ export interface PlatformSkinSpec {
   /** Minimum interactive size: 44pt (Apple HIG / WCAG 2.2), 48dp (Material 3). */
   minTouchTarget: number;
   /**
-   * Escenario de la curva del mes. La escena 3D es solo de iOS: en Android la superficie de
-   * `expo-gl` no refresca los cuadros en pantalla y la curva se veía quieta (ADR 0014).
+   * Escenario de la curva del mes. Las tres pieles dibujan la escena 3D (ADR 0032); la curva
+   * vectorial queda como respaldo si la escena no puede dibujar. Para volver a la curva
+   * vectorial en una piel, basta poner `vector` aquí (ADR 0014 explica por qué Android la usó).
    */
   curveStage: CurveStage;
 }
@@ -66,7 +67,7 @@ export const platformSkins: Record<PlatformSkinId, PlatformSkinSpec> = {
     navigation: 'floating-dock',
     pressFeedback: 'sink',
     minTouchTarget: 48,
-    curveStage: 'vector',
+    curveStage: 'scene-3d',
   },
   web: {
     id: 'web',
@@ -75,7 +76,7 @@ export const platformSkins: Record<PlatformSkinId, PlatformSkinSpec> = {
     navigation: 'adaptive-header',
     pressFeedback: 'step',
     minTouchTarget: MIN_TOUCH_TARGET_PT,
-    curveStage: 'vector',
+    curveStage: 'scene-3d',
   },
 };
 
@@ -859,6 +860,8 @@ export const motionDistance = {
   medium: 12,
   /** Toast or sheet rising from an edge. */
   large: 30,
+  /** Tab change along the navigation axis (iOS): the incoming tab slides in from its side. */
+  screenAxis: 24,
 } as const;
 
 /** The scale a surface animates FROM (or presses down to); it always settles at 1. */
@@ -867,7 +870,136 @@ export const motionScale = {
   menu: 0.97,
   menuClose: 0.99,
   hint: 0.98,
+  /** Tab change as a Material fade-through (Android): the incoming tab grows into place. */
+  screen: 0.96,
 } as const;
+
+/**
+ * Ambient particles behind the workspace (iOS, Android and Web, DESIGN.md §6.6): a few faint dots
+ * that drift up slowly and breathe in and out. They are background, never information: low
+ * opacity, no touch and still with Reduce Motion.
+ */
+export interface AmbientParticlesSpec {
+  enabled: boolean;
+  /** Wait after mount before the galaxy appears (and fades in), so startup paints first. */
+  startDelayMs: number;
+  /** Dots on a compact screen; wider screens add more up to `maxCount`. */
+  count: number;
+  maxCount: number;
+  /** Screen area (pt²) that earns one more dot beyond `count`. */
+  areaPerExtraParticle: number;
+  minRadius: number;
+  maxRadius: number;
+  /** One rise, from appearing to fading out. */
+  minCycleMs: number;
+  maxCycleMs: number;
+  /** Vertical travel of one rise. */
+  riseDistance: number;
+  /** Largest sideways sway of one rise, to either side. */
+  swayDistance: number;
+  /** Peak opacity per theme; dark backgrounds need a little more. */
+  peakOpacity: { light: number; dark: number };
+  /** With Reduce Motion the dots stay put at this share of their peak. */
+  staticOpacityRatio: number;
+  /** Share of the dots in the accent color; the rest use the secondary ink. */
+  accentShare: number;
+  /**
+   * Twinkling stars (galaxy look): a bright round core inside a soft halo and a wider, fainter
+   * glow, all round, so a star reads as light and never as a cross. Each one breathes, floats a
+   * little and, for the flaring ones, its halo swells to a brief sparkle once per cycle.
+   */
+  stars: {
+    count: number;
+    minCoreRadius: number;
+    maxCoreRadius: number;
+    /** Halo and glow radius as a multiple of the core. */
+    haloRatio: number;
+    glowRatio: number;
+    /** Opacity of the halo and the glow relative to the core. */
+    haloOpacity: number;
+    glowOpacity: number;
+    minTwinkleMs: number;
+    maxTwinkleMs: number;
+    /** Share of the stars whose halo flares once per cycle. */
+    flareShare: number;
+    /** Vertical float of one twinkle cycle, up and back. */
+    floatDistance: number;
+    peakOpacity: { light: number; dark: number };
+    /** Share of tinted stars: cool (accent) and warm (gold); the rest are white light. */
+    accentShare: number;
+    warmShare: number;
+  };
+  /** Shooting stars: now and then a streak crosses the top half of the screen. */
+  shootingStars: {
+    count: number;
+    /** Wait before each pass; every star waits a different amount. */
+    minIntervalMs: number;
+    maxIntervalMs: number;
+    /** One pass, from appearing to fading out. */
+    travelMs: number;
+    /** Distance the head covers in one pass. */
+    travelDistance: number;
+    /** Length of the tail. */
+    tailLength: number;
+    /** Thickness of the head and the tail. */
+    thickness: number;
+    /** Downward angle of the path, in degrees from the horizontal. */
+    angleDeg: number;
+    peakOpacity: { light: number; dark: number };
+  };
+}
+
+const AMBIENT_PARTICLES_ON: AmbientParticlesSpec = {
+  enabled: true,
+  startDelayMs: 600,
+  count: 14,
+  maxCount: 24,
+  areaPerExtraParticle: 60000,
+  minRadius: 1,
+  maxRadius: 2.4,
+  minCycleMs: 14000,
+  maxCycleMs: 26000,
+  riseDistance: 56,
+  swayDistance: 14,
+  peakOpacity: { light: 0.22, dark: 0.32 },
+  staticOpacityRatio: 0.6,
+  accentShare: 0.45,
+  stars: {
+    count: 9,
+    minCoreRadius: 0.9,
+    maxCoreRadius: 1.7,
+    haloRatio: 2.6,
+    glowRatio: 5.5,
+    haloOpacity: 0.28,
+    glowOpacity: 0.08,
+    minTwinkleMs: 3600,
+    maxTwinkleMs: 7200,
+    flareShare: 0.35,
+    floatDistance: 3,
+    peakOpacity: { light: 0.45, dark: 0.85 },
+    accentShare: 0.3,
+    warmShare: 0.2,
+  },
+  shootingStars: {
+    count: 2,
+    minIntervalMs: 7000,
+    maxIntervalMs: 15000,
+    travelMs: 1100,
+    travelDistance: 280,
+    tailLength: 72,
+    thickness: 1.5,
+    angleDeg: 24,
+    peakOpacity: { light: 0.45, dark: 0.75 },
+  },
+};
+
+export const ambientParticlesBySkin: Record<PlatformSkinId, AmbientParticlesSpec> = {
+  ios: AMBIENT_PARTICLES_ON,
+  android: AMBIENT_PARTICLES_ON,
+  // The user asked for the galaxy on Web too. It is not tied to the scroll (AGENTS.md §7.2)
+  // and stays still with prefers-reduced-motion.
+  web: AMBIENT_PARTICLES_ON,
+};
 
 /** Items past this index enter with the last staggered offset, so a long list is never late. */
 export const MOTION_STAGGER_MAX_ITEMS = 6;

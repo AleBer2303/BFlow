@@ -153,6 +153,7 @@ export interface AuthSlice {
   updateAuthUserProfile: (updates: {
     displayName?: string;
     financialGoal?: string;
+    photoUrl?: string;
   }) => Promise<ProfileSaveStatus>;
   clearWorkspaceSession: () => void;
   requireAuthenticationGate: () => void;

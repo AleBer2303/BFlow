@@ -1,17 +1,6 @@
 /**
- * Android always draws the vector curve (`skinSpec.curveStage === 'vector'`, ADR 0014), so
- * this loader imports nothing: three.js and expo-gl stay out of the Android module graph.
- *
- * If something ever asks for the 3D stage here, it reports itself unavailable and
- * `MonthlyCurveSection` falls back to the vector curve.
+ * Android draws the three.js scene like iOS (`skinSpec.curveStage === 'scene-3d'`, ADR 0032).
+ * If the GL surface never arrives (`GL_CONTEXT_TIMEOUT_MS`) or the scene fails, it reports
+ * itself unavailable and `MonthlyCurveSection` falls back to the vector curve.
  */
-
-import { useEffect } from 'react';
-import type { MonthlyCurveStageProps } from './MonthlyCurveStage';
-
-export function MonthlyCurveStageLoader({ onUnavailable }: MonthlyCurveStageProps): null {
-  useEffect(() => {
-    onUnavailable();
-  }, [onUnavailable]);
-  return null;
-}
+export { default as MonthlyCurveStageLoader } from './MonthlyCurveStage';

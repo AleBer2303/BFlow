@@ -156,10 +156,10 @@ describe('platform skin identity', () => {
     }
   });
 
-  it('draws the month curve in 3D only on iOS; Android and Web use the animated vectors', () => {
+  it('draws the month curve in 3D on every skin (ADR 0032)', () => {
     expect(platformSkins.ios.curveStage).toBe('scene-3d');
-    expect(platformSkins.android.curveStage).toBe('vector');
-    expect(platformSkins.web.curveStage).toBe('vector');
+    expect(platformSkins.android.curveStage).toBe('scene-3d');
+    expect(platformSkins.web.curveStage).toBe('scene-3d');
   });
 
   it('uses 44pt targets on iOS and Web and 48dp on Android', () => {

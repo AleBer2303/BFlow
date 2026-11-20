@@ -336,10 +336,12 @@ export const LiquidGlassDock = React.memo(function LiquidGlassDock({
     scrollChoreoActiveSV.value = isScrollChoreoActive;
   }, [isScrollChoreoActive, scrollChoreoActiveSV]);
 
-  const activeIndex = useMemo(() => {
-    const idx = DOCK_TABS.findIndex((t) => t.id === activeTab);
-    return idx >= 0 ? idx : 0;
-  }, [activeTab]);
+  const rawActiveIndex = useMemo(
+    () => DOCK_TABS.findIndex((t) => t.id === activeTab),
+    [activeTab]
+  );
+  const hasActiveDockTab = rawActiveIndex >= 0;
+  const activeIndex = hasActiveDockTab ? rawActiveIndex : 0;
 
   const screenWidth = Dimensions.get('window').width;
   const defaultWidth = Math.min(DOCK_MAX_WIDTH, Math.max(304, screenWidth - spacing.sm * 2));
@@ -352,6 +354,7 @@ export const LiquidGlassDock = React.memo(function LiquidGlassDock({
   const stretch = useSharedValue(0); // 0 still, 1 full drag speed
   const dockWidthSV = useSharedValue(defaultWidth);
   const activeIndexSV = useSharedValue(activeIndex);
+  const hasActiveDockTabSV = useSharedValue(hasActiveDockTab);
   const staticSV = useSharedValue(isStatic);
   const dragging = useSharedValue(false);
   const didDrag = useSharedValue(false);
@@ -365,6 +368,8 @@ export const LiquidGlassDock = React.memo(function LiquidGlassDock({
   // Latest props for the JS callbacks scheduled from the UI thread.
   const activeTabRef = useRef(activeTab);
   activeTabRef.current = activeTab;
+  const hasActiveDockTabRef = useRef(hasActiveDockTab);
+  hasActiveDockTabRef.current = hasActiveDockTab;
   const onSelectTabRef = useRef(onSelectTab);
   onSelectTabRef.current = onSelectTab;
   const onReselectActiveTabRef = useRef(onReselectActiveTab);
@@ -379,25 +384,26 @@ export const LiquidGlassDock = React.memo(function LiquidGlassDock({
   // Tracks whether the current touch already triggered a tab switch on pressIn,
   // so the trailing onPress does not treat the newly active tab as a reselect-to-top tap.
   const justSelectedTabRef = useRef<BFlowWorkspaceTab | null>(null);
-  // Tab drawn in the accent colour: follows the lens tab by tab, never in between.
-  const [highlightIndex, setHighlightIndex] = useState(activeIndex);
+  // Tab drawn in the accent colour: follows the lens tab by tab, or -1 when on Account.
+  const [highlightIndex, setHighlightIndex] = useState(hasActiveDockTab ? activeIndex : -1);
   // The lens' glass surface over the icons is on only while the lens is touched.
   const [isLensTouched, setLensTouched] = useState(false);
 
   useEffect(() => {
     activeIndexSV.value = activeIndex;
+    hasActiveDockTabSV.value = hasActiveDockTab;
     if (dragging.value) return;
     if (
       pendingReleaseIndexRef.current !== null &&
-      pendingReleaseIndexRef.current !== activeIndex
+      (!hasActiveDockTab || pendingReleaseIndexRef.current !== activeIndex)
     ) {
       return;
     }
     pendingReleaseIndexRef.current = null;
     hoverIndex.value = activeIndex;
-    setHighlightIndex(activeIndex);
+    setHighlightIndex(hasActiveDockTab ? activeIndex : -1);
     springTo(position, activeIndex, springConfigs.liquidSettle, isStaticRef.current, 0);
-  }, [activeIndex, activeIndexSV, dragging, hoverIndex, position]);
+  }, [activeIndex, activeIndexSV, dragging, hasActiveDockTab, hasActiveDockTabSV, hoverIndex, position]);
 
   const selectTabAtIndex = useCallback(
     (index: number, fromPressIn: boolean): boolean => {
@@ -470,14 +476,16 @@ export const LiquidGlassDock = React.memo(function LiquidGlassDock({
   }, []);
   const handleDragCancel = useCallback(() => {
     pendingReleaseIndexRef.current = null;
-    setHighlightIndex(activeIndexSV.value);
+    setHighlightIndex(hasActiveDockTabRef.current ? activeIndexSV.value : -1);
   }, [activeIndexSV]);
   // A touch that selected nothing (the active tab, the capsule's rim): the lens, which left for
   // the touched spot on touch-down, goes back to the tab that is really selected.
   const handleTouchEnd = useCallback(() => {
     const target = pendingReleaseIndexRef.current ?? activeIndexSV.value;
     hoverIndex.value = target;
-    setHighlightIndex(target);
+    setHighlightIndex(
+      pendingReleaseIndexRef.current !== null || hasActiveDockTabRef.current ? target : -1
+    );
     springTo(position, target, springConfigs.liquidSettle, isStaticRef.current, 0);
   }, [activeIndexSV, hoverIndex, position]);
 
@@ -501,7 +509,7 @@ export const LiquidGlassDock = React.memo(function LiquidGlassDock({
         springTo(lift, 1, springConfigs.liquidLift, false, 0);
       }
       // The lens leaves for the touched tab right away, without waiting for the JS thread.
-      if (touched !== activeIndexSV.value) {
+      if (!hasActiveDockTabSV.value || touched !== activeIndexSV.value) {
         springTo(position, touched, springConfigs.liquidSettle, staticSV.value, 0);
       }
     },
@@ -600,7 +608,7 @@ export const LiquidGlassDock = React.memo(function LiquidGlassDock({
         { scale: pressScale * hideScale },
       ],
     };
-  }, [dockHiddenSV, dockTravel, press, scrollChoreoActiveSV]);
+  });
   const lensStyle = useAnimatedStyle(() => {
     const frame = lensTransformAt(position.value, lift.value, stretch.value, dockWidthSV.value);
     return {
@@ -634,9 +642,10 @@ export const LiquidGlassDock = React.memo(function LiquidGlassDock({
   const accentColor = colors.accent.primary;
   const restColor = colors.text.secondary;
 
-  // The lens, drawn under the icons.
+  // The lens, drawn under the icons (hidden at rest when on the header Account view).
+  const showLens = lensWidth > 0 && (hasActiveDockTab || isLensTouched || highlightIndex >= 0);
   const lens =
-    lensWidth > 0 ? (
+    showLens ? (
       <Animated.View
         pointerEvents="none"
         testID="dock-magnifying-lens"

@@ -7,7 +7,9 @@ import {
   flushCloudWidgetSnapshotWrite,
 } from '../data/repositories/widgetSnapshotRepository';
 import {
-  Entrance,
+  AmountPrivacyProvider,
+  TabTransition,
+  type TabSwitchDirection,
   TabVisibilityProvider,
   hapticService,
   type HapticType,
@@ -130,8 +132,7 @@ interface WorkspaceTabKeepAliveProps {
 }
 
 /**
- * Lazy keep-alive for workspace tabs: each visited tab mounts inside `<Entrance>` once
- * and remains mounted hidden (`display: 'none'`, hidden from touch & screen readers) when
+ * Lazy keep-alive for workspace tabs: each visited tab mounts once and remains mounted hidden (`display: 'none'`, hidden from touch & screen readers) when
  * switching tabs, avoiding massive Android native view teardown/rebuild on rapid switches.
  */
 const WorkspaceTabKeepAlive = React.memo(function WorkspaceTabKeepAlive({
@@ -144,6 +145,17 @@ const WorkspaceTabKeepAlive = React.memo(function WorkspaceTabKeepAlive({
 
   if (!visitedTabs[activeTab]) {
     setVisitedTabs((prev) => (prev[activeTab] ? prev : { ...prev, [activeTab]: true }));
+  }
+
+  // Side of the dock the incoming tab comes from, for `TabTransition` (render-phase update,
+  // so it is ready in the same commit that shows the tab).
+  const [shownTab, setShownTab] = useState(activeTab);
+  const [direction, setDirection] = useState<TabSwitchDirection>(0);
+  if (shownTab !== activeTab) {
+    setShownTab(activeTab);
+    setDirection(
+      WORKSPACE_TAB_ORDER.indexOf(activeTab) > WORKSPACE_TAB_ORDER.indexOf(shownTab) ? 1 : -1
+    );
   }
 
   const renderTabContent = (tab: BFlowWorkspaceTab): React.JSX.Element => {
@@ -181,7 +193,9 @@ const WorkspaceTabKeepAlive = React.memo(function WorkspaceTabKeepAlive({
             aria-hidden={!isActive}
           >
             <TabVisibilityProvider isActive={isActive}>
-              <Entrance kind="screen">{renderTabContent(tab)}</Entrance>
+              <TabTransition direction={isActive ? direction : 0}>
+                {renderTabContent(tab)}
+              </TabTransition>
             </TabVisibilityProvider>
           </View>
         );
@@ -611,24 +625,29 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     );
   }
 
+  // Privacy mode (the eye in Summary) covers every amount of the workspace.
   return (
-    <WorkspaceShell
-      monthLabel={activeMonthLabel}
-      activeTab={activeTab}
-      onSelectTab={setActiveTab}
-      showNavigation={!needsOnboarding}
-      pendingSyncCount={pendingOfflineWritesCount}
-    >
-      {needsOnboarding ? (
-        <InitialAccountSetupView
-          onCompleteSetup={(config) => {
-            void completeInitialAccountSetup(config);
-            void triggerHaptic('success');
-          }}
-        />
-      ) : (
-        <WorkspaceTabKeepAlive activeTab={contentTab} accountTabProps={accountTabProps} />
-      )}
-    </WorkspaceShell>
+    <AmountPrivacyProvider>
+      <WorkspaceShell
+        monthLabel={activeMonthLabel}
+        activeTab={activeTab}
+        contentTab={contentTab}
+        onSelectTab={setActiveTab}
+        showNavigation={!needsOnboarding}
+        accountPhotoUrl={authUser.photoUrl}
+        pendingSyncCount={pendingOfflineWritesCount}
+      >
+        {needsOnboarding ? (
+          <InitialAccountSetupView
+            onCompleteSetup={(config) => {
+              void completeInitialAccountSetup(config);
+              void triggerHaptic('success');
+            }}
+          />
+        ) : (
+          <WorkspaceTabKeepAlive activeTab={contentTab} accountTabProps={accountTabProps} />
+        )}
+      </WorkspaceShell>
+    </AmountPrivacyProvider>
   );
 }

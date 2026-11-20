@@ -1,6 +1,6 @@
 import React from 'react';
 import { Platform, StyleProp, TextStyle } from 'react-native';
-import { formatCurrency } from '../../domain/money/money';
+import { useAmountPrivacy } from '../privacy/AmountPrivacyContext';
 import { useBFlowTheme } from '../theme/ThemeContext';
 import { AppText, TypographyVariant } from './Typography';
 
@@ -30,6 +30,7 @@ export function CurrencyText({
   testID,
 }: CurrencyTextProps): React.JSX.Element {
   const { colors } = useBFlowTheme();
+  const { formatAmount } = useAmountPrivacy();
 
   const toneColorMap: Record<CurrencyTone, string> = {
     neutral: colors.text.primary,
@@ -53,7 +54,7 @@ export function CurrencyText({
         ? { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: FIT_MINIMUM_FONT_SCALE }
         : null)}
     >
-      {formatCurrency(amount)}
+      {formatAmount(amount)}
     </AppText>
   );
 }

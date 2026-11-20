@@ -9,15 +9,15 @@
 
 import type { BFlowWorkspaceTab } from '../../../features/budget/store/useBudgetStore';
 import { liquidDockMotion } from '../../tokens';
-import { WORKSPACE_TABS } from '../navigation/workspaceTabs';
+import { PRIMARY_WORKSPACE_TABS } from '../navigation/workspaceTabs';
 
 export interface DockTabConfig {
   id: BFlowWorkspaceTab;
   label: string;
 }
 
-/** The dock shows the shared workspace destinations (see navigation/workspaceTabs). */
-export const DOCK_TABS: ReadonlyArray<DockTabConfig> = WORKSPACE_TABS;
+/** The dock shows the five primary financial destinations (`Cuenta` lives in the header, ADR 0033). */
+export const DOCK_TABS: ReadonlyArray<DockTabConfig> = PRIMARY_WORKSPACE_TABS;
 
 export const DOCK_PADDING_H = 6;
 export const DOCK_MAX_WIDTH = 580;

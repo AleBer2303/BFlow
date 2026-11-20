@@ -7,14 +7,16 @@
  * which loads the values of `item` (or an empty form when it is null).
  */
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import {
   AppPressable,
   AppText,
   AppTextInput,
   FormMessage,
-  MIN_TOUCH_TARGET_PT,
+  hapticService,
+  HeroAmountField,
+  useAmountPrivacy,
   useBFlowTheme,
   usePrimaryActionLook,
 } from '../../../design-system';
@@ -40,8 +42,8 @@ export interface ProvisionItemFormProps {
 }
 
 const KIND_OPTIONS = [
-  { id: 'recurring', label: 'Provisión Recurrente' },
-  { id: 'target_goal', label: 'Meta Objetivo' },
+  { id: 'recurring', label: 'Provisión' },
+  { id: 'target_goal', label: 'Meta objetivo' },
 ] as const;
 
 export const ProvisionItemForm = React.memo(function ProvisionItemForm({
@@ -49,8 +51,10 @@ export const ProvisionItemForm = React.memo(function ProvisionItemForm({
   onSaveProvisionItem,
   onClose,
 }: ProvisionItemFormProps): React.JSX.Element {
-  const { colors, spacing, radius } = useBFlowTheme();
+  const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
   const primaryAction = usePrimaryActionLook();
+  const { formatAmount } = useAmountPrivacy();
+
   const [name, setName] = useState(() => item?.name ?? '');
   const [amount, setAmount] = useState(() => (item ? formatGroupedIntegerInput(item.amount) : ''));
   const [months, setMonths] = useState(() =>
@@ -59,6 +63,22 @@ export const ProvisionItemForm = React.memo(function ProvisionItemForm({
   const [kind, setKind] = useState<ProvisionKind>(() => item?.kind ?? 'recurring');
   const [notes, setNotes] = useState(() => item?.notes ?? '');
   const [error, setError] = useState<string | null>(null);
+
+  const monthlyPreview = useMemo(() => {
+    const amountDigits = amount.replace(/[^0-9]/g, '');
+    const parsedAmount = amountDigits ? Number(amountDigits) : 0;
+    const monthsDigits = months.replace(/[^0-9]/g, '');
+    const parsedMonths = monthsDigits ? Number(monthsDigits) : 0;
+    if (
+      !Number.isSafeInteger(parsedAmount) ||
+      parsedAmount <= 0 ||
+      !Number.isSafeInteger(parsedMonths) ||
+      parsedMonths < 1
+    ) {
+      return null;
+    }
+    return Math.ceil(parsedAmount / parsedMonths);
+  }, [amount, months]);
 
   const handleSubmit = () => {
     if (!name.trim()) {
@@ -78,6 +98,7 @@ export const ProvisionItemForm = React.memo(function ProvisionItemForm({
       return;
     }
 
+    setError(null);
     onSaveProvisionItem?.({
       ...(item ? { id: item.id } : {}),
       name: name.trim(),
@@ -95,18 +116,53 @@ export const ProvisionItemForm = React.memo(function ProvisionItemForm({
       testID="provision-form-card"
       style={{
         padding: spacing.md,
-        borderRadius: radius.md,
-        backgroundColor: colors.glass.surfaceElevatedTint,
+        borderRadius: radius.lg,
+        borderCurve: 'continuous',
+        backgroundColor: colors.glass.surfaceTint,
         borderWidth: 1,
         borderColor: colors.glass.specularBorder,
-        gap: spacing.xs,
+        gap: spacing.md,
       }}
     >
-      <AppText variant="headline">
-        {item ? 'Editar Provisión o Meta' : 'Nueva Provisión o Meta'}
-      </AppText>
+      {/* Header */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing.xs,
+          flexWrap: 'wrap',
+        }}
+      >
+        <AppText variant="title2">
+          {item ? 'Editar Meta o Provisión' : 'Nueva Meta o Provisión'}
+        </AppText>
+        <View
+          style={{
+            paddingHorizontal: spacing.xs,
+            paddingVertical: 2,
+            borderRadius: radius.pill,
+            backgroundColor: colors.semantic.provisionsSoft,
+          }}
+        >
+          <AppText variant="micro" color={colors.semantic.provisions}>
+            {kind === 'target_goal' ? 'Meta' : 'Provisión'}
+          </AppText>
+        </View>
+      </View>
 
-      <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+      {/* Segmented Kind Selector */}
+      <View
+        style={{
+          flexDirection: 'row',
+          gap: spacing.xxs,
+          padding: spacing.xxs,
+          borderRadius: radius.md,
+          borderCurve: 'continuous',
+          backgroundColor: colors.glass.surfaceElevatedTint,
+          borderWidth: 1,
+          borderColor: colors.glass.subtleBorder,
+        }}
+      >
         {KIND_OPTIONS.map((opt) => {
           const active = kind === opt.id;
           return (
@@ -114,20 +170,25 @@ export const ProvisionItemForm = React.memo(function ProvisionItemForm({
               key={opt.id}
               testID={`provision-kind-${opt.id}`}
               accessibilityRole="button"
-              onPress={() => setKind(opt.id)}
+              accessibilityState={{ selected: active }}
+              onPress={() => {
+                hapticService.selection();
+                setKind(opt.id);
+              }}
               style={{
                 flex: 1,
-                minHeight: 38,
-                borderRadius: radius.md,
-                backgroundColor: active ? colors.semantic.provisionsSoft : colors.glass.surfaceTint,
+                minHeight: minTouchTarget,
+                borderRadius: radius.sm,
+                borderCurve: 'continuous',
+                backgroundColor: active ? colors.semantic.provisionsSoft : 'transparent',
                 borderWidth: 1,
-                borderColor: active ? colors.glass.specularBorder : colors.glass.subtleBorder,
+                borderColor: active ? colors.semantic.provisions : 'transparent',
                 justifyContent: 'center',
                 alignItems: 'center',
               }}
             >
               <AppText
-                variant="micro"
+                variant="callout"
                 color={active ? colors.semantic.provisions : colors.text.secondary}
               >
                 {opt.label}
@@ -137,58 +198,98 @@ export const ProvisionItemForm = React.memo(function ProvisionItemForm({
         })}
       </View>
 
-      <AppTextInput
-        testID="provision-name-input"
-        value={name}
-        onChangeText={setName}
-        placeholder="Nombre (ej. Seguro, Mantenimiento, Póliza)"
-      />
-
-      <AppTextInput
-        testID="provision-amount-input"
+      {/* Single Interactive Hero Amount Input */}
+      <HeroAmountField
+        containerTestID="provision-hero-amount"
+        inputTestID="provision-amount-input"
+        label={kind === 'target_goal' ? 'Monto objetivo total' : 'Costo total del ciclo'}
+        tone="provisions"
         value={amount}
-        onChangeText={setAmount}
-        keyboardType="number-pad"
-        placeholder="Costo total del ciclo (ej. 690.000)"
+        onChangeText={(text) => {
+          setAmount(text);
+          if (error) setError(null);
+        }}
       />
 
-      <AppTextInput
-        testID="provision-months-input"
-        value={months}
-        onChangeText={setMonths}
-        keyboardType="number-pad"
-        placeholder="Periodo en meses (ej. 1 mensual, 12 anual)"
-      />
+      {/* Name Input */}
+      <View style={{ gap: spacing.xs }}>
+        <AppText variant="caption" color={colors.text.secondary}>
+          Nombre de la meta o provisión
+        </AppText>
+        <AppTextInput
+          testID="provision-name-input"
+          value={name}
+          onChangeText={(text) => {
+            setName(text);
+            if (error) setError(null);
+          }}
+          placeholder="Ej. Seguro, Mantenimiento, Viaje, Póliza"
+        />
+      </View>
 
-      <AppTextInput
-        testID="provision-notes-input"
-        value={notes}
-        onChangeText={setNotes}
-        placeholder="Nota o fecha objetivo opcional"
-      />
+      {/* Period in Months + Live Monthly Suggestion */}
+      <View style={{ gap: spacing.xs }}>
+        <AppText variant="caption" color={colors.text.secondary}>
+          Periodo en meses
+        </AppText>
+        <AppTextInput
+          testID="provision-months-input"
+          value={months}
+          onChangeText={(text) => {
+            setMonths(text);
+            if (error) setError(null);
+          }}
+          keyboardType="number-pad"
+          placeholder="Ej. 1 mensual, 12 anual"
+        />
+        {monthlyPreview !== null ? (
+          <AppText
+            testID="provision-monthly-preview"
+            variant="micro"
+            color={colors.semantic.provisions}
+          >
+            {`Cuota mensual sugerida: ${formatAmount(monthlyPreview)}/mes`}
+          </AppText>
+        ) : (
+          <AppText variant="micro" color={colors.text.muted}>
+            Ingresa el monto y meses para calcular la cuota mensual.
+          </AppText>
+        )}
+      </View>
+
+      {/* Optional Note */}
+      <View style={{ gap: spacing.xs }}>
+        <AppText variant="caption" color={colors.text.secondary}>
+          Nota o fecha objetivo (opcional)
+        </AppText>
+        <AppTextInput
+          testID="provision-notes-input"
+          value={notes}
+          onChangeText={setNotes}
+          placeholder="Ej. Renovación en marzo, meta 2027-08"
+        />
+      </View>
 
       <FormMessage message={error} />
 
-      <View style={{ flexDirection: 'row', gap: spacing.xs, justifyContent: 'flex-end' }}>
-        <AppPressable
-          testID="submit-provision-button"
-          accessibilityRole="button"
-          onPress={handleSubmit}
-          style={{
-            minHeight: MIN_TOUCH_TARGET_PT,
-            paddingHorizontal: spacing.md,
-            borderRadius: radius.md,
-            borderCurve: 'continuous',
-            ...primaryAction.container,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <AppText variant="caption" color={primaryAction.labelColor ?? colors.semantic.income}>
-            Guardar Provisión
-          </AppText>
-        </AppPressable>
-      </View>
+      <AppPressable
+        testID="submit-provision-button"
+        accessibilityRole="button"
+        onPress={handleSubmit}
+        style={{
+          width: '100%',
+          minHeight: minTouchTarget,
+          borderRadius: radius.md,
+          borderCurve: 'continuous',
+          ...primaryAction.container,
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        <AppText variant="headline" color={primaryAction.labelColor ?? colors.semantic.provisions}>
+          Guardar
+        </AppText>
+      </AppPressable>
     </View>
   );
 });

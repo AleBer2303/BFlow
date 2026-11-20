@@ -5,14 +5,24 @@
 
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
-import { Dimensions } from 'react-native';
+import { Dimensions, StyleSheet } from 'react-native';
+import {
+  AmountPrivacyProvider,
+  HIDDEN_AMOUNT_TEXT,
+} from '../../../../design-system/privacy/AmountPrivacyContext';
 import { BFlowThemeProvider } from '../../../../design-system/theme/ThemeContext';
-import { PLATFORM_SKIN_IDS, type PlatformSkinId } from '../../../../design-system/tokens';
+import {
+  PLATFORM_SKIN_IDS,
+  palettesBySkin,
+  type PlatformSkinId,
+} from '../../../../design-system/tokens';
 import type {
   MonthlySavingsSummary,
   ProvisionPlan,
   ProvisionPlanComparisonSummary,
 } from '../../../../domain';
+import { calculateProvisionPlanSummary } from '../../../../domain';
+import { useBudgetStore } from '../../../budget/store/useBudgetStore';
 import { SavingsAndMotoIdealView } from '../SavingsAndMotoIdealView';
 
 const ORIGINAL_WINDOW = Dimensions.get('window');
@@ -484,5 +494,112 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView form state on %s skin'
     expect(screen.getByTestId('provision-name-input').props.value).toBe('Seguro Moto');
     expect(screen.getByTestId('provision-amount-input').props.value).toBe('600.000');
     expect(screen.getByTestId('provision-months-input').props.value).toBe('12');
+  });
+
+  it('renames the goals trigger to "+ Agregar Metas", uses HeroAmountField without card re-renders, and previews monthly quota', () => {
+    renderView(skin);
+
+    expect(screen.getByTestId('open-add-provision-button')).toHaveTextContent('+ Agregar Metas');
+    expect(screen.queryByText('Aporte mes')).toBeNull();
+    expect(screen.queryByText('Con metas')).toBeNull();
+    expect(screen.queryByText('Brecha')).toBeNull();
+    mockStatusBadgeRender.mockClear();
+
+    // Opening and closing "+ Nuevo Fondo" does not re-render hero or goal badges
+    fireEvent.press(screen.getByTestId('open-add-savings-bucket-button'));
+    expect(mockStatusBadgeRender).not.toHaveBeenCalled();
+
+    const newBucketHeroStyle = StyleSheet.flatten(
+      screen.getByTestId('new-bucket-hero-amount').props.style
+    );
+    const newBucketInput = screen.getByTestId('new-bucket-balance-input');
+    expect(newBucketHeroStyle.backgroundColor).toBe(palettesBySkin[skin].dark.semantic.savingsSoft);
+    expect(StyleSheet.flatten(newBucketInput.props.style).color).toBe(
+      palettesBySkin[skin].dark.semantic.savings
+    );
+
+    fireEvent.changeText(newBucketInput, '450000');
+    expect(screen.getByTestId('new-bucket-balance-input').props.value).toBe('450.000');
+    expect(screen.queryByText('$ 450.000')).toBeNull();
+    fireEvent.press(screen.getByTestId('open-add-savings-bucket-button'));
+    expect(mockStatusBadgeRender).not.toHaveBeenCalled();
+
+    // Opening and closing "+ Agregar Metas" does not re-render hero or goal badges
+    fireEvent.press(screen.getByTestId('open-add-provision-button'));
+    expect(screen.getByTestId('open-add-provision-button')).toHaveTextContent('Cerrar');
+    expect(screen.getByTestId('submit-provision-button')).toHaveTextContent('Guardar');
+    expect(mockStatusBadgeRender).not.toHaveBeenCalled();
+
+    const provisionHeroStyle = StyleSheet.flatten(
+      screen.getByTestId('provision-hero-amount').props.style
+    );
+    const provisionAmountInput = screen.getByTestId('provision-amount-input');
+    expect(provisionHeroStyle.backgroundColor).toBe(
+      palettesBySkin[skin].dark.semantic.provisionsSoft
+    );
+    expect(StyleSheet.flatten(provisionAmountInput.props.style).color).toBe(
+      palettesBySkin[skin].dark.semantic.provisions
+    );
+
+    // Math.ceil(100000 / 3) = 33.334
+    fireEvent.changeText(provisionAmountInput, '100000');
+    fireEvent.changeText(screen.getByTestId('provision-months-input'), '3');
+    expect(screen.getByTestId('provision-monthly-preview')).toHaveTextContent(
+      'Cuota mensual sugerida: $ 33.334/mes'
+    );
+    expect(screen.queryByText('$ 100.000')).toBeNull();
+    expect(mockStatusBadgeRender).not.toHaveBeenCalled();
+  });
+
+  it('masks monthly quota preview when privacy mode hides amounts', () => {
+    render(
+      <BFlowThemeProvider skin={skin} initialMode="dark">
+        <AmountPrivacyProvider initialHidden>
+          <SavingsAndMotoIdealView
+            savingsSummary={BASE_SAVINGS_SUMMARY}
+            motoIdealSummary={BASE_PROVISION_SUMMARY}
+            provisionPlan={BASE_PROVISION_PLAN}
+            onSaveProvisionItem={jest.fn()}
+          />
+        </AmountPrivacyProvider>
+      </BFlowThemeProvider>
+    );
+
+    fireEvent.press(screen.getByTestId('open-add-provision-button'));
+    fireEvent.changeText(screen.getByTestId('provision-amount-input'), '600000');
+    fireEvent.changeText(screen.getByTestId('provision-months-input'), '12');
+
+    expect(screen.getByTestId('provision-monthly-preview')).toHaveTextContent(
+      `Cuota mensual sugerida: ${HIDDEN_AMOUNT_TEXT}/mes`
+    );
+  });
+
+  it('persists targetMonthKey and calculates monthly saving when adding a goal in the store', async () => {
+    useBudgetStore.getState().resetToOctober2026GoldenState();
+
+    await act(async () => {
+      await useBudgetStore.getState().saveProvisionItem({
+        name: 'Laptop Trabajo',
+        amount: 1_200_000,
+        periodMonths: 6,
+        priority: '1. Alta',
+        kind: 'target_goal',
+      });
+    });
+
+    const state = useBudgetStore.getState();
+    const summary = calculateProvisionPlanSummary(
+      state.idealMotoPlan,
+      state.entries,
+      0,
+      state.activeMonthKey
+    );
+    const createdGoal = summary.targetGoals.find((g) => g.displayName === 'Laptop Trabajo');
+    expect(createdGoal).toMatchObject({
+      targetAmountCop: 1_200_000,
+      targetMonthKey: '2027-04',
+      monthsUntilTarget: 6,
+      suggestedMonthlySavingCop: 200_000,
+    });
   });
 });

@@ -1,22 +1,22 @@
 /**
  * src/features/savings/components/SavingsAndMotoIdealView.tsx
  *
- * Implements Screen `08-savings` (Fondos de Ahorro & Provisiones Programadas):
- * - Hero Card Total Ahorros Acumulados
- * - Standard buckets (Fondo Moto, Fondo Ahorros) + user-created custom savings funds
+ * Implements Screen `08-savings` (Fondos de Ahorro & Metas/Provisiones Programadas):
+ * - Memoized Hero Card Total Ahorros Acumulados
+ * - Standard buckets (Fondo de Reserva, Fondo Ahorros) + user-created custom savings funds
  * - Adjust opening/previous-month balances for all savings funds
  * - Full CRUD (Create, Edit, Update, Delete) for user-configurable Provisions & Target Goals
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 import {
+  animateNextLayout,
   AppPressable,
   AppText,
   CurrencyText,
   GlassSurface,
   hapticService,
-  MIN_TOUCH_TARGET_PT,
   PencilEditIcon,
   ResponsiveColumns,
   RevealDown,
@@ -24,8 +24,9 @@ import {
   ScrollRevealSection,
   StatusBadge,
   TrashBinIcon,
-  useBFlowTheme,
   useAmountPrivacy,
+  useBFlowTheme,
+  usePrimaryActionLook,
 } from '../../../design-system';
 import {
   type IdealMotoPlan,
@@ -34,6 +35,8 @@ import {
   type ProvisionPlan,
   type ProvisionPlanComparisonSummary,
 } from '../../../domain';
+
+type ProvisionPlanItem = ProvisionPlan['items'][number];
 import type { SaveProvisionItemInput } from '../../budget/store/useBudgetStore';
 import { ProvisionItemForm, type EditableProvisionItem } from './ProvisionItemForm';
 import {
@@ -59,7 +62,7 @@ interface ActionModeToggleRowProps {
 }
 
 /** Renders a two-button Editar / Eliminar mode toggle row for a list section. */
-function ActionModeToggleRow({
+const ActionModeToggleRow = React.memo(function ActionModeToggleRow({
   activeMode,
   showEdit,
   showDelete,
@@ -72,7 +75,7 @@ function ActionModeToggleRow({
   onToggleEdit,
   onToggleDelete,
 }: ActionModeToggleRowProps): React.JSX.Element | null {
-  const { colors, spacing, radius } = useBFlowTheme();
+  const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
   if (!showEdit && !showDelete) return null;
 
   const isEditActive = activeMode === 'edit';
@@ -88,7 +91,7 @@ function ActionModeToggleRow({
           onPress={onToggleEdit}
           style={{
             flex: 1,
-            minHeight: MIN_TOUCH_TARGET_PT,
+            minHeight: minTouchTarget,
             paddingHorizontal: spacing.md,
             borderRadius: radius.pill,
             borderCurve: 'continuous',
@@ -96,9 +99,7 @@ function ActionModeToggleRow({
               ? colors.glass.surfaceElevatedTint
               : colors.glass.surfaceTint,
             borderWidth: 1.5,
-            borderColor: isEditActive
-              ? colors.semantic.income
-              : colors.glass.subtleBorder,
+            borderColor: isEditActive ? colors.semantic.income : colors.glass.subtleBorder,
             flexDirection: 'row',
             gap: spacing.xs,
             alignItems: 'center',
@@ -126,7 +127,7 @@ function ActionModeToggleRow({
           onPress={onToggleDelete}
           style={{
             flex: 1,
-            minHeight: MIN_TOUCH_TARGET_PT,
+            minHeight: minTouchTarget,
             paddingHorizontal: spacing.md,
             borderRadius: radius.pill,
             borderCurve: 'continuous',
@@ -134,9 +135,7 @@ function ActionModeToggleRow({
               ? colors.semantic.expenseSoft
               : colors.glass.surfaceTint,
             borderWidth: 1.5,
-            borderColor: isDeleteActive
-              ? colors.semantic.expense
-              : colors.glass.subtleBorder,
+            borderColor: isDeleteActive ? colors.semantic.expense : colors.glass.subtleBorder,
             flexDirection: 'row',
             gap: spacing.xs,
             alignItems: 'center',
@@ -157,7 +156,7 @@ function ActionModeToggleRow({
       ) : null}
     </View>
   );
-}
+});
 
 interface InlineItemActionPillProps {
   mode: ListActionMode;
@@ -177,7 +176,7 @@ function InlineItemActionPill({
   onEdit,
   onDelete,
 }: InlineItemActionPillProps): React.JSX.Element | null {
-  const { colors, spacing, radius } = useBFlowTheme();
+  const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
 
   if (mode === 'edit' && onEdit) {
     return (
@@ -187,7 +186,7 @@ function InlineItemActionPill({
         accessibilityLabel={`Editar ${itemName}`}
         onPress={onEdit}
         style={{
-          minHeight: MIN_TOUCH_TARGET_PT,
+          minHeight: minTouchTarget,
           paddingHorizontal: spacing.md,
           borderRadius: radius.pill,
           borderCurve: 'continuous',
@@ -216,7 +215,7 @@ function InlineItemActionPill({
         accessibilityLabel={`Eliminar ${itemName}`}
         onPress={onDelete}
         style={{
-          minHeight: MIN_TOUCH_TARGET_PT,
+          minHeight: minTouchTarget,
           paddingHorizontal: spacing.md,
           borderRadius: radius.pill,
           borderCurve: 'continuous',
@@ -239,6 +238,438 @@ function InlineItemActionPill({
 
   return null;
 }
+
+const SavingsHeroCard = React.memo(function SavingsHeroCard({
+  activeBucketsCount,
+  totalCurrentSavings,
+  totalProjectedAfterPendingExpenses,
+}: {
+  activeBucketsCount: number;
+  totalCurrentSavings: number;
+  totalProjectedAfterPendingExpenses: number;
+}): React.JSX.Element {
+  const { formatAmount } = useAmountPrivacy();
+  const { colors, spacing } = useBFlowTheme();
+
+  return (
+    <ScrollDepthHero>
+      <GlassSurface elevated testID="savings-hero-card">
+        <View style={{ gap: spacing.xs }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: spacing.xs,
+            }}
+          >
+            <AppText variant="caption" color={colors.text.secondary}>
+              Total Ahorros Acumulados
+            </AppText>
+            <StatusBadge label={` Fondos activos (${activeBucketsCount})`} status="savings" />
+          </View>
+
+          <CurrencyText
+            testID="savings-hero-total"
+            amount={totalCurrentSavings}
+            variant="heroCurrency"
+            tone="reserve"
+          />
+
+          <AppText variant="caption" color={colors.text.secondary}>
+            {`Total proyectado tras pagar pendientes: ${formatAmount(totalProjectedAfterPendingExpenses)}`}
+          </AppText>
+        </View>
+      </GlassSurface>
+    </ScrollDepthHero>
+  );
+});
+
+interface SavingsBucketsListProps {
+  savingsSummary: MonthlySavingsSummary;
+  bucketActionMode: ListActionMode;
+  canEditBucket: boolean;
+  canDeleteBucket: boolean;
+  onEditBucket: (bucketId: string, name: string, openingBalance: number) => void;
+  onDeleteBucket: (bucketId: string) => void;
+}
+
+const SavingsBucketsList = React.memo(function SavingsBucketsList({
+  savingsSummary,
+  bucketActionMode,
+  canEditBucket,
+  canDeleteBucket,
+  onEditBucket,
+  onDeleteBucket,
+}: SavingsBucketsListProps): React.JSX.Element {
+  const { formatAmount } = useAmountPrivacy();
+  const { colors, spacing } = useBFlowTheme();
+
+  const customBuckets = savingsSummary.customBuckets ?? [];
+  const hasMotoBucket = savingsSummary.hasMotoBucket !== false;
+  const hasSavingsBucket = savingsSummary.hasSavingsBucket !== false;
+  const activeBucketsCount =
+    (hasMotoBucket ? 1 : 0) + (hasSavingsBucket ? 1 : 0) + customBuckets.length;
+
+  const renderBucketRowAction = (
+    bucketId: string,
+    name: string,
+    openingBalance: number
+  ): React.JSX.Element | null => (
+    <InlineItemActionPill
+      mode={bucketActionMode}
+      itemName={name}
+      editTestID={`edit-savings-bucket-${bucketId}`}
+      deleteTestID={`delete-savings-bucket-${bucketId}`}
+      onEdit={canEditBucket ? () => onEditBucket(bucketId, name, openingBalance) : undefined}
+      onDelete={canDeleteBucket ? () => onDeleteBucket(bucketId) : undefined}
+    />
+  );
+
+  return (
+    <>
+      {hasMotoBucket || hasSavingsBucket ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
+          {hasMotoBucket ? (
+            <GlassSurface style={{ flex: 1, minWidth: 200 }} testID="bucket-moto-card">
+              <View style={{ gap: spacing.xs }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: spacing.xs,
+                  }}
+                >
+                  <AppText variant="headline" style={{ flex: 1, minWidth: 120 }}>
+                    {savingsSummary.moto.name || 'Fondo de Reserva'}
+                  </AppText>
+                  {renderBucketRowAction(
+                    'moto',
+                    savingsSummary.moto.name || 'Fondo de Reserva',
+                    savingsSummary.moto.openingBalance
+                  )}
+                </View>
+                <CurrencyText
+                  testID="bucket-moto-current"
+                  amount={savingsSummary.moto.currentBalance}
+                  variant="title2"
+                  tone="reserve"
+                />
+                <AppText variant="micro" color={colors.text.secondary}>
+                  {`Saldo mes anterior: ${formatAmount(savingsSummary.moto.openingBalance)}`}
+                </AppText>
+                <AppText variant="micro" color={colors.semantic.income}>
+                  {`+ Aportes pagados: ${formatAmount(savingsSummary.moto.paidContributionsThisMonth)}`}
+                </AppText>
+              </View>
+            </GlassSurface>
+          ) : null}
+
+          {hasSavingsBucket ? (
+            <GlassSurface style={{ flex: 1, minWidth: 200 }} testID="bucket-savings-card">
+              <View style={{ gap: spacing.xs }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: spacing.xs,
+                  }}
+                >
+                  <AppText variant="headline" style={{ flex: 1, minWidth: 120 }}>
+                    {savingsSummary.savings.name || 'Fondo Ahorros'}
+                  </AppText>
+                  {renderBucketRowAction(
+                    'savings',
+                    savingsSummary.savings.name || 'Fondo Ahorros',
+                    savingsSummary.savings.openingBalance
+                  )}
+                </View>
+                <CurrencyText
+                  testID="bucket-savings-current"
+                  amount={savingsSummary.savings.currentBalance}
+                  variant="title2"
+                  tone="income"
+                />
+                <AppText variant="micro" color={colors.text.secondary}>
+                  {`Saldo mes anterior: ${formatAmount(savingsSummary.savings.openingBalance)} + Flujo Neto ${formatAmount(savingsSummary.savings.netCashFlowContribution)}`}
+                </AppText>
+                <AppText variant="micro" color={colors.semantic.pending}>
+                  {`Tras pendientes: ${formatAmount(savingsSummary.savings.projectedAfterPendingExpenses)}`}
+                </AppText>
+              </View>
+            </GlassSurface>
+          ) : null}
+        </View>
+      ) : null}
+
+      {customBuckets.map((cb) => (
+        <GlassSurface key={cb.id} testID={`bucket-custom-card-${cb.id}`}>
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: spacing.sm,
+            }}
+          >
+            <View style={{ flex: 1, minWidth: 140, gap: spacing.xxs }}>
+              <AppText variant="headline">{cb.name}</AppText>
+              <CurrencyText amount={cb.currentBalance} variant="title2" tone="savings" />
+              <AppText variant="micro" color={colors.text.secondary}>
+                {`Saldo anterior: ${formatAmount(cb.openingBalance)} · + Aportes pagados: ${formatAmount(cb.paidContributionsThisMonth)}`}
+              </AppText>
+            </View>
+            {renderBucketRowAction(cb.id, cb.name, cb.openingBalance)}
+          </View>
+        </GlassSurface>
+      ))}
+
+      {activeBucketsCount === 0 ? (
+        <GlassSurface testID="empty-savings-buckets-card">
+          <AppText variant="caption" color={colors.text.secondary}>
+            No tienes fondos de ahorro creados aún. Usa &quot;+ Nuevo Fondo&quot; para agregar tus
+            propios fondos y vincularles movimientos.
+          </AppText>
+        </GlassSurface>
+      ) : null}
+    </>
+  );
+});
+
+const ProvisionsCardHeader = React.memo(function ProvisionsCardHeader({
+  motoIdealSummary,
+}: {
+  motoIdealSummary: MotoIdealComparisonSummary | ProvisionPlanComparisonSummary;
+}): React.JSX.Element {
+  const { formatAmount } = useAmountPrivacy();
+  const { spacing } = useBFlowTheme();
+
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: spacing.xs,
+      }}
+    >
+      <View style={{ flex: 1 }}>
+        <AppText variant="title2">Provisiones y Metas</AppText>
+      </View>
+      <StatusBadge
+        label={`Cuota ideal: ${formatAmount(motoIdealSummary.excelRecurringMonthlyTotalCop)}/mes`}
+        status="provisions"
+      />
+    </View>
+  );
+});
+
+interface ProvisionsItemsListProps {
+  motoIdealSummary: MotoIdealComparisonSummary | ProvisionPlanComparisonSummary;
+  planItemById: ReadonlyMap<string, ProvisionPlanItem>;
+  provisionActionMode: ListActionMode;
+  canEditProvision: boolean;
+  canDeleteProvision: boolean;
+  onEditProvision: (item: EditableProvisionItem) => void;
+  onDeleteProvision: (itemId: string) => void;
+}
+
+const ProvisionsItemsList = React.memo(function ProvisionsItemsList({
+  motoIdealSummary,
+  planItemById,
+  provisionActionMode,
+  canEditProvision,
+  canDeleteProvision,
+  onEditProvision,
+  onDeleteProvision,
+}: ProvisionsItemsListProps): React.JSX.Element {
+  const { formatAmount } = useAmountPrivacy();
+  const { colors, spacing, radius } = useBFlowTheme();
+
+  const hasRecurring = motoIdealSummary.recurringItems.length > 0;
+  const hasGoals = motoIdealSummary.targetGoals.length > 0;
+  const hasProvisionItems = hasRecurring || hasGoals;
+
+  const renderProvisionRowAction = (item: EditableProvisionItem): React.JSX.Element | null => (
+    <InlineItemActionPill
+      mode={provisionActionMode}
+      itemName={item.name}
+      editTestID={`edit-provision-${item.id}`}
+      deleteTestID={`delete-provision-${item.id}`}
+      onEdit={canEditProvision ? () => onEditProvision(item) : undefined}
+      onDelete={canDeleteProvision ? () => onDeleteProvision(item.id) : undefined}
+    />
+  );
+
+  return (
+    <View style={{ gap: spacing.md }}>
+      {!hasProvisionItems ? (
+        <AppText variant="caption" color={colors.text.muted}>
+          No tienes provisiones ni metas configuradas aún. Usa &quot;+ Agregar Metas&quot; para
+          agregar las tuyas.
+        </AppText>
+      ) : null}
+
+      {/* Target Goals */}
+      {hasGoals ? (
+        <View style={{ gap: spacing.xs }}>
+          <AppText variant="micro" color={colors.text.secondary}>
+            Metas
+          </AppText>
+          {motoIdealSummary.targetGoals.map((goal) => {
+            const rawPlanItem = planItemById.get(goal.id);
+            const actionButton = renderProvisionRowAction({
+              id: goal.id,
+              name: rawPlanItem?.displayName ?? goal.displayName,
+              amount: goal.targetAmountCop,
+              periodMonths: rawPlanItem?.periodMonths ?? goal.monthsUntilTarget ?? 1,
+              kind: 'target_goal',
+              notes: rawPlanItem?.notes ?? goal.notes,
+            });
+            return (
+              <View
+                key={goal.id}
+                testID={`moto-target-goal-${goal.id}`}
+                style={{
+                  padding: spacing.md,
+                  borderRadius: radius.md,
+                  borderCurve: 'continuous',
+                  backgroundColor: colors.semantic.provisionsSoft,
+                  borderWidth: 1,
+                  borderColor: colors.glass.specularBorder,
+                  gap: spacing.xs,
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: spacing.xs,
+                  }}
+                >
+                  <View style={{ flex: 1, minWidth: 140 }}>
+                    <AppText variant="headline">{goal.displayName}</AppText>
+                  </View>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: spacing.xs,
+                    }}
+                  >
+                    <StatusBadge label={`Meta: ${goal.targetMonthKey}`} status="provisions" />
+                    {actionButton}
+                  </View>
+                </View>
+
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'baseline',
+                    flexWrap: 'wrap',
+                    gap: spacing.xs,
+                  }}
+                >
+                  <AppText variant="caption" color={colors.text.secondary}>
+                    {`Objetivo: ${formatAmount(goal.targetAmountCop)} · ${goal.monthsUntilTarget} ${goal.monthsUntilTarget === 1 ? 'mes' : 'meses'}`}
+                  </AppText>
+                  <AppText variant="callout" tabularNums color={colors.semantic.provisions}>
+                    {`${formatAmount(goal.suggestedMonthlySavingCop)}/mes`}
+                  </AppText>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
+
+      {/* Recurring Provisions: single grouped container with hairline dividers */}
+      {hasRecurring ? (
+        <View style={{ gap: spacing.xs }}>
+          <AppText variant="micro" color={colors.text.secondary}>
+            Provisiones mensuales
+          </AppText>
+          <View
+            style={{
+              borderRadius: radius.md,
+              borderCurve: 'continuous',
+              backgroundColor: colors.glass.surfaceTint,
+              borderWidth: 1,
+              borderColor: colors.glass.subtleBorder,
+              overflow: 'hidden',
+            }}
+          >
+            {motoIdealSummary.recurringItems.map((item, index) => {
+              const rawPlanItem = planItemById.get(item.id);
+              const isLast = index === motoIdealSummary.recurringItems.length - 1;
+              const actionButton = renderProvisionRowAction({
+                id: item.id,
+                name: rawPlanItem?.displayName ?? item.displayName,
+                amount: rawPlanItem?.cycleCostCop ?? item.cycleCostCop,
+                periodMonths: item.periodMonths,
+                kind: 'recurring',
+                notes: rawPlanItem?.notes ?? item.notes,
+              });
+              return (
+                <View
+                  key={item.id}
+                  testID={`moto-ideal-item-${item.id}`}
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: spacing.sm,
+                    paddingVertical: spacing.sm,
+                    paddingHorizontal: spacing.md,
+                    ...(isLast
+                      ? null
+                      : {
+                          borderBottomWidth: 1,
+                          borderBottomColor: colors.glass.subtleBorder,
+                        }),
+                  }}
+                >
+                  <View style={{ flex: 1, minWidth: 140, gap: spacing.xxs }}>
+                    <AppText variant="body">{item.displayName}</AppText>
+                    <AppText variant="micro" color={colors.text.secondary}>
+                      {item.periodMonths > 1
+                        ? `${formatAmount(item.cycleCostCop)} cada ${item.periodMonths} meses`
+                        : item.actualBudgetedAmountCop !== undefined
+                          ? `Presupuesto: ${formatAmount(item.actualBudgetedAmountCop)}`
+                          : 'Mensual'}
+                    </AppText>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                    <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+                      <CurrencyText
+                        amount={item.excelMonthlyAmountCop}
+                        variant="callout"
+                        tone="provisions"
+                      />
+                    </View>
+                    {actionButton}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+});
 
 export interface SavingsAndMotoIdealViewProps {
   savingsSummary: MonthlySavingsSummary;
@@ -265,8 +696,8 @@ export function SavingsAndMotoIdealView({
   onSaveProvisionItem,
   onDeleteProvisionItem,
 }: SavingsAndMotoIdealViewProps): React.JSX.Element {
-  const { formatAmount } = useAmountPrivacy();
-  const { colors, spacing, radius } = useBFlowTheme();
+  const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
+  const primaryAction = usePrimaryActionLook();
 
   // The forms own their field state (R-17); the view only knows which one is open and for
   // which item. A new key remounts a form, so it loads that item's values (or starts empty).
@@ -280,11 +711,28 @@ export function SavingsAndMotoIdealView({
   const [editingProvision, setEditingProvision] = useState<EditableProvisionItem | null>(null);
   const [provisionFormKey, setProvisionFormKey] = useState(0);
 
-  const hasProvisionItems =
-    motoIdealSummary.recurringItems.length > 0 || motoIdealSummary.targetGoals.length > 0;
   const canManageProvisions = Boolean(onSaveProvisionItem || onDeleteProvisionItem);
 
-  const toggleBucketActionMode = (mode: Exclude<ListActionMode, null>) => {
+  const planItemById = useMemo(
+    () => new Map((provisionPlan?.items ?? []).map((item) => [item.id, item] as const)),
+    [provisionPlan?.items]
+  );
+
+  const activeBucketsCount = useMemo(() => {
+    const customCount = savingsSummary.customBuckets?.length ?? 0;
+    const motoCount = savingsSummary.hasMotoBucket !== false ? 1 : 0;
+    const savingsCount = savingsSummary.hasSavingsBucket !== false ? 1 : 0;
+    return motoCount + savingsCount + customCount;
+  }, [savingsSummary.customBuckets, savingsSummary.hasMotoBucket, savingsSummary.hasSavingsBucket]);
+
+  useEffect(() => {
+    setBucketActionMode(null);
+    setEditingBucket(null);
+    setIsAddingBucket(false);
+  }, [savingsSummary.monthKey]);
+
+  const toggleBucketActionMode = useCallback((mode: Exclude<ListActionMode, null>) => {
+    animateNextLayout();
     setBucketActionMode((prev) => {
       const next = prev === mode ? null : mode;
       if (mode === 'delete') {
@@ -298,10 +746,11 @@ export function SavingsAndMotoIdealView({
       }
       return next;
     });
-  };
+  }, []);
 
-  const toggleProvisionActionMode = (mode: Exclude<ListActionMode, null>) => {
+  const toggleProvisionActionMode = useCallback((mode: Exclude<ListActionMode, null>) => {
     hapticService.selection();
+    animateNextLayout();
     setProvisionActionMode((prev) => {
       const next = prev === mode ? null : mode;
       if (next) {
@@ -310,21 +759,10 @@ export function SavingsAndMotoIdealView({
       }
       return next;
     });
-  };
+  }, []);
 
-  const customBuckets = savingsSummary.customBuckets ?? [];
-  const hasMotoBucket = savingsSummary.hasMotoBucket !== false;
-  const hasSavingsBucket = savingsSummary.hasSavingsBucket !== false;
-  const activeBucketsCount =
-    (hasMotoBucket ? 1 : 0) + (hasSavingsBucket ? 1 : 0) + customBuckets.length;
-
-  useEffect(() => {
-    setBucketActionMode(null);
-    setEditingBucket(null);
-    setIsAddingBucket(false);
-  }, [savingsSummary.monthKey]);
-
-  const handleToggleAddBucket = () => {
+  const handleToggleAddBucket = useCallback(() => {
+    hapticService.light();
     setIsAddingBucket((prev) => {
       const next = !prev;
       if (next) {
@@ -334,65 +772,66 @@ export function SavingsAndMotoIdealView({
       }
       return next;
     });
-  };
+  }, []);
   const handleCloseAddBucket = useCallback(() => setIsAddingBucket(false), []);
 
-  const handleOpenEditBucket = (bucketId: string, name: string, openingBalance: number) => {
-    setBucketActionMode(null);
-    setIsAddingBucket(false);
-    setBucketFormKey((key) => key + 1);
-    setEditingBucket({ id: bucketId, name, openingBalance });
-  };
+  const handleOpenEditBucket = useCallback(
+    (bucketId: string, name: string, openingBalance: number) => {
+      hapticService.light();
+      setBucketActionMode(null);
+      setIsAddingBucket(false);
+      setBucketFormKey((key) => key + 1);
+      setEditingBucket({ id: bucketId, name, openingBalance });
+    },
+    []
+  );
   const handleCloseEditBucket = useCallback(() => setEditingBucket(null), []);
 
-  const handleDeleteBucket = (bucketId: string) => {
-    onDeleteSavingsBucket?.(bucketId);
-    if (editingBucket?.id === bucketId) {
-      setEditingBucket(null);
-    }
-  };
-
-  const renderBucketRowAction = (
-    bucketId: string,
-    name: string,
-    openingBalance: number
-  ): React.JSX.Element | null => (
-    <InlineItemActionPill
-      mode={bucketActionMode}
-      itemName={name}
-      editTestID={`edit-savings-bucket-${bucketId}`}
-      deleteTestID={`delete-savings-bucket-${bucketId}`}
-      onEdit={
-        onUpdateOpeningBalance
-          ? () => handleOpenEditBucket(bucketId, name, openingBalance)
-          : undefined
-      }
-      onDelete={onDeleteSavingsBucket ? () => handleDeleteBucket(bucketId) : undefined}
-    />
+  const handleDeleteBucket = useCallback(
+    (bucketId: string) => {
+      hapticService.trigger('warning');
+      onDeleteSavingsBucket?.(bucketId);
+      setEditingBucket((prev) => (prev?.id === bucketId ? null : prev));
+    },
+    [onDeleteSavingsBucket]
   );
 
-  const openProvisionForm = (item: EditableProvisionItem | null) => {
+  const openProvisionForm = useCallback((item: EditableProvisionItem | null) => {
+    hapticService.light();
     setProvisionActionMode(null);
     setEditingProvision(item);
     setProvisionFormKey((key) => key + 1);
     setIsProvisionFormOpen(true);
-  };
+  }, []);
   const handleCloseProvisionForm = useCallback(() => {
     setIsProvisionFormOpen(false);
     setEditingProvision(null);
   }, []);
 
-  const renderProvisionRowAction = (item: EditableProvisionItem): React.JSX.Element | null => (
-    <InlineItemActionPill
-      mode={provisionActionMode}
-      itemName={item.name}
-      editTestID={`edit-provision-${item.id}`}
-      deleteTestID={`delete-provision-${item.id}`}
-      onEdit={onSaveProvisionItem ? () => openProvisionForm(item) : undefined}
-      onDelete={onDeleteProvisionItem ? () => onDeleteProvisionItem(item.id) : undefined}
-    />
+  const handleDeleteProvision = useCallback(
+    (itemId: string) => {
+      hapticService.trigger('warning');
+      onDeleteProvisionItem?.(itemId);
+    },
+    [onDeleteProvisionItem]
   );
 
+  const handleToggleEditBuckets = useCallback(
+    () => toggleBucketActionMode('edit'),
+    [toggleBucketActionMode]
+  );
+  const handleToggleDeleteBuckets = useCallback(
+    () => toggleBucketActionMode('delete'),
+    [toggleBucketActionMode]
+  );
+  const handleToggleEditProvisions = useCallback(
+    () => toggleProvisionActionMode('edit'),
+    [toggleProvisionActionMode]
+  );
+  const handleToggleDeleteProvisions = useCallback(
+    () => toggleProvisionActionMode('delete'),
+    [toggleProvisionActionMode]
+  );
 
   return (
     <View style={{ gap: spacing.md }} testID="savings-and-moto-ideal-view">
@@ -400,49 +839,22 @@ export function SavingsAndMotoIdealView({
       <ResponsiveColumns testID="savings-panels">
         <View style={{ gap: spacing.md }}>
           {/* Screen 08: Hero Card Total Ahorros */}
-          <ScrollDepthHero>
-            <GlassSurface elevated testID="savings-hero-card">
-            <View style={{ gap: spacing.xs }}>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: spacing.xs,
-                }}
-              >
-                <AppText variant="caption" color={colors.text.secondary}>
-                  Total Ahorros Acumulados
-                </AppText>
-                <StatusBadge
-                  label={` Fondos activos (${activeBucketsCount})`}
-                  status="savings"
-                />
-              </View>
-
-              <CurrencyText
-                testID="savings-hero-total"
-                amount={savingsSummary.totalCurrentSavings}
-                variant="heroCurrency"
-                tone="reserve"
-              />
-
-              <AppText variant="caption" color={colors.text.secondary}>
-                {`Total proyectado tras pagar pendientes: ${formatAmount(savingsSummary.totalProjectedAfterPendingExpenses)}`}
-              </AppText>
-            </View>
-            </GlassSurface>
-          </ScrollDepthHero>
+          <SavingsHeroCard
+            activeBucketsCount={activeBucketsCount}
+            totalCurrentSavings={savingsSummary.totalCurrentSavings}
+            totalProjectedAfterPendingExpenses={savingsSummary.totalProjectedAfterPendingExpenses}
+          />
 
           {/* Add New Fund Button (directly below Total Ahorros Acumulados, above the funds list) */}
           <AppPressable
             testID="open-add-savings-bucket-button"
             accessibilityRole="button"
-            accessibilityLabel={isAddingBucket ? 'Cerrar formulario de nuevo fondo' : 'Nuevo fondo de ahorro'}
+            accessibilityLabel={
+              isAddingBucket ? 'Cerrar formulario de nuevo fondo' : 'Nuevo fondo de ahorro'
+            }
             onPress={handleToggleAddBucket}
             style={{
-              minHeight: MIN_TOUCH_TARGET_PT,
+              minHeight: minTouchTarget,
               paddingVertical: spacing.xs,
               paddingHorizontal: spacing.md,
               borderRadius: radius.md,
@@ -450,11 +862,19 @@ export function SavingsAndMotoIdealView({
               backgroundColor: colors.glass.surfaceElevatedTint,
               borderWidth: 1,
               borderColor: colors.glass.specularBorder,
+              ...(isAddingBucket ? null : primaryAction.container),
               justifyContent: 'center',
               alignItems: 'center',
             }}
           >
-            <AppText variant="caption" color={colors.text.primary}>
+            <AppText
+              variant="headline"
+              color={
+                isAddingBucket
+                  ? colors.text.primary
+                  : (primaryAction.labelColor ?? colors.text.primary)
+              }
+            >
               {isAddingBucket ? 'Cerrar' : '+ Nuevo Fondo'}
             </AppText>
           </AppPressable>
@@ -474,8 +894,8 @@ export function SavingsAndMotoIdealView({
             deleteAccessibilityLabel={
               bucketActionMode === 'delete' ? 'Cancelar eliminación de fondos' : 'Eliminar fondo'
             }
-            onToggleEdit={() => toggleBucketActionMode('edit')}
-            onToggleDelete={() => toggleBucketActionMode('delete')}
+            onToggleEdit={handleToggleEditBuckets}
+            onToggleDelete={handleToggleDeleteBuckets}
           />
 
           {/* Add New Custom Savings Fund Sheet */}
@@ -499,311 +919,106 @@ export function SavingsAndMotoIdealView({
             ) : null}
           </RevealDown>
 
-          {/* Primary Bucket Cards: Fondo Moto & Fondo Ahorros (rendered only when present in the user's account) */}
-          {hasMotoBucket || hasSavingsBucket ? (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
-              {hasMotoBucket ? (
-                <GlassSurface style={{ flex: 1, minWidth: 200 }} testID="bucket-moto-card">
-                  <View style={{ gap: spacing.xs }}>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: spacing.xs,
-                      }}
-                    >
-                      <AppText variant="headline" style={{ flex: 1, minWidth: 120 }}>
-                        {savingsSummary.moto.name || 'Fondo de Reserva'}
-                      </AppText>
-                      {renderBucketRowAction(
-                        'moto',
-                        savingsSummary.moto.name || 'Fondo de Reserva',
-                        savingsSummary.moto.openingBalance
-                      )}
-                    </View>
-                    <CurrencyText
-                      testID="bucket-moto-current"
-                      amount={savingsSummary.moto.currentBalance}
-                      variant="title2"
-                      tone="reserve"
-                    />
-                    <AppText variant="micro" color={colors.text.secondary}>
-                      {`Saldo mes anterior: ${formatAmount(savingsSummary.moto.openingBalance)}`}
-                    </AppText>
-                    <AppText variant="micro" color={colors.semantic.income}>
-                      {`+ Aportes pagados: ${formatAmount(savingsSummary.moto.paidContributionsThisMonth)}`}
-                    </AppText>
-                  </View>
-                </GlassSurface>
-              ) : null}
-
-              {hasSavingsBucket ? (
-                <GlassSurface style={{ flex: 1, minWidth: 200 }} testID="bucket-savings-card">
-                  <View style={{ gap: spacing.xs }}>
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: spacing.xs,
-                      }}
-                    >
-                      <AppText variant="headline" style={{ flex: 1, minWidth: 120 }}>
-                        {savingsSummary.savings.name || 'Fondo Ahorros'}
-                      </AppText>
-                      {renderBucketRowAction(
-                        'savings',
-                        savingsSummary.savings.name || 'Fondo Ahorros',
-                        savingsSummary.savings.openingBalance
-                      )}
-                    </View>
-                    <CurrencyText
-                      testID="bucket-savings-current"
-                      amount={savingsSummary.savings.currentBalance}
-                      variant="title2"
-                      tone="income"
-                    />
-                    <AppText variant="micro" color={colors.text.secondary}>
-                      {`Saldo mes anterior: ${formatAmount(savingsSummary.savings.openingBalance)} + Flujo Neto ${formatAmount(savingsSummary.savings.netCashFlowContribution)}`}
-                    </AppText>
-                    <AppText variant="micro" color={colors.semantic.pending}>
-                      {`Tras pendientes: ${formatAmount(savingsSummary.savings.projectedAfterPendingExpenses)}`}
-                    </AppText>
-                  </View>
-                </GlassSurface>
-              ) : null}
-            </View>
-          ) : null}
-
-          {/* Custom User-Created Savings Funds */}
-          {customBuckets.map((cb) => (
-            <GlassSurface key={cb.id} testID={`bucket-custom-card-${cb.id}`}>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: spacing.sm,
-                }}
-              >
-                <View style={{ flex: 1, minWidth: 140, gap: spacing.xxs }}>
-                  <AppText variant="headline">{cb.name}</AppText>
-                  <CurrencyText amount={cb.currentBalance} variant="title2" tone="savings" />
-                  <AppText variant="micro" color={colors.text.secondary}>
-                    {`Saldo anterior: ${formatAmount(cb.openingBalance)} · + Aportes pagados: ${formatAmount(cb.paidContributionsThisMonth)}`}
-                  </AppText>
-                </View>
-                {renderBucketRowAction(cb.id, cb.name, cb.openingBalance)}
-              </View>
-            </GlassSurface>
-          ))}
-
-          {activeBucketsCount === 0 ? (
-            <GlassSurface testID="empty-savings-buckets-card">
-              <AppText variant="caption" color={colors.text.secondary}>
-                No tienes fondos de ahorro creados aún. Usa &quot;+ Nuevo Fondo&quot; para agregar tus
-                propios fondos y vincularles movimientos.
-              </AppText>
-            </GlassSurface>
-          ) : null}
-
+          {/* Savings Fund Cards */}
+          <SavingsBucketsList
+            savingsSummary={savingsSummary}
+            bucketActionMode={bucketActionMode}
+            canEditBucket={Boolean(onUpdateOpeningBalance)}
+            canDeleteBucket={Boolean(onDeleteSavingsBucket)}
+            onEditBucket={handleOpenEditBucket}
+            onDeleteBucket={handleDeleteBucket}
+          />
         </View>
 
         {/* Provisions & Target Goals Card (User-Configurable CRUD) */}
         <ScrollRevealSection>
           <GlassSurface elevated testID="moto-ideal-card">
-          <View style={{ gap: spacing.sm }}>
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: spacing.xs,
-              }}
-            >
-              <View style={{ flex: 1 }}>
-                <AppText variant="title2">Provisiones y Metas Programadas</AppText>
-              </View>
-              <StatusBadge
-                label={`Cuota ideal: ${formatAmount(motoIdealSummary.excelRecurringMonthlyTotalCop)}/mes`}
-                status="provisions"
-              />
-            </View>
+            <View style={{ gap: spacing.sm }}>
+              <ProvisionsCardHeader motoIdealSummary={motoIdealSummary} />
 
-            <AppText variant="caption" color={colors.text.secondary}>
-              {`Total con metas: ${formatAmount(motoIdealSummary.totalWithTargetGoalsCop)} · Aporte real este mes: ${formatAmount(motoIdealSummary.actualMotoContributionCop)} (Brecha operativa: ${formatAmount(motoIdealSummary.monthlyGapAgainstIdealCop)})`}
-            </AppText>
-
-            <AppPressable
-              testID="open-add-provision-button"
-              accessibilityRole="button"
-              onPress={() => {
-                if (isProvisionFormOpen) {
-                  setIsProvisionFormOpen(false);
-                } else {
-                  openProvisionForm(null);
+              <AppPressable
+                testID="open-add-provision-button"
+                accessibilityRole="button"
+                accessibilityLabel={
+                  isProvisionFormOpen ? 'Cerrar formulario de metas' : 'Agregar metas'
                 }
-              }}
-              style={{
-                minHeight: MIN_TOUCH_TARGET_PT,
-                paddingVertical: spacing.xs,
-                paddingHorizontal: spacing.md,
-                borderRadius: radius.md,
-                borderCurve: 'continuous',
-                backgroundColor: colors.glass.surfaceElevatedTint,
-                borderWidth: 1,
-                borderColor: colors.glass.specularBorder,
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <AppText variant="caption" color={colors.text.primary}>
-                {isProvisionFormOpen ? 'Cerrar' : '+ Agregar Provisión o Meta'}
-              </AppText>
-            </AppPressable>
-
-            {canManageProvisions ? (
-              <ActionModeToggleRow
-                activeMode={provisionActionMode}
-                showEdit={Boolean(onSaveProvisionItem)}
-                showDelete={Boolean(onDeleteProvisionItem)}
-                editLabel="Editar"
-                deleteLabel="Eliminar"
-                editTestID="provision-action-edit-button"
-                deleteTestID="provision-action-delete-button"
-                editAccessibilityLabel={
-                  provisionActionMode === 'edit'
-                    ? 'Cancelar edición de provisiones y metas'
-                    : 'Editar provisiones y metas'
-                }
-                deleteAccessibilityLabel={
-                  provisionActionMode === 'delete'
-                    ? 'Cancelar eliminación de provisiones y metas'
-                    : 'Eliminar provisiones y metas'
-                }
-                onToggleEdit={() => toggleProvisionActionMode('edit')}
-                onToggleDelete={() => toggleProvisionActionMode('delete')}
-              />
-            ) : null}
-
-            <RevealDown visible={isProvisionFormOpen}>
-              <ProvisionItemForm
-                key={provisionFormKey}
-                item={editingProvision}
-                onSaveProvisionItem={onSaveProvisionItem}
-                onClose={handleCloseProvisionForm}
-              />
-            </RevealDown>
-
-            {!hasProvisionItems ? (
-              <AppText variant="caption" color={colors.text.muted}>
-                No tienes provisiones ni metas configuradas aún. Usa el botón superior para agregar las tuyas.
-              </AppText>
-            ) : null}
-
-            <View style={{ gap: spacing.xs }}>
-              {motoIdealSummary.recurringItems.map((item) => {
-                const rawPlanItem = provisionPlan?.items.find((p) => p.id === item.id);
-                const actionButton = renderProvisionRowAction({
-                  id: item.id,
-                  name: rawPlanItem?.displayName ?? item.displayName,
-                  amount: rawPlanItem?.cycleCostCop ?? item.cycleCostCop,
-                  periodMonths: item.periodMonths,
-                  kind: 'recurring',
-                  notes: rawPlanItem?.notes ?? item.notes,
-                });
-                return (
-                  <View
-                    key={item.id}
-                    testID={`moto-ideal-item-${item.id}`}
-                    style={{
-                      flexDirection: 'row',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                      gap: spacing.sm,
-                      paddingVertical: spacing.xs,
-                      paddingHorizontal: spacing.sm,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.glass.surfaceTint,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                    }}
-                  >
-                    <View style={{ flex: 1, minWidth: 140, gap: spacing.xxs }}>
-                      <AppText variant="body">{item.displayName}</AppText>
-                      <AppText variant="micro" color={colors.text.secondary}>
-                        {item.periodMonths > 1
-                          ? `Ciclo: ${formatAmount(item.cycleCostCop)} / ${item.periodMonths} meses`
-                          : item.actualBudgetedAmountCop !== undefined
-                            ? `Vinculado en presupuesto · Real: ${formatAmount(item.actualBudgetedAmountCop)}`
-                            : 'Provisión mensual directa'}
-                      </AppText>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                      <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
-                        <CurrencyText amount={item.excelMonthlyAmountCop} variant="body" tone="provisions" />
-                      </View>
-                      {actionButton}
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-
-            {/* Target Goals */}
-            {motoIdealSummary.targetGoals.map((goal) => {
-              const rawPlanItem = provisionPlan?.items.find((p) => p.id === goal.id);
-              const actionButton = renderProvisionRowAction({
-                id: goal.id,
-                name: rawPlanItem?.displayName ?? goal.displayName,
-                amount: goal.targetAmountCop,
-                periodMonths: rawPlanItem?.periodMonths ?? 1,
-                kind: 'target_goal',
-                notes: rawPlanItem?.notes ?? goal.notes,
-              });
-              return (
-                <View
-                  key={goal.id}
-                  testID={`moto-target-goal-${goal.id}`}
-                  style={{
-                    padding: spacing.md,
-                    borderRadius: radius.md,
-                    backgroundColor: colors.semantic.provisionsSoft,
-                    borderWidth: 1,
-                    borderColor: colors.glass.specularBorder,
-                    gap: spacing.xs,
-                  }}
+                onPress={() => {
+                  if (isProvisionFormOpen) {
+                    hapticService.light();
+                    setIsProvisionFormOpen(false);
+                  } else {
+                    openProvisionForm(null);
+                  }
+                }}
+                style={{
+                  minHeight: minTouchTarget,
+                  paddingVertical: spacing.xs,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radius.md,
+                  borderCurve: 'continuous',
+                  backgroundColor: colors.glass.surfaceElevatedTint,
+                  borderWidth: 1,
+                  borderColor: colors.glass.specularBorder,
+                  ...(isProvisionFormOpen ? null : primaryAction.container),
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <AppText
+                  variant="headline"
+                  color={
+                    isProvisionFormOpen
+                      ? colors.text.primary
+                      : (primaryAction.labelColor ?? colors.text.primary)
+                  }
                 >
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                      gap: spacing.xs,
-                    }}
-                  >
-                    <View style={{ flex: 1, minWidth: 160 }}>
-                      <AppText variant="headline">{`🎯 ${goal.displayName}`}</AppText>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.xs }}>
-                      <StatusBadge label={`Meta: ${goal.targetMonthKey}`} status="provisions" />
-                      {actionButton}
-                    </View>
-                  </View>
-                  <AppText variant="caption" color={colors.text.secondary}>
-                    {`Objetivo total: ${formatAmount(goal.targetAmountCop)} · Cuota sugerida (${goal.monthsUntilTarget} meses): ${formatAmount(goal.suggestedMonthlySavingCop)}/mes`}
-                  </AppText>
-                </View>
-              );
-            })}
-          </View>
+                  {isProvisionFormOpen ? 'Cerrar' : '+ Agregar Metas'}
+                </AppText>
+              </AppPressable>
+
+              {canManageProvisions ? (
+                <ActionModeToggleRow
+                  activeMode={provisionActionMode}
+                  showEdit={Boolean(onSaveProvisionItem)}
+                  showDelete={Boolean(onDeleteProvisionItem)}
+                  editLabel="Editar"
+                  deleteLabel="Eliminar"
+                  editTestID="provision-action-edit-button"
+                  deleteTestID="provision-action-delete-button"
+                  editAccessibilityLabel={
+                    provisionActionMode === 'edit'
+                      ? 'Cancelar edición de provisiones y metas'
+                      : 'Editar provisiones y metas'
+                  }
+                  deleteAccessibilityLabel={
+                    provisionActionMode === 'delete'
+                      ? 'Cancelar eliminación de provisiones y metas'
+                      : 'Eliminar provisiones y metas'
+                  }
+                  onToggleEdit={handleToggleEditProvisions}
+                  onToggleDelete={handleToggleDeleteProvisions}
+                />
+              ) : null}
+
+              <RevealDown visible={isProvisionFormOpen}>
+                <ProvisionItemForm
+                  key={provisionFormKey}
+                  item={editingProvision}
+                  onSaveProvisionItem={onSaveProvisionItem}
+                  onClose={handleCloseProvisionForm}
+                />
+              </RevealDown>
+
+              <ProvisionsItemsList
+                motoIdealSummary={motoIdealSummary}
+                planItemById={planItemById}
+                provisionActionMode={provisionActionMode}
+                canEditProvision={Boolean(onSaveProvisionItem)}
+                canDeleteProvision={Boolean(onDeleteProvisionItem)}
+                onEditProvision={openProvisionForm}
+                onDeleteProvision={handleDeleteProvision}
+              />
+            </View>
           </GlassSurface>
         </ScrollRevealSection>
       </ResponsiveColumns>

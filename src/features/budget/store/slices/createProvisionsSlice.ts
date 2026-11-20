@@ -8,7 +8,7 @@ import {
   EMPTY_PROVISION_PLAN,
   FirestoreBudgetRepository,
 } from '../../../../data/repositories/budgetRepository';
-import { type ProvisionItemSpec } from '../../../../domain';
+import { addMonthsToMonthKey, type ProvisionItemSpec } from '../../../../domain';
 import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
   getStoreInitialState,
@@ -32,6 +32,10 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
     if (!trimmedName || safeAmount <= 0) return;
 
     const monthlyContribution = Math.ceil(safeAmount / safePeriodMonths);
+    const targetMonthKey =
+      input.kind === 'target_goal'
+        ? addMonthsToMonthKey(state.activeMonthKey, safePeriodMonths)
+        : undefined;
     const itemId =
       input.id ??
       `prov_${trimmedName
@@ -47,7 +51,9 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
       cycleCostCop: safeAmount,
       periodMonths: safePeriodMonths,
       ceilMonthlyCop: monthlyContribution,
-      ...(input.kind === 'target_goal' ? { targetAmountCop: safeAmount } : {}),
+      ...(input.kind === 'target_goal'
+        ? { targetAmountCop: safeAmount, targetMonthKey }
+        : {}),
       includedInExcelTotalB43: input.kind === 'recurring',
       kind: input.kind === 'target_goal' ? 'target_goal' : 'recurring_provision',
       ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),

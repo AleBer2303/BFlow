@@ -19,6 +19,7 @@ export * from './components/AdaptiveSelectField';
 export * from './components/IosWheelPickerModal';
 export * from './components/KeyboardAwareScrollView';
 export * from './components/AppTextInput';
+export * from './components/HeroAmountField';
 export * from './components/TactilePressable';
 export * from './components/RevealDown';
 export * from './components/FormMessage';

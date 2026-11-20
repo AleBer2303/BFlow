@@ -9,7 +9,7 @@
  * - Comparison against linked budget entries.
  */
 
-import { assertValidMonthKey } from '../date/monthKey';
+import { addMonthsToMonthKey, assertValidMonthKey } from '../date/monthKey';
 import { MonthEntry, ProvisionItemSpec, ProvisionPlan } from '../models/types';
 import { calculateMonthlyProvisionCeil, sumMoneyIntegers } from '../money/money';
 
@@ -139,8 +139,15 @@ export function calculateProvisionPlanSummary(
 
   const targetGoals: EvaluatedTargetGoal[] = goalSpecs.map((spec) => {
     const targetAmount = spec.targetAmount ?? spec.targetAmountCop ?? 0;
-    const targetMonthKey = spec.targetMonthKey ?? currentMonthKey;
-    const monthsUntilTarget = countMonthsBetween(currentMonthKey, targetMonthKey);
+    const fallbackMonths = Math.max(1, Math.round(spec.periodMonths ?? 1));
+    const targetMonthKey =
+      spec.targetMonthKey ??
+      (fallbackMonths > 1
+        ? addMonthsToMonthKey(currentMonthKey, fallbackMonths)
+        : currentMonthKey);
+    const monthsUntilTarget = spec.targetMonthKey
+      ? countMonthsBetween(currentMonthKey, targetMonthKey)
+      : fallbackMonths;
     const suggestedMonthlySaving = Math.ceil(targetAmount / monthsUntilTarget);
 
     const goal: EvaluatedTargetGoal = {

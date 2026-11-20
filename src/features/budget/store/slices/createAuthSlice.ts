@@ -12,6 +12,7 @@ import {
   type InitialAccountSetupPayload,
 } from '../../../../data/repositories/budgetRepository';
 import {
+  addMonthsToMonthKey,
   buildDebtPaymentsForInstallment,
   getMonthNumberFromMonthKey,
   toAppIsoDate,
@@ -407,7 +408,12 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
           cycleCostCop: safeAmount,
           periodMonths: safeMonths,
           ceilMonthlyCop: monthlyContribution,
-          ...(p.kind === 'target_goal' ? { targetAmountCop: safeAmount } : {}),
+          ...(p.kind === 'target_goal'
+            ? {
+                targetAmountCop: safeAmount,
+                targetMonthKey: addMonthsToMonthKey(monthKey, safeMonths),
+              }
+            : {}),
           includedInExcelTotalB43: p.kind === 'recurring',
           kind: p.kind === 'target_goal' ? 'target_goal' : 'recurring_provision',
           ...(p.notes?.trim() ? { notes: p.notes.trim() } : {}),

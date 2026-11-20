@@ -15,7 +15,8 @@ import {
   AppTextInput,
   FormMessage,
   GlassSurface,
-  MIN_TOUCH_TARGET_PT,
+  HeroAmountField,
+  hapticService,
   useBFlowTheme,
   usePrimaryActionLook,
 } from '../../../design-system';
@@ -37,7 +38,7 @@ export const NewSavingsBucketForm = React.memo(function NewSavingsBucketForm({
   onCreateSavingsBucket,
   onClose,
 }: NewSavingsBucketFormProps): React.JSX.Element {
-  const { colors, spacing, radius } = useBFlowTheme();
+  const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
   const primaryAction = usePrimaryActionLook();
   const [name, setName] = useState('');
   const [balance, setBalance] = useState('');
@@ -53,32 +54,69 @@ export const NewSavingsBucketForm = React.memo(function NewSavingsBucketForm({
       setError('Ingresa un saldo inicial entero válido.');
       return;
     }
+    setError(null);
     onCreateSavingsBucket?.(name.trim(), parsed);
     onClose();
   };
 
   return (
     <GlassSurface elevated testID="add-savings-bucket-card">
-      <View style={{ gap: spacing.sm }}>
-        <AppText variant="headline">Crear Nuevo Fondo de Ahorro</AppText>
-        <AppText variant="micro" color={colors.text.secondary}>
-          Podrás vincular cualquier gasto de tu Checklist a este fondo para que sume automáticamente al marcarlo como pagado.
-        </AppText>
+      <View style={{ gap: spacing.md }}>
+        {/* Header */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.xs,
+            flexWrap: 'wrap',
+          }}
+        >
+          <AppText variant="title2">Nuevo Fondo de Ahorro</AppText>
+          <View
+            style={{
+              paddingHorizontal: spacing.xs,
+              paddingVertical: 2,
+              borderRadius: radius.pill,
+              backgroundColor: colors.semantic.savingsSoft,
+            }}
+          >
+            <AppText variant="micro" color={colors.semantic.savings}>
+              Ahorro
+            </AppText>
+          </View>
+        </View>
 
-        <AppTextInput
-          testID="new-bucket-name-input"
-          value={name}
-          onChangeText={setName}
-          placeholder="Nombre del fondo (ej. Fondo Viaje, Emergencias)"
-        />
-
-        <AppTextInput
-          testID="new-bucket-balance-input"
+        {/* Single Interactive Hero Amount Input in semantic savings tone */}
+        <HeroAmountField
+          containerTestID="new-bucket-hero-amount"
+          inputTestID="new-bucket-balance-input"
+          label="Saldo inicial"
+          tone="savings"
           value={balance}
-          onChangeText={setBalance}
-          keyboardType="number-pad"
-          placeholder="Saldo actual o del mes anterior (ej. 500.000)"
+          onChangeText={(text) => {
+            setBalance(text);
+            if (error) setError(null);
+          }}
         />
+
+        {/* Fund Name Input */}
+        <View style={{ gap: spacing.xs }}>
+          <AppText variant="caption" color={colors.text.secondary}>
+            Nombre del fondo
+          </AppText>
+          <AppTextInput
+            testID="new-bucket-name-input"
+            value={name}
+            onChangeText={(text) => {
+              setName(text);
+              if (error) setError(null);
+            }}
+            placeholder="Ej. Fondo Viaje, Emergencias, Educación"
+          />
+          <AppText variant="micro" color={colors.text.muted}>
+            Podrás vincular gastos del Checklist a este fondo para que sumen al pagarse.
+          </AppText>
+        </View>
 
         <FormMessage message={error} />
 
@@ -87,7 +125,8 @@ export const NewSavingsBucketForm = React.memo(function NewSavingsBucketForm({
           accessibilityRole="button"
           onPress={handleCreate}
           style={{
-            minHeight: MIN_TOUCH_TARGET_PT,
+            width: '100%',
+            minHeight: minTouchTarget,
             borderRadius: radius.md,
             borderCurve: 'continuous',
             ...primaryAction.container,
@@ -95,7 +134,7 @@ export const NewSavingsBucketForm = React.memo(function NewSavingsBucketForm({
             alignItems: 'center',
           }}
         >
-          <AppText variant="body" color={primaryAction.labelColor ?? colors.semantic.income}>
+          <AppText variant="headline" color={primaryAction.labelColor ?? colors.semantic.savings}>
             Guardar Fondo de Ahorro
           </AppText>
         </AppPressable>
@@ -121,7 +160,8 @@ export const EditSavingsBucketForm = React.memo(function EditSavingsBucketForm({
   onUpdateOpeningBalance,
   onClose,
 }: EditSavingsBucketFormProps): React.JSX.Element {
-  const { colors, spacing, radius } = useBFlowTheme();
+  const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
+  const primaryAction = usePrimaryActionLook();
   const [name, setName] = useState(bucket.name);
   const [balance, setBalance] = useState(() => formatGroupedIntegerInput(bucket.openingBalance));
   const [error, setError] = useState<string | null>(null);
@@ -137,34 +177,68 @@ export const EditSavingsBucketForm = React.memo(function EditSavingsBucketForm({
       setError('Ingresa un saldo entero válido para el fondo.');
       return;
     }
+    setError(null);
     onUpdateOpeningBalance?.(bucket.id, parsed, trimmedName);
     onClose();
   };
 
   return (
     <GlassSurface elevated testID="edit-savings-bucket-card">
-      <View style={{ gap: spacing.sm }}>
-        <AppText variant="headline">
-          {bucket.name ? `Editar ${bucket.name}` : 'Editar Fondo de Ahorro'}
-        </AppText>
-        <AppText variant="micro" color={colors.text.secondary}>
-          Edita el nombre o el saldo actual/del mes anterior con el que inicia este fondo.
-        </AppText>
+      <View style={{ gap: spacing.md }}>
+        {/* Header */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.xs,
+            flexWrap: 'wrap',
+          }}
+        >
+          <AppText variant="title2">
+            {bucket.name ? `Editar ${bucket.name}` : 'Editar Fondo de Ahorro'}
+          </AppText>
+          <View
+            style={{
+              paddingHorizontal: spacing.xs,
+              paddingVertical: 2,
+              borderRadius: radius.pill,
+              backgroundColor: colors.semantic.savingsSoft,
+            }}
+          >
+            <AppText variant="micro" color={colors.semantic.savings}>
+              Ahorro
+            </AppText>
+          </View>
+        </View>
 
-        <AppTextInput
-          testID="edit-bucket-name-input"
-          value={name}
-          onChangeText={setName}
-          placeholder="Nombre del fondo"
-        />
-
-        <AppTextInput
-          testID="edit-bucket-balance-input"
+        {/* Single Interactive Hero Amount Input */}
+        <HeroAmountField
+          containerTestID="edit-bucket-hero-amount"
+          inputTestID="edit-bucket-balance-input"
+          label="Saldo inicial del mes"
+          tone="savings"
           value={balance}
-          onChangeText={setBalance}
-          keyboardType="number-pad"
-          placeholder="0"
+          onChangeText={(text) => {
+            setBalance(text);
+            if (error) setError(null);
+          }}
         />
+
+        {/* Fund Name Input */}
+        <View style={{ gap: spacing.xs }}>
+          <AppText variant="caption" color={colors.text.secondary}>
+            Nombre del fondo
+          </AppText>
+          <AppTextInput
+            testID="edit-bucket-name-input"
+            value={name}
+            onChangeText={(text) => {
+              setName(text);
+              if (error) setError(null);
+            }}
+            placeholder="Nombre del fondo"
+          />
+        </View>
 
         <FormMessage message={error} />
 
@@ -173,10 +247,13 @@ export const EditSavingsBucketForm = React.memo(function EditSavingsBucketForm({
             testID="cancel-edit-bucket-button"
             accessibilityRole="button"
             accessibilityLabel="Cancelar edición de fondo"
-            onPress={onClose}
+            onPress={() => {
+              hapticService.light();
+              onClose();
+            }}
             style={{
               flex: 1,
-              minHeight: MIN_TOUCH_TARGET_PT,
+              minHeight: minTouchTarget,
               borderRadius: radius.md,
               borderCurve: 'continuous',
               backgroundColor: colors.glass.surfaceTint,
@@ -186,7 +263,7 @@ export const EditSavingsBucketForm = React.memo(function EditSavingsBucketForm({
               alignItems: 'center',
             }}
           >
-            <AppText variant="body" color={colors.text.secondary}>
+            <AppText variant="callout" color={colors.text.secondary}>
               Cancelar
             </AppText>
           </AppPressable>
@@ -198,17 +275,15 @@ export const EditSavingsBucketForm = React.memo(function EditSavingsBucketForm({
             onPress={handleSave}
             style={{
               flex: 1,
-              minHeight: MIN_TOUCH_TARGET_PT,
+              minHeight: minTouchTarget,
               borderRadius: radius.md,
               borderCurve: 'continuous',
-              backgroundColor: colors.glass.surfaceElevatedTint,
-              borderWidth: 1,
-              borderColor: colors.glass.specularBorder,
+              ...primaryAction.container,
               justifyContent: 'center',
               alignItems: 'center',
             }}
           >
-            <AppText variant="body" color={colors.semantic.income}>
+            <AppText variant="headline" color={primaryAction.labelColor ?? colors.semantic.savings}>
               Guardar Saldo
             </AppText>
           </AppPressable>

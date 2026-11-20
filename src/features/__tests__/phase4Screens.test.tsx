@@ -237,7 +237,10 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     fireEvent.press(screen.getByTestId('workspace-tab-checklist'));
     fireEvent.press(screen.getByTestId('expenses-edit-action-button')); // enable in-situ edit mode
     fireEvent.press(screen.getByTestId('edit-entry-2026-10_exp_smart_fit'));
-    fireEvent.press(screen.getByTestId('edit-entry-debt-debt_esp_ia'));
+    fireEvent.press(screen.getByTestId('edit-entry-more-options-toggle'));
+    fireEvent.press(screen.getByTestId('edit-entry-debt-select'));
+    fireEvent.press(screen.getByTestId('edit-entry-debt-picker-option-debt_esp_ia'));
+    fireEvent.press(screen.getByTestId('edit-entry-debt-picker-confirm'));
     fireEvent.press(screen.getByTestId('save-edit-entry-button'));
     fireEvent.press(screen.getByTestId('expenses-edit-action-button')); // disable in-situ edit mode
 

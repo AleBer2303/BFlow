@@ -122,4 +122,32 @@ describe('domain/savings & domain/moto-ideal — Savings Buckets and Moto Ideal 
     expect(summary.customBuckets[0]?.paidContributionsThisMonth).toBe(300_000);
     expect(summary.customBuckets[0]?.currentBalance).toBe(800_000);
   });
+
+  it('computes monthly goal contribution using periodMonths when targetMonthKey is omitted', () => {
+    const plan: IdealMotoPlan = {
+      recurringMonthlyTotalCop: 0,
+      totalWithTargetGoalCop: 1_000_000,
+      items: [
+        {
+          id: 'goal_laptop',
+          displayName: 'Laptop',
+          monthlyAmountCop: 166_667,
+          cycleCostCop: 1_000_000,
+          periodMonths: 6,
+          targetAmountCop: 1_000_000,
+          includedInExcelTotalB43: false,
+          kind: 'target_goal',
+        },
+      ],
+    };
+
+    const summary = calculateMotoIdealSummary(plan, octoberEntries, 0, '2026-10');
+    expect(summary.targetGoals[0]).toMatchObject({
+      id: 'goal_laptop',
+      targetAmountCop: 1_000_000,
+      targetMonthKey: '2027-04',
+      monthsUntilTarget: 6,
+      suggestedMonthlySavingCop: 166_667,
+    });
+  });
 });

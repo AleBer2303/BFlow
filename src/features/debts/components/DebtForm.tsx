@@ -7,7 +7,7 @@
  * empty form when it is null).
  */
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import {
   AppPressable,
@@ -15,7 +15,9 @@ import {
   AppTextInput,
   FormMessage,
   GlassSurface,
-  MIN_TOUCH_TARGET_PT,
+  hapticService,
+  HeroAmountField,
+  useAmountPrivacy,
   useBFlowTheme,
   usePrimaryActionLook,
 } from '../../../design-system';
@@ -57,16 +59,17 @@ export interface DebtFormProps {
 }
 
 const RATE_TYPE_OPTIONS = [
-  { id: 'monthly', label: 'Interés Mensual (%)' },
-  { id: 'annual', label: 'Interés Anual (%)' },
+  { id: 'monthly', label: 'Mensual (%)' },
+  { id: 'annual', label: 'Anual (%)' },
 ] as const;
 
 function initialInterestRate(debt: DebtFormDebt | null): string {
-  if (!debt) return '0';
-  if (debt.interestRateType === 'annual' && debt.annualInterestRate !== undefined) {
-    return String(debt.annualInterestRate);
-  }
-  return debt.monthlyInterestRate !== undefined ? String(debt.monthlyInterestRate) : '0';
+  if (!debt) return '';
+  const value =
+    debt.interestRateType === 'annual' && debt.annualInterestRate !== undefined
+      ? debt.annualInterestRate
+      : debt.monthlyInterestRate ?? 0;
+  return value > 0 ? String(value) : '';
 }
 
 export const DebtForm = React.memo(function DebtForm({
@@ -75,8 +78,9 @@ export const DebtForm = React.memo(function DebtForm({
   onUpdateDebt,
   onClose,
 }: DebtFormProps): React.JSX.Element {
-  const { colors, spacing, radius } = useBFlowTheme();
+  const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
   const primaryAction = usePrimaryActionLook();
+  const { formatAmount } = useAmountPrivacy();
 
   const [name, setName] = useState(() => debt?.name ?? '');
   const [lender, setLender] = useState(() => debt?.lender ?? '');
@@ -93,6 +97,29 @@ export const DebtForm = React.memo(function DebtForm({
       : ''
   );
   const [error, setError] = useState<string | null>(null);
+
+  const interestPreview = useMemo(() => {
+    const cleanBalance = openingBalance.replace(/[^0-9]/g, '');
+    const parsedBalance = cleanBalance ? Number(cleanBalance) : 0;
+    const cleanRate = interestRate.replace(',', '.').trim();
+    const parsedRate = cleanRate ? parseFloat(cleanRate) : 0;
+    const maxAllowedRate = interestRateType === 'annual' ? 200 : 100;
+    if (
+      !Number.isSafeInteger(parsedBalance) ||
+      parsedBalance <= 0 ||
+      isNaN(parsedRate) ||
+      parsedRate <= 0 ||
+      parsedRate > maxAllowedRate
+    ) {
+      return null;
+    }
+    const monthlyRate = interestRateType === 'annual' ? parsedRate / 12 : parsedRate;
+    const estimatedMonthlyInterest = Math.round(parsedBalance * (monthlyRate / 100));
+    return {
+      monthlyRate,
+      estimatedMonthlyInterest,
+    };
+  }, [interestRate, interestRateType, openingBalance]);
 
   const handleSave = () => {
     if (!name.trim()) {
@@ -144,51 +171,93 @@ export const DebtForm = React.memo(function DebtForm({
 
   return (
     <GlassSurface elevated testID="debt-form-modal">
-      <View style={{ gap: spacing.sm }}>
-        <AppText variant="title2">{debt ? 'Editar Deuda' : 'Registrar Nueva Deuda'}</AppText>
+      <View style={{ gap: spacing.md }}>
+        {/* Header */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.xs,
+            flexWrap: 'wrap',
+          }}
+        >
+          <AppText variant="title2">{debt ? 'Editar Deuda' : 'Registrar Nueva Deuda'}</AppText>
+          <View
+            style={{
+              paddingHorizontal: spacing.xs,
+              paddingVertical: 2,
+              borderRadius: radius.pill,
+              backgroundColor: colors.semantic.debtSoft,
+            }}
+          >
+            <AppText variant="micro" color={colors.semantic.debt}>
+              Deuda
+            </AppText>
+          </View>
+        </View>
 
-        <View style={{ gap: spacing.xxs }}>
+        {/* Single Interactive Hero Amount Input in semantic debt tone */}
+        <HeroAmountField
+          containerTestID="debt-form-hero-amount"
+          inputTestID="debt-form-amount-input"
+          label="Saldo inicial"
+          tone="debt"
+          value={openingBalance}
+          onChangeText={(text) => {
+            setOpeningBalance(text);
+            if (error) setError(null);
+          }}
+        />
+
+        {/* Name Input */}
+        <View style={{ gap: spacing.xs }}>
           <AppText variant="caption" color={colors.text.secondary}>
             Nombre de la deuda
           </AppText>
           <AppTextInput
             testID="debt-form-name-input"
             value={name}
-            onChangeText={setName}
+            onChangeText={(text) => {
+              setName(text);
+              if (error) setError(null);
+            }}
             placeholder="Ej. Tarjeta de crédito, Préstamo personal"
           />
         </View>
 
-        <View style={{ gap: spacing.xxs }}>
+        {/* Lender Input */}
+        <View style={{ gap: spacing.xs }}>
           <AppText variant="caption" color={colors.text.secondary}>
-            Acreedor / Entidad
+            Acreedor o entidad
           </AppText>
           <AppTextInput
             testID="debt-form-lender-input"
             value={lender}
-            onChangeText={setLender}
+            onChangeText={(text) => {
+              setLender(text);
+              if (error) setError(null);
+            }}
             placeholder="Ej. Banco, Entidad financiera, Familiar"
           />
         </View>
 
-        <View style={{ gap: spacing.xxs }}>
+        {/* Interest Rate Type & Percentage */}
+        <View style={{ gap: spacing.xs }}>
           <AppText variant="caption" color={colors.text.secondary}>
-            Saldo inicial
+            Tasa de interés (opcional)
           </AppText>
-          <AppTextInput
-            testID="debt-form-amount-input"
-            value={openingBalance}
-            onChangeText={setOpeningBalance}
-            keyboardType="number-pad"
-            placeholder="Ej. 2.500.000"
-          />
-        </View>
-
-        <View style={{ gap: spacing.xxs }}>
-          <AppText variant="caption" color={colors.text.secondary}>
-            Tipo y porcentaje de interés:
-          </AppText>
-          <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              gap: spacing.xxs,
+              padding: spacing.xxs,
+              borderRadius: radius.md,
+              borderCurve: 'continuous',
+              backgroundColor: colors.glass.surfaceTint,
+              borderWidth: 1,
+              borderColor: colors.glass.subtleBorder,
+            }}
+          >
             {RATE_TYPE_OPTIONS.map((opt) => {
               const active = interestRateType === opt.id;
               return (
@@ -196,20 +265,26 @@ export const DebtForm = React.memo(function DebtForm({
                   key={opt.id}
                   testID={`debt-form-rate-type-${opt.id}`}
                   accessibilityRole="button"
-                  onPress={() => setInterestRateType(opt.id)}
+                  accessibilityState={{ selected: active }}
+                  onPress={() => {
+                    hapticService.selection();
+                    setInterestRateType(opt.id);
+                    if (error) setError(null);
+                  }}
                   style={{
                     flex: 1,
-                    minHeight: 38,
-                    borderRadius: radius.md,
-                    backgroundColor: active ? colors.semantic.debtSoft : colors.glass.surfaceTint,
+                    minHeight: minTouchTarget,
+                    borderRadius: radius.sm,
+                    borderCurve: 'continuous',
+                    backgroundColor: active ? colors.semantic.debtSoft : 'transparent',
                     borderWidth: 1,
-                    borderColor: active ? colors.glass.specularBorder : colors.glass.subtleBorder,
+                    borderColor: active ? colors.semantic.debt : 'transparent',
                     justifyContent: 'center',
                     alignItems: 'center',
                   }}
                 >
                   <AppText
-                    variant="micro"
+                    variant="caption"
                     color={active ? colors.semantic.debt : colors.text.secondary}
                   >
                     {opt.label}
@@ -221,27 +296,42 @@ export const DebtForm = React.memo(function DebtForm({
           <AppTextInput
             testID="debt-form-interest-rate-input"
             value={interestRate}
-            onChangeText={setInterestRate}
+            onChangeText={(text) => {
+              setInterestRate(text);
+              if (error) setError(null);
+            }}
             keyboardType="decimal-pad"
             placeholder={
               interestRateType === 'annual'
-                ? 'Ej. 12.0 o 24.0 anual (0 si no cobra interés)'
-                : 'Ej. 0.9 o 2.0 mensual (0 si no cobra interés)'
+                ? 'Ej. 12.0 o 24.0 anual (vacío = 0%)'
+                : 'Ej. 0.9 o 2.0 mensual (vacío = 0%)'
             }
           />
-          <AppText variant="micro" color={colors.text.muted}>
-            Se conserva mes a mes y entre sesiones a menos que lo edites directamente.
-          </AppText>
+          {interestPreview ? (
+            <AppText testID="debt-form-interest-preview" variant="micro" color={colors.semantic.debt}>
+              {interestRateType === 'annual'
+                ? `Interés mensual aprox.: ~ ${formatAmount(interestPreview.estimatedMonthlyInterest)} (${interestPreview.monthlyRate.toFixed(2)}% mes)`
+                : `Interés mensual aprox.: ~ ${formatAmount(interestPreview.estimatedMonthlyInterest)}`}
+            </AppText>
+          ) : (
+            <AppText variant="micro" color={colors.text.muted}>
+              Sin cobro de interés (0 %). Se conserva mes a mes salvo edición.
+            </AppText>
+          )}
         </View>
 
-        <View style={{ gap: spacing.xxs }}>
+        {/* Monthly Installment Input */}
+        <View style={{ gap: spacing.xs }}>
           <AppText variant="caption" color={colors.text.secondary}>
-            Cuota mensual pactada que aportas a esta deuda (opcional)
+            Cuota mensual pactada (opcional)
           </AppText>
           <AppTextInput
             testID="debt-form-installment-input"
             value={monthlyInstallment}
-            onChangeText={setMonthlyInstallment}
+            onChangeText={(text) => {
+              setMonthlyInstallment(text);
+              if (error) setError(null);
+            }}
             keyboardType="number-pad"
             placeholder="Ej. 500.000"
           />
@@ -249,33 +339,25 @@ export const DebtForm = React.memo(function DebtForm({
 
         <FormMessage message={error} />
 
-        <View
+        {/* Full-width Primary Action Button */}
+        <AppPressable
+          testID="debt-form-submit-button"
+          accessibilityRole="button"
+          onPress={handleSave}
           style={{
-            flexDirection: 'row',
-            gap: spacing.xs,
-            justifyContent: 'flex-end',
-            paddingTop: spacing.xs,
+            width: '100%',
+            minHeight: minTouchTarget,
+            borderRadius: radius.md,
+            borderCurve: 'continuous',
+            ...primaryAction.container,
+            justifyContent: 'center',
+            alignItems: 'center',
           }}
         >
-          <AppPressable
-            testID="debt-form-submit-button"
-            accessibilityRole="button"
-            onPress={handleSave}
-            style={{
-              minHeight: MIN_TOUCH_TARGET_PT,
-              paddingHorizontal: spacing.lg,
-              borderRadius: radius.md,
-              borderCurve: 'continuous',
-              ...primaryAction.container,
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
-            <AppText variant="headline" color={primaryAction.labelColor ?? colors.semantic.income}>
-              Guardar Deuda
-            </AppText>
-          </AppPressable>
-        </View>
+          <AppText variant="headline" color={primaryAction.labelColor ?? colors.semantic.debt}>
+            Guardar Deuda
+          </AppText>
+        </AppPressable>
       </View>
     </GlassSurface>
   );

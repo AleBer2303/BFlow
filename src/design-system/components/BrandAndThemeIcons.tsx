@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Image, View } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { hapticService } from '../../platform/haptics/hapticService';
 import { IS_MOTION_STATIC, USE_NATIVE_DRIVER, toEasing } from '../motion/motionRuntime';
@@ -9,6 +9,71 @@ import { useAmountPrivacy } from '../privacy/AmountPrivacyContext';
 import { useBFlowTheme } from '../theme/ThemeContext';
 import { motionDuration } from '../tokens';
 import { AppPressable } from './AppPressable';
+import { AccountNavIcon } from './WorkspaceNavIcons';
+
+export interface AccountHeaderAvatarButtonProps {
+  /** User profile photo URI (compressed Data URI or HTTPS URL); falls back to AccountNavIcon. */
+  photoUrl?: string | null;
+  isSelected?: boolean;
+  onPress: () => void;
+  testID?: string;
+}
+
+/**
+ * Top-right header button for opening the Account workspace view (ADR 0033).
+ * Renders the user's profile photo when available, or the minimalist Account vector icon otherwise.
+ */
+export function AccountHeaderAvatarButton({
+  photoUrl,
+  isSelected = false,
+  onPress,
+  testID = 'workspace-tab-account',
+}: AccountHeaderAvatarButtonProps): React.JSX.Element {
+  const { colors, radius, minTouchTarget, skin } = useBFlowTheme();
+  const [failedPhotoUrl, setFailedPhotoUrl] = useState<string | null>(null);
+
+  const trimmedPhoto = typeof photoUrl === 'string' ? photoUrl.trim() : '';
+  const showPhoto = trimmedPhoto.length > 0 && failedPhotoUrl !== trimmedPhoto;
+
+  return (
+    <AppPressable
+      testID={testID}
+      accessibilityRole="tab"
+      accessibilityLabel="Cuenta"
+      accessibilityState={{ selected: isSelected }}
+      onPressIn={() => hapticService.selection()}
+      onPress={onPress}
+      style={{
+        width: minTouchTarget,
+        height: minTouchTarget,
+        borderRadius: skin === 'web' ? radius.sm : radius.pill,
+        backgroundColor: isSelected ? colors.accent.container : colors.glass.surfaceElevatedTint,
+        borderWidth: isSelected ? 1.5 : 1,
+        borderColor: isSelected ? colors.accent.primary : colors.glass.specularBorder,
+        overflow: 'hidden',
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      {showPhoto ? (
+        <Image
+          testID="account-header-avatar-image"
+          source={{ uri: trimmedPhoto }}
+          style={{ width: '100%', height: '100%' }}
+          resizeMode="cover"
+          onError={() => setFailedPhotoUrl(trimmedPhoto)}
+        />
+      ) : (
+        <AccountNavIcon
+          testID="account-header-avatar-icon"
+          size={20}
+          color={isSelected ? colors.accent.primary : colors.text.primary}
+          focused={isSelected}
+        />
+      )}
+    </AppPressable>
+  );
+}
 
 export interface ThemeToggleIconButtonProps {
   testID?: string;

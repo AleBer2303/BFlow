@@ -159,17 +159,38 @@ describe.each(PLATFORM_SKIN_IDS)('core flows on the %s skin', (skin) => {
     expect(screen.getByTestId('golden-net-flow')).toHaveTextContent('$ 950.000');
   });
 
-  it('switches between dark and light and repaints with the skin palette', () => {
+  it('switches between dark and light from Account and repaints with the skin palette', () => {
     renderApp(skin);
 
     expect(styleOf('workspace-shell').backgroundColor).toBe(
       palettesBySkin[skin].dark.background.primary
     );
+    // Header now carries the Account avatar button; theme switch lives inside Account (ADR 0033).
+    expect(screen.queryByTestId('theme-toggle-button')).toBeNull();
+    expect(screen.getByTestId('account-header-avatar-icon')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('workspace-tab-account'));
+    expect(screen.getByTestId('account-appearance-card')).toBeTruthy();
     fireEvent.press(screen.getByTestId('theme-toggle-button'));
     expect(screen.getByTestId('theme-icon-moon')).toBeTruthy();
     expect(styleOf('workspace-shell').backgroundColor).toBe(
       palettesBySkin[skin].light.background.primary
     );
+  });
+
+  it('replaces the header Account icon with the user profile photo when registered', () => {
+    act(() => {
+      const current = useBudgetStore.getState().authUser;
+      if (current) {
+        useBudgetStore.setState({
+          authUser: { ...current, photoUrl: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==' },
+        });
+      }
+    });
+    renderApp(skin);
+
+    expect(screen.getByTestId('account-header-avatar-image')).toBeTruthy();
+    expect(screen.queryByTestId('account-header-avatar-icon')).toBeNull();
   });
 
   it('hides the navigation while the account is being set up', () => {

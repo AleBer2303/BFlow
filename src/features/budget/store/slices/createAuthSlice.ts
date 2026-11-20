@@ -32,6 +32,7 @@ import {
   syncAuthDisplayName,
   type BFlowAuthUser,
 } from '../../../../platform/auth/authAdapter';
+import { sanitizeProfilePhotoUrl } from '../../../../platform/media/profilePhotoValidation';
 import { isDemoModeEnabled } from '../../../../platform/mode/demoMode';
 import {
   clearPersistedAccount,
@@ -116,7 +117,21 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
         ? updates.financialGoal.trim().slice(0, PROFILE_FINANCIAL_GOAL_MAX_LENGTH)
         : current.financialGoal ?? '';
 
-    const applyProfile = (profile: { displayName: string | null; financialGoal?: string }) => {
+    const hasPhotoUpdate = updates.photoUrl !== undefined;
+    let nextPhotoUrl: string | undefined = current.photoUrl;
+    if (hasPhotoUpdate) {
+      const sanitized = sanitizeProfilePhotoUrl(updates.photoUrl);
+      if (sanitized === undefined) {
+        return 'rejected';
+      }
+      nextPhotoUrl = sanitized === '' ? undefined : sanitized;
+    }
+
+    const applyProfile = (profile: {
+      displayName: string | null;
+      financialGoal?: string;
+      photoUrl?: string;
+    }) => {
       // Se aplica sobre la sesión vigente: el correo o su verificación pudieron cambiar.
       const latest = get().authUser;
       if (!latest || latest.uid !== current.uid) return;
@@ -124,19 +139,27 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
         ...latest,
         displayName: profile.displayName,
         financialGoal: profile.financialGoal,
+        photoUrl: profile.photoUrl,
       };
+      if (!nextUser.photoUrl) {
+        delete nextUser.photoUrl;
+      }
       savePersistedSession(nextUser);
       set({ authUser: nextUser });
     };
 
-    applyProfile({ displayName, financialGoal });
+    applyProfile({ displayName, financialGoal, photoUrl: nextPhotoUrl });
 
     if (!isRealAuthUser(current)) {
       return 'local';
     }
 
     const uid = current.uid;
-    const profile = { displayName, financialGoal };
+    const profile = {
+      displayName,
+      financialGoal,
+      ...(hasPhotoUpdate ? { photoUrl: nextPhotoUrl ?? '' } : {}),
+    };
     const { status } = await executeOptimisticCloudWrite({
       uid,
       operation: { type: 'save_user_profile', payload: profile },
@@ -144,13 +167,17 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
         await new FirestoreBudgetRepository().saveUserProfile(uid, profile);
       },
       rollback: () => {
-        applyProfile({ displayName: current.displayName, financialGoal: current.financialGoal });
+        applyProfile({
+          displayName: current.displayName,
+          financialGoal: current.financialGoal,
+          photoUrl: current.photoUrl,
+        });
       },
       friendlyErrorMessage: 'No se pudo guardar tu perfil en la nube.',
       setStoreState: set,
     });
 
-    if (status === 'synced') {
+    if (status === 'synced' && displayName !== current.displayName) {
       void syncAuthDisplayName(displayName);
     }
     return status;

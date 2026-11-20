@@ -70,6 +70,25 @@ describe('saveUserProfile: perfil del usuario en users/{uid}', () => {
     ).rejects.toMatchObject({ code: 'permission-denied' });
   });
 
+  it('writes photoUrl when updated or cleared, and omits it when untouched (ADR 0033)', async () => {
+    const repo = new FirestoreBudgetRepository({} as Firestore);
+    const samplePhoto = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+
+    await repo.saveUserProfile('uid_profile_01', {
+      displayName: 'Alejandro',
+      financialGoal: 'Viaje',
+      photoUrl: samplePhoto,
+    });
+    expect(batchSet.mock.calls[0][1].photoUrl).toBe(samplePhoto);
+
+    await repo.saveUserProfile('uid_profile_01', {
+      displayName: 'Alejandro',
+      financialGoal: 'Viaje',
+      photoUrl: '',
+    });
+    expect(batchSet.mock.calls[1][1].photoUrl).toBe('');
+  });
+
   it('keeps one profile per user in the in-memory repository', async () => {
     const repo = new InMemoryBudgetRepository(false);
 

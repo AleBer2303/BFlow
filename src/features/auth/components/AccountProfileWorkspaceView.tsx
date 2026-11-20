@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -7,9 +8,9 @@ import {
   View,
 } from 'react-native';
 import {
+  AmbientParticles,
   AppPressable,
   AppText,
-  FormMessage,
   GlassSurface,
   MIN_TOUCH_TARGET_PT,
   type PlatformSkinId,
@@ -17,13 +18,16 @@ import {
   ScrollDepthHero,
   ScrollRevealSection,
   StatusBadge,
+  ThemeToggleIconButton,
+  hapticService,
   useBFlowTheme,
+  useResponsiveLayout,
 } from '../../../design-system';
 import type { BFlowAuthUser } from '../../../platform/auth/authAdapter';
 import { getCooldownRemainingMs, startCooldown } from '../../../platform/auth/authRateLimiter';
 import { useSafeInsets } from '../../../platform/insets/useSafeInsets';
 import { useCountdown } from '../hooks/useCountdown';
-import { AccountEmailForm, ProfileDetailsForm } from './AccountProfileForms';
+import { AccountEmailForm, AccountPasswordCard, ProfileDetailsForm } from './AccountProfileForms';
 
 /** Edition shown beside the version: the material of the running platform skin. */
 const APP_EDITION_LABEL: Record<PlatformSkinId, string> = {
@@ -45,6 +49,7 @@ export interface AccountProfileWorkspaceViewProps {
   onUpdateProfile?: (updates: {
     displayName?: string;
     financialGoal?: string;
+    photoUrl?: string;
   }) => Promise<'saved' | 'queued' | void> | void;
   /** Envía al correo de la cuenta el enlace para definir una nueva contraseña (ADR 0025). */
   onSendPasswordReset?: () => Promise<void> | void;
@@ -55,6 +60,56 @@ export interface AccountProfileWorkspaceViewProps {
   onResetFullAccount?: () => void;
   testID?: string;
 }
+
+const ManualSyncButton = React.memo(function ManualSyncButton({
+  isSyncing,
+  onManualSync,
+}: {
+  isSyncing: boolean;
+  onManualSync: () => void;
+}): React.JSX.Element {
+  const { colors, radius, minTouchTarget } = useBFlowTheme();
+  const syncCooldown = useCountdown(() => getCooldownRemainingMs('manual_sync'));
+  const isSyncWaiting = syncCooldown.secondsLeft > 0;
+
+  const handleManualSync = () => {
+    hapticService.light();
+    onManualSync();
+    startCooldown('manual_sync');
+    syncCooldown.refresh();
+  };
+
+  return (
+    <AppPressable
+      testID="manual-sync-button"
+      accessibilityRole="button"
+      accessibilityLabel={
+        isSyncWaiting
+          ? `Podrás sincronizar de nuevo en ${syncCooldown.secondsLeft} segundos`
+          : 'Sincronizar ahora'
+      }
+      onPress={handleManualSync}
+      disabled={isSyncing || isSyncWaiting}
+      style={{
+        minHeight: minTouchTarget,
+        borderRadius: radius.pill,
+        backgroundColor: colors.glass.surfaceTint,
+        borderWidth: 1,
+        borderColor: colors.glass.specularBorder,
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+    >
+      <AppText variant="caption" color={colors.text.primary}>
+        {isSyncing
+          ? 'Sincronizando datos...'
+          : isSyncWaiting
+            ? `Podrás sincronizar de nuevo en ${syncCooldown.secondsLeft} s`
+            : 'Sincronizar datos ahora'}
+      </AppText>
+    </AppPressable>
+  );
+});
 
 /**
  * Account & Profile workspace screen.
@@ -76,7 +131,8 @@ export function AccountProfileWorkspaceView({
   onResetFullAccount,
   testID = 'account-profile-workspace-view',
 }: AccountProfileWorkspaceViewProps): React.JSX.Element {
-  const { colors, radius, spacing, skin } = useBFlowTheme();
+  const { colors, mode, radius, spacing, skin, minTouchTarget } = useBFlowTheme();
+  const layout = useResponsiveLayout();
   const insets = useSafeInsets();
 
   // The profile and email forms own their field state (R-17); a new key resets them each
@@ -84,30 +140,11 @@ export function AccountProfileWorkspaceView({
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profileFormsKey, setProfileFormsKey] = useState(0);
   const [confirmingAccountReset, setConfirmingAccountReset] = useState(false);
+  const [failedPhotoUrl, setFailedPhotoUrl] = useState<string | null>(null);
 
-  // Contraseña
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
-  const [isPasswordBusy, setIsPasswordBusy] = useState(false);
-
-  // Límites de uso (ADR 0026): espera entre sincronizaciones y entre enlaces de contraseña.
-  const syncCooldown = useCountdown(() => getCooldownRemainingMs('manual_sync'));
-  const passwordResetCooldown = useCountdown(() => getCooldownRemainingMs('password_reset_email'));
-  const isSyncWaiting = syncCooldown.secondsLeft > 0;
-  const isPasswordResetWaiting = passwordResetCooldown.secondsLeft > 0;
-
+  const hasProfilePhoto =
+    Boolean(authUser.photoUrl?.trim()) && failedPhotoUrl !== (authUser.photoUrl ?? null);
   const isPasswordAccount = authUser.authProvider !== 'google.com';
-
-  const secondaryButtonStyle = {
-    minHeight: MIN_TOUCH_TARGET_PT,
-    borderRadius: radius.pill,
-    borderCurve: 'continuous',
-    backgroundColor: colors.glass.surfaceTint,
-    borderWidth: 1,
-    borderColor: colors.glass.subtleBorder,
-    justifyContent: 'center',
-    alignItems: 'center',
-  } as const;
 
   const userInitials = (authUser.displayName ?? 'BF')
     .split(' ')
@@ -115,36 +152,6 @@ export function AccountProfileWorkspaceView({
     .slice(0, 2)
     .map((word) => word[0]?.toUpperCase() ?? '')
     .join('');
-
-  const handleManualSync = () => {
-    if (!onManualSync) return;
-    onManualSync();
-    startCooldown('manual_sync');
-    syncCooldown.refresh();
-  };
-
-  const handleSendPasswordReset = async () => {
-    if (!onSendPasswordReset) return;
-    setPasswordError(null);
-    setPasswordSuccess(null);
-    setIsPasswordBusy(true);
-    try {
-      await onSendPasswordReset();
-      startCooldown('password_reset_email');
-      passwordResetCooldown.refresh();
-      setPasswordSuccess(
-        `Enviamos a ${authUser.email ?? 'tu correo'} un enlace para definir una nueva contraseña. Revisa también el correo no deseado.`
-      );
-    } catch (err) {
-      setPasswordError(
-        err instanceof Error
-          ? err.message
-          : 'No fue posible enviar el enlace para restablecer la contraseña.'
-      );
-    } finally {
-      setIsPasswordBusy(false);
-    }
-  };
 
   return (
     <View testID={testID} style={{ gap: spacing.md }}>
@@ -170,13 +177,24 @@ export function AccountProfileWorkspaceView({
                   backgroundColor: colors.glass.surfaceElevatedTint,
                   borderWidth: 1.2,
                   borderColor: colors.glass.specularBorder,
+                  overflow: 'hidden',
                   justifyContent: 'center',
                   alignItems: 'center',
                 }}
               >
-                <AppText variant="headline" color={colors.text.primary}>
-                  {userInitials || 'BF'}
-                </AppText>
+                {hasProfilePhoto && authUser.photoUrl ? (
+                  <Image
+                    testID="account-profile-avatar-image"
+                    source={{ uri: authUser.photoUrl }}
+                    style={{ width: '100%', height: '100%' }}
+                    resizeMode="cover"
+                    onError={() => setFailedPhotoUrl(authUser.photoUrl ?? null)}
+                  />
+                ) : (
+                  <AppText variant="headline" color={colors.text.primary}>
+                    {userInitials || 'BF'}
+                  </AppText>
+                )}
               </View>
 
               <View style={{ flex: 1, gap: spacing.xxs }}>
@@ -220,48 +238,43 @@ export function AccountProfileWorkspaceView({
             </View>
 
             {onManualSync ? (
-              <AppPressable
-                testID="manual-sync-button"
-                accessibilityRole="button"
-                accessibilityLabel={
-                  isSyncWaiting
-                    ? `Podrás sincronizar de nuevo en ${syncCooldown.secondsLeft} segundos`
-                    : 'Sincronizar ahora'
-                }
-                onPress={handleManualSync}
-                disabled={isSyncing || isSyncWaiting}
-                style={{
-                  minHeight: 40,
-                  borderRadius: radius.pill,
-                  backgroundColor: colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: colors.glass.specularBorder,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
-              >
-                <AppText variant="caption" color={colors.text.primary}>
-                  {isSyncing
-                    ? 'Sincronizando datos...'
-                    : isSyncWaiting
-                      ? `Podrás sincronizar de nuevo en ${syncCooldown.secondsLeft} s`
-                      : 'Sincronizar datos ahora'}
-                </AppText>
-              </AppPressable>
+              <ManualSyncButton isSyncing={isSyncing} onManualSync={onManualSync} />
             ) : null}
           </View>
           </GlassSurface>
         </ScrollDepthHero>
 
         <View style={{ gap: spacing.md }}>
-          {/* 2. Account Configuration: Action Button to Open Dedicated Profile Update Window */}
+          {/* 2. Appearance: Light / Dark Theme Toggle (moved from workspace header, ADR 0033) */}
+          <ScrollRevealSection>
+            <GlassSurface elevated testID="account-appearance-card">
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: spacing.md,
+                }}
+              >
+                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                  <AppText variant="headline">Apariencia</AppText>
+                  <AppText variant="caption" color={colors.text.secondary}>
+                    {mode === 'dark' ? 'Modo oscuro activo' : 'Modo claro activo'}
+                  </AppText>
+                </View>
+                <ThemeToggleIconButton testID="theme-toggle-button" />
+              </View>
+            </GlassSurface>
+          </ScrollRevealSection>
+
+          {/* 3. Account Configuration: Action Button to Open Dedicated Profile Update Window */}
           <ScrollRevealSection>
             <GlassSurface elevated testID="account-settings-card">
             <View style={{ gap: spacing.xs }}>
               <View style={{ gap: 2 }}>
                 <AppText variant="headline">Configuración de Perfil</AppText>
                 <AppText variant="caption" color={colors.text.secondary}>
-                  Actualiza tu nombre, tu meta de ahorro, tu correo de acceso y tu contraseña.
+                  Actualiza tu foto de perfil, nombre, meta de ahorro, correo y contraseña.
                 </AppText>
               </View>
 
@@ -270,9 +283,8 @@ export function AccountProfileWorkspaceView({
                 accessibilityRole="button"
                 accessibilityLabel="Actualizar mis datos de perfil"
                 onPress={() => {
+                  hapticService.light();
                   setProfileFormsKey((key) => key + 1);
-                  setPasswordError(null);
-                  setPasswordSuccess(null);
                   setIsProfileModalOpen(true);
                 }}
                 style={{
@@ -414,102 +426,179 @@ export function AccountProfileWorkspaceView({
             paddingTop: Platform.OS === 'ios' ? 44 : Math.max(insets.top, spacing.md),
           }}
         >
+          {isProfileModalOpen ? <AmbientParticles /> : null}
+
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={{ flex: 1 }}
           >
             <ScrollView
               contentContainerStyle={{
-                padding: spacing.md,
-                gap: spacing.md,
+                paddingHorizontal: layout.gutter,
+                paddingTop: spacing.sm,
                 paddingBottom: spacing.xxl,
               }}
               keyboardShouldPersistTaps="handled"
             >
-              {/* Window Navigation Bar */}
               <View
                 style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  paddingVertical: spacing.xs,
+                  width: '100%',
+                  maxWidth: layout.contentMaxWidth,
+                  alignSelf: 'center',
+                  gap: spacing.md,
                 }}
               >
-                <AppPressable
-                  testID="close-profile-settings-modal"
-                  accessibilityRole="button"
-                  accessibilityLabel="Volver al menú de cuenta"
-                  onPress={() => setIsProfileModalOpen(false)}
+                {/* Window Navigation Bar */}
+                <View
                   style={{
-                    minHeight: MIN_TOUCH_TARGET_PT,
-                    paddingHorizontal: spacing.md,
-                    borderRadius: radius.pill,
-                    backgroundColor: colors.glass.surfaceTint,
-                    borderWidth: 1,
-                    borderColor: colors.glass.subtleBorder,
-                    justifyContent: 'center',
+                    flexDirection: 'row',
                     alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: spacing.sm,
+                    paddingVertical: spacing.xs,
                   }}
                 >
-                  <AppText variant="caption" color={colors.text.primary} style={{ fontWeight: '600' }}>
-                    ← Volver
-                  </AppText>
-                </AppPressable>
-
-                <AppText variant="title2">Actualizar Datos</AppText>
-
-                {/* Symmetrical placeholder */}
-                <View style={{ width: 70 }} />
-              </View>
-
-              <ProfileDetailsForm
-                key={`profile-${profileFormsKey}`}
-                authUser={authUser}
-                onUpdateProfile={onUpdateProfile}
-              />
-
-              {/* Correo de acceso: verificación y cambio, con los correos de Firebase Auth */}
-              <AccountEmailForm
-                key={`email-${profileFormsKey}`}
-                authUser={authUser}
-                onRequestEmailChange={onRequestEmailChange}
-                onSendEmailVerification={onSendEmailVerification}
-              />
-
-              {/* Contraseña: enlace de restablecimiento de Firebase Auth */}
-              {isPasswordAccount ? (
-                <GlassSurface elevated testID="account-password-card">
-                  <View style={{ gap: spacing.sm }}>
-                    <AppText variant="headline">Contraseña</AppText>
-                    <AppText variant="caption" color={colors.text.secondary}>
-                      {`Enviaremos a ${authUser.email ?? 'tu correo'} un enlace para definir una nueva contraseña. Después tendrás que iniciar sesión nuevamente.`}
+                  <AppPressable
+                    testID="close-profile-settings-modal"
+                    accessibilityRole="button"
+                    accessibilityLabel="Volver al menú de cuenta"
+                    onPress={() => {
+                      hapticService.light();
+                      setIsProfileModalOpen(false);
+                    }}
+                    style={{
+                      minHeight: minTouchTarget,
+                      paddingHorizontal: spacing.md,
+                      borderRadius: radius.pill,
+                      borderCurve: 'continuous',
+                      backgroundColor: colors.glass.surfaceTint,
+                      borderWidth: 1,
+                      borderColor: colors.glass.subtleBorder,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <AppText variant="caption" color={colors.text.primary} style={{ fontWeight: '600' }}>
+                      ← Volver
                     </AppText>
+                  </AppPressable>
 
-                    <FormMessage
-                      message={passwordSuccess}
-                      tone="success"
-                      testID="security-success-banner"
-                    />
-                    <FormMessage message={passwordError} testID="security-error-banner" />
+                  <AppText variant="title2" style={{ flexShrink: 1, textAlign: 'center' }}>
+                    Actualizar Datos
+                  </AppText>
 
-                    <AppPressable
-                      testID="send-password-reset-button"
-                      accessibilityRole="button"
-                      disabled={isPasswordBusy || isPasswordResetWaiting}
-                      onPress={handleSendPasswordReset}
-                      style={secondaryButtonStyle}
+                  {/* Symmetrical spacer */}
+                  <View style={{ width: 72 }} />
+                </View>
+
+                {/* Compact Identity Banner */}
+                <GlassSurface elevated testID="profile-modal-identity-banner">
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: spacing.md,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: spacing.md,
+                        flex: 1,
+                        minWidth: 180,
+                      }}
                     >
-                      <AppText variant="caption" color={colors.text.primary} style={{ fontWeight: '600' }}>
-                        {isPasswordBusy
-                          ? 'Enviando enlace...'
-                          : isPasswordResetWaiting
-                            ? `Podrás pedir otro enlace en ${passwordResetCooldown.secondsLeft} s`
-                            : 'Restablecer contraseña'}
+                      <View
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: radius.pill,
+                          backgroundColor: colors.accent.container,
+                          borderWidth: 1.2,
+                          borderColor: colors.accent.primary,
+                          overflow: 'hidden',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                      >
+                        {hasProfilePhoto && authUser.photoUrl ? (
+                          <Image
+                            testID="profile-modal-avatar-image"
+                            source={{ uri: authUser.photoUrl }}
+                            style={{ width: '100%', height: '100%' }}
+                            resizeMode="cover"
+                            onError={() => setFailedPhotoUrl(authUser.photoUrl ?? null)}
+                          />
+                        ) : (
+                          <AppText
+                            variant="headline"
+                            color={colors.accent.onContainer}
+                            style={{ fontWeight: '700' }}
+                          >
+                            {userInitials || 'BF'}
+                          </AppText>
+                        )}
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                        <AppText variant="headline" numberOfLines={1}>
+                          {authUser.displayName ?? 'Usuario BFlow'}
+                        </AppText>
+                        <AppText variant="caption" color={colors.text.secondary} numberOfLines={1}>
+                          {authUser.email ?? 'Sin correo'}
+                        </AppText>
+                      </View>
+                    </View>
+
+                    <View
+                      style={{
+                        paddingHorizontal: spacing.sm,
+                        paddingVertical: 5,
+                        borderRadius: radius.pill,
+                        borderCurve: 'continuous',
+                        backgroundColor: colors.glass.surfaceTint,
+                        borderWidth: 1,
+                        borderColor: colors.glass.subtleBorder,
+                      }}
+                    >
+                      <AppText
+                        variant="caption"
+                        color={colors.text.secondary}
+                        style={{ fontWeight: '600' }}
+                      >
+                        {isPasswordAccount ? 'Correo' : 'Google'}
                       </AppText>
-                    </AppPressable>
+                    </View>
                   </View>
                 </GlassSurface>
-              ) : null}
+
+                <ResponsiveColumns testID="profile-modal-columns">
+                  <ProfileDetailsForm
+                    key={`profile-${profileFormsKey}`}
+                    authUser={authUser}
+                    onUpdateProfile={onUpdateProfile}
+                  />
+
+                  <View style={{ gap: spacing.md }}>
+                    <AccountEmailForm
+                      key={`email-${profileFormsKey}`}
+                      authUser={authUser}
+                      onRequestEmailChange={onRequestEmailChange}
+                      onSendEmailVerification={onSendEmailVerification}
+                    />
+
+                    {isPasswordAccount ? (
+                      <AccountPasswordCard
+                        key={`password-${profileFormsKey}`}
+                        email={authUser.email}
+                        onSendPasswordReset={onSendPasswordReset}
+                      />
+                    ) : null}
+                  </View>
+                </ResponsiveColumns>
+              </View>
             </ScrollView>
           </KeyboardAvoidingView>
         </View>

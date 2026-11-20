@@ -317,19 +317,24 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
     expect(rulesContent).toContain('match /monthSnapshots/{snapshotId}');
     expect(rulesContent).toContain('request.resource.data.monthKey == resource.data.monthKey');
     expect(rulesContent).toContain('request.resource.data.entryId == resource.data.entryId');
+    expect(rulesContent).toContain("'photoUrl',");
+    expect(rulesContent).toContain('function isValidPhotoUrl(data)');
+    expect(rulesContent).toContain("data.photoUrl[0:23] == 'data:image/jpeg;base64,'");
+    expect(rulesContent).toContain('isValidPhotoUrl(data) &&');
     expect(rulesContent).toContain("'dataRevision',");
     expect(rulesContent).toContain(
       "!('dataRevision' in data) || data.dataRevision == null || isNonEmptyString(data.dataRevision, 120)"
     );
     expect(rulesContent).toContain('allow read, write: if false;');
 
-    // Emulator-grade evaluation of isValidUserProfile rules logic against valid and invalid dataRevision payloads
+    // Emulator-grade evaluation of isValidUserProfile rules logic against valid and invalid dataRevision/photoUrl payloads
     const allowedUserFields = new Set([
       'uid',
       'email',
       'displayName',
       'phone',
       'financialGoal',
+      'photoUrl',
       'authProvider',
       'createdAt',
       'lastLoginAt',
@@ -343,6 +348,19 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
     const evaluateIsValidUserProfile = (data: Record<string, unknown>, uid: string): boolean => {
       if (!Object.keys(data).every((k) => allowedUserFields.has(k))) return false;
       if ('uid' in data && data.uid !== uid) return false;
+      if (
+        'photoUrl' in data &&
+        data.photoUrl !== null &&
+        data.photoUrl !== '' &&
+        !(
+          typeof data.photoUrl === 'string' &&
+          ((data.photoUrl.length <= 2048 && /^https:\/\/[^\s]+$/.test(data.photoUrl)) ||
+            (data.photoUrl.length <= 120000 &&
+              /^data:image\/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(data.photoUrl)))
+        )
+      ) {
+        return false;
+      }
       if (
         'dataRevision' in data &&
         data.dataRevision !== null &&
@@ -365,6 +383,22 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
     ).toBe(true);
     expect(evaluateIsValidUserProfile({ uid: 'u1', dataRevision: null }, 'u1')).toBe(true);
     expect(evaluateIsValidUserProfile({ uid: 'u1' }, 'u1')).toBe(true);
+    expect(
+      evaluateIsValidUserProfile(
+        { uid: 'u1', photoUrl: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==' },
+        'u1'
+      )
+    ).toBe(true);
+    expect(evaluateIsValidUserProfile({ uid: 'u1', photoUrl: '' }, 'u1')).toBe(true);
+    expect(
+      evaluateIsValidUserProfile(
+        { uid: 'u1', photoUrl: 'data:image/svg+xml;base64,PHN2Zz4=' },
+        'u1'
+      )
+    ).toBe(false);
+    expect(
+      evaluateIsValidUserProfile({ uid: 'u1', photoUrl: 'http://insecure.example/a.jpg' }, 'u1')
+    ).toBe(false);
     // Reject empty string, oversized string (>120), non-string (number), or unknown field
     expect(evaluateIsValidUserProfile({ uid: 'u1', dataRevision: '' }, 'u1')).toBe(false);
     expect(evaluateIsValidUserProfile({ uid: 'u1', dataRevision: 'x'.repeat(121) }, 'u1')).toBe(

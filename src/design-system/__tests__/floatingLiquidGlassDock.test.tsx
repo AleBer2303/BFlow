@@ -47,7 +47,8 @@ const { getAnimatedStyle } = require('react-native-reanimated') as {
 
 /** Dock 360 wide: tab width 58, tab centers at 35, 93, 151, 209, 267 and 325. */
 const DOCK_WIDTH = 360;
-const tabCenter = (index: number) => DOCK_PADDING_H + 58 * (index + 0.5);
+const TAB_WIDTH = (DOCK_WIDTH - DOCK_PADDING_H * 2) / DOCK_TABS.length;
+const tabCenter = (index: number) => DOCK_PADDING_H + TAB_WIDTH * (index + 0.5);
 
 function renderIosDock(
   props: Partial<React.ComponentProps<typeof FloatingLiquidGlassDock>> = {},
@@ -98,18 +99,32 @@ describe('FloatingLiquidGlassDock on iOS (Liquid Glass, UI-thread lens, ADR 0030
     __resetLiquidGlassAvailabilityForTests();
   });
 
-  it('renders all 6 navigation tabs with exact labels including Cierre and Cuenta', () => {
+  it('renders all 5 primary navigation tabs without Cuenta (which lives in the header, ADR 0033)', () => {
     renderIosDock();
 
     expect(screen.getByTestId('floating-liquid-glass-dock')).toBeTruthy();
-    expect(DOCK_TABS).toHaveLength(6);
+    expect(DOCK_TABS).toHaveLength(5);
 
     expect(screen.getByTestId('workspace-tab-summary')).toHaveTextContent('Resumen');
     expect(screen.getByTestId('workspace-tab-checklist')).toHaveTextContent('Checklist');
     expect(screen.getByTestId('workspace-tab-debts')).toHaveTextContent('Deudas');
     expect(screen.getByTestId('workspace-tab-savings')).toHaveTextContent('Ahorros');
     expect(screen.getByTestId('workspace-tab-analytics')).toHaveTextContent('Cierre');
-    expect(screen.getByTestId('workspace-tab-account')).toHaveTextContent('Cuenta');
+    expect(screen.queryByTestId('workspace-tab-account')).toBeNull();
+  });
+
+  it('hides the resting lens and deselects dock tabs when the header Account view is active', () => {
+    const { onSelectTab } = renderIosDock({ activeTab: 'account' });
+
+    expect(screen.queryByTestId('dock-magnifying-lens')).toBeNull();
+    for (const tab of DOCK_TABS) {
+      expect(screen.getByTestId(`workspace-tab-${tab.id}`).props.accessibilityState).toEqual({
+        selected: false,
+      });
+    }
+
+    fireEvent.press(screen.getByTestId('workspace-tab-summary'));
+    expect(onSelectTab).toHaveBeenCalledWith('summary');
   });
 
   it('renders all 6 custom minimalist SVG vector icons', () => {
@@ -138,12 +153,12 @@ describe('FloatingLiquidGlassDock on iOS (Liquid Glass, UI-thread lens, ADR 0030
     expect(screen.getByTestId('workspace-tab-summary').props.accessibilityState).toEqual({
       selected: true,
     });
-    expect(screen.getByTestId('workspace-tab-account').props.accessibilityState).toEqual({
+    expect(screen.getByTestId('workspace-tab-savings').props.accessibilityState).toEqual({
       selected: false,
     });
 
-    fireEvent.press(screen.getByTestId('workspace-tab-account'));
-    expect(onSelectTab).toHaveBeenCalledWith('account');
+    fireEvent.press(screen.getByTestId('workspace-tab-savings'));
+    expect(onSelectTab).toHaveBeenCalledWith('savings');
 
     fireEvent.press(screen.getByTestId('workspace-tab-analytics'));
     expect(onSelectTab).toHaveBeenCalledWith('analytics');
@@ -171,14 +186,14 @@ describe('FloatingLiquidGlassDock on iOS (Liquid Glass, UI-thread lens, ADR 0030
     expect(lensStyle.top).toBe(4);
     expect(lensStyle.bottom).toBe(4);
     expect(lensStyle.left).toBe(DOCK_PADDING_H + LENS_MARGIN_H);
-    expect(lensStyle.width).toBeCloseTo(58 - LENS_MARGIN_H * 2, 5);
+    expect(lensStyle.width).toBeCloseTo(TAB_WIDTH - LENS_MARGIN_H * 2, 5);
     expect(lensStyle.borderRadius).toBe(radius.pill);
     expect(lens.props.pointerEvents).toBe('none');
 
     // Travel, swell and stretch are transforms (UI thread, no layout pass).
     const animated = getAnimatedStyle(lens);
     expect(Object.keys(transformOf(animated))).toEqual(['translateX', 'scaleX', 'scaleY']);
-    expect(transformOf(animated).translateX).toBeCloseTo(58 * 2, 5);
+    expect(transformOf(animated).translateX).toBeCloseTo(TAB_WIDTH * 2, 5);
 
     // Blur fallback (Jest): glass material, resting tint, glow, and the specular highlight + rim
     // drawn only where there is no system glass.
@@ -303,41 +318,42 @@ describe('FloatingLiquidGlassDock on iOS (Liquid Glass, UI-thread lens, ADR 0030
     const availableWidth = DOCK_WIDTH - DOCK_PADDING_H * 2;
     const tabWidth = availableWidth / DOCK_TABS.length;
     const lensWidth = tabWidth - LENS_MARGIN_H * 2;
+    const lastIndex = DOCK_TABS.length - 1;
 
     const tab0Left = DOCK_PADDING_H + LENS_MARGIN_H;
-    const tab5Right = DOCK_PADDING_H + LENS_MARGIN_H + tabWidth * 5 + lensWidth;
+    const lastTabRight = DOCK_PADDING_H + LENS_MARGIN_H + tabWidth * lastIndex + lensWidth;
 
-    expect(tab0Left).toBe(DOCK_WIDTH - tab5Right);
+    expect(tab0Left).toBeCloseTo(DOCK_WIDTH - lastTabRight, 9);
     expect(tab0Left).toBe(DOCK_PADDING_H + LENS_MARGIN_H);
   });
 
-  it('maps sliding coordinates linearly across all 6 tabs and clamps bounds', () => {
+  it('maps sliding coordinates linearly across all 5 tabs and clamps bounds', () => {
     const left = 20;
+    const lastIndex = DOCK_TABS.length - 1;
     expect(getDockIndexFromScreenX(-50, left, DOCK_WIDTH)).toBe(0);
-    expect(getDockIndexFromScreenX(25, left, DOCK_WIDTH)).toBe(0);
-    expect(getDockIndexFromScreenX(55, left, DOCK_WIDTH)).toBe(0);
-    expect(getDockIndexFromScreenX(110, left, DOCK_WIDTH)).toBe(1);
-    expect(getDockIndexFromScreenX(170, left, DOCK_WIDTH)).toBe(2);
-    expect(getDockIndexFromScreenX(230, left, DOCK_WIDTH)).toBe(3);
-    expect(getDockIndexFromScreenX(290, left, DOCK_WIDTH)).toBe(4);
-    expect(getDockIndexFromScreenX(345, left, DOCK_WIDTH)).toBe(5);
-    expect(getDockIndexFromScreenX(999, left, DOCK_WIDTH)).toBe(5);
+    expect(getDockIndexFromScreenX(left + tabCenter(0), left, DOCK_WIDTH)).toBe(0);
+    expect(getDockIndexFromScreenX(left + tabCenter(1), left, DOCK_WIDTH)).toBe(1);
+    expect(getDockIndexFromScreenX(left + tabCenter(2), left, DOCK_WIDTH)).toBe(2);
+    expect(getDockIndexFromScreenX(left + tabCenter(3), left, DOCK_WIDTH)).toBe(3);
+    expect(getDockIndexFromScreenX(left + tabCenter(4), left, DOCK_WIDTH)).toBe(4);
+    expect(getDockIndexFromScreenX(999, left, DOCK_WIDTH)).toBe(lastIndex);
     expect(getDockIndexFromScreenX(100, left, 0)).toBe(0);
   });
 
   it('maps finger X to a continuous fractional lens position clamped to the dock', () => {
     const pos = (x: number) => getDockLensPositionFromScreenX(x, 0, DOCK_WIDTH);
+    const lastIndex = DOCK_TABS.length - 1;
 
-    expect(pos(35)).toBeCloseTo(0, 5);
-    expect(pos(93)).toBeCloseTo(1, 5);
-    expect(pos(325)).toBeCloseTo(5, 5);
-    expect(pos(64)).toBeCloseTo(0.5, 5);
-    const samples = [40, 50, 60, 70, 80, 90].map(pos);
+    expect(pos(tabCenter(0))).toBeCloseTo(0, 5);
+    expect(pos(tabCenter(1))).toBeCloseTo(1, 5);
+    expect(pos(tabCenter(lastIndex))).toBeCloseTo(lastIndex, 5);
+    expect(pos((tabCenter(0) + tabCenter(1)) / 2)).toBeCloseTo(0.5, 5);
+    const samples = [45, 55, 65, 75, 85, 95].map(pos);
     for (let i = 1; i < samples.length; i++) {
       expect(samples[i]!).toBeGreaterThan(samples[i - 1]!);
     }
     expect(pos(-100)).toBe(0);
-    expect(pos(999)).toBe(5);
+    expect(pos(999)).toBe(lastIndex);
     expect(getDockLensPositionFromScreenX(100, 0, 0)).toBe(0);
   });
 
@@ -379,9 +395,9 @@ describe('FloatingLiquidGlassDock on iOS (Liquid Glass, UI-thread lens, ADR 0030
   });
 
   it('moves the UI-thread lens exactly like computeLensFrame (parity of the two copies)', () => {
-    const tabWidth = 58;
+    const tabWidth = TAB_WIDTH;
     const lensWidth = tabWidth - LENS_MARGIN_H * 2;
-    for (const position of [-1.5, -0.3, 0, 0.4, 2.5, 5, 5.3, 6.5]) {
+    for (const position of [-1.5, -0.3, 0, 0.4, 2.5, 4, 4.3, 5.5]) {
       for (const [lift, stretch] of [[0, 0], [1, 0], [1, 1], [1.4, 1], [-0.3, 0], [NaN, NaN]] as const) {
         const reference = computeLensFrame({ position, lift, stretch, tabWidth, lensWidth });
         const ui = lensTransformAt(position, lift, stretch, DOCK_WIDTH);
@@ -442,11 +458,11 @@ describe('FloatingLiquidGlassDock on iOS (Liquid Glass, UI-thread lens, ADR 0030
 
     rerender(
       <BFlowThemeProvider initialMode="dark">
-        <FloatingLiquidGlassDock activeTab="account" onSelectTab={jest.fn()} />
+        <FloatingLiquidGlassDock activeTab="analytics" onSelectTab={jest.fn()} />
       </BFlowThemeProvider>
     );
     flushFrames();
-    expect(labelColor('Cuenta')).toBe(accent);
+    expect(labelColor('Cierre')).toBe(accent);
     expect(labelColor('Deudas')).toBe(rest);
   });
 
@@ -512,7 +528,7 @@ describe('FloatingLiquidGlassDock on iOS (Liquid Glass, UI-thread lens, ADR 0030
     });
     flushFrames();
     // It glides with the finger: fractional, between tabs.
-    expect(lensX()).toBeCloseTo(58, 0);
+    expect(lensX()).toBeCloseTo(TAB_WIDTH, 0);
 
     act(() => {
       pan.update({ x: tabCenter(3) + 6, y: 30, velocityX: 600 });
@@ -532,7 +548,7 @@ describe('FloatingLiquidGlassDock on iOS (Liquid Glass, UI-thread lens, ADR 0030
     await flushScheduled();
     expect(onSelectTab).toHaveBeenCalledTimes(1);
     expect(onSelectTab).toHaveBeenCalledWith('savings');
-    expect(lensX()).toBeCloseTo(58 * 3, 5);
+    expect(lensX()).toBeCloseTo(TAB_WIDTH * 3, 5);
   });
 
   it('sends the lens back to the selected tab when the system cancels the drag', async () => {
@@ -550,7 +566,7 @@ describe('FloatingLiquidGlassDock on iOS (Liquid Glass, UI-thread lens, ADR 0030
     expect(onSelectTab).not.toHaveBeenCalled();
     expect(
       transformOf(getAnimatedStyle(screen.getByTestId('dock-magnifying-lens'))).translateX
-    ).toBeCloseTo(58, 5);
+    ).toBeCloseTo(TAB_WIDTH, 5);
   });
 
   it('keeps released tab highlighted and stable without jumping back during async prop update', () => {
@@ -578,7 +594,7 @@ describe('FloatingLiquidGlassDock on iOS (Liquid Glass, UI-thread lens, ADR 0030
       </BFlowThemeProvider>
     );
     flushFrames();
-    expect(lensX()).toBeCloseTo(58 * 2, 5);
+    expect(lensX()).toBeCloseTo(TAB_WIDTH * 2, 5);
 
     rerender(
       <BFlowThemeProvider initialMode="dark">
@@ -588,7 +604,7 @@ describe('FloatingLiquidGlassDock on iOS (Liquid Glass, UI-thread lens, ADR 0030
     expect(screen.getByTestId('workspace-tab-debts').props.accessibilityState).toEqual({
       selected: true,
     });
-    expect(lensX()).toBeCloseTo(58 * 2, 5);
+    expect(lensX()).toBeCloseTo(TAB_WIDTH * 2, 5);
   });
 });
 
@@ -664,10 +680,18 @@ describe('FloatingLiquidGlassDock on the Android skin (flat selection pill)', ()
 
     rerender(
       <BFlowThemeProvider skin="android" initialMode="dark">
-        <FloatingLiquidGlassDock activeTab="account" onSelectTab={jest.fn()} />
+        <FloatingLiquidGlassDock activeTab="analytics" onSelectTab={jest.fn()} />
       </BFlowThemeProvider>
     );
     expect(translateX()).toBeCloseTo(tabWidth * (DOCK_TABS.length - 1), 5);
+
+    // When Account (header button) is active, the flat indicator hides cleanly.
+    rerender(
+      <BFlowThemeProvider skin="android" initialMode="dark">
+        <FloatingLiquidGlassDock activeTab="account" onSelectTab={jest.fn()} />
+      </BFlowThemeProvider>
+    );
+    expect(screen.queryByTestId('dock-flat-indicator')).toBeNull();
   });
 
   it('paints the dock with the opaque Android surface in both themes', () => {
@@ -795,7 +819,7 @@ describe('FloatingLiquidGlassDock on the Android skin (flat selection pill)', ()
       });
       const laidOutDock = screen.getByTestId('floating-liquid-glass-dock');
 
-      expect(styleOf('dock-flat-indicator').width).toBeCloseTo(54, 1);
+      expect(styleOf('dock-flat-indicator').width).toBeCloseTo(TAB_WIDTH - LENS_MARGIN_H * 2, 1);
       dockIconRenderSpy.mockClear();
       springSpy.mockClear();
 

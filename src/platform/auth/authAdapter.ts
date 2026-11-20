@@ -32,6 +32,7 @@ import { isOwnerCanonicalEmail } from '../../data/repositories/budgetRepository'
 import { describeUnmetPasswordRule } from '../../domain/auth/passwordPolicy';
 import { toBogotaMonthKey } from '../../domain/date/monthKey';
 import { DEMO_OWNER_SEED_EMAIL } from '../mode/ownerSeedEmail';
+import { sanitizeProfilePhotoUrl } from '../media/profilePhotoValidation';
 import { clearPersistedAccount } from '../storage/accountCache';
 import { runPasswordAttempt, startCooldown } from './authRateLimiter';
 import {
@@ -45,6 +46,8 @@ export interface BFlowAuthUser {
   displayName: string | null;
   phone?: string;
   financialGoal?: string;
+  /** Foto de perfil guardada en `users/{uid}.photoUrl` (Data URI comprimido o URL HTTPS, ADR 0033). */
+  photoUrl?: string;
   authProvider?: 'password' | 'google.com' | 'local';
   createdAt?: string;
   lastLoginAt?: string;
@@ -300,6 +303,16 @@ async function syncUserProfileDocument(
         ? existingData.financialGoal
         : persisted?.financialGoal);
 
+    // Una foto vacía en Firestore es una foto eliminada: no se rescata la anterior ni la de Google.
+    const resolvedPhotoUrl =
+      existingData.photoUrl === ''
+        ? undefined
+        : existingData.photoUrl === null
+          ? undefined
+          : sanitizeProfilePhotoUrl(existingData.photoUrl) ??
+            sanitizeProfilePhotoUrl(persisted?.photoUrl) ??
+            sanitizeProfilePhotoUrl(firebaseUser.photoURL);
+
     const resolvedProvider: 'password' | 'google.com' =
       overrides?.authProvider ?? resolveAuthProvider(firebaseUser);
 
@@ -363,6 +376,7 @@ async function syncUserProfileDocument(
       displayName: resolvedDisplayName,
       ...(resolvedPhone ? { phone: resolvedPhone } : {}),
       ...(resolvedGoal ? { financialGoal: resolvedGoal } : {}),
+      ...(resolvedPhotoUrl ? { photoUrl: resolvedPhotoUrl } : {}),
       authProvider: resolvedProvider,
       createdAt,
       lastLoginAt: effectiveLastLoginAt,
@@ -571,6 +585,7 @@ export function subscribeToAuthUser(
         listener(current);
       } else {
         const isOwner = isOwnerCanonicalEmail(firebaseUser.email);
+        const initialPhotoUrl = sanitizeProfilePhotoUrl(firebaseUser.photoURL);
         const fastUser: BFlowAuthUser = {
           uid: firebaseUser.uid,
           email: firebaseUser.email,
@@ -578,6 +593,7 @@ export function subscribeToAuthUser(
             firebaseUser.displayName ||
             firebaseUser.email?.split('@')[0] ||
             'Usuario BFlow',
+          ...(initialPhotoUrl ? { photoUrl: initialPhotoUrl } : {}),
           authProvider: resolveAuthProvider(firebaseUser),
           activeMonthKey: isOwner
             ? '2026-10'

@@ -26,6 +26,7 @@ import {
   withTiming,
 } from 'react-native-reanimated';
 import {
+  AccountHeaderAvatarButton,
   AmbientParticles,
   AppText,
   DOCK_BOTTOM_OFFSET,
@@ -36,7 +37,6 @@ import {
   type KeyboardAwareScrollViewElement,
   ScrollChoreographyProvider,
   type ScrollChoreographyContextValue,
-  ThemeToggleIconButton,
   WORKSPACE_TABS,
   WebAppHeader,
   WebTabBar,
@@ -63,6 +63,8 @@ export interface WorkspaceShellProps {
   onSelectTab: (tab: BFlowWorkspaceTab) => void;
   /** Hidden while the account is being set up (onboarding). */
   showNavigation: boolean;
+  /** User profile photo URI rendered in the top-right Account avatar button (ADR 0033). */
+  accountPhotoUrl?: string | null;
   /** Pending offline mutations waiting to be synced to cloud. */
   pendingSyncCount?: number;
   children: React.ReactNode;
@@ -209,6 +211,7 @@ export function WorkspaceShell({
   contentTab = activeTab,
   onSelectTab,
   showNavigation,
+  accountPhotoUrl,
   pendingSyncCount,
   children,
 }: WorkspaceShellProps): React.JSX.Element {
@@ -478,7 +481,12 @@ export function WorkspaceShell({
       <AmbientParticles />
       <ScrollChoreographyProvider value={choreographyValue}>
         {isWeb ? (
-          <WebAppHeader layout={layout} contextLabel={monthLabel} navigation={webHeaderNavigation} />
+          <WebAppHeader
+            layout={layout}
+            contextLabel={monthLabel}
+            navigation={webHeaderNavigation}
+            accountPhotoUrl={accountPhotoUrl}
+          />
         ) : null}
 
         <KeyboardAwareScrollView
@@ -555,7 +563,20 @@ export function WorkspaceShell({
                     </View>
                   ) : null}
                 </View>
-                <ThemeToggleIconButton testID="theme-toggle-button" />
+                {showNavigation ? (
+                  <AccountHeaderAvatarButton
+                    testID="workspace-tab-account"
+                    photoUrl={accountPhotoUrl}
+                    isSelected={activeTab === 'account'}
+                    onPress={() => {
+                      if (activeTab === 'account') {
+                        scrollToTop();
+                      } else {
+                        onSelectTab('account');
+                      }
+                    }}
+                  />
+                ) : null}
               </View>
             ) : null}
 
@@ -597,7 +618,20 @@ export function WorkspaceShell({
                     </View>
                   ) : null}
                 </View>
-                <ThemeToggleIconButton testID="theme-toggle-button" />
+                {showNavigation ? (
+                  <AccountHeaderAvatarButton
+                    testID="workspace-tab-account"
+                    photoUrl={accountPhotoUrl}
+                    isSelected={activeTab === 'account'}
+                    onPress={() => {
+                      if (activeTab === 'account') {
+                        scrollToTop();
+                      } else {
+                        onSelectTab('account');
+                      }
+                    }}
+                  />
+                ) : null}
               </View>
             ) : null}
 

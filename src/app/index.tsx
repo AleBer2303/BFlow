@@ -634,6 +634,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
         contentTab={contentTab}
         onSelectTab={setActiveTab}
         showNavigation={!needsOnboarding}
+        accountPhotoUrl={authUser.photoUrl}
         pendingSyncCount={pendingOfflineWritesCount}
       >
         {needsOnboarding ? (

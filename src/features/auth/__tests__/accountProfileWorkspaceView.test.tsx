@@ -1,5 +1,6 @@
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { Dimensions } from 'react-native';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react-native';
 import { BFlowThemeProvider } from '../../../design-system/theme/ThemeContext';
 import { AccountProfileWorkspaceView } from '../components/AccountProfileWorkspaceView';
 import { PLATFORM_SKIN_IDS } from '../../../design-system/tokens';
@@ -8,6 +9,7 @@ import {
   __resetAuthRateLimiterForTests,
   recordFailedAuthAttempt,
 } from '../../../platform/auth/authRateLimiter';
+import * as profilePhotoPicker from '../../../platform/media/profilePhotoPicker';
 
 /** Counts renders of the account screen's status badge: the profile forms have none here. */
 const mockStatusBadgeRender = jest.fn();
@@ -709,5 +711,168 @@ describe('AccountProfileWorkspaceView', () => {
     // Verify technical UID / timezone details are no longer shown
     expect(screen.queryByText('Identificador (UID)')).toBeNull();
     expect(screen.queryByText('Zona Horaria')).toBeNull();
+  });
+});
+
+describe('AccountProfileWorkspaceView modernized modal across platforms, themes, and widths', () => {
+  const originalWindow = Dimensions.get('window');
+
+  afterEach(() => {
+    cleanup();
+    act(() => {
+      Dimensions.set({ window: originalWindow });
+    });
+    __resetAuthRateLimiterForTests();
+    jest.useRealTimers();
+  });
+
+  const passwordUser: BFlowAuthUser = {
+    uid: 'usr_modern_modal',
+    email: 'brayan.serrano@bflow.app',
+    displayName: 'Brayan Serrano',
+    financialGoal: 'Viaje a Japón',
+    authProvider: 'password',
+    emailVerified: true,
+    activeMonthKey: '2026-10',
+    provider: 'firebase',
+  };
+
+  it.each(
+    PLATFORM_SKIN_IDS.flatMap((skin) => [
+      { skin, mode: 'dark' as const, width: 320 },
+      { skin, mode: 'light' as const, width: 1440 },
+    ])
+  )(
+    'renders compact identity banner and responsive modal columns on $skin ($mode, width $width)',
+    ({ skin, mode, width }) => {
+      act(() => {
+        Dimensions.set({
+          window: { width, height: 844, scale: 2, fontScale: 1 },
+        });
+      });
+
+      render(
+        <BFlowThemeProvider skin={skin} initialMode={mode}>
+          <AccountProfileWorkspaceView
+            authUser={passwordUser}
+            syncStatusMessage="En línea"
+            isSyncing={false}
+            onSignOut={jest.fn()}
+            onUpdateProfile={jest.fn()}
+            onRequestEmailChange={jest.fn()}
+            onSendPasswordReset={jest.fn()}
+          />
+        </BFlowThemeProvider>
+      );
+
+      fireEvent.press(screen.getByTestId('open-profile-settings-button'));
+
+      expect(screen.getByTestId('profile-settings-modal')).toBeTruthy();
+      const banner = screen.getByTestId('profile-modal-identity-banner');
+      expect(banner).toBeTruthy();
+      expect(screen.getByTestId('profile-modal-columns')).toBeTruthy();
+      expect(within(banner).getByText('BS')).toBeTruthy();
+      expect(within(banner).getByText('Correo')).toBeTruthy();
+      expect(screen.getByTestId('save-profile-settings-button')).toBeTruthy();
+      expect(screen.getByTestId('account-email-card')).toBeTruthy();
+      expect(screen.getByTestId('account-password-card')).toBeTruthy();
+    }
+  );
+
+  it('isolates cooldown timer ticks and password card from re-rendering parent status badges', async () => {
+    jest.useFakeTimers();
+    __resetAuthRateLimiterForTests();
+
+    const onManualSync = jest.fn();
+    const onSendPasswordReset = jest.fn().mockResolvedValue(undefined);
+
+    render(
+      <BFlowThemeProvider skin="ios" initialMode="dark">
+        <AccountProfileWorkspaceView
+          authUser={passwordUser}
+          syncStatusMessage="Sincronizado"
+          isSyncing={false}
+          onSignOut={jest.fn()}
+          onManualSync={onManualSync}
+          onSendPasswordReset={onSendPasswordReset}
+          onRequestEmailChange={jest.fn()}
+        />
+      </BFlowThemeProvider>
+    );
+
+    fireEvent.press(screen.getByTestId('open-profile-settings-button'));
+    mockStatusBadgeRender.mockClear();
+
+    // Ticking manual sync cooldown only re-renders ManualSyncButton, never parent badges.
+    fireEvent.press(screen.getByTestId('manual-sync-button'));
+    expect(onManualSync).toHaveBeenCalledTimes(1);
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(mockStatusBadgeRender).not.toHaveBeenCalled();
+
+    // Ticking password reset cooldown only re-renders AccountPasswordCard.
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('send-password-reset-button'));
+    });
+    expect(onSendPasswordReset).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('security-success-banner')).toBeTruthy();
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(mockStatusBadgeRender).not.toHaveBeenCalled();
+
+    // Reopening the modal resets transient password status banners while keeping cooldown.
+    fireEvent.press(screen.getByTestId('close-profile-settings-modal'));
+    fireEvent.press(screen.getByTestId('open-profile-settings-button'));
+    expect(screen.queryByTestId('security-success-banner')).toBeNull();
+    expect(screen.getByTestId('send-password-reset-button').props.accessibilityState?.disabled).toBe(
+      true
+    );
+  });
+
+  it('toggles Light/Dark theme inside the Account Appearance card and allows picking/removing profile photo', async () => {
+    const samplePhoto = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+    const pickSpy = jest
+      .spyOn(profilePhotoPicker, 'pickAndCompressProfilePhoto')
+      .mockResolvedValue({ status: 'picked', dataUri: samplePhoto });
+    const onUpdateProfile = jest.fn().mockResolvedValue('saved');
+
+    render(
+      <BFlowThemeProvider skin="ios" initialMode="dark">
+        <AccountProfileWorkspaceView
+          authUser={passwordUser}
+          syncStatusMessage="En línea"
+          isSyncing={false}
+          onSignOut={jest.fn()}
+          onUpdateProfile={onUpdateProfile}
+        />
+      </BFlowThemeProvider>
+    );
+
+    expect(screen.getByTestId('account-appearance-card')).toBeTruthy();
+    expect(screen.getByText('Modo oscuro activo')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('theme-toggle-button'));
+    expect(screen.getByText('Modo claro activo')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('open-profile-settings-button'));
+    expect(screen.queryByTestId('remove-profile-photo-button')).toBeNull();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('pick-profile-photo-button'));
+    });
+
+    expect(pickSpy).toHaveBeenCalledTimes(1);
+    expect(onUpdateProfile).toHaveBeenCalledWith({ photoUrl: samplePhoto });
+    expect(screen.getByTestId('profile-photo-preview')).toBeTruthy();
+    expect(screen.getByTestId('remove-profile-photo-button')).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('remove-profile-photo-button'));
+    });
+
+    expect(onUpdateProfile).toHaveBeenCalledWith({ photoUrl: '' });
+    expect(screen.queryByTestId('profile-photo-preview')).toBeNull();
+    pickSpy.mockRestore();
   });
 });

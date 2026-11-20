@@ -363,14 +363,14 @@ Fallback arquitectural idéntico visualmente mediante `expo-blur`:
 
 ## 10. Pieles por Plataforma (iOS · Android · Web)
 
-Decisiones en los ADR [0010](docs/decisions/0010-platform-skins-and-responsive-layout.md), [0011](docs/decisions/0011-web-redesign-and-vector-curve.md) y [0024](docs/decisions/0024-android-floating-dock-flat-indicator.md). La piel se resuelve en `src/design-system/platform/platformSkin.ts` y sus tokens viven en `src/design-system/tokens.ts` (`palettesBySkin`, `radiusBySkin`, `typographyBySkin`, `platformSkins`).
+Decisiones en los ADR [0010](docs/decisions/0010-platform-skins-and-responsive-layout.md), [0011](docs/decisions/0011-web-redesign-and-vector-curve.md), [0024](docs/decisions/0024-android-floating-dock-flat-indicator.md) y [0033](docs/decisions/0033-header-account-avatar-and-profile-photo.md). La piel se resuelve en `src/design-system/platform/platformSkin.ts` y sus tokens viven en `src/design-system/tokens.ts` (`palettesBySkin`, `radiusBySkin`, `typographyBySkin`, `platformSkins`).
 
 ### 10.1 Qué cambia y qué no
 
 | | iOS | Android | Web |
 | :--- | :--- | :--- | :--- |
 | Material | Liquid Glass: tinte translúcido + blur + borde especular | Material 3: contenedor tonal **opaco**; la variante elevada sube un tono y usa `elevation: 2` | Tarjeta plana, línea de 1 px, sin sombra |
-| Navegación | Dock flotante con lente líquido | Barra superior + el mismo dock flotante, opaco y con píldora plana (ADR 0024) | Cabecera opaca con línea; palabras desde 840 px, barra al pie por debajo |
+| Navegación | Dock flotante (5 destinos financieros) con lente líquido + avatar de Cuenta arriba a la derecha (ADR 0033) | Barra superior con avatar de Cuenta + el mismo dock flotante (5 destinos), opaco y con píldora plana (ADR 0024, 0033) | Cabecera opaca con línea y avatar de Cuenta a la derecha; 5 palabras desde 840 px, barra al pie por debajo (ADR 0033) |
 | Toque | Se hunde y atenúa con resorte (escala 0,97, opacidad 0,82) | Se hunde y atenúa igual, con curva y sin sobrepaso; sin ripple | Hover (140 ms) y pulsación (90 ms, escala 0,985), sin rebote |
 | Botón principal | Cápsula de vidrio | Relleno con el acento, totalmente redondeado | El único botón relleno con el acento, radio 4 |
 | Radios `xs / sm / md / lg / xl / pill` | 6 / 10 / 16 / 22 / 28 / 999 | 4 / 8 / 12 / 16 / 28 / 999 | 2 / 4 / 6 / 8 / 8 / 4 |

@@ -244,6 +244,8 @@ export interface UserProfileFields {
   displayName: string;
   /** Vacío borra la meta. */
   financialGoal: string;
+  /** Vacío borra la foto; omitido la deja sin cambios (ADR 0033). */
+  photoUrl?: string;
 }
 
 function reconstructClosedMonthBalances(
@@ -2592,7 +2594,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     );
   }
 
-  /** Guarda el nombre y la meta en `users/{uid}`, por la misma vía que el resto (ADR 0018). */
+  /** Guarda el perfil del usuario en `users/{uid}`, por la misma vía que el resto (ADR 0018, ADR 0033). */
   async saveUserProfile(uid: string, profile: UserProfileFields): Promise<void> {
     await this.commitUserDataMutationBatch(
       uid,
@@ -2600,6 +2602,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       {
         displayName: profile.displayName,
         financialGoal: profile.financialGoal,
+        ...(profile.photoUrl !== undefined ? { photoUrl: profile.photoUrl } : {}),
       }
     );
   }

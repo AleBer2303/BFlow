@@ -412,8 +412,8 @@ describe('Web navigation', () => {
     expect(screen.UNSAFE_queryAllByType(BlurView)).toHaveLength(0);
   });
 
-  it('drops the words and the month below 840px, keeping the mark and the theme switch', () => {
-    renderWithSkin(
+  it('drops the words and the month below 840px, keeping the mark and the account button (or theme switch when logged out)', () => {
+    const view = renderWithSkin(
       'web',
       <WebAppHeader
         layout={resolveResponsiveLayout(390, 844, 'web')}
@@ -425,15 +425,40 @@ describe('Web navigation', () => {
     expect(screen.queryByTestId('nav')).toBeNull();
     expect(screen.queryByTestId('web-header-context')).toBeNull();
     expect(screen.getByTestId('web-brand-mark')).toBeTruthy();
+    expect(screen.getByTestId('workspace-tab-account')).toBeTruthy();
+    expect(screen.getByTestId('account-header-avatar-icon')).toBeTruthy();
+    expect(screen.queryByTestId('theme-toggle-button')).toBeNull();
+    view.unmount();
+
+    // When a profile photo is configured, it replaces the Account icon in the header.
+    const withPhoto = renderWithSkin(
+      'web',
+      <WebAppHeader
+        layout={resolveResponsiveLayout(390, 844, 'web')}
+        contextLabel="Octubre 2026"
+        navigation={navigation}
+        accountPhotoUrl="data:image/jpeg;base64,/9j/4AAQSkZJRg=="
+      />
+    );
+    expect(screen.getByTestId('account-header-avatar-image')).toBeTruthy();
+    expect(screen.queryByTestId('account-header-avatar-icon')).toBeNull();
+    withPhoto.unmount();
+
+    // Logged-out header (no navigation) retains the theme switch.
+    renderWithSkin(
+      'web',
+      <WebAppHeader layout={resolveResponsiveLayout(390, 844, 'web')} />
+    );
     expect(screen.getByTestId('theme-toggle-button')).toBeTruthy();
   });
 
-  it('moves the destinations to a foot bar on phones, with labels when they fit', () => {
+  it('moves the 5 primary destinations to a foot bar on phones, with labels when they fit', () => {
     const view = renderWithSkin(
       'web',
       <WebTabBar activeTab="summary" onSelectTab={navigation.onSelectTab} layout={resolveResponsiveLayout(390, 844, 'web')} />
     );
     expect(screen.getByTestId('workspace-tab-debts')).toHaveTextContent('Deudas');
+    expect(screen.queryByTestId('workspace-tab-account')).toBeNull();
     expect(restingStyle('web-tab-bar')).toMatchObject({ height: 64, borderTopWidth: 1 });
 
     fireEvent.press(screen.getByTestId('workspace-tab-debts'));
@@ -441,10 +466,10 @@ describe('Web navigation', () => {
     expect(navigation.onSelectTab).toHaveBeenCalledTimes(1);
     view.unmount();
 
-    // 320px: 53px cells cannot hold a 13px label, so the bar shows icons with accessible names.
+    // Narrow 280px bar: 56px cells cannot hold a 13px label, so the bar shows icons with accessible names.
     renderWithSkin(
       'web',
-      <WebTabBar activeTab="summary" onSelectTab={navigation.onSelectTab} layout={resolveResponsiveLayout(320, 568, 'web')} />
+      <WebTabBar activeTab="summary" onSelectTab={navigation.onSelectTab} layout={resolveResponsiveLayout(280, 568, 'web')} />
     );
     expect(screen.getByTestId('workspace-tab-debts')).not.toHaveTextContent('Deudas');
     expect(screen.getByTestId('workspace-tab-debts').props.accessibilityLabel).toBe('Deudas');

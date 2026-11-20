@@ -106,17 +106,22 @@ export const FlatPillDock = React.memo(function FlatPillDock({
   // released index until parent state updates activeTab to match.
   const pendingReleaseIndexRef = useRef<number | null>(null);
 
-  const activeIndex = useMemo(() => {
-    const idx = DOCK_TABS.findIndex((t) => t.id === activeTab);
-    return idx >= 0 ? idx : 0;
-  }, [activeTab]);
+  const rawActiveIndex = useMemo(
+    () => DOCK_TABS.findIndex((t) => t.id === activeTab),
+    [activeTab]
+  );
+  const hasActiveDockTab = rawActiveIndex >= 0;
+  const activeIndex = hasActiveDockTab ? rawActiveIndex : 0;
 
-  // Current visual active index taking into account dragging and pending release
-  const displayedIndex = draggedIndex ?? (pendingReleaseIndexRef.current ?? activeIndex);
+  // Current visual active index taking into account dragging and pending release (-1 when on Account)
+  const displayedIndex =
+    draggedIndex ?? (pendingReleaseIndexRef.current ?? (hasActiveDockTab ? activeIndex : -1));
+  const showIndicator =
+    hasActiveDockTab || draggedIndex !== null || pendingReleaseIndexRef.current !== null;
 
   const gliderAnim = useRef(new Animated.Value(activeIndex)).current;
   const tabScaleAnims = useRef(
-    DOCK_TABS.map((_, i) => new Animated.Value(i === activeIndex ? 1.05 : 1))
+    DOCK_TABS.map((_, i) => new Animated.Value(hasActiveDockTab && i === activeIndex ? 1.05 : 1))
   ).current;
 
   // Track current visual index during gesture
@@ -131,7 +136,7 @@ export const FlatPillDock = React.memo(function FlatPillDock({
     // If we recently released on an index and props.activeTab has not updated yet, do not revert!
     if (
       pendingReleaseIndexRef.current !== null &&
-      pendingReleaseIndexRef.current !== activeIndex
+      (!hasActiveDockTab || pendingReleaseIndexRef.current !== activeIndex)
     ) {
       return;
     }
@@ -141,9 +146,9 @@ export const FlatPillDock = React.memo(function FlatPillDock({
 
     settle(gliderAnim, activeIndex);
     tabScaleAnims.forEach((anim, i) => {
-      spring(anim, i === activeIndex ? 1.05 : 1, springConfigs.gentle);
+      spring(anim, hasActiveDockTab && i === activeIndex ? 1.05 : 1, springConfigs.gentle);
     });
-  }, [activeIndex, draggedIndex, gliderAnim, settle, spring, tabScaleAnims]);
+  }, [activeIndex, draggedIndex, gliderAnim, hasActiveDockTab, settle, spring, tabScaleAnims]);
 
   const selectTabAtIndex = useCallback(
     (index: number, fromPressIn: boolean) => {
@@ -443,7 +448,7 @@ export const FlatPillDock = React.memo(function FlatPillDock({
           }}
         >
           {/* Flat selection pill: one tonal fill, nothing that reads as glass */}
-          {availableWidth > 0 && lensWidth > 0 ? (
+          {showIndicator && availableWidth > 0 && lensWidth > 0 ? (
             <Animated.View
               pointerEvents="none"
               testID="dock-flat-indicator"

@@ -38,6 +38,7 @@ describe('design-system & PhaseOneHomeScreen (RNTL)', () => {
       </BFlowThemeProvider>
     );
 
+    fireEvent.press(screen.getByTestId('workspace-tab-account'));
     const themeBtn = screen.getByTestId('theme-toggle-button');
     expect(screen.getByTestId('theme-icon-sun')).toBeTruthy();
     fireEvent.press(themeBtn);

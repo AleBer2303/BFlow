@@ -457,6 +457,7 @@ async function executeQueuedOperation(
       await repo.saveUserProfile(uid, {
         displayName: p.displayName as string,
         financialGoal: p.financialGoal as string,
+        ...(typeof p.photoUrl === 'string' ? { photoUrl: p.photoUrl } : {}),
       });
       break;
 

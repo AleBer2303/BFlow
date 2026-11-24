@@ -25,6 +25,7 @@ function point(monthKey: string, totalDebt: number): MonthlyHistoryPoint {
     savingsName: 'Ahorros',
     savingsBalance: 0,
     otherSavingsBalance: 0,
+    savingsBuckets: [],
     totalSavings: 0,
   };
 }

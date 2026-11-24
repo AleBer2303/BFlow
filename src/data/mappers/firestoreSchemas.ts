@@ -231,6 +231,15 @@ export const monthSnapshotSchema: z.ZodType<MonthSnapshot> = z.object({
     motoClosingBalance: signedIntSchema,
     savingsClosingBalance: signedIntSchema,
     totalClosingSavings: signedIntSchema,
+    buckets: z
+      .array(
+        z.object({
+          id: z.string().min(1),
+          name: z.string().min(1),
+          closingBalance: signedIntSchema,
+        })
+      )
+      .optional(),
   }),
 });
 

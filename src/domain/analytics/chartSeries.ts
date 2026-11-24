@@ -44,6 +44,12 @@ export interface MonthlyHistoryInput {
   maxMonths?: number;
 }
 
+export interface MonthlySavingsBucketPoint {
+  id: string;
+  name: string;
+  balance: number;
+}
+
 export interface MonthlyHistoryPoint {
   monthKey: string;
   isClosed: boolean;
@@ -60,6 +66,8 @@ export interface MonthlyHistoryPoint {
   savingsBalance: number;
   /** User-created buckets beyond the reserve and the general savings. */
   otherSavingsBalance: number;
+  /** Actual savings buckets owned by the user in this month, without hardcoded defaults. */
+  savingsBuckets: readonly MonthlySavingsBucketPoint[];
   totalSavings: number;
 }
 
@@ -150,6 +158,62 @@ function bucketName(
   return name ? name : fallback;
 }
 
+function resolveSnapshotSavingsBuckets(
+  closingSavings: MonthSnapshot['closingSavings'],
+  buckets: readonly SavingsBucket[],
+  reserveBalance: number,
+  savingsBalance: number,
+  otherSavingsBalance: number
+): MonthlySavingsBucketPoint[] {
+  if (closingSavings.buckets) {
+    return closingSavings.buckets.map((bucket) => ({
+      id: bucket.id,
+      name: bucket.name.trim() || bucket.id,
+      balance: bucket.closingBalance,
+    }));
+  }
+
+  const result: MonthlySavingsBucketPoint[] = [];
+  const reserveBucket = buckets.find((b) => RESERVE_BUCKET_IDS.has(b.id));
+  const savingsBucket = buckets.find((b) => b.id === 'savings');
+  const customBuckets = buckets.filter(
+    (b) => !RESERVE_BUCKET_IDS.has(b.id) && b.id !== 'savings'
+  );
+
+  if (reserveBucket || (buckets.length === 0 && reserveBalance !== 0)) {
+    result.push({
+      id: reserveBucket?.id ?? 'reserve',
+      name: bucketName(buckets, (b) => RESERVE_BUCKET_IDS.has(b.id), DEFAULT_RESERVE_NAME),
+      balance: reserveBalance,
+    });
+  }
+  if (savingsBucket || (buckets.length === 0 && savingsBalance !== 0)) {
+    result.push({
+      id: 'savings',
+      name: bucketName(buckets, (b) => b.id === 'savings', DEFAULT_SAVINGS_NAME),
+      balance: savingsBalance,
+    });
+  }
+  if (customBuckets.length === 1) {
+    const onlyCustom = customBuckets[0];
+    if (onlyCustom) {
+      result.push({
+        id: onlyCustom.id,
+        name: onlyCustom.name.trim() || onlyCustom.id,
+        balance: otherSavingsBalance,
+      });
+    }
+  } else if (otherSavingsBalance > 0) {
+    result.push({
+      id: 'other',
+      name: 'Otros fondos',
+      balance: otherSavingsBalance,
+    });
+  }
+
+  return result;
+}
+
 function buildPointFromSnapshot(
   snapshot: MonthSnapshot,
   buckets: readonly SavingsBucket[]
@@ -157,6 +221,10 @@ function buildPointFromSnapshot(
   const { budget, closingSavings } = snapshot;
   const reserveBalance = closingSavings.reserveClosingBalance ?? closingSavings.motoClosingBalance;
   const savingsBalance = closingSavings.savingsClosingBalance;
+  const otherSavingsBalance = Math.max(
+    0,
+    closingSavings.totalClosingSavings - reserveBalance - savingsBalance
+  );
   return {
     monthKey: snapshot.monthKey,
     isClosed: true,
@@ -171,9 +239,13 @@ function buildPointFromSnapshot(
     reserveBalance,
     savingsName: bucketName(buckets, (b) => b.id === 'savings', DEFAULT_SAVINGS_NAME),
     savingsBalance,
-    otherSavingsBalance: Math.max(
-      0,
-      closingSavings.totalClosingSavings - reserveBalance - savingsBalance
+    otherSavingsBalance,
+    savingsBuckets: resolveSnapshotSavingsBuckets(
+      closingSavings,
+      buckets,
+      reserveBalance,
+      savingsBalance,
+      otherSavingsBalance
     ),
     totalSavings: closingSavings.totalClosingSavings,
   };
@@ -215,6 +287,21 @@ export function buildMonthlyHistory(input: MonthlyHistoryInput): MonthlyHistoryP
     );
     const reserveBalance = savings.reserve.currentBalance;
     const savingsBalance = savings.savings.currentBalance;
+    const reserveName = savings.reserve.name.trim() || DEFAULT_RESERVE_NAME;
+    const savingsName = savings.savings.name.trim() || DEFAULT_SAVINGS_NAME;
+    const savingsBuckets: MonthlySavingsBucketPoint[] = [
+      ...(savings.hasReserveBucket
+        ? [{ id: savings.reserve.bucketId, name: reserveName, balance: reserveBalance }]
+        : []),
+      ...(savings.hasSavingsBucket
+        ? [{ id: 'savings', name: savingsName, balance: savingsBalance }]
+        : []),
+      ...savings.customBuckets.map((bucket) => ({
+        id: bucket.bucketId,
+        name: bucket.name.trim() || bucket.bucketId,
+        balance: bucket.currentBalance,
+      })),
+    ];
 
     return {
       monthKey,
@@ -226,13 +313,14 @@ export function buildMonthlyHistory(input: MonthlyHistoryInput): MonthlyHistoryP
       pendingExpenses: budget.pendingExpenses,
       netCashFlow: budget.netCashFlow,
       totalDebt: debts.totalRemainingDebt,
-      reserveName: savings.reserve.name || DEFAULT_RESERVE_NAME,
+      reserveName,
       reserveBalance,
-      savingsName: savings.savings.name || DEFAULT_SAVINGS_NAME,
+      savingsName,
       savingsBalance,
       otherSavingsBalance: sumMoneyIntegers(
         savings.customBuckets.map((bucket) => bucket.currentBalance)
       ),
+      savingsBuckets,
       totalSavings: savings.totalCurrentSavings,
     };
   });

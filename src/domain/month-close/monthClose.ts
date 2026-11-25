@@ -63,6 +63,33 @@ export function closeMonthAndRollover(input: CloseMonthInput): CloseMonthResult 
     input.closingMonthKey
   );
 
+  const reserveBucket = input.savingsBuckets.find((b) => b.id === 'reserve' || b.id === 'moto');
+  const closingSavingsBuckets = [
+    ...(savingsSummary.hasReserveBucket
+      ? [
+          {
+            id: reserveBucket?.id ?? 'reserve',
+            name: reserveBucket?.name || 'Fondo de Reserva',
+            closingBalance: savingsSummary.reserve.currentBalance,
+          },
+        ]
+      : []),
+    ...(savingsSummary.hasSavingsBucket
+      ? [
+          {
+            id: 'savings' as const,
+            name: input.savingsBuckets.find((b) => b.id === 'savings')?.name || 'Ahorros',
+            closingBalance: savingsSummary.savings.currentBalance,
+          },
+        ]
+      : []),
+    ...savingsSummary.customBuckets.map((cb) => ({
+      id: cb.bucketId,
+      name: cb.name,
+      closingBalance: cb.currentBalance,
+    })),
+  ];
+
   const snapshot: MonthSnapshot = {
     monthKey: input.closingMonthKey,
     closedAtIso: input.closedAtIso,
@@ -104,6 +131,7 @@ export function closeMonthAndRollover(input: CloseMonthInput): CloseMonthResult 
       motoClosingBalance: savingsSummary.reserve.currentBalance,
       savingsClosingBalance: savingsSummary.savings.currentBalance,
       totalClosingSavings: savingsSummary.totalCurrentSavings,
+      buckets: closingSavingsBuckets,
     },
   };
 
@@ -149,32 +177,11 @@ export function closeMonthAndRollover(input: CloseMonthInput): CloseMonthResult 
     };
   });
 
-  const reserveBucket = input.savingsBuckets.find((b) => b.id === 'reserve' || b.id === 'moto');
-  const nextMonthSavingsBuckets: SavingsBucket[] = [
-    ...(savingsSummary.hasReserveBucket
-      ? [
-          {
-            id: reserveBucket?.id ?? 'reserve',
-            name: reserveBucket?.name ?? 'Fondo de Reserva',
-            openingBalance: savingsSummary.reserve.currentBalance,
-          },
-        ]
-      : []),
-    ...(savingsSummary.hasSavingsBucket
-      ? [
-          {
-            id: 'savings',
-            name: input.savingsBuckets.find((b) => b.id === 'savings')?.name ?? 'Ahorros',
-            openingBalance: savingsSummary.savings.currentBalance,
-          },
-        ]
-      : []),
-    ...savingsSummary.customBuckets.map((cb) => ({
-      id: cb.bucketId,
-      name: cb.name,
-      openingBalance: cb.currentBalance,
-    })),
-  ];
+  const nextMonthSavingsBuckets: SavingsBucket[] = closingSavingsBuckets.map((bucket) => ({
+    id: bucket.id,
+    name: bucket.name,
+    openingBalance: bucket.closingBalance,
+  }));
 
   const existingNextMonthEntries = input.entries.filter((e) => e.monthKey === nextMonthKey);
   const nextMonthEntries = ensureMonthPlan(

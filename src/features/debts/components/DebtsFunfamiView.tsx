@@ -8,7 +8,7 @@
  * - 100% pure integers, >= minTouchTarget touch targets, smooth native layout transitions
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import {
   animateNextLayout,
@@ -24,6 +24,7 @@ import {
   ScrollDepthHero,
   ScrollRevealSection,
   StatusBadge,
+  TabLeaveResetter,
   TrashBinIcon,
   useAmountPrivacy,
   useBFlowTheme,
@@ -307,6 +308,42 @@ const DebtObligationCard = React.memo(function DebtObligationCard({
   );
 });
 
+type ActiveDebtForm =
+  | { kind: 'create'; key: number }
+  | { kind: 'edit'; debt: DebtFormDebt; key: number }
+  | null;
+
+interface DebtObligationsGridProps {
+  obligations: readonly DebtFormDebt[];
+  monthKey: string;
+  debtActionMode: DebtActionMode;
+  onEdit: (debt: DebtFormDebt) => void;
+  onDelete: (debtId: string, name: string) => void;
+}
+
+const DebtObligationsGrid = React.memo(function DebtObligationsGrid({
+  obligations,
+  monthKey,
+  debtActionMode,
+  onEdit,
+  onDelete,
+}: DebtObligationsGridProps): React.JSX.Element {
+  return (
+    <ResponsiveColumns testID="debt-cards-grid">
+      {obligations.map((debt) => (
+        <DebtObligationCard
+          key={debt.debtId}
+          debt={debt}
+          monthKey={monthKey}
+          debtActionMode={debtActionMode}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
+      ))}
+    </ResponsiveColumns>
+  );
+});
+
 export function DebtsFunfamiView({
   debtSummary,
   onCreateDebt,
@@ -318,12 +355,22 @@ export function DebtsFunfamiView({
 
   const [dismissedBannerMonth, setDismissedBannerMonth] = useState<string | null>(null);
 
-  // The form owns its field state (R-17); the view only knows whether it is open and for
-  // which debt. A new key remounts it, so it loads that debt's values (or starts empty).
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [formKey, setFormKey] = useState(0);
+  // Single active form slot (R-17): guarantees at most one form is open and remounts clean.
+  const [activeForm, setActiveForm] = useState<ActiveDebtForm>(null);
   const [debtActionMode, setDebtActionMode] = useState<DebtActionMode>(null);
-  const [editingDebt, setEditingDebt] = useState<DebtFormDebt | null>(null);
+  const formKeyRef = useRef(0);
+
+  const isFormOpen = activeForm !== null;
+  const editingDebt = activeForm?.kind === 'edit' ? activeForm.debt : null;
+
+  const handleResetTransientState = useCallback(() => {
+    setActiveForm(null);
+    setDebtActionMode(null);
+  }, []);
+
+  useEffect(() => {
+    handleResetTransientState();
+  }, [debtSummary.monthKey, handleResetTransientState]);
 
   const paidOffDebt = useMemo(
     () =>
@@ -353,8 +400,7 @@ export function DebtsFunfamiView({
     setDebtActionMode((prev) => {
       const next = prev === mode ? null : mode;
       if (next) {
-        setIsFormOpen(false);
-        setEditingDebt(null);
+        setActiveForm(null);
       }
       return next;
     });
@@ -363,12 +409,15 @@ export function DebtsFunfamiView({
   const openForm = useCallback((debt: DebtFormDebt | null) => {
     hapticService.light();
     setDebtActionMode(null);
-    setEditingDebt(debt);
-    setFormKey((key) => key + 1);
-    setIsFormOpen(true);
+    formKeyRef.current += 1;
+    setActiveForm(
+      debt
+        ? { kind: 'edit', debt, key: formKeyRef.current }
+        : { kind: 'create', key: formKeyRef.current }
+    );
   }, []);
 
-  const handleCloseForm = useCallback(() => setIsFormOpen(false), []);
+  const handleCloseForm = useCallback(() => setActiveForm(null), []);
 
   const handleDeleteDebtConfirm = useCallback(
     (debtId: string, name: string) => {
@@ -384,6 +433,9 @@ export function DebtsFunfamiView({
 
   return (
     <View style={{ gap: spacing.md }} testID="debts-funfami-view">
+      {activeForm !== null || debtActionMode !== null ? (
+        <TabLeaveResetter onLeave={handleResetTransientState} />
+      ) : null}
       {/* Hero Card: Total Deudas */}
       <DebtHeroCard debtSummary={debtSummary} />
 
@@ -395,7 +447,7 @@ export function DebtsFunfamiView({
           onPress={() => {
             if (isFormOpen) {
               hapticService.light();
-              setIsFormOpen(false);
+              handleCloseForm();
             } else {
               openForm(null);
             }
@@ -491,7 +543,7 @@ export function DebtsFunfamiView({
       {/* Form Drawer / Card for Creating or Editing a Debt */}
       <RevealDown visible={isFormOpen}>
         <DebtForm
-          key={formKey}
+          key={activeForm ? activeForm.key : 'debt-idle'}
           debt={editingDebt}
           onCreateDebt={onCreateDebt}
           onUpdateDebt={onUpdateDebt}
@@ -537,19 +589,13 @@ export function DebtsFunfamiView({
         </GlassSurface>
       </RevealDown>
 
-      <ResponsiveColumns testID="debt-cards-grid">
-        {/* Individual Active Obligations Breakdown */}
-        {activeObligations.map((debt) => (
-          <DebtObligationCard
-            key={debt.debtId}
-            debt={debt}
-            monthKey={debtSummary.monthKey}
-            debtActionMode={debtActionMode}
-            onEdit={openForm}
-            onDelete={handleDeleteDebtConfirm}
-          />
-        ))}
-      </ResponsiveColumns>
+      <DebtObligationsGrid
+        obligations={activeObligations}
+        monthKey={debtSummary.monthKey}
+        debtActionMode={debtActionMode}
+        onEdit={openForm}
+        onDelete={handleDeleteDebtConfirm}
+      />
     </View>
   );
 }

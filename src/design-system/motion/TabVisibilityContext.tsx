@@ -6,7 +6,7 @@
  * consumers (SVG curve, chart transitions) pause `requestAnimationFrame` loops while hidden.
  */
 
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
 
 const TabVisibilityContext = createContext<boolean>(true);
 
@@ -27,3 +27,22 @@ export function TabVisibilityProvider({
 export function useIsTabActive(): boolean {
   return useContext(TabVisibilityContext);
 }
+
+/**
+ * Zero-render leaf that invokes `onLeave` when the enclosing tab becomes inactive.
+ * Subscribing only this leaf to `TabVisibilityContext` prevents heavy workspace views
+ * from re-rendering on rapid tab switches when no transient state is open.
+ */
+export const TabLeaveResetter = React.memo(function TabLeaveResetter({
+  onLeave,
+}: {
+  onLeave: () => void;
+}): null {
+  const isTabActive = useIsTabActive();
+  useEffect(() => {
+    if (!isTabActive) {
+      onLeave();
+    }
+  }, [isTabActive, onLeave]);
+  return null;
+});

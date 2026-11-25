@@ -6,6 +6,7 @@ import {
   BFlowThemeProvider,
   HIDDEN_AMOUNT_TEXT,
   PLATFORM_SKIN_IDS,
+  TabVisibilityProvider,
   palettesBySkin,
   type PlatformSkinId,
   type ThemeMode,
@@ -13,6 +14,7 @@ import {
 import type { Concept, Debt, MonthEntry, SavingsBucket } from '../../../domain';
 import { ChecklistAddMovementForm } from '../components/ChecklistAddMovementForm';
 import { ChecklistEditEntryForm } from '../components/ChecklistEditEntryForm';
+import { ChecklistWorkspaceView } from '../components/ChecklistWorkspaceView';
 
 const SAMPLE_CONCEPTS: readonly Concept[] = [
   {
@@ -379,6 +381,141 @@ describe('ChecklistAddMovementForm & HeroAmountField', () => {
         note: 'Renovación anual',
       });
       expect(onClose).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it.each(PLATFORM_SKIN_IDS)(
+    'keeps only one form open at a time and resets transient modes on month change (%s skin)',
+    (skin) => {
+      const budget = {
+        monthKey: '2026-10',
+        plannedIncome: 0,
+        receivedIncome: 0,
+        pendingIncome: 0,
+        incomeByGroup: {
+          fixed: { planned: 0, paid: 0, pending: 0 },
+          variable: { planned: 0, paid: 0, pending: 0 },
+        },
+        plannedExpenses: 130_000,
+        paidExpenses: 0,
+        pendingExpenses: 130_000,
+        expensesByGroup: {
+          fixed: { planned: 130_000, paid: 0, pending: 130_000 },
+          variable: { planned: 0, paid: 0, pending: 0 },
+        },
+        netCashFlow: 0,
+        projectedNetFlow: -130_000,
+      };
+      const { rerender } = render(
+        <BFlowThemeProvider skin={skin} initialMode="dark">
+          <TabVisibilityProvider isActive>
+            <ChecklistWorkspaceView
+              monthKey="2026-10"
+              concepts={SAMPLE_CONCEPTS}
+              entries={SAMPLE_ENTRIES}
+              budget={budget}
+              debts={SAMPLE_DEBTS}
+              savingsBuckets={SAMPLE_BUCKETS}
+              onToggleEntry={jest.fn()}
+              onAddOrCompleteMovement={jest.fn()}
+              onRemoveRepeatableEntry={jest.fn()}
+            />
+          </TabVisibilityProvider>
+        </BFlowThemeProvider>
+      );
+
+      // Mutual exclusion: Ingresos Edit -> Gastos Delete -> Ingresos Delete -> only one active
+      fireEvent.press(screen.getByTestId('incomes-edit-action-button'));
+      expect(screen.getByTestId('edit-entry-2026-10_inc_freelance')).toBeTruthy();
+
+      fireEvent.press(screen.getByTestId('expenses-delete-action-button'));
+      expect(screen.queryByTestId('edit-entry-2026-10_inc_freelance')).toBeNull();
+      expect(screen.getByTestId('delete-entry-2026-10_exp_seguro_tr_sura')).toBeTruthy();
+
+      fireEvent.press(screen.getByTestId('incomes-delete-action-button'));
+      expect(screen.queryByTestId('delete-entry-2026-10_exp_seguro_tr_sura')).toBeNull();
+      expect(screen.getByTestId('delete-entry-2026-10_inc_freelance')).toBeTruthy();
+
+      // Open add movement form, then enable expenses edit mode -> add form closes
+      fireEvent.press(screen.getByTestId('open-add-movement-modal-button'));
+      expect(screen.queryByTestId('delete-entry-2026-10_inc_freelance')).toBeNull();
+      expect(screen.getByTestId('add-movement-modal-card')).toBeTruthy();
+
+      fireEvent.press(screen.getByTestId('expenses-edit-action-button'));
+      expect(screen.queryByTestId('add-movement-modal-card')).toBeNull();
+      expect(screen.getByTestId('edit-entry-2026-10_exp_seguro_tr_sura')).toBeTruthy();
+
+      // Open edit form, then toggle "+ Nuevo Movimiento" -> edit form closes and add form opens
+      fireEvent.press(screen.getByTestId('edit-entry-2026-10_exp_seguro_tr_sura'));
+      expect(screen.getByTestId('edit-entry-modal-card')).toBeTruthy();
+
+      fireEvent.press(screen.getByTestId('open-add-movement-modal-button'));
+      expect(screen.queryByTestId('edit-entry-modal-card')).toBeNull();
+      expect(screen.getByTestId('add-movement-modal-card')).toBeTruthy();
+
+      // Leaving the tab resets open form and section modes back to normal
+      fireEvent.press(screen.getByTestId('incomes-edit-action-button'));
+      expect(screen.getByTestId('edit-entry-2026-10_inc_freelance')).toBeTruthy();
+
+      rerender(
+        <BFlowThemeProvider skin={skin} initialMode="dark">
+          <TabVisibilityProvider isActive={false}>
+            <ChecklistWorkspaceView
+              monthKey="2026-10"
+              concepts={SAMPLE_CONCEPTS}
+              entries={SAMPLE_ENTRIES}
+              budget={budget}
+              debts={SAMPLE_DEBTS}
+              savingsBuckets={SAMPLE_BUCKETS}
+              onToggleEntry={jest.fn()}
+              onAddOrCompleteMovement={jest.fn()}
+              onRemoveRepeatableEntry={jest.fn()}
+            />
+          </TabVisibilityProvider>
+        </BFlowThemeProvider>
+      );
+      expect(screen.queryByTestId('edit-entry-2026-10_inc_freelance')).toBeNull();
+      expect(screen.queryByTestId('add-movement-modal-card')).toBeNull();
+
+      // Switching monthKey also clears open form and modes
+      rerender(
+        <BFlowThemeProvider skin={skin} initialMode="dark">
+          <TabVisibilityProvider isActive>
+            <ChecklistWorkspaceView
+              monthKey="2026-10"
+              concepts={SAMPLE_CONCEPTS}
+              entries={SAMPLE_ENTRIES}
+              budget={budget}
+              debts={SAMPLE_DEBTS}
+              savingsBuckets={SAMPLE_BUCKETS}
+              onToggleEntry={jest.fn()}
+              onAddOrCompleteMovement={jest.fn()}
+              onRemoveRepeatableEntry={jest.fn()}
+            />
+          </TabVisibilityProvider>
+        </BFlowThemeProvider>
+      );
+      fireEvent.press(screen.getByTestId('open-add-movement-modal-button'));
+      expect(screen.getByTestId('add-movement-modal-card')).toBeTruthy();
+
+      rerender(
+        <BFlowThemeProvider skin={skin} initialMode="dark">
+          <TabVisibilityProvider isActive>
+            <ChecklistWorkspaceView
+              monthKey="2026-11"
+              concepts={SAMPLE_CONCEPTS}
+              entries={SAMPLE_ENTRIES}
+              budget={{ ...budget, monthKey: '2026-11' }}
+              debts={SAMPLE_DEBTS}
+              savingsBuckets={SAMPLE_BUCKETS}
+              onToggleEntry={jest.fn()}
+              onAddOrCompleteMovement={jest.fn()}
+              onRemoveRepeatableEntry={jest.fn()}
+            />
+          </TabVisibilityProvider>
+        </BFlowThemeProvider>
+      );
+      expect(screen.queryByTestId('add-movement-modal-card')).toBeNull();
     }
   );
 });

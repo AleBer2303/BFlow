@@ -181,5 +181,10 @@ export interface MonthSnapshot {
     motoClosingBalance: number;
     savingsClosingBalance: number;
     totalClosingSavings: number;
+    buckets?: ReadonlyArray<{
+      id: SavingsBucketId;
+      name: string;
+      closingBalance: number;
+    }>;
   };
 }

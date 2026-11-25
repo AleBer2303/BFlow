@@ -25,7 +25,25 @@ const OCTOBER: MonthlyHistoryPoint = {
   savingsName: 'Ahorros',
   savingsBalance: 2_080_000,
   otherSavingsBalance: 0,
+  savingsBuckets: [
+    { id: 'moto', name: 'Moto', balance: 2_300_000 },
+    { id: 'savings', name: 'Ahorros', balance: 2_080_000 },
+  ],
   totalSavings: 4_380_000,
+};
+
+const CUSTOM_USER_OCTOBER: MonthlyHistoryPoint = {
+  ...OCTOBER,
+  reserveName: 'Fondo de Reserva',
+  reserveBalance: 0,
+  savingsName: 'Ahorros',
+  savingsBalance: 0,
+  otherSavingsBalance: 800_000,
+  savingsBuckets: [
+    { id: 'custom_emergency', name: 'Emergencias', balance: 500_000 },
+    { id: 'custom_trip', name: 'Viaje', balance: 300_000 },
+  ],
+  totalSavings: 800_000,
 };
 
 function renderChart(history: MonthlyHistoryPoint[] = [OCTOBER], skin: PlatformSkinId = 'ios') {
@@ -46,6 +64,17 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsTrendCharts on the %s skin', (skin) => 
     expect(balances).toHaveTextContent(/Moto\s*\$ 2\.300\.000/);
     expect(balances).toHaveTextContent(/Ahorros\s*\$ 2\.080\.000/);
   });
+
+  it('shows only the custom funds owned by a new user without preset buckets', () => {
+    renderChart([CUSTOM_USER_OCTOBER], skin);
+
+    const balances = screen.getByTestId('savings-trend-chart-readout');
+    expect(balances).toHaveTextContent(/Emergencias\s*\$ 500\.000/);
+    expect(balances).toHaveTextContent(/Viaje\s*\$ 300\.000/);
+    expect(balances).not.toHaveTextContent(/Fondo de Reserva|Reserva/);
+    expect(balances).not.toHaveTextContent(/Ahorros/);
+    expect(balances).not.toHaveTextContent(/Otros fondos/);
+  });
 });
 
 describe('SavingsTrendCharts', () => {
@@ -58,21 +87,43 @@ describe('SavingsTrendCharts', () => {
     expect(screen.queryByTestId('savings-chart-provision')).toBeNull();
   });
 
-  it('adds the other buckets as their own layer only when they hold money', () => {
+  it('shows each custom bucket under its own name instead of grouping into Otros fondos', () => {
     const november: MonthlyHistoryPoint = {
       ...OCTOBER,
       monthKey: '2026-11',
       otherSavingsBalance: 300_000,
+      savingsBuckets: [
+        { id: 'moto', name: 'Moto', balance: 2_300_000 },
+        { id: 'savings', name: 'Ahorros', balance: 2_080_000 },
+        { id: 'trip', name: 'Viaje', balance: 300_000 },
+      ],
       totalSavings: 4_680_000,
     };
     renderChart([OCTOBER, november]);
-    expect(screen.getByTestId('savings-trend-chart-readout')).toHaveTextContent(
-      /Otros fondos\s*\$ 300\.000/
-    );
+    const readout = screen.getByTestId('savings-trend-chart-readout');
+    expect(readout).toHaveTextContent(/Viaje\s*\$ 300\.000/);
+    expect(readout).not.toHaveTextContent(/Otros fondos/);
+  });
+
+  it('renders an empty state when the user has no savings funds', () => {
+    renderChart([{ ...CUSTOM_USER_OCTOBER, savingsBuckets: [], totalSavings: 0 }]);
+    expect(screen.getByTestId('savings-trend-chart-empty')).toBeTruthy();
+    expect(screen.queryByTestId('savings-trend-chart')).toBeNull();
   });
 
   it('reads any month of the history when touched', () => {
-    renderChart([OCTOBER, { ...OCTOBER, monthKey: '2026-11', reserveBalance: 2_500_000 }]);
+    renderChart([
+      OCTOBER,
+      {
+        ...OCTOBER,
+        monthKey: '2026-11',
+        reserveBalance: 2_500_000,
+        savingsBuckets: [
+          { id: 'moto', name: 'Moto', balance: 2_500_000 },
+          { id: 'savings', name: 'Ahorros', balance: 2_080_000 },
+        ],
+      },
+    ]);
     fireEvent.press(screen.getByTestId('savings-trend-chart-point-0'));
     expect(screen.getByTestId('savings-trend-chart-readout')).toHaveTextContent(/Octubre 2026/);
   });

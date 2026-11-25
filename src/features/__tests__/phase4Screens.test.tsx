@@ -255,7 +255,7 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     fireEvent.changeText(screen.getByTestId('new-bucket-name-input'), 'Fondo Viaje');
     fireEvent.changeText(screen.getByTestId('new-bucket-balance-input'), '500000');
     fireEvent.press(screen.getByTestId('submit-new-bucket-button'));
-    expect(screen.getByText('Fondo Viaje')).toBeTruthy();
+    expect(screen.getAllByText('Fondo Viaje').length).toBeGreaterThanOrEqual(1);
 
     fireEvent.press(screen.getByTestId('open-add-provision-button'));
     expect(screen.queryByTestId('cancel-provision-button')).toBeNull();
@@ -280,14 +280,19 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
       fireEvent.press(screen.getByTestId('confirm-reset-full-account-button'));
     });
 
-    // Must render InitialAccountSetupView
+    // Must render InitialAccountSetupView and keep WorkspaceShell month label in sync with user selection
     expect(screen.getByTestId('initial-account-setup-view')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('onboarding-month-dropdown-trigger'));
+    fireEvent.press(screen.getByTestId('onboarding-month-picker-option-07'));
+    fireEvent.press(screen.getByTestId('onboarding-month-picker-confirm'));
+    expect(screen.getAllByText(/Julio/).length).toBeGreaterThanOrEqual(2);
 
-    // Configure an income and complete setup via accordion
-    fireEvent.press(screen.getByTestId('onboarding-toggle-add-income'));
-    fireEvent.changeText(screen.getByTestId('onboarding-income-name-input'), 'Salario Mensual');
-    fireEvent.changeText(screen.getByTestId('onboarding-income-amount-input'), '5000000');
-    fireEvent.press(screen.getByTestId('onboarding-add-income-button'));
+    // Configure an income and complete setup via the shared modernized movement form
+    fireEvent.press(screen.getByTestId('onboarding-toggle-add-movement'));
+    fireEvent.press(screen.getByTestId('modal-type-income'));
+    fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Salario Mensual');
+    fireEvent.changeText(screen.getByTestId('movement-amount-input'), '5000000');
+    fireEvent.press(screen.getByTestId('submit-movement-button'));
 
     await act(async () => {
       fireEvent.press(screen.getByTestId('complete-initial-setup-button'));

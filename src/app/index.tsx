@@ -14,7 +14,7 @@ import {
   hapticService,
   type HapticType,
 } from '../design-system';
-import { formatMonthKeyLabelEs } from '../domain';
+import { formatMonthKeyLabelEs, toAppMonthKey } from '../domain';
 import { AnalyticsTab } from '../features/analytics/components/AnalyticsTab';
 import { AccountTab, type AccountTabProps } from '../features/auth/components/AccountTab';
 import { AuthScreen, type AuthScreenProps } from '../features/auth/components/AuthScreen';
@@ -237,8 +237,17 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
 
   const [authErrorMessage, setAuthErrorMessage] = useState<string | null>(null);
   const [authStatusMessage, setAuthStatusMessage] = useState<string | null>(null);
+  const [onboardingMonthKey, setOnboardingMonthKey] = useState<string>(() => toAppMonthKey());
 
-  const activeMonthLabel = formatMonthKeyLabelEs(activeMonthKey);
+  useEffect(() => {
+    if (needsOnboarding) {
+      setOnboardingMonthKey(toAppMonthKey());
+    }
+  }, [needsOnboarding]);
+
+  const activeMonthLabel = formatMonthKeyLabelEs(
+    needsOnboarding ? onboardingMonthKey : activeMonthKey
+  );
 
   const syncInFlightRef = React.useRef<Map<string, Promise<void>>>(new Map());
   // Cuenta creada en esta sesión cuyo presupuesto se prepara al verificar el correo.
@@ -639,6 +648,8 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
       >
         {needsOnboarding ? (
           <InitialAccountSetupView
+            defaultMonthKey={onboardingMonthKey}
+            onMonthKeyChange={setOnboardingMonthKey}
             onCompleteSetup={(config) => {
               void completeInitialAccountSetup(config);
               void triggerHaptic('success');

@@ -83,6 +83,7 @@ function pointFor(monthKey: string, overrides: Partial<MonthlyHistoryPoint> = {}
     savingsName: 'Ahorros',
     savingsBalance: 0,
     otherSavingsBalance: 0,
+    savingsBuckets: [],
     totalSavings: 0,
     ...overrides,
   } satisfies MonthlyHistoryPoint;
@@ -144,6 +145,10 @@ describe('buildMonthlyHistory', () => {
       savingsName: 'Ahorros',
       savingsBalance: 2_080_000,
       otherSavingsBalance: 0,
+      savingsBuckets: [
+        { id: 'moto', name: 'Moto', balance: 2_300_000 },
+        { id: 'savings', name: 'Ahorros', balance: 2_080_000 },
+      ],
       totalSavings: 4_380_000,
     });
   });
@@ -250,7 +255,7 @@ describe('buildMonthlyHistory', () => {
     });
   });
 
-  it('adds user buckets to the other savings and handles months with no data', () => {
+  it('adds user buckets individually and omits preset funds the user does not own', () => {
     const [october] = buildMonthlyHistory(
       octoberInput({
         savingsBucketsByMonth: {
@@ -258,7 +263,64 @@ describe('buildMonthlyHistory', () => {
         },
       })
     );
-    expect(october).toMatchObject({ otherSavingsBalance: 300_000, totalSavings: 4_680_000 });
+    expect(october).toMatchObject({
+      otherSavingsBalance: 300_000,
+      totalSavings: 4_680_000,
+      savingsBuckets: [
+        { id: 'moto', name: 'Moto', balance: 2_300_000 },
+        { id: 'savings', name: 'Ahorros', balance: 2_080_000 },
+        { id: 'trip', name: 'Viaje', balance: 300_000 },
+      ],
+    });
+
+    // A new user with only custom funds should never get hardcoded reserve/savings buckets.
+    const customOnlyBuckets: SavingsBucket[] = [
+      { id: 'custom_emergency', name: 'Emergencias', openingBalance: 500_000 },
+      { id: 'custom_trip', name: 'Viaje', openingBalance: 300_000 },
+    ];
+    const [customUser] = buildMonthlyHistory(
+      octoberInput({
+        entries: [],
+        debtsByMonth: {},
+        savingsBucketsByMonth: { '2026-10': customOnlyBuckets },
+      })
+    );
+    expect(customUser?.savingsBuckets).toEqual([
+      { id: 'custom_emergency', name: 'Emergencias', balance: 500_000 },
+      { id: 'custom_trip', name: 'Viaje', balance: 300_000 },
+    ]);
+
+    // Closing a month with custom funds preserves every fund individually in the snapshot.
+    const closedCustom = closeMonthAndRollover({
+      closingMonthKey: '2026-10',
+      closedAtIso: '2026-10-31T23:00:00.000Z',
+      concepts: [],
+      entries: [],
+      debts: [],
+      debtPayments: [],
+      savingsBuckets: customOnlyBuckets,
+    });
+    const customHistory = buildMonthlyHistory({
+      monthKeys: ['2026-10', '2026-11'],
+      activeMonthKey: '2026-11',
+      concepts: [],
+      entries: [],
+      debtPayments: [],
+      debtsByMonth: {},
+      savingsBucketsByMonth: {
+        '2026-10': customOnlyBuckets,
+        '2026-11': closedCustom.nextMonthSavingsBuckets,
+      },
+      closedSnapshots: { '2026-10': closedCustom.snapshot },
+    });
+    expect(customHistory[0]?.savingsBuckets).toEqual([
+      { id: 'custom_emergency', name: 'Emergencias', balance: 500_000 },
+      { id: 'custom_trip', name: 'Viaje', balance: 300_000 },
+    ]);
+    expect(customHistory[1]?.savingsBuckets).toEqual([
+      { id: 'custom_emergency', name: 'Emergencias', balance: 500_000 },
+      { id: 'custom_trip', name: 'Viaje', balance: 300_000 },
+    ]);
 
     const [empty] = buildMonthlyHistory(
       octoberInput({
@@ -272,6 +334,7 @@ describe('buildMonthlyHistory', () => {
       totalDebt: 0,
       reserveName: 'Fondo de Reserva',
       reserveBalance: 0,
+      savingsBuckets: [],
       totalSavings: 0,
     });
   });

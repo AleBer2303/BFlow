@@ -6,6 +6,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
 import { Dimensions, StyleSheet } from 'react-native';
+import { TabVisibilityProvider } from '../../../../design-system/motion/TabVisibilityContext';
 import {
   AmountPrivacyProvider,
   HIDDEN_AMOUNT_TEXT,
@@ -572,6 +573,78 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView form state on %s skin'
     expect(screen.getByTestId('provision-monthly-preview')).toHaveTextContent(
       `Cuota mensual sugerida: ${HIDDEN_AMOUNT_TEXT}/mes`
     );
+  });
+
+  it('keeps only one form active across funds and provisions and resets on monthKey change or tab leave', () => {
+    const { rerender } = render(
+      <BFlowThemeProvider skin={skin} initialMode="dark">
+        <TabVisibilityProvider isActive>
+          <SavingsAndMotoIdealView
+            savingsSummary={BASE_SAVINGS_SUMMARY}
+            motoIdealSummary={BASE_PROVISION_SUMMARY}
+            provisionPlan={BASE_PROVISION_PLAN}
+            onSaveProvisionItem={jest.fn()}
+            onDeleteProvisionItem={jest.fn()}
+          />
+        </TabVisibilityProvider>
+      </BFlowThemeProvider>
+    );
+
+    // Open "+ Nuevo Fondo", then open "+ Agregar Metas" -> fund form closes automatically
+    fireEvent.press(screen.getByTestId('open-add-savings-bucket-button'));
+    expect(screen.getByTestId('add-savings-bucket-card')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('open-add-provision-button'));
+    expect(screen.queryByTestId('add-savings-bucket-card')).toBeNull();
+    expect(screen.getByTestId('provision-form-card')).toBeTruthy();
+
+    // Leaving the tab resets open form and action modes
+    rerender(
+      <BFlowThemeProvider skin={skin} initialMode="dark">
+        <TabVisibilityProvider isActive={false}>
+          <SavingsAndMotoIdealView
+            savingsSummary={BASE_SAVINGS_SUMMARY}
+            motoIdealSummary={BASE_PROVISION_SUMMARY}
+            provisionPlan={BASE_PROVISION_PLAN}
+            onSaveProvisionItem={jest.fn()}
+            onDeleteProvisionItem={jest.fn()}
+          />
+        </TabVisibilityProvider>
+      </BFlowThemeProvider>
+    );
+    expect(screen.queryByTestId('provision-form-card')).toBeNull();
+
+    // Switching monthKey resets open provision form as well
+    rerender(
+      <BFlowThemeProvider skin={skin} initialMode="dark">
+        <TabVisibilityProvider isActive>
+          <SavingsAndMotoIdealView
+            savingsSummary={BASE_SAVINGS_SUMMARY}
+            motoIdealSummary={BASE_PROVISION_SUMMARY}
+            provisionPlan={BASE_PROVISION_PLAN}
+            onSaveProvisionItem={jest.fn()}
+            onDeleteProvisionItem={jest.fn()}
+          />
+        </TabVisibilityProvider>
+      </BFlowThemeProvider>
+    );
+    fireEvent.press(screen.getByTestId('open-add-provision-button'));
+    expect(screen.getByTestId('provision-form-card')).toBeTruthy();
+
+    rerender(
+      <BFlowThemeProvider skin={skin} initialMode="dark">
+        <TabVisibilityProvider isActive>
+          <SavingsAndMotoIdealView
+            savingsSummary={{ ...BASE_SAVINGS_SUMMARY, monthKey: '2026-11' }}
+            motoIdealSummary={BASE_PROVISION_SUMMARY}
+            provisionPlan={BASE_PROVISION_PLAN}
+            onSaveProvisionItem={jest.fn()}
+            onDeleteProvisionItem={jest.fn()}
+          />
+        </TabVisibilityProvider>
+      </BFlowThemeProvider>
+    );
+    expect(screen.queryByTestId('provision-form-card')).toBeNull();
   });
 
   it('persists targetMonthKey and calculates monthly saving when adding a goal in the store', async () => {

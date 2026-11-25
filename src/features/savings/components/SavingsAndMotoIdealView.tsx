@@ -23,10 +23,10 @@ import {
   ScrollDepthHero,
   ScrollRevealSection,
   StatusBadge,
+  TabLeaveResetter,
   TrashBinIcon,
   useAmountPrivacy,
   useBFlowTheme,
-  useIsTabActive,
   usePrimaryActionLook,
 } from '../../../design-system';
 import {
@@ -705,7 +705,6 @@ export function SavingsAndMotoIdealView({
 }: SavingsAndMotoIdealViewProps): React.JSX.Element {
   const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
   const primaryAction = usePrimaryActionLook();
-  const isTabActive = useIsTabActive();
 
   // Single active form slot across both panels (R-17): at most one form is open at a time,
   // and each open remounts clean with a fresh key while memoized lists stay untouched.
@@ -733,19 +732,15 @@ export function SavingsAndMotoIdealView({
     return motoCount + savingsCount + customCount;
   }, [savingsSummary.customBuckets, savingsSummary.hasMotoBucket, savingsSummary.hasSavingsBucket]);
 
-  useEffect(() => {
+  const handleResetTransientState = useCallback(() => {
     setActiveForm(null);
     setBucketActionMode(null);
     setProvisionActionMode(null);
-  }, [savingsSummary.monthKey]);
+  }, []);
 
   useEffect(() => {
-    if (!isTabActive) {
-      setActiveForm(null);
-      setBucketActionMode(null);
-      setProvisionActionMode(null);
-    }
-  }, [isTabActive]);
+    handleResetTransientState();
+  }, [savingsSummary.monthKey, handleResetTransientState]);
 
   const toggleBucketActionMode = useCallback((mode: Exclude<ListActionMode, null>) => {
     animateNextLayout();
@@ -865,6 +860,9 @@ export function SavingsAndMotoIdealView({
 
   return (
     <View style={{ gap: spacing.md }} testID="savings-and-moto-ideal-view">
+      {activeForm !== null || bucketActionMode !== null || provisionActionMode !== null ? (
+        <TabLeaveResetter onLeave={handleResetTransientState} />
+      ) : null}
       {/* Wide windows: funds on the left, provisions on the right. Phones stack them. */}
       <ResponsiveColumns testID="savings-panels">
         <View style={{ gap: spacing.md }}>

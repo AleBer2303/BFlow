@@ -33,11 +33,11 @@ import {
   ScrollDepthHero,
   ScrollRevealSection,
   StatusBadge,
+  TabLeaveResetter,
   toEasing,
   TrashBinIcon,
   USE_NATIVE_DRIVER,
   useBFlowTheme,
-  useIsTabActive,
   usePrimaryActionLook,
   useAmountPrivacy,
 } from '../../../design-system';
@@ -830,7 +830,6 @@ export function ChecklistWorkspaceView({
 }: ChecklistWorkspaceViewProps): React.JSX.Element {
   const { colors, spacing, radius, typography } = useBFlowTheme();
   const primaryAction = usePrimaryActionLook();
-  const isTabActive = useIsTabActive();
   const [filterMode, setFilterMode] = useState<ChecklistFilterMode>('all');
 
   // Single mutually-exclusive section mode across Ingresos and Gastos (at most one active).
@@ -847,17 +846,14 @@ export function ChecklistWorkspaceView({
   const isAddModalOpen = activeForm?.kind === 'add';
   const editingEntryId = activeForm?.kind === 'edit' ? activeForm.entryId : null;
 
-  useEffect(() => {
+  const handleResetTransientState = useCallback(() => {
     setActiveForm(null);
     setSectionMode(null);
-  }, [monthKey]);
+  }, []);
 
   useEffect(() => {
-    if (!isTabActive) {
-      setActiveForm(null);
-      setSectionMode(null);
-    }
-  }, [isTabActive]);
+    handleResetTransientState();
+  }, [monthKey, handleResetTransientState]);
 
   const conceptById = useMemo(
     () => new Map(concepts.map((concept) => [concept.id, concept] as const)),
@@ -960,6 +956,9 @@ export function ChecklistWorkspaceView({
 
   return (
     <View style={{ gap: spacing.md }} testID="checklist-workspace-view">
+      {activeForm !== null || sectionMode !== null ? (
+        <TabLeaveResetter onLeave={handleResetTransientState} />
+      ) : null}
       {/* Top Action Bar: Header + Full-Width Add Movement CTA + Segmented Filter */}
       <ScrollDepthHero>
         <GlassSurface elevated>

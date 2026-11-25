@@ -24,10 +24,10 @@ import {
   ScrollDepthHero,
   ScrollRevealSection,
   StatusBadge,
+  TabLeaveResetter,
   TrashBinIcon,
   useAmountPrivacy,
   useBFlowTheme,
-  useIsTabActive,
   usePrimaryActionLook,
 } from '../../../design-system';
 import { confirmDestructive } from '../../../platform/dialogs/confirmDestructive';
@@ -352,7 +352,6 @@ export function DebtsFunfamiView({
 }: DebtsFunfamiViewProps): React.JSX.Element {
   const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
   const primaryAction = usePrimaryActionLook();
-  const isTabActive = useIsTabActive();
 
   const [dismissedBannerMonth, setDismissedBannerMonth] = useState<string | null>(null);
 
@@ -364,17 +363,14 @@ export function DebtsFunfamiView({
   const isFormOpen = activeForm !== null;
   const editingDebt = activeForm?.kind === 'edit' ? activeForm.debt : null;
 
-  useEffect(() => {
+  const handleResetTransientState = useCallback(() => {
     setActiveForm(null);
     setDebtActionMode(null);
-  }, [debtSummary.monthKey]);
+  }, []);
 
   useEffect(() => {
-    if (!isTabActive) {
-      setActiveForm(null);
-      setDebtActionMode(null);
-    }
-  }, [isTabActive]);
+    handleResetTransientState();
+  }, [debtSummary.monthKey, handleResetTransientState]);
 
   const paidOffDebt = useMemo(
     () =>
@@ -437,6 +433,9 @@ export function DebtsFunfamiView({
 
   return (
     <View style={{ gap: spacing.md }} testID="debts-funfami-view">
+      {activeForm !== null || debtActionMode !== null ? (
+        <TabLeaveResetter onLeave={handleResetTransientState} />
+      ) : null}
       {/* Hero Card: Total Deudas */}
       <DebtHeroCard debtSummary={debtSummary} />
 

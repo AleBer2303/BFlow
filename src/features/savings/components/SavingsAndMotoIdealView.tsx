@@ -8,7 +8,7 @@
  * - Full CRUD (Create, Edit, Update, Delete) for user-configurable Provisions & Target Goals
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import {
   animateNextLayout,
@@ -26,6 +26,7 @@ import {
   TrashBinIcon,
   useAmountPrivacy,
   useBFlowTheme,
+  useIsTabActive,
   usePrimaryActionLook,
 } from '../../../design-system';
 import {
@@ -686,6 +687,12 @@ export interface SavingsAndMotoIdealViewProps {
   onDeleteProvisionItem?: (itemId: string) => void;
 }
 
+type ActiveSavingsForm =
+  | { kind: 'add-bucket'; key: number }
+  | { kind: 'edit-bucket'; bucket: EditableSavingsBucket; key: number }
+  | { kind: 'provision'; item: EditableProvisionItem | null; key: number }
+  | null;
+
 export function SavingsAndMotoIdealView({
   savingsSummary,
   motoIdealSummary,
@@ -698,18 +705,19 @@ export function SavingsAndMotoIdealView({
 }: SavingsAndMotoIdealViewProps): React.JSX.Element {
   const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
   const primaryAction = usePrimaryActionLook();
+  const isTabActive = useIsTabActive();
 
-  // The forms own their field state (R-17); the view only knows which one is open and for
-  // which item. A new key remounts a form, so it loads that item's values (or starts empty).
+  // Single active form slot across both panels (R-17): at most one form is open at a time,
+  // and each open remounts clean with a fresh key while memoized lists stay untouched.
+  const [activeForm, setActiveForm] = useState<ActiveSavingsForm>(null);
   const [bucketActionMode, setBucketActionMode] = useState<ListActionMode>(null);
-  const [editingBucket, setEditingBucket] = useState<EditableSavingsBucket | null>(null);
-  const [isAddingBucket, setIsAddingBucket] = useState(false);
-  const [bucketFormKey, setBucketFormKey] = useState(0);
-
-  const [isProvisionFormOpen, setIsProvisionFormOpen] = useState(false);
   const [provisionActionMode, setProvisionActionMode] = useState<ListActionMode>(null);
-  const [editingProvision, setEditingProvision] = useState<EditableProvisionItem | null>(null);
-  const [provisionFormKey, setProvisionFormKey] = useState(0);
+  const formKeyRef = useRef(0);
+
+  const isAddingBucket = activeForm?.kind === 'add-bucket';
+  const editingBucket = activeForm?.kind === 'edit-bucket' ? activeForm.bucket : null;
+  const isProvisionFormOpen = activeForm?.kind === 'provision';
+  const editingProvision = activeForm?.kind === 'provision' ? activeForm.item : null;
 
   const canManageProvisions = Boolean(onSaveProvisionItem || onDeleteProvisionItem);
 
@@ -726,10 +734,18 @@ export function SavingsAndMotoIdealView({
   }, [savingsSummary.customBuckets, savingsSummary.hasMotoBucket, savingsSummary.hasSavingsBucket]);
 
   useEffect(() => {
+    setActiveForm(null);
     setBucketActionMode(null);
-    setEditingBucket(null);
-    setIsAddingBucket(false);
+    setProvisionActionMode(null);
   }, [savingsSummary.monthKey]);
+
+  useEffect(() => {
+    if (!isTabActive) {
+      setActiveForm(null);
+      setBucketActionMode(null);
+      setProvisionActionMode(null);
+    }
+  }, [isTabActive]);
 
   const toggleBucketActionMode = useCallback((mode: Exclude<ListActionMode, null>) => {
     animateNextLayout();
@@ -741,8 +757,8 @@ export function SavingsAndMotoIdealView({
         hapticService.selection();
       }
       if (next) {
-        setIsAddingBucket(false);
-        setEditingBucket(null);
+        setActiveForm(null);
+        setProvisionActionMode(null);
       }
       return next;
     });
@@ -754,8 +770,8 @@ export function SavingsAndMotoIdealView({
     setProvisionActionMode((prev) => {
       const next = prev === mode ? null : mode;
       if (next) {
-        setIsProvisionFormOpen(false);
-        setEditingProvision(null);
+        setActiveForm(null);
+        setBucketActionMode(null);
       }
       return next;
     });
@@ -763,55 +779,69 @@ export function SavingsAndMotoIdealView({
 
   const handleToggleAddBucket = useCallback(() => {
     hapticService.light();
-    setIsAddingBucket((prev) => {
-      const next = !prev;
-      if (next) {
-        setBucketActionMode(null);
-        setEditingBucket(null);
-        setBucketFormKey((key) => key + 1);
-      }
-      return next;
+    setActiveForm((prev) => {
+      if (prev?.kind === 'add-bucket') return null;
+      setBucketActionMode(null);
+      setProvisionActionMode(null);
+      formKeyRef.current += 1;
+      return { kind: 'add-bucket', key: formKeyRef.current };
     });
   }, []);
-  const handleCloseAddBucket = useCallback(() => setIsAddingBucket(false), []);
+
+  const handleCloseActiveForm = useCallback(() => setActiveForm(null), []);
 
   const handleOpenEditBucket = useCallback(
     (bucketId: string, name: string, openingBalance: number) => {
       hapticService.light();
       setBucketActionMode(null);
-      setIsAddingBucket(false);
-      setBucketFormKey((key) => key + 1);
-      setEditingBucket({ id: bucketId, name, openingBalance });
+      setProvisionActionMode(null);
+      formKeyRef.current += 1;
+      setActiveForm({
+        kind: 'edit-bucket',
+        bucket: { id: bucketId, name, openingBalance },
+        key: formKeyRef.current,
+      });
     },
     []
   );
-  const handleCloseEditBucket = useCallback(() => setEditingBucket(null), []);
 
   const handleDeleteBucket = useCallback(
     (bucketId: string) => {
       hapticService.trigger('warning');
       onDeleteSavingsBucket?.(bucketId);
-      setEditingBucket((prev) => (prev?.id === bucketId ? null : prev));
+      setActiveForm((prev) =>
+        prev?.kind === 'edit-bucket' && prev.bucket.id === bucketId ? null : prev
+      );
     },
     [onDeleteSavingsBucket]
   );
 
   const openProvisionForm = useCallback((item: EditableProvisionItem | null) => {
     hapticService.light();
+    setBucketActionMode(null);
     setProvisionActionMode(null);
-    setEditingProvision(item);
-    setProvisionFormKey((key) => key + 1);
-    setIsProvisionFormOpen(true);
+    formKeyRef.current += 1;
+    setActiveForm({ kind: 'provision', item, key: formKeyRef.current });
   }, []);
-  const handleCloseProvisionForm = useCallback(() => {
-    setIsProvisionFormOpen(false);
-    setEditingProvision(null);
+
+  const handleToggleProvisionForm = useCallback(() => {
+    hapticService.light();
+    setActiveForm((prev) => {
+      if (prev?.kind === 'provision') return null;
+      setBucketActionMode(null);
+      setProvisionActionMode(null);
+      formKeyRef.current += 1;
+      return { kind: 'provision', item: null, key: formKeyRef.current };
+    });
   }, []);
 
   const handleDeleteProvision = useCallback(
     (itemId: string) => {
       hapticService.trigger('warning');
       onDeleteProvisionItem?.(itemId);
+      setActiveForm((prev) =>
+        prev?.kind === 'provision' && prev.item?.id === itemId ? null : prev
+      );
     },
     [onDeleteProvisionItem]
   );
@@ -901,9 +931,9 @@ export function SavingsAndMotoIdealView({
           {/* Add New Custom Savings Fund Sheet */}
           <RevealDown visible={isAddingBucket}>
             <NewSavingsBucketForm
-              key={bucketFormKey}
+              key={activeForm?.kind === 'add-bucket' ? activeForm.key : 'add-bucket-idle'}
               onCreateSavingsBucket={onCreateSavingsBucket}
-              onClose={handleCloseAddBucket}
+              onClose={handleCloseActiveForm}
             />
           </RevealDown>
 
@@ -911,10 +941,10 @@ export function SavingsAndMotoIdealView({
           <RevealDown visible={editingBucket !== null}>
             {editingBucket ? (
               <EditSavingsBucketForm
-                key={bucketFormKey}
+                key={activeForm?.kind === 'edit-bucket' ? activeForm.key : 'edit-bucket-idle'}
                 bucket={editingBucket}
                 onUpdateOpeningBalance={onUpdateOpeningBalance}
-                onClose={handleCloseEditBucket}
+                onClose={handleCloseActiveForm}
               />
             ) : null}
           </RevealDown>
@@ -942,14 +972,7 @@ export function SavingsAndMotoIdealView({
                 accessibilityLabel={
                   isProvisionFormOpen ? 'Cerrar formulario de metas' : 'Agregar metas'
                 }
-                onPress={() => {
-                  if (isProvisionFormOpen) {
-                    hapticService.light();
-                    setIsProvisionFormOpen(false);
-                  } else {
-                    openProvisionForm(null);
-                  }
-                }}
+                onPress={handleToggleProvisionForm}
                 style={{
                   minHeight: minTouchTarget,
                   paddingVertical: spacing.xs,
@@ -1002,10 +1025,10 @@ export function SavingsAndMotoIdealView({
 
               <RevealDown visible={isProvisionFormOpen}>
                 <ProvisionItemForm
-                  key={provisionFormKey}
+                  key={activeForm?.kind === 'provision' ? activeForm.key : 'provision-idle'}
                   item={editingProvision}
                   onSaveProvisionItem={onSaveProvisionItem}
-                  onClose={handleCloseProvisionForm}
+                  onClose={handleCloseActiveForm}
                 />
               </RevealDown>
 

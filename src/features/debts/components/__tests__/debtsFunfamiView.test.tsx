@@ -6,6 +6,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
 import { Alert, Dimensions, StyleSheet } from 'react-native';
+import { TabVisibilityProvider } from '../../../../design-system/motion/TabVisibilityContext';
 import {
   AmountPrivacyProvider,
   HIDDEN_AMOUNT_TEXT,
@@ -327,5 +328,46 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView form state on %s skin', (skin
     expect(screen.getByTestId('debt-form-interest-preview')).toHaveTextContent(
       `Interés mensual aprox.: ~ ${HIDDEN_AMOUNT_TEXT}`
     );
+  });
+
+  it('resets open form and action mode when monthKey changes or tab becomes inactive', () => {
+    const { rerender } = render(
+      <BFlowThemeProvider skin={skin} initialMode="dark">
+        <TabVisibilityProvider isActive>
+          <DebtsFunfamiView debtSummary={BASE_DEBT_SUMMARY} />
+        </TabVisibilityProvider>
+      </BFlowThemeProvider>
+    );
+
+    fireEvent.press(screen.getByTestId('debts-add-new-debt-button'));
+    expect(screen.getByTestId('debt-form-modal')).toBeTruthy();
+
+    rerender(
+      <BFlowThemeProvider skin={skin} initialMode="dark">
+        <TabVisibilityProvider isActive={false}>
+          <DebtsFunfamiView debtSummary={BASE_DEBT_SUMMARY} />
+        </TabVisibilityProvider>
+      </BFlowThemeProvider>
+    );
+    expect(screen.queryByTestId('debt-form-modal')).toBeNull();
+
+    rerender(
+      <BFlowThemeProvider skin={skin} initialMode="dark">
+        <TabVisibilityProvider isActive>
+          <DebtsFunfamiView debtSummary={BASE_DEBT_SUMMARY} />
+        </TabVisibilityProvider>
+      </BFlowThemeProvider>
+    );
+    fireEvent.press(screen.getByTestId('debt-action-edit-button'));
+    expect(screen.getByTestId('debt-edit-debt_cb300f_moto')).toBeTruthy();
+
+    rerender(
+      <BFlowThemeProvider skin={skin} initialMode="dark">
+        <TabVisibilityProvider isActive>
+          <DebtsFunfamiView debtSummary={{ ...BASE_DEBT_SUMMARY, monthKey: '2026-11' }} />
+        </TabVisibilityProvider>
+      </BFlowThemeProvider>
+    );
+    expect(screen.queryByTestId('debt-edit-debt_cb300f_moto')).toBeNull();
   });
 });

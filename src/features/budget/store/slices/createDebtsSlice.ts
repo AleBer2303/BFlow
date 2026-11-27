@@ -215,6 +215,8 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
   deleteDebt: async (monthKey, debtId) => {
     const state = get();
     const previousDebtsByMonth = state.debtsByMonth;
+    const previousConcepts = state.concepts;
+    const previousDebtPayments = state.debtPayments;
     const nextDebtsByMonth: Record<string, Debt[]> = {};
     for (const [mk, list] of Object.entries(state.debtsByMonth)) {
       nextDebtsByMonth[mk] = list.filter((d) => d.id !== debtId);
@@ -223,8 +225,18 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
       nextDebtsByMonth[monthKey] = [];
     }
 
+    // ADR 0035: the same cascade the repository applies in Firestore.
+    const nextConcepts = state.concepts.map((c) => {
+      if (c.defaultTargetDebtId !== debtId) return c;
+      const { defaultTargetDebtId: _removed, ...rest } = c;
+      return rest;
+    });
+    const nextDebtPayments = state.debtPayments.filter((dp) => dp.debtId !== debtId);
+
     set({
       debtsByMonth: nextDebtsByMonth,
+      concepts: nextConcepts,
+      debtPayments: nextDebtPayments,
     });
     triggerWidgetSync(get());
 
@@ -242,7 +254,11 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
           await repo.deleteDebt(uid, debtId);
         },
         rollback: () => {
-          set({ debtsByMonth: previousDebtsByMonth });
+          set({
+            debtsByMonth: previousDebtsByMonth,
+            concepts: previousConcepts,
+            debtPayments: previousDebtPayments,
+          });
         },
         friendlyErrorMessage: 'No se pudo eliminar la deuda en la nube.',
         setStoreState: set,

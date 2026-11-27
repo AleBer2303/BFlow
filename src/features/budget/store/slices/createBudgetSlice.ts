@@ -412,16 +412,16 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     if (isRealAuthUser(updateAuthUser)) {
       await executeOptimisticCloudWrite({
         uid: updateAuthUser.uid,
-        operation: {
-          type: activeEntry ? 'save_or_update_entry' : 'save_concept',
-          payload: activeEntry
-            ? {
+        operation: activeEntry
+          ? {
+              type: 'save_or_update_entry',
+              payload: {
                 entry: activeEntry,
                 concept: updatedConcept,
                 debtPayments: nextDebtPayments.filter((dp) => dp.entryId === activeEntry.id),
-              }
-            : { concept: updatedConcept },
-        },
+              },
+            }
+          : { type: 'save_concept', payload: { concept: updatedConcept } },
         performCloudWrite: async () => {
           const repo = new FirestoreBudgetRepository();
           if (activeEntry) {
@@ -636,7 +636,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
       await executeOptimisticCloudWrite({
         uid,
         operation: {
-          type: 'delete_or_reset_entry',
+          type: 'delete_entry_completely',
           payload: {
             entryId,
             conceptId: target.conceptId,
@@ -663,14 +663,15 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
   removeOrResetEntry: async (entryId) => {
     const state = get();
     const target = state.entries.find((e) => e.id === entryId);
+    if (!target) return;
     const previousEntries = state.entries;
     const previousDebtPayments = state.debtPayments;
 
     const nextEntries = deleteMovement(state.entries, state.concepts, entryId);
-    const concept = target ? state.concepts.find((c) => c.id === target.conceptId) : undefined;
+    const concept = state.concepts.find((c) => c.id === target.conceptId);
 
     let nextDebtPayments = state.debtPayments;
-    if (target && (concept?.linkedDebtGroup || concept?.defaultTargetDebtId)) {
+    if (concept?.linkedDebtGroup || concept?.defaultTargetDebtId) {
       nextDebtPayments = state.debtPayments.map((dp) => {
         if (dp.entryId !== entryId) return dp;
         const { completedAt: _removed, ...restPayment } = dp;
@@ -698,10 +699,10 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           type: 'delete_or_reset_entry',
           payload: {
             entryId,
-            conceptId: target?.conceptId ?? '',
-            monthKey: target?.monthKey ?? '',
+            conceptId: target.conceptId,
+            monthKey: target.monthKey,
             entry: target,
-            concept,
+            ...(concept ? { concept } : {}),
           },
         },
         performCloudWrite: async () => {

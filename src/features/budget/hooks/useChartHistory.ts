@@ -13,7 +13,7 @@ import {
   formatMonthKeyShortLabelEs,
   type MonthlyHistoryPoint,
 } from '../../../domain';
-import { useBudgetStore } from '../store/useBudgetStore';
+import { useTabStore } from './useTabStore';
 
 export interface MonthAxis {
   /** "Oct", under the plot. */
@@ -34,14 +34,14 @@ export function useMonthAxis(history: readonly Pick<MonthlyHistoryPoint, 'monthK
 }
 
 export function useChartHistory(): readonly MonthlyHistoryPoint[] {
-  const activeMonthKey = useBudgetStore((state) => state.activeMonthKey);
-  const availableMonths = useBudgetStore((state) => state.availableMonths);
-  const concepts = useBudgetStore((state) => state.concepts);
-  const entries = useBudgetStore((state) => state.entries);
-  const debtPayments = useBudgetStore((state) => state.debtPayments);
-  const debtsByMonth = useBudgetStore((state) => state.debtsByMonth);
-  const savingsBucketsByMonth = useBudgetStore((state) => state.savingsBucketsByMonth);
-  const closedSnapshots = useBudgetStore((state) => state.closedSnapshots);
+  const activeMonthKey = useTabStore((state) => state.activeMonthKey);
+  const availableMonths = useTabStore((state) => state.availableMonths);
+  const concepts = useTabStore((state) => state.concepts);
+  const entries = useTabStore((state) => state.entries);
+  const debtPayments = useTabStore((state) => state.debtPayments);
+  const debtsByMonth = useTabStore((state) => state.debtsByMonth);
+  const savingsBucketsByMonth = useTabStore((state) => state.savingsBucketsByMonth);
+  const closedSnapshots = useTabStore((state) => state.closedSnapshots);
 
   return useMemo(
     () =>

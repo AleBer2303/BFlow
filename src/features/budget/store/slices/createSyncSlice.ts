@@ -6,7 +6,6 @@
 
 import {
   ensureStandardSavingsBuckets,
-  FirestoreBudgetRepository,
 } from '../../../../data/repositories/budgetRepository';
 import { savePersistedSession } from '../../../../platform/auth/authAdapter';
 import {
@@ -22,6 +21,7 @@ import {
   hasPendingOfflineWrites,
 } from '../../../../platform/storage/offlineWriteQueue';
 import {
+  getBudgetRepository,
   getStoreInitialState,
   isRealAuthUser,
   triggerWidgetSync,
@@ -68,7 +68,7 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
     triggerWidgetSync(get());
 
     if (isRealAuthUser(state.authUser)) {
-      const repo = new FirestoreBudgetRepository();
+      const repo = getBudgetRepository();
       void repo.saveActiveMonthKey(state.authUser.uid, monthKey).catch(() => {
         // Non-fatal if offline
       });
@@ -143,7 +143,7 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
   flushOfflineWrites: async () => {
     const user = get().authUser;
     if (!isRealAuthUser(user)) return;
-    const repo = new FirestoreBudgetRepository();
+    const repo = getBudgetRepository();
     const result = await drainOfflineWriteQueue(user.uid, repo);
     set({
       pendingOfflineWritesCount: result.remaining,
@@ -175,7 +175,7 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
     }
 
     try {
-      const repo = new FirestoreBudgetRepository();
+      const repo = getBudgetRepository();
 
       // Drain any pending offline writes first so cloud receives our local changes
       const { discarded } = await drainOfflineWriteQueue(user.uid, repo);

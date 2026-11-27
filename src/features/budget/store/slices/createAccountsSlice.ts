@@ -7,7 +7,6 @@
  * `set`, widget sync, cloud write with rollback on a permanent error.
  */
 
-import { FirestoreBudgetRepository } from '../../../../data/repositories/budgetRepository';
 import {
   isValidAccountDay,
   normalizeLastFourDigits,
@@ -15,6 +14,7 @@ import {
 } from '../../../../domain';
 import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
+  getBudgetRepository,
   getStoreInitialState,
   isRealAuthUser,
   triggerWidgetSync,
@@ -91,7 +91,7 @@ export const createAccountsSlice: SliceCreator<AccountsSlice> = (set, get) => {
           uid,
           operation: { type: 'save_financial_account', payload: { account } },
           performCloudWrite: async () => {
-            await new FirestoreBudgetRepository().saveFinancialAccount(uid, account);
+            await getBudgetRepository().saveFinancialAccount(uid, account);
           },
           rollback: () => set({ financialAccounts: previousAccounts }),
           friendlyErrorMessage: 'No se pudo guardar la tarjeta o cuenta en la nube.',
@@ -124,7 +124,7 @@ export const createAccountsSlice: SliceCreator<AccountsSlice> = (set, get) => {
           uid,
           operation: { type: 'save_financial_account', payload: { account: updated } },
           performCloudWrite: async () => {
-            await new FirestoreBudgetRepository().saveFinancialAccount(uid, updated);
+            await getBudgetRepository().saveFinancialAccount(uid, updated);
           },
           rollback: () => set({ financialAccounts: previousAccounts }),
           friendlyErrorMessage: 'No se pudo actualizar la tarjeta o cuenta en la nube.',
@@ -149,7 +149,7 @@ export const createAccountsSlice: SliceCreator<AccountsSlice> = (set, get) => {
           uid,
           operation: { type: 'delete_financial_account', payload: { accountId } },
           performCloudWrite: async () => {
-            await new FirestoreBudgetRepository().deleteFinancialAccount(uid, accountId);
+            await getBudgetRepository().deleteFinancialAccount(uid, accountId);
           },
           rollback: () => set({ financialAccounts: previousAccounts }),
           friendlyErrorMessage: 'No se pudo eliminar la tarjeta o cuenta en la nube.',

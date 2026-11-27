@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { useBudgetStore } from '../../budget/store/useBudgetStore';
+import { useTabStore } from '../../budget/hooks/useTabStore';
 import {
   AccountProfileWorkspaceView,
   type AccountProfileWorkspaceViewProps,
@@ -21,7 +21,7 @@ export type AccountTabProps = Omit<
 export const AccountTab = React.memo(function AccountTab(
   props: AccountTabProps
 ): React.JSX.Element | null {
-  const { authUser, syncMessage, isSyncing } = useBudgetStore(
+  const { authUser, syncMessage, isSyncing } = useTabStore(
     useShallow((state) => ({
       authUser: state.authUser,
       syncMessage: state.syncMessage,

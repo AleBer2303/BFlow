@@ -19,7 +19,7 @@ import {
   useSavingsSummary,
 } from '../../budget/hooks/useActiveMonthSummaries';
 import { useChartHistory } from '../../budget/hooks/useChartHistory';
-import { useBudgetStore } from '../../budget/store/useBudgetStore';
+import { useTabStore } from '../../budget/hooks/useTabStore';
 import {
   SavingsAndProvisionsView,
   type SavingsAndProvisionsViewProps,
@@ -33,12 +33,12 @@ export const SavingsTab = React.memo(function SavingsTab(): React.JSX.Element {
   const budget = useBudgetSummary();
   const savingsSummary = useSavingsSummary(budget);
   const provisionSummary = useProvisionPlanSummary(savingsSummary);
-  const provisionPlan = useBudgetStore((state) => state.idealMotoPlan);
+  const provisionPlan = useTabStore((state) => state.idealMotoPlan);
   const history = useChartHistory();
   const savingsAccounts = useFinancialAccounts('savings');
   const savingsAccountsSummary = useFinancialAccountsSummary('savings');
   const { spacing } = useBFlowTheme();
-  const actions = useBudgetStore(
+  const actions = useTabStore(
     useShallow((state) => ({
       updateSavingsOpeningBalance: state.updateSavingsOpeningBalance,
       createSavingsBucket: state.createSavingsBucket,

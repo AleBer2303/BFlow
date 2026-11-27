@@ -4,7 +4,6 @@
  * Debts, interest rate conversions and debt installment cascading slice.
  */
 
-import { FirestoreBudgetRepository } from '../../../../data/repositories/budgetRepository';
 import {
   buildDebtPaymentsForInstallment,
   type Debt,
@@ -13,6 +12,7 @@ import {
 } from '../../../../domain';
 import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
+  getBudgetRepository,
   getStoreInitialState,
   isRealAuthUser,
   triggerWidgetSync,
@@ -85,7 +85,7 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
           payload: { debt: newDebt },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveDebt(uid, newDebt);
         },
         rollback: () => {
@@ -199,7 +199,7 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
           payload: { debt: nonNullDebt },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveDebt(uid, nonNullDebt);
         },
         rollback: () => {
@@ -250,7 +250,7 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
           payload: { debtId },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.deleteDebt(uid, debtId);
         },
         rollback: () => {
@@ -322,7 +322,7 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
           },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveOrUpdateEntry(
             uid,
             updatedEntry,

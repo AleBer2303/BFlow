@@ -278,7 +278,7 @@ function sbox(idx: number): number {
   return AES_SBOX[idx & 0xff] ?? 0;
 }
 
-function expandAes256Key(key: Uint8Array): Uint8Array {
+export function expandAes256Key(key: Uint8Array): Uint8Array {
   const roundKeys = new Uint8Array(240); // 15 * 16 bytes for AES-256 (14 rounds)
   roundKeys.set(key.subarray(0, 32));
 
@@ -320,12 +320,16 @@ function gmul2(a: number): number {
   return ((a << 1) ^ ((a & 0x80) !== 0 ? 0x1b : 0x00)) & 0xff;
 }
 
+/**
+ * Encrypts one block into `state`, which the caller reuses for every block (OPT-05): creating a
+ * 16-byte array per block meant ~16 000 allocations for a 256 KB cache on the JS thread.
+ * `state` must not be `inputBlock`.
+ */
 function aes256EncryptBlock(
   inputBlock: Uint8Array,
   roundKeys: Uint8Array,
-  outputBlock: Uint8Array
+  state: Uint8Array
 ): void {
-  const state = new Uint8Array(16);
   for (let i = 0; i < 16; i += 1) {
     state[i] = (inputBlock[i] ?? 0) ^ (roundKeys[i] ?? 0);
   }
@@ -378,8 +382,6 @@ function aes256EncryptBlock(
       state[i] = (state[i] ?? 0) ^ (roundKeys[rkOffset + i] ?? 0);
     }
   }
-
-  outputBlock.set(state);
 }
 
 export function aes256CtrTransform(

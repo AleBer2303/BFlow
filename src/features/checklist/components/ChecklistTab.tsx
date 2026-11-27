@@ -16,7 +16,7 @@ import {
   useBudgetSummary,
   useFinancialAccounts,
 } from '../../budget/hooks/useActiveMonthSummaries';
-import { useBudgetStore } from '../../budget/store/useBudgetStore';
+import { useTabStore } from '../../budget/hooks/useTabStore';
 import {
   ChecklistWorkspaceView,
   type ChecklistWorkspaceViewProps,
@@ -26,13 +26,13 @@ type Props = ChecklistWorkspaceViewProps;
 
 export const ChecklistTab = React.memo(function ChecklistTab(): React.JSX.Element {
   const monthKey = useActiveMonthKey();
-  const concepts = useBudgetStore((state) => state.concepts);
-  const entries = useBudgetStore((state) => state.entries);
+  const concepts = useTabStore((state) => state.concepts);
+  const entries = useTabStore((state) => state.entries);
   const budget = useBudgetSummary();
   const debts = useActiveDebts();
   const savingsBuckets = useActiveSavingsBuckets();
   const financialAccounts = useFinancialAccounts();
-  const actions = useBudgetStore(
+  const actions = useTabStore(
     useShallow((state) => ({
       toggleEntryStatus: state.toggleEntryStatus,
       addOrCompleteMovement: state.addOrCompleteMovement,

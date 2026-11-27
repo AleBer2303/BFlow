@@ -6,7 +6,6 @@
 
 import {
   ensureStandardSavingsBuckets,
-  FirestoreBudgetRepository,
 } from '../../../../data/repositories/budgetRepository';
 import {
   applyEntryAccountLink,
@@ -25,6 +24,7 @@ import { savePersistedSession } from '../../../../platform/auth/authAdapter';
 import { clearPersistedAccount } from '../../../../platform/storage/accountCache';
 import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
+  getBudgetRepository,
   applyConceptLinkageUpdates,
   getStoreInitialState,
   buildOctober2026SeedWorkspaceState,
@@ -92,7 +92,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveOrUpdateEntry(
             authUser.uid,
             updatedEntry,
@@ -191,7 +191,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveOrUpdateEntry(
             authUser.uid,
             updatedEntry,
@@ -311,7 +311,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveCustomConceptAndEntry(
             authUser.uid,
             newConcept,
@@ -423,7 +423,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
             }
           : { type: 'save_concept', payload: { concept: updatedConcept } },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           if (activeEntry) {
             await repo.saveOrUpdateEntry(
               updateAuthUser.uid,
@@ -474,7 +474,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           payload: { conceptId },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.deleteConcept(deleteAuthUser.uid, conceptId);
         },
         rollback: () => {
@@ -591,7 +591,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveOrUpdateEntry(
             uid,
             updatedEntry,
@@ -644,7 +644,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.deleteEntryCompletely(uid, entryId);
         },
         rollback: () => {
@@ -706,7 +706,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.deleteOrResetEntry(uid, entryId, {
             entry: target,
             concept,
@@ -794,7 +794,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           payload: { monthKey: currentMonthKey, result },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.persistMonthCloseResult(uid, currentMonthKey, result);
         },
         rollback: () => {
@@ -841,7 +841,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           payload: { monthKey },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.reopenMonthInCloud(uid, monthKey);
         },
         rollback: () => {
@@ -889,7 +889,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
             payload: { monthKey },
           },
           performCloudWrite: async () => {
-            const repo = new FirestoreBudgetRepository();
+            const repo = getBudgetRepository();
             await repo.reopenMonthInCloud(uid, monthKey);
           },
           rollback: () => {
@@ -939,7 +939,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           payload: { monthKey, fallbackMonth },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.deleteMonthInCloud(uid, monthKey, fallbackMonth);
         },
         rollback: () => {

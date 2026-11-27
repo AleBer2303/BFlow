@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, View } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { hapticService } from '../../platform/haptics/hapticService';
@@ -90,13 +90,17 @@ export function ThemeToggleIconButton({
   const strokeColor = colors.text.primary;
   // Icon swap: the new icon turns a quarter and grows into the slot the old one left.
   const swap = useReplayOnChange(mode, motionDuration.fast);
-  const swapStyle = {
-    opacity: swap,
-    transform: [
-      { rotate: swap.interpolate({ inputRange: [0, 1], outputRange: ['-90deg', '0deg'] }) },
-      { scale: swap.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) },
-    ],
-  };
+  // Memoized: `swap` is a stable Animated.Value, so re-renders reuse the interpolations (OPT-06).
+  const swapStyle = useMemo(
+    () => ({
+      opacity: swap,
+      transform: [
+        { rotate: swap.interpolate({ inputRange: [0, 1], outputRange: ['-90deg', '0deg'] }) },
+        { scale: swap.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) },
+      ],
+    }),
+    [swap]
+  );
 
   return (
     <AppPressable

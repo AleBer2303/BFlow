@@ -12,7 +12,7 @@
  */
 
 import type { FullCloudAccountData } from '../../data/repositories/budgetRepository';
-import { persistentStorage } from './persistentStorageAdapter';
+import { getStorageGeneration, persistentStorage } from './persistentStorageAdapter';
 
 export const ACCOUNT_CACHE_SCHEMA_VERSION = 2;
 export const ACCOUNT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -110,8 +110,34 @@ export function isEquivalentCloudAccount(
 let pendingSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingSaveEntry: { uid: string; data: FullCloudAccountData; dataRevision?: string } | null = null;
 
+/**
+ * Last envelope written or read for each user (OPT-02): its metadata (`dataRevision`,
+ * `historySyncedAt`, `savedAt`) and a reference to its data, which is store state and never
+ * mutated. `savePersistedAccount` and `updatePersistedAccountRevision` use it instead of
+ * reading the cache again, which decrypts on a cold read and always parses the whole account.
+ * It is keyed by uid (one user's metadata never reaches another) and is dropped when the cache
+ * is cleared, found invalid, or the storage underneath changes (`getStorageGeneration`).
+ */
+const knownEnvelopes = new Map<string, { generation: number; envelope: PersistedAccountEnvelope }>();
+
+function rememberEnvelope(envelope: PersistedAccountEnvelope): void {
+  knownEnvelopes.set(envelope.uid, { generation: getStorageGeneration(), envelope });
+}
+
+/** The known envelope, or undefined when it has to be read from storage. */
+function getKnownEnvelope(uid: string): PersistedAccountEnvelope | undefined {
+  const known = knownEnvelopes.get(uid);
+  if (!known) return undefined;
+  if (known.generation !== getStorageGeneration()) {
+    knownEnvelopes.delete(uid);
+    return undefined;
+  }
+  return known.envelope;
+}
+
 function readValidatedEnvelope(uid: string): PersistedAccountEnvelope | null {
   if (!uid) return null;
+  knownEnvelopes.delete(uid);
   try {
     const raw = persistentStorage.getItem<unknown>(getAccountCacheKey(uid));
     if (!raw || typeof raw !== 'object') {
@@ -136,7 +162,9 @@ function readValidatedEnvelope(uid: string): PersistedAccountEnvelope | null {
       return null;
     }
 
-    return candidate as PersistedAccountEnvelope;
+    const envelope = candidate as PersistedAccountEnvelope;
+    rememberEnvelope(envelope);
+    return envelope;
   } catch {
     return null;
   }
@@ -157,7 +185,7 @@ export function savePersistedAccount(
 ): void {
   if (!uid) return;
   try {
-    const existingEnvelope = readValidatedEnvelope(uid);
+    const existingEnvelope = getKnownEnvelope(uid) ?? readValidatedEnvelope(uid);
     const resolvedRevision =
       dataRevision ?? data.dataRevision ?? existingEnvelope?.dataRevision;
     // Saves made from the store do not carry the marker: keep the one of the last cloud load.
@@ -177,6 +205,7 @@ export function savePersistedAccount(
     };
     persistentStorage.setItem(getAccountCacheKey(uid), envelope);
     persistentStorage.removeItem(getLegacyAccountCacheKeyV1(uid));
+    rememberEnvelope(envelope);
   } catch {
     // Gracefully handle storage errors
   }
@@ -200,7 +229,7 @@ export function updatePersistedAccountRevision(
         data: { ...pendingSaveEntry.data, dataRevision },
       };
     }
-    const existingEnvelope = readValidatedEnvelope(uid);
+    const existingEnvelope = getKnownEnvelope(uid) ?? readValidatedEnvelope(uid);
     if (!existingEnvelope) return;
     const updatedEnvelope: PersistedAccountEnvelope = {
       ...existingEnvelope,
@@ -212,6 +241,7 @@ export function updatePersistedAccountRevision(
       },
     };
     persistentStorage.setItem(getAccountCacheKey(uid), updatedEnvelope);
+    rememberEnvelope(updatedEnvelope);
   } catch {
     // Gracefully handle storage errors
   }
@@ -296,6 +326,7 @@ export function loadPersistedAccount(uid: string): FullCloudAccountData | null {
 export function clearPersistedAccount(uid: string): void {
   if (!uid) return;
   cancelPendingPersistedAccountSave(uid);
+  knownEnvelopes.delete(uid);
   try {
     persistentStorage.removeItem(getAccountCacheKey(uid));
     persistentStorage.removeItem(getLegacyAccountCacheKeyV1(uid));

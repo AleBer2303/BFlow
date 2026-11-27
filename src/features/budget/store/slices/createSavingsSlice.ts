@@ -6,11 +6,11 @@
 
 import {
   ensureStandardSavingsBuckets,
-  FirestoreBudgetRepository,
 } from '../../../../data/repositories/budgetRepository';
 import { type SavingsBucket } from '../../../../domain';
 import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
+  getBudgetRepository,
   getStoreInitialState,
   isRealAuthUser,
   triggerWidgetSync,
@@ -75,7 +75,7 @@ export const createSavingsSlice: SliceCreator<SavingsSlice> = (set, get) => {
           },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveSavingsBucket(
             uid,
             bucketId,
@@ -141,7 +141,7 @@ export const createSavingsSlice: SliceCreator<SavingsSlice> = (set, get) => {
           },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveSavingsBucket(
             uid,
             bucketId,
@@ -197,7 +197,7 @@ export const createSavingsSlice: SliceCreator<SavingsSlice> = (set, get) => {
           payload: { bucketId },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.deleteSavingsBucket(uid, bucketId);
         },
         rollback: () => {

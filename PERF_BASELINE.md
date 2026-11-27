@@ -659,3 +659,94 @@ La única variante por debajo de 250 KB deja bandas visibles en el degradado del
 - Lecturas reales en Firestore: los conteos salen del SDK simulado. `getCountFromServer` y la consulta por `updatedAt` no se han ejecutado contra Firestore ni contra el emulador.
 - Tiempo por tecla en dispositivo al escribir en los formularios: los resultados son conteos de renders en Jest.
 - Si el peso de `icon.png` influye en el `.ipa` o el `.apk`: el prebuild de Expo genera los íconos de cada densidad a partir de ese archivo, y no se compiló ningún binario para comprobarlo.
+
+## 20. Auditorías consolidadas — Fase 2: pestañas ocultas, caché local y cifrado
+
+Puntos OPT-01, OPT-02, OPT-04, OPT-05 y OPT-06 de la Fase 2 de [`plan_consolidado_pendientes_auditorias.md`](docs/Improvements/AUDITS/plan_consolidado_pendientes_auditorias.md). Todo se midió en Jest (Node 22, Windows 11), en la misma rama, antes y después de cada cambio. Las cifras con `BFLOW_RENDER_REPORT=1` salen de los tests citados.
+
+### OPT-01: pestañas ocultas congeladas
+
+Las pestañas visitadas siguen montadas (`display: 'none'`). Antes, sus selectores y sus `useMemo` de dominio se volvían a ejecutar con cada cambio del store.
+
+Con `useTabStore` (`src/features/budget/hooks/useTabStore.ts`), los selectores de las pestañas dejan de escuchar el store mientras la pestaña está oculta y devuelven el último valor que mostraron. Al volver la pestaña, leen el store una vez.
+
+La visibilidad llega por `useTabVisibilityStore()`, un store externo que nunca provoca renders por sí mismo. Por eso cambiar de pestaña tampoco vuelve a pintar los contenedores.
+
+Medición: las 6 pestañas visitadas, Checklist activa, se marca una fila. El test es `renderCommits.test.tsx`, «OPT-01». El resultado es el mismo en las tres pieles (iOS, Android y Web).
+
+| Medida | Antes | Después |
+| :--- | :--- | :--- |
+| Vistas ocultas que se vuelven a pintar | Resumen 2, Deudas 2, Ahorros 2, Cierre 1 | **0** |
+| Commits de Checklist / filas | 2 / 1 | 2 / 1 |
+| Llamadas a calculadores del dominio | 25 (`buildMonthlyHistory` 4, `calculateMonthlyBudgetSummary` 5, `calculateDebtsSummary` 5, `calculateChecklistProgress` 3, `calculateMonthlySavingsSummary` 3, `calculateFinancialAccountsSummary` 3, `buildMonthlyCurve` 1, `calculateProvisionPlanSummary` 1) | **6**: las 5 del snapshot del widget, que es del store y no de una pestaña, más 1 `calculateMonthlyBudgetSummary` de la cabecera de Checklist |
+| Volver a Resumen después | 1 commit, datos ya calculados | 2 commits: el cambio de pestaña y el refresco; 1 llamada a cada calculador de Resumen, con datos actuales |
+
+Los tests anteriores de `renderCommits.test.tsx` no cambian: el mensaje de sincronización solo pinta Cuenta, marcar una fila pinta solo esa fila y escribir no pinta las filas.
+
+### OPT-02: un solo punto de guardado de la caché
+
+Antes había tres disparadores de `schedulePersistedAccountSave`:
+- la suscripción de `src/app/index.tsx`;
+- `triggerWidgetSync`, a través de `persistHydratedAccountSnapshot`;
+- cuatro llamadas en `createProvisionsSlice`.
+
+Ahora el único disparador es `startPersistedAccountAutoSave` (`persistedAccountFields.ts`), que se conecta al crear el store. Además, `accountCache` guarda en memoria el último sobre de cada usuario: sus metadatos y una referencia a sus datos.
+
+El test es `persistedAccountAutoSave.test.ts`. El «antes» bajo Jest no incluye la suscripción de `index.tsx`, que no corre con `NODE_ENV === 'test'`; en la app sumaba un guardado más por acción.
+
+| Medida | Antes | Después |
+| :--- | :--- | :--- |
+| Guardados programados al marcar un movimiento | 1 en Jest; **2** en la app (`triggerWidgetSync` + `index.tsx`) | **1** |
+| Guardados programados al borrar una provisión | 1 en Jest; **2** en la app (slice + `index.tsx`) | **1** |
+| Cambio con `setState` directo | 0 en Jest; 1 en la app | **1** |
+| Lecturas de la caché en un guardado y un cambio de revisión (`getItem` de la clave de la cuenta: un `JSON.parse` de la cuenta entera, y además un descifrado en la primera lectura) | **2** | **0** |
+| Escrituras en disco por esa secuencia | 2 | 2 |
+
+Se mantienen:
+- `historySyncedAt` (ADR 0028) y `dataRevision`.
+- El aislamiento por usuario: el sobre conocido va por uid y se descarta con `clearPersistedAccount`.
+- Volver a leer la caché si el almacenamiento cambió: `getStorageGeneration()` cambia con `clear()`, con otro backend o con un reinicio simulado.
+
+### OPT-04: índices por mes en `loadFullCloudAccount` y contexto en `addMonthEntry`
+
+Antes, el bucle de meses hacía por cada mes:
+- `entries.some`, dos `entries.filter` y un `paymentList.filter`;
+- un `paymentList.some` por cada movimiento ligado a deuda.
+
+Ahora `entries` y `debtPayments` se agrupan una vez en un `Map<monthKey, …>`, y los abonos sintetizados se registran en un `Set`.
+
+Medición con un test temporal que no está en el repo: una cuenta de 36 meses (432 movimientos y 36 abonos) en el Firestore simulado, 15 cargas por corrida y 3 corridas.
+
+| Medida | Antes | Después |
+| :--- | :--- | :--- |
+| Tiempo medio por carga | 4,8 / 6,0 / 5,8 ms | 5,1 / 5,3 / 5,2 ms |
+| Hash SHA-256 de la salida (sin `historySyncedAt` ni `dataRevision`) | `3a57194959768aa0` | `3a57194959768aa0` (idéntica) |
+
+Con 36 meses la diferencia cae dentro del ruido. Los calculadores del dominio que se llaman por mes (`calculateDebtsSummary`, `calculateMonthlyBudgetSummary`, `calculateMonthlySavingsSummary`) siguen recorriendo todos los movimientos de la cuenta. Ese costo, también cuadrático, no se tocó, porque cambiar sus entradas pide validar la paridad de las fórmulas.
+
+`addMonthEntry` acepta ahora `{ monthEntries, concepts }`, y cada pieza recibida se salta su `getDocs` (test `addMonthEntryContext.test.ts`: de 2 lecturas a 0). En la app no cambia nada: **el store no llama a `addMonthEntry`**, porque guarda con `saveOrUpdateEntry`. Los conteos de `phase4FirestoreReads.test.ts` no cambian.
+
+### OPT-05: cifrado con un solo `state`
+
+`aes256EncryptBlock` cifra directamente en el bloque que le pasa `aes256CtrTransform`, en lugar de crear un `Uint8Array(16)` por bloque. Para 256 KB eso eran 16.384 asignaciones.
+
+El test es `storageCipherVectors.test.ts`, con 5 cifrados por corrida y 3 corridas.
+
+| Medida | Antes | Después |
+| :--- | :--- | :--- |
+| Cifrar 256 KB en Node (V8) | 17,2 / 18,2 / 17,8 ms | 15,8 / 15,4 / 15,6 ms (≈ −12 %) |
+| Vectores NIST SP 800-38A F.5.5, texto de 1.390 bytes con el contador desbordando y sobre `enc:v1` generado antes del cambio | — | Idénticos byte a byte |
+
+### OPT-06: repositorio compartido y `swapStyle`
+
+| Medida | Antes | Después | Test |
+| :--- | :--- | :--- | :--- |
+| Repositorios de Firestore creados en 3 escrituras seguidas | 3 (uno por escritura, en 30 sitios de los slices) | **1** (`getBudgetRepository()`, perezoso) | `budgetRepositoryGetter.test.ts` |
+| `interpolate` por cada render de `ThemeToggleIconButton` en el mismo modo | 2 | **0** (`useMemo`) | `themeToggleSwapStyle.test.tsx` |
+
+### No medido
+
+- **La fluidez en un Android físico queda sin verificar.** Todo lo anterior son conteos y tiempos de Jest en Node: ni Hermes ni un dispositivo.
+- El tiempo del cifrado en Hermes, donde el costo de asignar suele pesar más que en V8.
+- El tiempo de cambiar de pestaña en el dispositivo con las pestañas congeladas.
+- `loadFullCloudAccount` con cuentas de más de 36 meses o contra Firestore real.

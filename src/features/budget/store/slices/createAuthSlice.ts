@@ -7,7 +7,6 @@
 import {
   EMPTY_PROVISION_PLAN,
   ensureStandardSavingsBuckets,
-  FirestoreBudgetRepository,
   isOwnerCanonicalEmail,
   type InitialAccountSetupPayload,
 } from '../../../../data/repositories/budgetRepository';
@@ -43,6 +42,7 @@ import {
   executeOptimisticCloudWrite,
 } from '../../../../platform/storage/offlineWriteQueue';
 import {
+  getBudgetRepository,
   buildCleanEmptyWorkspaceState,
   buildHydratedWorkspaceState,
   buildInitialState,
@@ -163,7 +163,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       uid,
       operation: { type: 'save_user_profile', payload: profile },
       performCloudWrite: async () => {
-        await new FirestoreBudgetRepository().saveUserProfile(uid, profile);
+        await getBudgetRepository().saveUserProfile(uid, profile);
       },
       rollback: () => {
         applyProfile({
@@ -509,7 +509,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
         uid,
         operation: { type: 'save_initial_account_setup', payload },
         performCloudWrite: async () => {
-          await new FirestoreBudgetRepository().saveInitialAccountSetup(uid, payload);
+          await getBudgetRepository().saveInitialAccountSetup(uid, payload);
         },
         rollback: () => {
           set(previousState);
@@ -583,7 +583,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
 
     if (isRealAuthUser(state.authUser)) {
       try {
-        const repo = new FirestoreBudgetRepository();
+        const repo = getBudgetRepository();
         await repo.resetFullAccountInCloud(state.authUser.uid, startMonth);
       } catch {
         set({

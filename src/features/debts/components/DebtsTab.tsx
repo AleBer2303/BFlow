@@ -17,7 +17,7 @@ import {
   useFinancialAccountsSummary,
 } from '../../budget/hooks/useActiveMonthSummaries';
 import { useChartHistory } from '../../budget/hooks/useChartHistory';
-import { useBudgetStore } from '../../budget/store/useBudgetStore';
+import { useTabStore } from '../../budget/hooks/useTabStore';
 import { DebtTrendChart } from './DebtTrendChart';
 import { DebtsWorkspaceView, type DebtsWorkspaceViewProps } from './DebtsWorkspaceView';
 
@@ -31,7 +31,7 @@ export const DebtsTab = React.memo(function DebtsTab(): React.JSX.Element {
   const financialAccounts = useFinancialAccounts('debts');
   const accountsSummary = useFinancialAccountsSummary('debts');
   const { spacing } = useBFlowTheme();
-  const actions = useBudgetStore(
+  const actions = useTabStore(
     useShallow((state) => ({
       createDebt: state.createDebt,
       updateDebt: state.updateDebt,

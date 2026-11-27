@@ -12,6 +12,7 @@
 
 import {
   collection,
+  deleteField,
   doc,
   getCountFromServer,
   getDoc,
@@ -146,6 +147,27 @@ function safeParseList<T>(
     }
   }
   return results;
+}
+
+/** One write of a cascade delete, applied inside `commitUserDataMutationBatch`. */
+type CascadeWrite = (batch: ReturnType<typeof writeBatch>, updatedAt: string) => void;
+
+/**
+ * Firestore accepts 500 writes per batch and `commitUserDataMutationBatch` adds the
+ * `users/{uid}` write, so cascades are split well below that (ADR 0035).
+ */
+const MAX_CASCADE_WRITES_PER_BATCH = 450;
+
+/**
+ * Splits a cascade into batches. The main delete goes last in `writes`, so it lands in the last
+ * batch: if a batch fails, the target still exists and replaying the operation finishes the job.
+ */
+function chunkCascadeWrites(writes: readonly CascadeWrite[]): CascadeWrite[][] {
+  const chunks: CascadeWrite[][] = [];
+  for (let i = 0; i < writes.length; i += MAX_CASCADE_WRITES_PER_BATCH) {
+    chunks.push(writes.slice(i, i + MAX_CASCADE_WRITES_PER_BATCH));
+  }
+  return chunks;
 }
 
 export function isOwnerCanonicalEmail(email?: string | null): boolean {
@@ -823,6 +845,17 @@ export class InMemoryBudgetRepository implements BudgetRepository {
         list.filter((d) => d.id !== debtId)
       );
     }
+    // ADR 0035: same cascade as Firestore.
+    for (const [id, concept] of this.concepts.entries()) {
+      if (concept.defaultTargetDebtId !== debtId) continue;
+      const { defaultTargetDebtId: _removed, ...rest } = concept;
+      this.concepts.set(id, rest);
+    }
+    for (const [id, payment] of this.debtPayments.entries()) {
+      if (payment.debtId === debtId) {
+        this.debtPayments.delete(id);
+      }
+    }
   }
 
   async saveFinancialAccount(_uid: string, account: FinancialAccount): Promise<void> {
@@ -874,6 +907,12 @@ export class InMemoryBudgetRepository implements BudgetRepository {
         mk,
         list.filter((b) => b.id !== bucketId)
       );
+    }
+    // ADR 0035: same cascade as Firestore.
+    for (const [id, concept] of this.concepts.entries()) {
+      if (concept.savingsContribution?.bucketId !== bucketId) continue;
+      const { savingsContribution: _removed, ...rest } = concept;
+      this.concepts.set(id, rest);
     }
   }
 
@@ -2477,11 +2516,39 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     });
   }
 
+  /**
+   * ADR 0035: deletes the debt, its `debtPayments` and the `defaultTargetDebtId` of the concepts
+   * that pointed to it. Closed months keep their history in `monthSnapshots`.
+   * Read errors are not swallowed: a transient one keeps the operation in the offline queue.
+   */
   async deleteDebt(uid: string, debtId: string): Promise<void> {
-    await this.commitUserDataMutationBatch(uid, (batch) => {
-      const debtRef = doc(this.db, 'users', uid, 'debts', debtId);
-      batch.delete(debtRef);
-    });
+    const [conceptsSnap, paymentsSnap] = await Promise.all([
+      getDocs(
+        query(
+          collection(this.db, 'users', uid, 'concepts'),
+          where('defaultTargetDebtId', '==', debtId)
+        )
+      ),
+      getDocs(
+        query(collection(this.db, 'users', uid, 'debtPayments'), where('debtId', '==', debtId))
+      ),
+    ]);
+
+    const writes: CascadeWrite[] = [
+      ...paymentsSnap.docs.map((snap): CascadeWrite => (batch) => batch.delete(snap.ref)),
+      ...conceptsSnap.docs.map(
+        (snap): CascadeWrite =>
+          (batch, updatedAt) =>
+            batch.update(snap.ref, { defaultTargetDebtId: deleteField(), updatedAt })
+      ),
+      (batch) => batch.delete(doc(this.db, 'users', uid, 'debts', debtId)),
+    ];
+
+    for (const chunk of chunkCascadeWrites(writes)) {
+      await this.commitUserDataMutationBatch(uid, (batch, updatedAt) => {
+        for (const write of chunk) write(batch, updatedAt);
+      });
+    }
   }
 
   /**
@@ -2535,11 +2602,32 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     });
   }
 
+  /**
+   * ADR 0035: deletes the bucket and the `savingsContribution` of the concepts that fed it,
+   * in the same batch while it fits.
+   */
   async deleteSavingsBucket(uid: string, bucketId: string): Promise<void> {
-    await this.commitUserDataMutationBatch(uid, (batch) => {
-      const bucketRef = doc(this.db, 'users', uid, 'savingsBuckets', bucketId);
-      batch.delete(bucketRef);
-    });
+    const conceptsSnap = await getDocs(
+      query(
+        collection(this.db, 'users', uid, 'concepts'),
+        where('savingsContribution.bucketId', '==', bucketId)
+      )
+    );
+
+    const writes: CascadeWrite[] = [
+      ...conceptsSnap.docs.map(
+        (snap): CascadeWrite =>
+          (batch, updatedAt) =>
+            batch.update(snap.ref, { savingsContribution: deleteField(), updatedAt })
+      ),
+      (batch) => batch.delete(doc(this.db, 'users', uid, 'savingsBuckets', bucketId)),
+    ];
+
+    for (const chunk of chunkCascadeWrites(writes)) {
+      await this.commitUserDataMutationBatch(uid, (batch, updatedAt) => {
+        for (const write of chunk) write(batch, updatedAt);
+      });
+    }
   }
 
   async saveProvisionPlan(uid: string, plan: IdealMotoPlan): Promise<void> {

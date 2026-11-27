@@ -167,7 +167,7 @@ describe('data/accounts — repositories and offline queue', () => {
 
     const result = await drainOfflineWriteQueue(uid, repo);
 
-    expect(result).toEqual({ processed: 2, remaining: 0 });
+    expect(result).toEqual({ processed: 2, remaining: 0, discarded: 0 });
     expect(save).toHaveBeenCalledWith(uid, expect.objectContaining({ name: 'Visa 2' }));
     expect(remove).toHaveBeenCalledWith(uid, 'acc_other');
   });

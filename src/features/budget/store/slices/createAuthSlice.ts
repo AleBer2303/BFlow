@@ -41,7 +41,6 @@ import {
 import {
   clearOfflineWriteQueue,
   executeOptimisticCloudWrite,
-  isPermanentCloudError,
 } from '../../../../platform/storage/offlineWriteQueue';
 import {
   buildCleanEmptyWorkspaceState,
@@ -502,23 +501,23 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
     }
     triggerWidgetSync(get());
 
-    if (isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.saveInitialAccountSetup(state.authUser.uid, payload);
-      } catch (err) {
-        if (isPermanentCloudError(err)) {
-          set({
-            ...previousState,
-            syncMessage: 'No se pudo guardar la configuración inicial en la nube.',
-          });
-          triggerWidgetSync(get());
-        } else {
-          set({
-            syncMessage: 'Configuración guardada localmente. Se sincronizará al conectar.',
-          });
-        }
-      }
+    const setupUser = state.authUser;
+    if (isRealAuthUser(setupUser)) {
+      const uid = setupUser.uid;
+      // BUG-03: same path as every other write, so an offline setup is queued and replayed.
+      await executeOptimisticCloudWrite({
+        uid,
+        operation: { type: 'save_initial_account_setup', payload },
+        performCloudWrite: async () => {
+          await new FirestoreBudgetRepository().saveInitialAccountSetup(uid, payload);
+        },
+        rollback: () => {
+          set(previousState);
+        },
+        friendlyErrorMessage: 'No se pudo guardar la configuración inicial en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
   },
 

@@ -17,6 +17,7 @@ import {
 } from '../../../../platform/storage/accountCache';
 import {
   drainOfflineWriteQueue,
+  formatDiscardedOfflineWritesNotice,
   getPendingOfflineWritesCount,
   hasPendingOfflineWrites,
 } from '../../../../platform/storage/offlineWriteQueue';
@@ -27,6 +28,12 @@ import {
   type SliceCreator,
   type SyncSlice,
 } from './sliceTypes';
+
+/** Appends the notice for stored offline writes dropped as invalid (ADR 0035). */
+function withDiscardedNotice(message: string, discarded: number): string {
+  const notice = formatDiscardedOfflineWritesNotice(discarded);
+  return notice ? `${message}. ${notice}` : message;
+}
 
 export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
   const initial = getStoreInitialState();
@@ -140,10 +147,12 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
     const result = await drainOfflineWriteQueue(user.uid, repo);
     set({
       pendingOfflineWritesCount: result.remaining,
-      syncMessage:
+      syncMessage: withDiscardedNotice(
         result.remaining === 0
           ? 'Todos los cambios locales se sincronizaron con la nube'
           : `${result.remaining} cambios pendientes por sincronizar`,
+        result.discarded
+      ),
     });
     triggerWidgetSync(get());
   },
@@ -169,12 +178,15 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
       const repo = new FirestoreBudgetRepository();
 
       // Drain any pending offline writes first so cloud receives our local changes
-      await drainOfflineWriteQueue(user.uid, repo);
+      const { discarded } = await drainOfflineWriteQueue(user.uid, repo);
       get().refreshPendingOfflineWritesCount();
 
       // R-09: If pending offline writes remain, DO NOT overwrite local state with outdated cloud data
       if (hasPendingOfflineWrites(user.uid)) {
-        set({ syncMessage: 'Cambios locales pendientes por sincronizar', isSyncing: false });
+        set({
+          syncMessage: withDiscardedNotice('Cambios locales pendientes por sincronizar', discarded),
+          isSyncing: false,
+        });
         triggerWidgetSync(get());
         return;
       }
@@ -206,7 +218,7 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
       if (!isEquivalentCloudAccount(cached, fullAccount)) {
         get().applyFullCloudAccount(fullAccount);
       }
-      set({ syncMessage: 'Sincronizado', isSyncing: false });
+      set({ syncMessage: withDiscardedNotice('Sincronizado', discarded), isSyncing: false });
       triggerWidgetSync(get());
     } catch {
       const hasLocalData = loadPersistedAccount(user.uid) !== null;

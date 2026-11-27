@@ -187,7 +187,7 @@ describe('updateAuthUserProfile: el perfil se guarda en Firestore', () => {
       displayName: 'Nombre En Cola',
       financialGoal: 'Meta en cola',
     });
-    expect(result).toEqual({ processed: 1, remaining: 0 });
+    expect(result).toEqual({ processed: 1, remaining: 0, discarded: 0 });
   });
 
   it('does not let a late rollback overwrite a session that changed account', async () => {

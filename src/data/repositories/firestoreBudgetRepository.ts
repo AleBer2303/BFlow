@@ -20,6 +20,7 @@ import {
   writeBatch,
   type DocumentSnapshot,
   type Firestore,
+  type WriteBatch,
 } from 'firebase/firestore';
 import {
   registerMovement,
@@ -83,6 +84,12 @@ import {
   type UserDocumentData,
 } from './accountHydration';
 import {
+  applyPendingSetWrites,
+  chunkCascadeWrites,
+  type CascadeWrite,
+  type PendingSetWrite,
+} from './batchWrites';
+import {
   EMPTY_PROVISION_PLAN,
   ensureStandardSavingsBuckets,
   generateDataRevision,
@@ -106,27 +113,6 @@ function readUserDocumentData(snap: DocumentSnapshot): UserDocumentData {
   return snap.exists() ? (snap.data() as Record<string, unknown>) : undefined;
 }
 
-/** One write of a cascade delete, applied inside `commitUserDataMutationBatch`. */
-type CascadeWrite = (batch: ReturnType<typeof writeBatch>, updatedAt: string) => void;
-
-/**
- * Firestore accepts 500 writes per batch and `commitUserDataMutationBatch` adds the
- * `users/{uid}` write, so cascades are split well below that (ADR 0035).
- */
-const MAX_CASCADE_WRITES_PER_BATCH = 450;
-
-/**
- * Splits a cascade into batches. The main delete goes last in `writes`, so it lands in the last
- * batch: if a batch fails, the target still exists and replaying the operation finishes the job.
- */
-function chunkCascadeWrites(writes: readonly CascadeWrite[]): CascadeWrite[][] {
-  const chunks: CascadeWrite[][] = [];
-  for (let i = 0; i < writes.length; i += MAX_CASCADE_WRITES_PER_BATCH) {
-    chunks.push(writes.slice(i, i + MAX_CASCADE_WRITES_PER_BATCH));
-  }
-  return chunks;
-}
-
 /**
  * Cloud Firestore implementation under `/users/{uid}/...`.
  * Respects Spark free-tier limits via deterministic IDs, month-scoped queries, and atomic batches.
@@ -145,7 +131,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
    */
   private async commitUserDataMutationBatch(
     uid: string,
-    buildBatch: (batch: ReturnType<typeof writeBatch>, updatedAt: string) => void,
+    buildBatch: (batch: WriteBatch, updatedAt: string) => void,
     extraUserFields?: Record<string, unknown>
   ): Promise<string> {
     const batch = writeBatch(this.db);
@@ -178,7 +164,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
   private commitUserDataMutationBatchInBackground(
     uid: string,
     extraUserFields?: Record<string, unknown>,
-    buildBatch: (batch: ReturnType<typeof writeBatch>, updatedAt: string) => void = () => {}
+    buildBatch: (batch: WriteBatch, updatedAt: string) => void = () => {}
   ): void {
     void this.commitUserDataMutationBatch(uid, buildBatch, extraUserFields).catch(() => {});
   }
@@ -1003,12 +989,15 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     });
   }
 
-  private async restoreBalancesFromSnapshotIfPresent(
+  /**
+   * The `debts` and `savingsBuckets` writes that put `targetMonthKey` back to the balances of its
+   * closed snapshot (CC-06: collected as data, applied later to the real batch). Empty when the
+   * month has no snapshot or the reads fail offline.
+   */
+  private async restoreBalanceWritesFromSnapshot(
     uid: string,
-    targetMonthKey: string,
-    batch: ReturnType<typeof writeBatch>,
-    updatedAt: string
-  ): Promise<void> {
+    targetMonthKey: string
+  ): Promise<PendingSetWrite[]> {
     try {
       const snapshotRef = doc(this.db, 'users', uid, 'monthSnapshots', targetMonthKey);
       const [snapshotSnap, conceptsSnap, entriesSnap, debtsSnap, bucketsSnap] = await Promise.all([
@@ -1023,62 +1012,40 @@ export class FirestoreBudgetRepository implements BudgetRepository {
         getDocs(collection(this.db, 'users', uid, 'debts')),
         getDocs(collection(this.db, 'users', uid, 'savingsBuckets')),
       ]);
-      if (!snapshotSnap.exists()) return;
-
-      const parsedSnap = parseMonthSnapshotFromFirestore(snapshotSnap.data());
-
-      const concepts = safeParseList(conceptsSnap.docs, parseConceptFromFirestore);
-      const entries = safeParseList(entriesSnap.docs, parseMonthEntryFromFirestore);
-      const currentDebts = safeParseList(debtsSnap.docs, parseDebtFromFirestore);
-      const currentBuckets = safeParseList(bucketsSnap.docs, parseSavingsBucketFromFirestore);
+      if (!snapshotSnap.exists()) return [];
 
       const reconstructed = reconstructClosedMonthBalances(
-        parsedSnap,
-        concepts,
-        entries,
-        currentDebts,
-        currentBuckets
+        parseMonthSnapshotFromFirestore(snapshotSnap.data()),
+        safeParseList(conceptsSnap.docs, parseConceptFromFirestore),
+        safeParseList(entriesSnap.docs, parseMonthEntryFromFirestore),
+        safeParseList(debtsSnap.docs, parseDebtFromFirestore),
+        safeParseList(bucketsSnap.docs, parseSavingsBucketFromFirestore)
       );
 
-      for (const restoredDebt of reconstructed.debts) {
-        batch.set(doc(this.db, 'users', uid, 'debts', restoredDebt.id), {
-          ...serializeDebtForFirestore({ ...restoredDebt, monthKey: targetMonthKey }),
-          updatedAt,
-        });
-      }
-      for (const restoredBucket of reconstructed.savingsBuckets) {
-        batch.set(doc(this.db, 'users', uid, 'savingsBuckets', restoredBucket.id), {
-          ...serializeSavingsBucketForFirestore({
-            ...restoredBucket,
-            monthKey: targetMonthKey,
-          }),
-          updatedAt,
-        });
-      }
+      return [
+        ...reconstructed.debts.map((restoredDebt) => ({
+          ref: doc(this.db, 'users', uid, 'debts', restoredDebt.id),
+          data: serializeDebtForFirestore({ ...restoredDebt, monthKey: targetMonthKey }),
+        })),
+        ...reconstructed.savingsBuckets.map((restoredBucket) => ({
+          ref: doc(this.db, 'users', uid, 'savingsBuckets', restoredBucket.id),
+          data: serializeSavingsBucketForFirestore({ ...restoredBucket, monthKey: targetMonthKey }),
+        })),
+      ];
     } catch {
       // Non-fatal if snapshot restoration is skipped offline
+      return [];
     }
   }
 
   async reopenMonthInCloud(uid: string, monthKey: string): Promise<void> {
-    const tempBatchOps: Array<(batch: ReturnType<typeof writeBatch>, updatedAt: string) => void> = [];
-    const proxyBatch = {
-      set: (ref: ReturnType<typeof doc>, data: Record<string, unknown>) => {
-        tempBatchOps.push((b) => b.set(ref, data));
-      },
-    } as unknown as ReturnType<typeof writeBatch>;
-
-    const previewUpdatedAt = new Date().toISOString();
-    await this.restoreBalancesFromSnapshotIfPresent(uid, monthKey, proxyBatch, previewUpdatedAt);
+    const restoreWrites = await this.restoreBalanceWritesFromSnapshot(uid, monthKey);
 
     await this.commitUserDataMutationBatch(
       uid,
       (batch, updatedAt) => {
-        for (const op of tempBatchOps) {
-          op(batch, updatedAt);
-        }
-        const snapshotRef = doc(this.db, 'users', uid, 'monthSnapshots', monthKey);
-        batch.delete(snapshotRef);
+        applyPendingSetWrites(batch, restoreWrites, updatedAt);
+        batch.delete(doc(this.db, 'users', uid, 'monthSnapshots', monthKey));
       },
       {
         activeMonthKey: monthKey,
@@ -1091,20 +1058,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     monthKey: string,
     fallbackMonthKey: string
   ): Promise<void> {
-    const tempBatchOps: Array<(batch: ReturnType<typeof writeBatch>, updatedAt: string) => void> = [];
-    const proxyBatch = {
-      set: (ref: ReturnType<typeof doc>, data: Record<string, unknown>) => {
-        tempBatchOps.push((b) => b.set(ref, data));
-      },
-    } as unknown as ReturnType<typeof writeBatch>;
-
-    const previewUpdatedAt = new Date().toISOString();
-    await this.restoreBalancesFromSnapshotIfPresent(
-      uid,
-      fallbackMonthKey,
-      proxyBatch,
-      previewUpdatedAt
-    );
+    const restoreWrites = await this.restoreBalanceWritesFromSnapshot(uid, fallbackMonthKey);
 
     let refsToDelete: Array<ReturnType<typeof doc>> = [];
     try {
@@ -1133,11 +1087,8 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     await this.commitUserDataMutationBatch(
       uid,
       (batch, updatedAt) => {
-        for (const op of tempBatchOps) {
-          op(batch, updatedAt);
-        }
-        const snapshotRef = doc(this.db, 'users', uid, 'monthSnapshots', monthKey);
-        batch.delete(snapshotRef);
+        applyPendingSetWrites(batch, restoreWrites, updatedAt);
+        batch.delete(doc(this.db, 'users', uid, 'monthSnapshots', monthKey));
 
         const fallbackSnapshotRef = doc(this.db, 'users', uid, 'monthSnapshots', fallbackMonthKey);
         batch.delete(fallbackSnapshotRef);

@@ -18,16 +18,16 @@ import {
   useSavingsSummary,
 } from '../../budget/hooks/useActiveMonthSummaries';
 import { useChartHistory } from '../../budget/hooks/useChartHistory';
-import { useBudgetStore } from '../../budget/store/useBudgetStore';
+import { useTabStore } from '../../budget/hooks/useTabStore';
 import { AccountsMonthPanel } from './AccountsMonthPanel';
 import { AnalyticsChartsPanel } from './AnalyticsChartsPanel';
 import { AnalyticsAndHistoryView } from './AnalyticsAndHistoryView';
 
 export const AnalyticsTab = React.memo(function AnalyticsTab(): React.JSX.Element {
   const activeMonthKey = useActiveMonthKey();
-  const availableMonths = useBudgetStore((state) => state.availableMonths);
-  const entries = useBudgetStore((state) => state.entries);
-  const closedSnapshots = useBudgetStore((state) => state.closedSnapshots);
+  const availableMonths = useTabStore((state) => state.availableMonths);
+  const entries = useTabStore((state) => state.entries);
+  const closedSnapshots = useTabStore((state) => state.closedSnapshots);
   const budget = useBudgetSummary();
   const checklist = useChecklistProgress();
   const debtSummary = useDebtSummary();
@@ -35,7 +35,7 @@ export const AnalyticsTab = React.memo(function AnalyticsTab(): React.JSX.Elemen
   const history = useChartHistory();
   const accountsSummary = useFinancialAccountsSummary();
   const { spacing } = useBFlowTheme();
-  const actions = useBudgetStore(
+  const actions = useTabStore(
     useShallow((state) => ({
       setActiveMonthKey: state.setActiveMonthKey,
       closeCurrentMonth: state.closeCurrentMonth,

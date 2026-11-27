@@ -7,7 +7,6 @@
 import {
   EMPTY_PROVISION_PLAN,
   ensureStandardSavingsBuckets,
-  FirestoreBudgetRepository,
   isOwnerCanonicalEmail,
   type InitialAccountSetupPayload,
 } from '../../../../data/repositories/budgetRepository';
@@ -44,6 +43,7 @@ import {
   isPermanentCloudError,
 } from '../../../../platform/storage/offlineWriteQueue';
 import {
+  getBudgetRepository,
   buildCleanEmptyWorkspaceState,
   buildHydratedWorkspaceState,
   buildInitialState,
@@ -164,7 +164,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       uid,
       operation: { type: 'save_user_profile', payload: profile },
       performCloudWrite: async () => {
-        await new FirestoreBudgetRepository().saveUserProfile(uid, profile);
+        await getBudgetRepository().saveUserProfile(uid, profile);
       },
       rollback: () => {
         applyProfile({
@@ -504,7 +504,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
 
     if (isRealAuthUser(state.authUser)) {
       try {
-        const repo = new FirestoreBudgetRepository();
+        const repo = getBudgetRepository();
         await repo.saveInitialAccountSetup(state.authUser.uid, payload);
       } catch (err) {
         if (isPermanentCloudError(err)) {
@@ -584,7 +584,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
 
     if (isRealAuthUser(state.authUser)) {
       try {
-        const repo = new FirestoreBudgetRepository();
+        const repo = getBudgetRepository();
         await repo.resetFullAccountInCloud(state.authUser.uid, startMonth);
       } catch {
         set({

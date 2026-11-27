@@ -6,14 +6,13 @@
 
 import {
   EMPTY_PROVISION_PLAN,
-  FirestoreBudgetRepository,
 } from '../../../../data/repositories/budgetRepository';
 import { addMonthsToMonthKey, type ProvisionItemSpec } from '../../../../domain';
 import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
+  getBudgetRepository,
   getStoreInitialState,
   isRealAuthUser,
-  persistHydratedAccountSnapshot,
   recalculateProvisionPlan,
   type ProvisionsSlice,
   type SliceCreator,
@@ -68,7 +67,6 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
 
     const nextPlan = recalculateProvisionPlan(nextItems);
     set({ idealMotoPlan: nextPlan });
-    persistHydratedAccountSnapshot(get());
 
     const authUser = state.authUser;
     if (isRealAuthUser(authUser)) {
@@ -80,12 +78,11 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
           payload: { plan: nextPlan },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveProvisionPlan(uid, nextPlan);
         },
         rollback: () => {
           set({ idealMotoPlan: previousPlan });
-          persistHydratedAccountSnapshot(get());
         },
         friendlyErrorMessage: 'No se pudo guardar la provisión en la nube.',
         setStoreState: set,
@@ -99,7 +96,6 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
     const nextItems = state.idealMotoPlan.items.filter((i) => i.id !== itemId);
     const nextPlan = recalculateProvisionPlan(nextItems);
     set({ idealMotoPlan: nextPlan });
-    persistHydratedAccountSnapshot(get());
 
     const authUser = state.authUser;
     if (isRealAuthUser(authUser)) {
@@ -111,12 +107,11 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
           payload: { plan: nextPlan },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveProvisionPlan(uid, nextPlan);
         },
         rollback: () => {
           set({ idealMotoPlan: previousPlan });
-          persistHydratedAccountSnapshot(get());
         },
         friendlyErrorMessage: 'No se pudo eliminar la provisión en la nube.',
         setStoreState: set,

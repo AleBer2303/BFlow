@@ -20,10 +20,6 @@ import { AccountTab, type AccountTabProps } from '../features/auth/components/Ac
 import { AuthScreen, type AuthScreenProps } from '../features/auth/components/AuthScreen';
 import { EmailVerificationScreen } from '../features/auth/components/EmailVerificationScreen';
 import {
-  havePersistedAccountFieldsChanged,
-  type PersistedAccountFields,
-} from '../features/budget/store/persistedAccountFields';
-import {
   cancelPendingWidgetSync,
   useBudgetStore,
   type BFlowWorkspaceTab,
@@ -61,7 +57,6 @@ import { markPerf } from '../platform/perf/perfMarks';
 import {
   clearPersistedAccount,
   flushPendingPersistedAccount,
-  schedulePersistedAccountSave,
 } from '../platform/storage/accountCache';
 import {
   clearWidgetData,
@@ -327,36 +322,8 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
     return () => subscription.remove();
   }, []);
 
-  // Debounced auto-save of store mutations to local encrypted persistent storage (R-06)
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'test') {
-      return;
-    }
-    let lastSaved: PersistedAccountFields | null = null;
-    const unsubscribe = useBudgetStore.subscribe((state) => {
-      const uid = state.authUser?.uid;
-      if (!uid || uid === 'local-owner' || uid === 'local-demo' || !state.isAccountHydrated) {
-        return;
-      }
-      if (havePersistedAccountFieldsChanged(lastSaved, state)) {
-        lastSaved = state;
-        schedulePersistedAccountSave(uid, {
-          activeMonthKey: state.activeMonthKey,
-          availableMonths: state.availableMonths,
-          concepts: state.concepts,
-          entries: state.entries,
-          debtsByMonth: state.debtsByMonth,
-          debtPayments: state.debtPayments,
-          savingsBucketsByMonth: state.savingsBucketsByMonth,
-          provisionPlan: state.idealMotoPlan,
-          closedSnapshots: state.closedSnapshots,
-          financialAccounts: state.financialAccounts,
-          needsOnboarding: state.needsOnboarding,
-        });
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+  // The device cache save is scheduled by the store itself (startPersistedAccountAutoSave, OPT-02);
+  // here it is only flushed when the app goes to the background.
 
   // Real-time WidgetKit synchronization & Cache flush: triggers on mount and whenever user leaves app / switches to background
   useEffect(() => {

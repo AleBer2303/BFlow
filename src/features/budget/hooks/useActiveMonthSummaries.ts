@@ -29,7 +29,7 @@ import {
   type MonthlySavingsSummary,
   type SavingsBucket,
 } from '../../../domain';
-import { useBudgetStore } from '../store/useBudgetStore';
+import { useTabStore } from './useTabStore';
 
 type DebtsSummary = ReturnType<typeof calculateDebtsSummary>;
 type ProvisionPlanSummary = ReturnType<typeof calculateProvisionPlanSummary>;
@@ -37,28 +37,28 @@ type ProvisionPlanSummary = ReturnType<typeof calculateProvisionPlanSummary>;
 const EMPTY_DEBTS: Debt[] = [];
 
 export function useActiveMonthKey(): string {
-  return useBudgetStore((state) => state.activeMonthKey);
+  return useTabStore((state) => state.activeMonthKey);
 }
 
 export function useActiveDebts(): readonly Debt[] {
-  return useBudgetStore((state) => state.debtsByMonth[state.activeMonthKey] ?? EMPTY_DEBTS);
+  return useTabStore((state) => state.debtsByMonth[state.activeMonthKey] ?? EMPTY_DEBTS);
 }
 
 export function useActiveSavingsBuckets(): readonly SavingsBucket[] {
-  const rawBuckets = useBudgetStore((state) => state.savingsBucketsByMonth[state.activeMonthKey]);
+  const rawBuckets = useTabStore((state) => state.savingsBucketsByMonth[state.activeMonthKey]);
   return useMemo(() => ensureStandardSavingsBuckets(rawBuckets ?? [], 0, 0), [rawBuckets]);
 }
 
 export function useBudgetSummary(): MonthlyBudgetSummary {
   const monthKey = useActiveMonthKey();
-  const entries = useBudgetStore((state) => state.entries);
+  const entries = useTabStore((state) => state.entries);
   return useMemo(() => calculateMonthlyBudgetSummary(entries, monthKey), [entries, monthKey]);
 }
 
 export function useChecklistProgress(): ChecklistProgress {
   const monthKey = useActiveMonthKey();
-  const concepts = useBudgetStore((state) => state.concepts);
-  const entries = useBudgetStore((state) => state.entries);
+  const concepts = useTabStore((state) => state.concepts);
+  const entries = useTabStore((state) => state.entries);
   return useMemo(
     () => calculateChecklistProgress(concepts, entries, monthKey),
     [concepts, entries, monthKey]
@@ -67,7 +67,7 @@ export function useChecklistProgress(): ChecklistProgress {
 
 function useActiveDebtPayments() {
   const monthKey = useActiveMonthKey();
-  const debtPayments = useBudgetStore((state) => state.debtPayments);
+  const debtPayments = useTabStore((state) => state.debtPayments);
   return useMemo(
     () => debtPayments.filter((payment) => payment.monthKey === monthKey),
     [debtPayments, monthKey]
@@ -76,7 +76,7 @@ function useActiveDebtPayments() {
 
 export function useDebtSummary(): DebtsSummary {
   const monthKey = useActiveMonthKey();
-  const entries = useBudgetStore((state) => state.entries);
+  const entries = useTabStore((state) => state.entries);
   const debts = useActiveDebts();
   const payments = useActiveDebtPayments();
   return useMemo(
@@ -87,8 +87,8 @@ export function useDebtSummary(): DebtsSummary {
 
 export function useSavingsSummary(budget: MonthlyBudgetSummary): MonthlySavingsSummary {
   const monthKey = useActiveMonthKey();
-  const concepts = useBudgetStore((state) => state.concepts);
-  const entries = useBudgetStore((state) => state.entries);
+  const concepts = useTabStore((state) => state.concepts);
+  const entries = useTabStore((state) => state.entries);
   const buckets = useActiveSavingsBuckets();
   return useMemo(
     () => calculateMonthlySavingsSummary(buckets, concepts, entries, budget, monthKey),
@@ -100,8 +100,8 @@ export function useProvisionPlanSummary(
   savingsSummary: MonthlySavingsSummary
 ): ProvisionPlanSummary {
   const monthKey = useActiveMonthKey();
-  const entries = useBudgetStore((state) => state.entries);
-  const plan = useBudgetStore((state) => state.idealMotoPlan);
+  const entries = useTabStore((state) => state.entries);
+  const plan = useTabStore((state) => state.idealMotoPlan);
   const paidThisMonth = savingsSummary.moto.paidContributionsThisMonth;
   return useMemo(
     () => calculateProvisionPlanSummary(plan, entries, paidThisMonth, monthKey),
@@ -115,8 +115,8 @@ export function useMonthlyCurve(
   debts: DebtsSummary
 ): MonthlyCurve {
   const monthKey = useActiveMonthKey();
-  const concepts = useBudgetStore((state) => state.concepts);
-  const entries = useBudgetStore((state) => state.entries);
+  const concepts = useTabStore((state) => state.concepts);
+  const entries = useTabStore((state) => state.entries);
   const payments = useActiveDebtPayments();
   return useMemo(
     () =>
@@ -142,7 +142,7 @@ export function useMonthlyCurve(
 export function useFinancialAccounts(
   scope: FinancialAccountScope = 'all'
 ): readonly FinancialAccount[] {
-  const accounts = useBudgetStore((state) => state.financialAccounts);
+  const accounts = useTabStore((state) => state.financialAccounts);
   return useMemo(
     () => (scope === 'all' ? accounts : filterFinancialAccountsByScope(accounts, scope)),
     [accounts, scope]
@@ -154,7 +154,7 @@ export function useFinancialAccountsSummary(
   scope: FinancialAccountScope = 'all'
 ): FinancialAccountsSummary {
   const monthKey = useActiveMonthKey();
-  const entries = useBudgetStore((state) => state.entries);
+  const entries = useTabStore((state) => state.entries);
   const accounts = useFinancialAccounts(scope);
   return useMemo(
     () => calculateFinancialAccountsSummary(accounts, entries, monthKey, toAppIsoDate()),

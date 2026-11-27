@@ -126,6 +126,16 @@ export interface InitialAccountSetupPayload {
   provisionPlan: IdealMotoPlan;
 }
 
+/**
+ * What the caller already has in memory for `addMonthEntry` (OPT-04, like R-14 in
+ * `deleteOrResetEntry`): each piece given skips its Firestore read.
+ */
+export interface AddMonthEntryContext {
+  /** Entries of `input.monthKey`. */
+  monthEntries?: readonly MonthEntry[];
+  concepts?: readonly Concept[];
+}
+
 export interface ToggleEntryCompletionResult {
   updatedEntry: MonthEntry;
   updatedDebtPayment?: DebtPayment;
@@ -146,6 +156,24 @@ function safeParseList<T>(
     }
   }
   return results;
+}
+
+/** Groups items by `monthKey`, keeping their order (OPT-04). */
+function groupByMonthKey<T extends { monthKey: string }>(items: readonly T[]): Map<string, T[]> {
+  const byMonth = new Map<string, T[]>();
+  for (const item of items) {
+    const list = byMonth.get(item.monthKey);
+    if (list) {
+      list.push(item);
+    } else {
+      byMonth.set(item.monthKey, [item]);
+    }
+  }
+  return byMonth;
+}
+
+function paymentEntryKey(entryId: string, monthKey: string): string {
+  return `${monthKey}|${entryId}`;
 }
 
 export function isOwnerCanonicalEmail(email?: string | null): boolean {
@@ -198,7 +226,11 @@ export interface BudgetRepository {
       concept?: Concept;
     }
   ): Promise<ToggleEntryCompletionResult>;
-  addMonthEntry(uid: string, input: RegisterOrCompleteMovementInput): Promise<MonthEntry>;
+  addMonthEntry(
+    uid: string,
+    input: RegisterOrCompleteMovementInput,
+    context?: AddMonthEntryContext
+  ): Promise<MonthEntry>;
   deleteOrResetEntry(
     uid: string,
     entryId: string,
@@ -610,12 +642,15 @@ export class InMemoryBudgetRepository implements BudgetRepository {
 
   async addMonthEntry(
     _uid: string,
-    input: RegisterOrCompleteMovementInput
+    input: RegisterOrCompleteMovementInput,
+    context?: AddMonthEntryContext
   ): Promise<MonthEntry> {
-    const existingEntriesForMonth = Array.from(this.entries.values()).filter(
-      (e) => e.monthKey === input.monthKey
-    );
-    const allConcepts = Array.from(this.concepts.values());
+    const existingEntriesForMonth = context?.monthEntries
+      ? [...context.monthEntries]
+      : Array.from(this.entries.values()).filter((e) => e.monthKey === input.monthKey);
+    const allConcepts = context?.concepts
+      ? [...context.concepts]
+      : Array.from(this.concepts.values());
     const nextEntries = registerMovement(existingEntriesForMonth, allConcepts, input);
     const created =
       nextEntries.find(
@@ -1623,15 +1658,18 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       }
     }
 
+    // Entries and payments grouped by month once, instead of filtering the whole lists in every
+    // month of the loops below (OPT-04). The indexes follow every push that comes after.
+    const entriesByMonth = groupByMonthKey(entries);
+
     // Ensure any open month without entries yet has its recurring checklist concepts populated
     for (const mk of availableMonths) {
-      if (
-        !closedSnapshots[mk] &&
-        concepts.length > 0 &&
-        !entries.some((e) => e.monthKey === mk)
-      ) {
+      if (!closedSnapshots[mk] && concepts.length > 0 && !entriesByMonth.has(mk)) {
         const plannedEntries = ensureMonthPlan(mk, concepts, []);
         entries.push(...plannedEntries);
+        if (plannedEntries.length > 0) {
+          entriesByMonth.set(mk, [...plannedEntries]);
+        }
       }
     }
 
@@ -1645,6 +1683,20 @@ export class FirestoreBudgetRepository implements BudgetRepository {
 
     // Ensure every completed entry for a debt-linked concept has an active debtPayment in memory
     const paymentList: DebtPayment[] = [...debtPayments];
+    const paymentsByMonth = groupByMonthKey(paymentList);
+    const paidEntryKeys = new Set(
+      paymentList.map((dp) => paymentEntryKey(dp.entryId, dp.monthKey))
+    );
+    const addSynthesizedPayment = (payment: DebtPayment): void => {
+      paymentList.push(payment);
+      const monthPayments = paymentsByMonth.get(payment.monthKey);
+      if (monthPayments) {
+        monthPayments.push(payment);
+      } else {
+        paymentsByMonth.set(payment.monthKey, [payment]);
+      }
+      paidEntryKeys.add(paymentEntryKey(payment.entryId, payment.monthKey));
+    };
     const conceptById = new Map<string, Concept>(concepts.map((c) => [c.id, c]));
 
     const debtsByMonth: Record<string, Debt[]> = {};
@@ -1701,16 +1753,14 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       } else {
         const prevMk = availableMonths[idx - 1]!;
         const prevDebts = debtsByMonth[prevMk] ?? currentDebts;
-        const prevEntries = entries.filter((e) => e.monthKey === prevMk);
+        const prevEntries = entriesByMonth.get(prevMk) ?? [];
 
         // Synthesize missing debt payments for completed debt-linked entries in prevMk
         for (const entry of prevEntries) {
           if (entry.status !== 'completed') continue;
           const concept = conceptById.get(entry.conceptId);
           if (!concept?.linkedDebtGroup && !concept?.defaultTargetDebtId) continue;
-          const hasPayment = paymentList.some(
-            (dp) => dp.entryId === entry.id && dp.monthKey === prevMk
-          );
+          const hasPayment = paidEntryKeys.has(paymentEntryKey(entry.id, prevMk));
           if (!hasPayment && prevDebts.length > 0) {
             const synthesized = buildDebtPaymentsForInstallment(
               entry,
@@ -1719,12 +1769,12 @@ export class FirestoreBudgetRepository implements BudgetRepository {
               concept.defaultTargetDebtId
             );
             for (const s of synthesized) {
-              paymentList.push(s);
+              addSynthesizedPayment(s);
             }
           }
         }
 
-        const prevPayments = paymentList.filter((dp) => dp.monthKey === prevMk);
+        const prevPayments = [...(paymentsByMonth.get(prevMk) ?? [])];
         const prevDebtSummary = calculateDebtsSummary(
           prevDebts,
           entries,
@@ -1848,15 +1898,13 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       }
 
       // Also synthesize missing debt payments for completed debt-linked entries in the current month `mk`
-      const mkEntries = entries.filter((e) => e.monthKey === mk);
+      const mkEntries = entriesByMonth.get(mk) ?? [];
       const mkDebts = debtsByMonth[mk] ?? [];
       for (const entry of mkEntries) {
         if (entry.status !== 'completed') continue;
         const concept = conceptById.get(entry.conceptId);
         if (!concept?.linkedDebtGroup && !concept?.defaultTargetDebtId) continue;
-        const hasPayment = paymentList.some(
-          (dp) => dp.entryId === entry.id && dp.monthKey === mk
-        );
+        const hasPayment = paidEntryKeys.has(paymentEntryKey(entry.id, mk));
         if (!hasPayment && mkDebts.length > 0) {
           const synthesized = buildDebtPaymentsForInstallment(
             entry,
@@ -1865,7 +1913,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
             concept.defaultTargetDebtId
           );
           for (const s of synthesized) {
-            paymentList.push(s);
+            addSynthesizedPayment(s);
           }
         }
       }
@@ -1998,22 +2046,25 @@ export class FirestoreBudgetRepository implements BudgetRepository {
 
   async addMonthEntry(
     uid: string,
-    input: RegisterOrCompleteMovementInput
+    input: RegisterOrCompleteMovementInput,
+    context?: AddMonthEntryContext
   ): Promise<MonthEntry> {
-    const [entriesSnap, conceptsSnap] = await Promise.all([
-      getDocs(
-        query(
-          collection(this.db, 'users', uid, 'entries'),
-          where('monthKey', '==', input.monthKey)
-        )
-      ),
-      getDocs(collection(this.db, 'users', uid, 'concepts')),
+    // OPT-04: only what the caller did not hand over is read (two getDocs at most).
+    const [existingEntriesForMonth, concepts] = await Promise.all([
+      context?.monthEntries
+        ? Promise.resolve([...context.monthEntries])
+        : getDocs(
+            query(
+              collection(this.db, 'users', uid, 'entries'),
+              where('monthKey', '==', input.monthKey)
+            )
+          ).then((snap) => snap.docs.map((d) => parseMonthEntryFromFirestore(d.data()))),
+      context?.concepts
+        ? Promise.resolve([...context.concepts])
+        : getDocs(collection(this.db, 'users', uid, 'concepts')).then((snap) =>
+            snap.docs.map((d) => parseConceptFromFirestore(d.data()))
+          ),
     ]);
-
-    const existingEntriesForMonth = entriesSnap.docs.map((d) =>
-      parseMonthEntryFromFirestore(d.data())
-    );
-    const concepts = conceptsSnap.docs.map((d) => parseConceptFromFirestore(d.data()));
 
     const nextEntries = registerMovement(existingEntriesForMonth, concepts, input);
     const created =

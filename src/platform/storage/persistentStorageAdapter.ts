@@ -126,6 +126,18 @@ export function decryptRawStringFromStorage(storedValue: string): string | null 
 export function __resetMemoryCacheForTests(): void {
   memoryStore.clear();
   inMemorySecretToken = null;
+  storageGeneration += 1;
+}
+
+/**
+ * Changes whenever the storage underneath may differ from what callers remember: a cleared store,
+ * another backend or a simulated restart. Modules that keep metadata of stored values in memory
+ * (`accountCache`, OPT-02) compare it to know when to read again.
+ */
+let storageGeneration = 0;
+
+export function getStorageGeneration(): number {
+  return storageGeneration;
 }
 
 /**
@@ -135,6 +147,7 @@ export function __resetMemoryCacheForTests(): void {
 export function __setStorageBackendForTests(backend: RawStorageBackend | null): void {
   activeBackend = backend ?? storageBackend;
   inMemorySecretToken = null;
+  storageGeneration += 1;
 }
 
 export const persistentStorage: BFlowStorageAdapter = {
@@ -211,6 +224,7 @@ export const persistentStorage: BFlowStorageAdapter = {
   clear(): void {
     memoryStore.clear();
     inMemorySecretToken = null;
+    storageGeneration += 1;
     try {
       activeBackend.clear();
     } catch {

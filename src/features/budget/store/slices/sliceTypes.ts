@@ -9,6 +9,7 @@ import type { StateCreator } from 'zustand';
 import {
   EMPTY_PROVISION_PLAN,
   ensureStandardSavingsBuckets,
+  FirestoreBudgetRepository,
   isOwnerCanonicalEmail,
   type FullCloudAccountData,
 } from '../../../../data/repositories/budgetRepository';
@@ -44,7 +45,6 @@ import { isDemoModeEnabled } from '../../../../platform/mode/demoMode';
 import {
   loadPersistedAccount,
   savePersistedAccount,
-  schedulePersistedAccountSave,
 } from '../../../../platform/storage/accountCache';
 import {
   getPendingOfflineWritesCount,
@@ -400,27 +400,21 @@ export function applyConceptLinkageUpdates(
   return next;
 }
 
-export function persistHydratedAccountSnapshot(state: BudgetStoreState): void {
-  const uid = state.authUser?.uid;
-  if (!uid || uid === 'local-owner' || uid === 'local-demo') {
-    return;
-  }
-  if (!state.isAccountHydrated) {
-    return;
-  }
-  schedulePersistedAccountSave(uid, {
-    activeMonthKey: state.activeMonthKey,
-    availableMonths: state.availableMonths,
-    concepts: state.concepts,
-    entries: state.entries,
-    debtsByMonth: state.debtsByMonth,
-    debtPayments: state.debtPayments,
-    savingsBucketsByMonth: state.savingsBucketsByMonth,
-    provisionPlan: state.idealMotoPlan,
-    closedSnapshots: state.closedSnapshots,
-    financialAccounts: state.financialAccounts,
-    needsOnboarding: state.needsOnboarding,
-  });
+let sharedBudgetRepository: FirestoreBudgetRepository | null = null;
+
+/**
+ * Firestore repository shared by every slice (OPT-06), created the first time a write needs it.
+ * The slices used to build one per write (30 places). Lazy, so a session that never writes to
+ * the cloud (showcase mode, tests) never touches Firebase.
+ */
+export function getBudgetRepository(): FirestoreBudgetRepository {
+  sharedBudgetRepository ??= new FirestoreBudgetRepository();
+  return sharedBudgetRepository;
+}
+
+/** Tests: replaces the shared repository (`null` builds a new one on the next use). */
+export function __setBudgetRepositoryForTests(repository: FirestoreBudgetRepository | null): void {
+  sharedBudgetRepository = repository;
 }
 
 const WIDGET_NOT_SYNCED: WidgetSyncResult = {
@@ -441,7 +435,6 @@ export function triggerWidgetSync(state: BudgetStoreState): Promise<WidgetSyncRe
   if (!state.isAccountHydrated) {
     return Promise.resolve(WIDGET_NOT_SYNCED);
   }
-  persistHydratedAccountSnapshot(state);
   pendingWidgetSyncState = state;
   if (!pendingWidgetSync) {
     pendingWidgetSync = Promise.resolve().then(() => {

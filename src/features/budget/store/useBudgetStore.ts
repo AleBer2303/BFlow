@@ -16,6 +16,7 @@
  */
 
 import { create } from 'zustand';
+import { startPersistedAccountAutoSave } from './persistedAccountFields';
 import {
   createAccountsSlice,
   createAuthSlice,
@@ -40,3 +41,6 @@ export const useBudgetStore = create<BudgetStoreState>((set, get, store) => ({
   ...createProvisionsSlice(set, get, store),
   ...createAccountsSlice(set, get, store),
 }));
+
+// Single trigger of the device cache save (OPT-02).
+startPersistedAccountAutoSave(useBudgetStore);

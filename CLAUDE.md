@@ -119,6 +119,19 @@ src/app/index.tsx  ──(hooks/props)──>  features/*/components
   - Jest: `jest.config.js` usa el resolver de Reanimated y `jest.setup.js` (Gesture Handler, Worklets y `expo-glass-effect` simulados). Los tests del dock de iOS usan temporizadores falsos (`jest.advanceTimersByTime`) para que los estilos animados se apliquen, leen `getAnimatedStyle` y arrastran con `createGestureController(getByGestureTestId('dock-pan-gesture'))`. Para el vidrio del sistema, `jest.spyOn` sobre `isLiquidGlassAvailable` y `__resetLiquidGlassAvailabilityForTests()`; el `afterEach` de la suite devuelve el mock a `false`.
   - Verificado en iPhone 16 Pro con iOS 27.2 y Expo Go 58.0.5. Sin verificar: el respaldo en iOS < 26 y el `.ipa`.
 
+- **Tarjetas de crédito y cuentas débito (ADR 0034):** `src/domain/accounts/financialAccounts.ts`, `createAccountsSlice`, colección `users/{uid}/financialAccounts`.
+  - El saldo no se guarda: sale de `openingBalance` (al inicio de `openingMonthKey`) más los `entries` completados con `accountId`. En débito, el ingreso suma y el gasto resta. En crédito, el gasto es compra salvo `accountRole: 'payment'`, y el ingreso es abono. `applyEntryAccountLink` guarda el rol solo en gastos con tarjeta de crédito.
+  - `financialAccounts` es una lista única (no por mes). Está en `PERSISTED_ACCOUNT_FIELDS` y en el guardado de caché de `index.tsx`: si añades otro campo persistido, ponlo en los dos sitios.
+  - Las tarjetas no suman al "Total Deudas" ni a los snapshots: los tests dorados no cambian.
+  - Eliminar una cuenta deja el `accountId` en los movimientos; el dominio ignora los ids sin cuenta.
+  - Deudas muestra las tarjetas y las cuentas corrientes; Ahorros, las cuentas de ahorros (`debitKind: 'savings'`). Filtrar con `useFinancialAccounts(scope)` / `useFinancialAccountsSummary(scope)` (`'debts' | 'savings' | 'all'`); movimientos y Cierre usan `'all'`. Una cuenta débito sin `debitKind` es corriente.
+  - En **+ Nueva Deuda** (`DebtForm`), el selector Deuda / Crédito / Débito (solo corriente) aparece al registrar y si se pasa `onCreateAccount`. En Ahorros, **+ Nuevo Ahorro** (`SavingsForm`) elige Fondo o Cuenta de ahorros. El onboarding sigue usando `NewSavingsBucketForm` («+ Nuevo Fondo»).
+  - `FinancialAccountFormFields` y `FinancialAccountCard` viven en `src/features/accounts/components/`. El tipo de débito lo fija quien abre el formulario (prop `debitKind`).
+  - El saldo de las cuentas de ahorros no suma a `totalCurrentSavings`: la tarjeta principal de Ahorros lo muestra aparte.
+  - Cierre muestra lo gastado y lo pagado por cuenta en `AccountsMonthPanel`, solo si hay cuentas en el mes.
+  - `loadFullCloudAccount` hace una consulta más: `phase4FirestoreReads.test.ts` espera 7 `getDocs` y 35 documentos.
+  - Sin verificar contra el emulador ni en un dispositivo.
+
 - **Gráficos (Fase 6, ADR 0020):** `src/design-system/components/charts/` (`BarChart`, `LineChart` y `DonutChart` con `react-native-svg`, animados por `chartTransition.ts`), con datos de `src/domain/analytics/chartSeries.ts`:
   - Un mes cerrado anterior al activo lee su snapshot. El mes activo, aunque esté cerrado, y los meses abiertos se calculan en vivo, igual que las tarjetas.
   - La ventana es de 6 meses hasta el mes activo. Cada gráfico muestra los que caben con el objetivo táctil completo por columna (`useChartWindow`).

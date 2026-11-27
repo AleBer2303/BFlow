@@ -12,6 +12,7 @@ import type {
   Concept,
   Debt,
   DebtPayment,
+  FinancialAccount,
   MonthEntry,
   MonthNumber,
   MonthSnapshot,
@@ -96,6 +97,28 @@ export const monthEntrySchema: z.ZodType<MonthEntry> = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'completedAt must be YYYY-MM-DD')
     .optional(),
   note: z.string().optional(),
+  accountId: z.string().min(1).max(120).optional(),
+  accountRole: z.enum(['purchase', 'payment']).optional(),
+});
+
+const accountDaySchema = z.number().int().min(1).max(31);
+
+export const financialAccountSchema: z.ZodType<FinancialAccount> = z.object({
+  id: z.string().min(1).max(120),
+  type: z.enum(['credit', 'debit']),
+  name: z.string().min(1).max(120),
+  institution: z.string().min(1).max(120),
+  lastFourDigits: z
+    .string()
+    .regex(/^\d{4}$/, 'lastFourDigits must be 4 digits')
+    .optional(),
+  openingBalance: nonNegativeIntSchema,
+  openingMonthKey: monthKeyStringSchema,
+  creditLimit: nonNegativeIntSchema.optional(),
+  statementDay: accountDaySchema.optional(),
+  paymentDueDay: accountDaySchema.optional(),
+  monthlyInterestRate: z.number().min(0).max(100).optional(),
+  debitKind: z.enum(['savings', 'checking']).optional(),
 });
 
 export const debtSchema: z.ZodType<Debt> = z.object({
@@ -282,6 +305,17 @@ export function serializeDebtForFirestore(debt: Debt): Record<string, unknown> {
 
 export function parseDebtFromFirestore(raw: unknown): Debt {
   return debtSchema.parse(raw);
+}
+
+export function serializeFinancialAccountForFirestore(
+  account: FinancialAccount
+): Record<string, unknown> {
+  const validated = financialAccountSchema.parse(account);
+  return stripUndefinedFields({ ...validated }) as Record<string, unknown>;
+}
+
+export function parseFinancialAccountFromFirestore(raw: unknown): FinancialAccount {
+  return financialAccountSchema.parse(raw);
 }
 
 export function serializeDebtPaymentForFirestore(payment: DebtPayment): Record<string, unknown> {

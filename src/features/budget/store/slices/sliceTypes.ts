@@ -17,6 +17,7 @@ import {
   getMonthNumberFromMonthKey,
   sumMoneyIntegers,
   toAppMonthKey,
+  type AccountMovementRole,
   type CloseMonthResult,
   type Concept,
   type ConceptGroup,
@@ -24,6 +25,9 @@ import {
   type Debt,
   type DebtInterestRateType,
   type DebtPayment,
+  type DebitAccountKind,
+  type FinancialAccount,
+  type FinancialAccountType,
   type IdealMotoPlan,
   type MonthEntry,
   type MonthSnapshot,
@@ -69,6 +73,9 @@ export interface EditEntryUpdates {
   targetDebtId?: string | null;
   savingsBucketId?: string | null;
   persistMonthly?: boolean;
+  /** Card or account the movement went through (ADR 0034); null removes the link. */
+  accountId?: string | null;
+  accountRole?: AccountMovementRole | null;
 }
 
 export interface CreateCustomConceptInput {
@@ -83,7 +90,26 @@ export interface CreateCustomConceptInput {
   savingsBucketId?: string | null;
   persistMonthly?: boolean;
   markCompleted?: boolean;
+  accountId?: string | null;
+  accountRole?: AccountMovementRole | null;
 }
+
+/** Fields of a credit card or debit account entered in the Debts form (ADR 0034). */
+export interface FinancialAccountInput {
+  type: FinancialAccountType;
+  name: string;
+  institution: string;
+  lastFourDigits?: string;
+  openingBalance: number;
+  creditLimit?: number;
+  statementDay?: number;
+  paymentDueDay?: number;
+  monthlyInterestRate?: number;
+  debitKind?: DebitAccountKind;
+}
+
+/** Same fields without the type, which never changes once the account exists. */
+export type FinancialAccountUpdates = Omit<FinancialAccountInput, 'type'>;
 
 export interface SaveProvisionItemInput {
   id?: string;
@@ -204,6 +230,8 @@ export interface BudgetSlice {
     input: RegisterOrCompleteMovementInput & {
       targetDebtId?: string | null;
       savingsBucketId?: string | null;
+      accountId?: string | null;
+      accountRole?: AccountMovementRole | null;
     }
   ) => Promise<void>;
   createCustomConceptAndMovement: (input: CreateCustomConceptInput) => Promise<void>;
@@ -280,6 +308,18 @@ export interface SavingsSlice {
   deleteSavingsBucket: (monthKey: string, bucketId: string) => Promise<void>;
 }
 
+export interface AccountsSlice {
+  financialAccounts: FinancialAccount[];
+
+  createFinancialAccount: (
+    monthKey: string,
+    input: FinancialAccountInput
+  ) => Promise<FinancialAccount | null>;
+  updateFinancialAccount: (accountId: string, updates: FinancialAccountUpdates) => Promise<void>;
+  /** Linked movements keep their link; they stop counting toward any account. */
+  deleteFinancialAccount: (accountId: string) => Promise<void>;
+}
+
 export interface ProvisionsSlice {
   idealMotoPlan: IdealMotoPlan;
 
@@ -292,7 +332,8 @@ export type BudgetStoreState = AuthSlice &
   BudgetSlice &
   DebtsSlice &
   SavingsSlice &
-  ProvisionsSlice;
+  ProvisionsSlice &
+  AccountsSlice;
 
 export type SliceCreator<T> = StateCreator<BudgetStoreState, [], [], T>;
 
@@ -377,6 +418,7 @@ export function persistHydratedAccountSnapshot(state: BudgetStoreState): void {
     savingsBucketsByMonth: state.savingsBucketsByMonth,
     provisionPlan: state.idealMotoPlan,
     closedSnapshots: state.closedSnapshots,
+    financialAccounts: state.financialAccounts,
     needsOnboarding: state.needsOnboarding,
   });
 }
@@ -483,6 +525,7 @@ export function buildCleanEmptyWorkspaceState(authUser: BFlowAuthUser | null) {
       : {}) as Record<string, SavingsBucket[]>,
     idealMotoPlan: { ...EMPTY_PROVISION_PLAN, items: [] },
     closedSnapshots: {} as Record<string, MonthSnapshot>,
+    financialAccounts: [] as FinancialAccount[],
     authUser,
     syncMessage: '',
     isSyncing: false,
@@ -515,6 +558,7 @@ export function buildHydratedWorkspaceState(
     savingsBucketsByMonth: account.savingsBucketsByMonth,
     idealMotoPlan: account.provisionPlan,
     closedSnapshots: account.closedSnapshots,
+    financialAccounts: account.financialAccounts ?? [],
     authUser: hydratedUser,
     syncMessage: '',
     isSyncing: false,
@@ -542,6 +586,7 @@ export function buildOctober2026SeedWorkspaceState(authUser: BFlowAuthUser | nul
     },
     idealMotoPlan: seed.provisionPlan,
     closedSnapshots: {} as Record<string, MonthSnapshot>,
+    financialAccounts: [] as FinancialAccount[],
     authUser,
     syncMessage: '',
     isSyncing: false,

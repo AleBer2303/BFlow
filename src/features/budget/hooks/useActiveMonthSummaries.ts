@@ -13,12 +13,17 @@ import {
   buildMonthlyCurve,
   calculateChecklistProgress,
   calculateDebtsSummary,
+  calculateFinancialAccountsSummary,
   calculateMonthlyBudgetSummary,
   calculateMonthlySavingsSummary,
   calculateProvisionPlanSummary,
+  filterFinancialAccountsByScope,
   toAppIsoDate,
   type ChecklistProgress,
   type Debt,
+  type FinancialAccount,
+  type FinancialAccountScope,
+  type FinancialAccountsSummary,
   type MonthlyBudgetSummary,
   type MonthlyCurve,
   type MonthlySavingsSummary,
@@ -126,5 +131,33 @@ export function useMonthlyCurve(
         debts,
       }),
     [monthKey, entries, concepts, payments, budget, savings, debts]
+  );
+}
+
+/**
+ * Credit cards and debit accounts (ADR 0034); one list for every month. `debts` keeps the
+ * cards and checking accounts (Deudas), `savings` the savings accounts (Ahorros) and `all`
+ * every account (Cierre, movements).
+ */
+export function useFinancialAccounts(
+  scope: FinancialAccountScope = 'all'
+): readonly FinancialAccount[] {
+  const accounts = useBudgetStore((state) => state.financialAccounts);
+  return useMemo(
+    () => (scope === 'all' ? accounts : filterFinancialAccountsByScope(accounts, scope)),
+    [accounts, scope]
+  );
+}
+
+/** Each account's balance and what was spent and paid with it in the active month. */
+export function useFinancialAccountsSummary(
+  scope: FinancialAccountScope = 'all'
+): FinancialAccountsSummary {
+  const monthKey = useActiveMonthKey();
+  const entries = useBudgetStore((state) => state.entries);
+  const accounts = useFinancialAccounts(scope);
+  return useMemo(
+    () => calculateFinancialAccountsSummary(accounts, entries, monthKey, toAppIsoDate()),
+    [accounts, entries, monthKey]
   );
 }

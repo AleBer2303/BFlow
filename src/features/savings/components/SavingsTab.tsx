@@ -2,7 +2,8 @@
  * src/features/savings/components/SavingsTab.tsx
  *
  * Container of the Savings tab: reads only the savings and provision data it shows, plus
- * the month-by-month history for the savings chart (Phase 6).
+ * the month-by-month history for the savings chart (Phase 6), and the savings bank accounts
+ * with their month summary (ADR 0034).
  */
 
 import React, { useCallback } from 'react';
@@ -12,6 +13,8 @@ import { ScrollRevealSection, hapticService, useBFlowTheme } from '../../../desi
 import {
   useActiveMonthKey,
   useBudgetSummary,
+  useFinancialAccounts,
+  useFinancialAccountsSummary,
   useProvisionPlanSummary,
   useSavingsSummary,
 } from '../../budget/hooks/useActiveMonthSummaries';
@@ -32,6 +35,8 @@ export const SavingsTab = React.memo(function SavingsTab(): React.JSX.Element {
   const provisionSummary = useProvisionPlanSummary(savingsSummary);
   const provisionPlan = useBudgetStore((state) => state.idealMotoPlan);
   const history = useChartHistory();
+  const savingsAccounts = useFinancialAccounts('savings');
+  const savingsAccountsSummary = useFinancialAccountsSummary('savings');
   const { spacing } = useBFlowTheme();
   const actions = useBudgetStore(
     useShallow((state) => ({
@@ -40,6 +45,9 @@ export const SavingsTab = React.memo(function SavingsTab(): React.JSX.Element {
       deleteSavingsBucket: state.deleteSavingsBucket,
       saveProvisionItem: state.saveProvisionItem,
       deleteProvisionItem: state.deleteProvisionItem,
+      createFinancialAccount: state.createFinancialAccount,
+      updateFinancialAccount: state.updateFinancialAccount,
+      deleteFinancialAccount: state.deleteFinancialAccount,
     }))
   );
 
@@ -79,6 +87,28 @@ export const SavingsTab = React.memo(function SavingsTab(): React.JSX.Element {
     [actions]
   );
 
+  const handleCreateAccount = useCallback<NonNullable<Props['onCreateAccount']>>(
+    (input) => {
+      hapticService.trigger('success');
+      void actions.createFinancialAccount(monthKey, input);
+    },
+    [actions, monthKey]
+  );
+  const handleUpdateAccount = useCallback<NonNullable<Props['onUpdateAccount']>>(
+    (accountId, updates) => {
+      hapticService.trigger('success');
+      void actions.updateFinancialAccount(accountId, updates);
+    },
+    [actions]
+  );
+  const handleDeleteAccount = useCallback<NonNullable<Props['onDeleteAccount']>>(
+    (accountId) => {
+      hapticService.trigger('warning');
+      void actions.deleteFinancialAccount(accountId);
+    },
+    [actions]
+  );
+
   return (
     <View style={{ gap: spacing.md }}>
       <SavingsAndProvisionsView
@@ -90,6 +120,11 @@ export const SavingsTab = React.memo(function SavingsTab(): React.JSX.Element {
         onDeleteSavingsBucket={handleDeleteSavingsBucket}
         onSaveProvisionItem={handleSaveProvisionItem}
         onDeleteProvisionItem={handleDeleteProvisionItem}
+        savingsAccounts={savingsAccounts}
+        savingsAccountsSummary={savingsAccountsSummary}
+        onCreateAccount={handleCreateAccount}
+        onUpdateAccount={handleUpdateAccount}
+        onDeleteAccount={handleDeleteAccount}
       />
       <ScrollRevealSection>
         <SavingsTrendCharts history={history} />

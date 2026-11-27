@@ -12,10 +12,12 @@
  * - createDebtsSlice: debts by month, installment cascading, interest calculation
  * - createSavingsSlice: savings buckets, opening balances, savings linkages
  * - createProvisionsSlice: provisions plan, recurring funds, target goals
+ * - createAccountsSlice: credit cards and debit accounts linked to movements (ADR 0034)
  */
 
 import { create } from 'zustand';
 import {
+  createAccountsSlice,
   createAuthSlice,
   createBudgetSlice,
   createDebtsSlice,
@@ -36,4 +38,5 @@ export const useBudgetStore = create<BudgetStoreState>((set, get, store) => ({
   ...createDebtsSlice(set, get, store),
   ...createSavingsSlice(set, get, store),
   ...createProvisionsSlice(set, get, store),
+  ...createAccountsSlice(set, get, store),
 }));

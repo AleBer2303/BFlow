@@ -9,6 +9,7 @@ import {
   FirestoreBudgetRepository,
 } from '../../../../data/repositories/budgetRepository';
 import {
+  applyEntryAccountLink,
   buildDebtPaymentsForInstallment,
   closeMonthAndRollover,
   deleteMovement,
@@ -134,14 +135,26 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
       nextConcepts = state.concepts.map((c) => (c.id === concept!.id ? concept! : c));
     }
 
-    const nextEntries = registerMovement(state.entries, nextConcepts, input);
-    const updatedEntry = nextEntries.find(
+    const registeredEntries = registerMovement(state.entries, nextConcepts, input);
+    const registeredEntry = registeredEntries.find(
       (e) =>
         e.monthKey === input.monthKey &&
         e.conceptId === input.conceptId &&
         (!state.entries.some((prev) => prev.id === e.id && prev.status === 'completed') ||
           !concept?.allowMultiplePerMonth)
     );
+    // ADR 0034: the card or account the movement went through.
+    const updatedEntry = registeredEntry
+      ? applyEntryAccountLink(
+          registeredEntry,
+          { accountId: input.accountId, accountRole: input.accountRole },
+          state.financialAccounts
+        )
+      : undefined;
+    const nextEntries =
+      updatedEntry && updatedEntry !== registeredEntry
+        ? registeredEntries.map((e) => (e === registeredEntry ? updatedEntry : e))
+        : registeredEntries;
 
     let nextDebtPayments = state.debtPayments;
     if ((concept?.linkedDebtGroup || concept?.defaultTargetDebtId) && updatedEntry) {
@@ -245,19 +258,23 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     );
 
     const isCompleted = input.markCompleted !== false;
-    const newEntry: MonthEntry = {
-      id: `${input.monthKey}_${customConceptId}`,
-      monthKey: input.monthKey,
-      conceptId: customConceptId,
-      conceptName: trimmedName,
-      type: input.type,
-      group: input.group,
-      plannedAmount: safeAmount,
-      actualAmount: safeAmount,
-      status: isCompleted ? 'completed' : 'pending',
-      ...(isCompleted ? { completedAt: toAppIsoDate() } : {}),
-      ...(input.note?.trim() ? { note: input.note.trim() } : {}),
-    };
+    const newEntry: MonthEntry = applyEntryAccountLink(
+      {
+        id: `${input.monthKey}_${customConceptId}`,
+        monthKey: input.monthKey,
+        conceptId: customConceptId,
+        conceptName: trimmedName,
+        type: input.type,
+        group: input.group,
+        plannedAmount: safeAmount,
+        actualAmount: safeAmount,
+        status: isCompleted ? 'completed' : 'pending',
+        ...(isCompleted ? { completedAt: toAppIsoDate() } : {}),
+        ...(input.note?.trim() ? { note: input.note.trim() } : {}),
+      },
+      { accountId: input.accountId, accountRole: input.accountRole },
+      state.financialAccounts
+    );
 
     let createdPayments: DebtPayment[] = [];
     let nextDebtPayments = state.debtPayments;
@@ -490,16 +507,21 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     const nextName = updates.conceptName.trim() || target.conceptName;
     const trimmedNote = updates.note?.trim();
 
-    const updatedEntry: MonthEntry = {
+    const editedEntry: MonthEntry = {
       ...target,
       conceptName: nextName,
       actualAmount: safeActual,
       plannedAmount: safePlanned,
       ...(trimmedNote ? { note: trimmedNote } : {}),
     };
-    if (!trimmedNote && 'note' in updatedEntry) {
-      delete (updatedEntry as { note?: string }).note;
+    if (!trimmedNote && 'note' in editedEntry) {
+      delete (editedEntry as { note?: string }).note;
     }
+    const updatedEntry = applyEntryAccountLink(
+      editedEntry,
+      { accountId: updates.accountId, accountRole: updates.accountRole },
+      state.financialAccounts
+    );
 
     const monthDebts =
       state.debtsByMonth[updatedEntry.monthKey] ?? state.debtsByMonth['2026-10'] ?? [];

@@ -27,11 +27,14 @@ import {
   toAppIsoDate,
   type Concept,
   type ConceptGroup,
+  type AccountMovementRole,
   type ConceptType,
   type Debt,
+  type FinancialAccount,
   type MonthEntry,
   type SavingsBucket,
 } from '../../../domain';
+import { AccountLinkFields, describeAccountLink } from './AccountLinkFields';
 import type { ChecklistWorkspaceViewProps } from './ChecklistWorkspaceView';
 
 export interface ChecklistAddMovementFormProps {
@@ -41,6 +44,8 @@ export interface ChecklistAddMovementFormProps {
   concepts: readonly Concept[];
   debts: readonly Debt[];
   savingsBuckets: readonly SavingsBucket[];
+  /** Credit cards and debit accounts a movement can go through (ADR 0034). */
+  financialAccounts?: readonly FinancialAccount[];
   onAddOrCompleteMovement: ChecklistWorkspaceViewProps['onAddOrCompleteMovement'];
   onCreateCustomMovement?: ChecklistWorkspaceViewProps['onCreateCustomMovement'];
   /** Called after a valid submit so the parent closes the form. */
@@ -48,6 +53,7 @@ export interface ChecklistAddMovementFormProps {
 }
 
 const NONE_OPTION_VALUE = '__none__';
+const NO_ACCOUNTS: readonly FinancialAccount[] = [];
 
 function resolveConceptDebtId(concept: Concept | undefined, debts: readonly Debt[]): string | null {
   if (concept?.defaultTargetDebtId) return concept.defaultTargetDebtId;
@@ -61,6 +67,7 @@ export const ChecklistAddMovementForm = React.memo(function ChecklistAddMovement
   concepts,
   debts,
   savingsBuckets,
+  financialAccounts = NO_ACCOUNTS,
   onAddOrCompleteMovement,
   onCreateCustomMovement,
   onSubmitted,
@@ -77,6 +84,8 @@ export const ChecklistAddMovementForm = React.memo(function ChecklistAddMovement
   const [targetDebtId, setTargetDebtId] = useState<string | null>(null);
   const [savingsBucketId, setSavingsBucketId] = useState<string | null>(null);
   const [linkageModified, setLinkageModified] = useState(false);
+  const [accountId, setAccountId] = useState<string | null>(null);
+  const [accountRole, setAccountRole] = useState<AccountMovementRole>('purchase');
   const [persistMonthly, setPersistMonthly] = useState<boolean>(true);
   const [showMoreOptions, setShowMoreOptions] = useState<boolean>(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -136,8 +145,25 @@ export const ChecklistAddMovementForm = React.memo(function ChecklistAddMovement
       const bucketName = savingsBuckets.find((b) => b.id === savingsBucketId)?.name;
       if (bucketName) parts.push(bucketName);
     }
+    const accountLabel = describeAccountLink(
+      financialAccounts,
+      movementType,
+      accountId,
+      accountRole
+    );
+    if (accountLabel) parts.push(accountLabel);
     return parts.join(' · ');
-  }, [debts, movementType, noteInput, savingsBucketId, savingsBuckets, targetDebtId]);
+  }, [
+    accountId,
+    accountRole,
+    debts,
+    financialAccounts,
+    movementType,
+    noteInput,
+    savingsBucketId,
+    savingsBuckets,
+    targetDebtId,
+  ]);
 
   const handleSelectSuggestion = (entry: MonthEntry) => {
     hapticService.selection();
@@ -177,6 +203,8 @@ export const ChecklistAddMovementForm = React.memo(function ChecklistAddMovement
           savingsBucketId: movementType === 'expense' ? savingsBucketId : null,
         }
       : {};
+    // ADR 0034: only sent when chosen, so completing a pending movement keeps its link.
+    const accountPayload = accountId ? { accountId, accountRole } : {};
 
     if (existingPendingEntry) {
       onAddOrCompleteMovement({
@@ -185,6 +213,7 @@ export const ChecklistAddMovementForm = React.memo(function ChecklistAddMovement
         actualAmount: parsedAmount,
         completedAt: toAppIsoDate(),
         ...linkagePayload,
+        ...accountPayload,
         ...(noteInput.trim() ? { note: noteInput.trim() } : {}),
       });
     } else if (onCreateCustomMovement) {
@@ -198,6 +227,7 @@ export const ChecklistAddMovementForm = React.memo(function ChecklistAddMovement
         targetDebtId: movementType === 'expense' ? targetDebtId : null,
         savingsBucketId: movementType === 'expense' ? savingsBucketId : null,
         persistMonthly,
+        ...accountPayload,
         ...(noteInput.trim() ? { note: noteInput.trim() } : {}),
       });
     } else {
@@ -213,6 +243,7 @@ export const ChecklistAddMovementForm = React.memo(function ChecklistAddMovement
           actualAmount: parsedAmount,
           completedAt: toAppIsoDate(),
           ...linkagePayload,
+          ...accountPayload,
           ...(noteInput.trim() ? { note: noteInput.trim() } : {}),
         });
       }
@@ -515,8 +546,12 @@ export const ChecklistAddMovementForm = React.memo(function ChecklistAddMovement
               >
                 {optionalSummary ||
                   (movementType === 'expense'
-                    ? 'Nota, vincular a deuda o fondo de ahorro'
-                    : 'Agregar nota opcional')}
+                    ? financialAccounts.length > 0
+                      ? 'Nota, tarjeta o cuenta, deuda o fondo de ahorro'
+                      : 'Nota, vincular a deuda o fondo de ahorro'
+                    : financialAccounts.length > 0
+                      ? 'Nota o cuenta donde se recibió'
+                      : 'Agregar nota opcional')}
               </AppText>
             </View>
             <AppText variant="micro" color={colors.text.secondary}>
@@ -542,6 +577,17 @@ export const ChecklistAddMovementForm = React.memo(function ChecklistAddMovement
                   placeholder="Ej. Factura No. 45, PSE, compra quincenal..."
                 />
               </View>
+
+              {/* Card or bank account the movement went through (ADR 0034) */}
+              <AccountLinkFields
+                accounts={financialAccounts}
+                movementType={movementType}
+                accountId={accountId}
+                accountRole={accountRole}
+                onChangeAccount={setAccountId}
+                onChangeRole={setAccountRole}
+                testIDPrefix="add-movement"
+              />
 
               {/* Modern Adaptive Selectors for Debt & Savings Fund Linkage */}
               {movementType === 'expense' && debts.length > 0 ? (

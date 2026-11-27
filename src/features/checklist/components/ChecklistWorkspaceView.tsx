@@ -42,9 +42,12 @@ import {
   useAmountPrivacy,
 } from '../../../design-system';
 import {
+  formatFinancialAccountLabel,
+  type AccountMovementRole,
   type Concept,
   type ConceptGroup,
   type Debt,
+  type FinancialAccount,
   type MonthEntry,
   type MonthlyBudgetSummary,
   type RegisterOrCompleteMovementInput,
@@ -59,6 +62,7 @@ import { ChecklistEditEntryForm } from './ChecklistEditEntryForm';
 
 const NO_DEBTS: readonly Debt[] = [];
 const NO_SAVINGS_BUCKETS: readonly SavingsBucket[] = [];
+const NO_ACCOUNTS: readonly FinancialAccount[] = [];
 
 export type ChecklistFilterMode = 'all' | 'pending' | 'completed';
 
@@ -69,11 +73,15 @@ export interface ChecklistWorkspaceViewProps {
   budget: MonthlyBudgetSummary;
   debts?: readonly Debt[];
   savingsBuckets?: readonly SavingsBucket[];
+  /** Credit cards and debit accounts (ADR 0034). */
+  financialAccounts?: readonly FinancialAccount[];
   onToggleEntry: (entry: MonthEntry) => void;
   onAddOrCompleteMovement: (
     input: RegisterOrCompleteMovementInput & {
       targetDebtId?: string | null;
       savingsBucketId?: string | null;
+      accountId?: string | null;
+      accountRole?: AccountMovementRole | null;
     }
   ) => void;
   onCreateCustomMovement?: (input: CreateCustomConceptInput) => void;
@@ -99,6 +107,7 @@ interface ChecklistRowItemProps {
   concept?: Concept;
   linkedDebt?: Debt;
   linkedBucket?: SavingsBucket;
+  linkedAccount?: FinancialAccount;
   isEditMode: boolean;
   isDeleteMode: boolean;
   colors: ReturnType<typeof useBFlowTheme>['colors'];
@@ -196,6 +205,7 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
   concept,
   linkedDebt,
   linkedBucket,
+  linkedAccount,
   isEditMode,
   isDeleteMode,
   colors,
@@ -294,6 +304,18 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
                 status="debt"
               />
             ) : null}
+            {linkedAccount ? (
+              <StatusBadge
+                label={
+                  linkedAccount.type === 'credit' &&
+                  entry.type === 'expense' &&
+                  entry.accountRole === 'payment'
+                    ? `Pago a ${formatFinancialAccountLabel(linkedAccount)}`
+                    : formatFinancialAccountLabel(linkedAccount)
+                }
+                status={linkedAccount.type === 'credit' ? 'savings' : 'provisions'}
+              />
+            ) : null}
             {concept?.recurrence.kind === 'specific_months' ? (
               <StatusBadge label="Solo este mes" status="info" />
             ) : null}
@@ -376,6 +398,7 @@ interface ChecklistSectionCardProps {
   debtById: ReadonlyMap<string, Debt>;
   debtByGroupKey: ReadonlyMap<string, Debt>;
   bucketById: ReadonlyMap<string, SavingsBucket>;
+  accountById: ReadonlyMap<string, FinancialAccount>;
   budget: MonthlyBudgetSummary;
   isEditMode: boolean;
   isDeleteMode: boolean;
@@ -392,6 +415,7 @@ const ChecklistIncomesCard = React.memo(function ChecklistIncomesCard({
   debtById,
   debtByGroupKey,
   bucketById,
+  accountById,
   budget,
   isEditMode,
   isDeleteMode,
@@ -425,6 +449,7 @@ const ChecklistIncomesCard = React.memo(function ChecklistIncomesCard({
         concept={concept}
         linkedDebt={linkedDebt}
         linkedBucket={linkedBucket}
+        linkedAccount={entry.accountId ? accountById.get(entry.accountId) : undefined}
         isEditMode={isEditMode}
         isDeleteMode={isDeleteMode}
         colors={colors}
@@ -550,6 +575,7 @@ const ChecklistExpensesCard = React.memo(function ChecklistExpensesCard({
   debtById,
   debtByGroupKey,
   bucketById,
+  accountById,
   budget,
   isEditMode,
   isDeleteMode,
@@ -583,6 +609,7 @@ const ChecklistExpensesCard = React.memo(function ChecklistExpensesCard({
         concept={concept}
         linkedDebt={linkedDebt}
         linkedBucket={linkedBucket}
+        linkedAccount={entry.accountId ? accountById.get(entry.accountId) : undefined}
         isEditMode={isEditMode}
         isDeleteMode={isDeleteMode}
         colors={colors}
@@ -707,6 +734,7 @@ interface ChecklistSectionsGridProps {
   conceptById: ReadonlyMap<string, Concept>;
   debts: readonly Debt[];
   savingsBuckets: readonly SavingsBucket[];
+  financialAccounts: readonly FinancialAccount[];
   budget: MonthlyBudgetSummary;
   incomesEditMode: boolean;
   incomesDeleteMode: boolean;
@@ -726,6 +754,7 @@ const ChecklistSectionsGrid = React.memo(function ChecklistSectionsGrid({
   conceptById,
   debts,
   savingsBuckets,
+  financialAccounts,
   budget,
   incomesEditMode,
   incomesDeleteMode,
@@ -756,6 +785,10 @@ const ChecklistSectionsGrid = React.memo(function ChecklistSectionsGrid({
     () => new Map(savingsBuckets.map((bucket) => [bucket.id, bucket] as const)),
     [savingsBuckets]
   );
+  const accountById = useMemo(
+    () => new Map(financialAccounts.map((account) => [account.id, account] as const)),
+    [financialAccounts]
+  );
 
   const incomeEntries = useMemo(
     () => filteredEntries.filter((e) => e.type === 'income'),
@@ -774,6 +807,7 @@ const ChecklistSectionsGrid = React.memo(function ChecklistSectionsGrid({
         debtById={debtById}
         debtByGroupKey={debtByGroupKey}
         bucketById={bucketById}
+        accountById={accountById}
         budget={budget}
         isEditMode={incomesEditMode}
         isDeleteMode={incomesDeleteMode}
@@ -789,6 +823,7 @@ const ChecklistSectionsGrid = React.memo(function ChecklistSectionsGrid({
         debtById={debtById}
         debtByGroupKey={debtByGroupKey}
         bucketById={bucketById}
+        accountById={accountById}
         budget={budget}
         isEditMode={expensesEditMode}
         isDeleteMode={expensesDeleteMode}
@@ -821,6 +856,7 @@ export function ChecklistWorkspaceView({
   budget,
   debts = NO_DEBTS,
   savingsBuckets = NO_SAVINGS_BUCKETS,
+  financialAccounts = NO_ACCOUNTS,
   onToggleEntry,
   onAddOrCompleteMovement,
   onCreateCustomMovement,
@@ -1082,6 +1118,7 @@ export function ChecklistWorkspaceView({
           concept={activeEditingEntry ? conceptById.get(activeEditingEntry.conceptId) : undefined}
           debts={debts}
           savingsBuckets={savingsBuckets}
+          financialAccounts={financialAccounts}
           onEditEntry={onEditEntry}
           onClose={handleCloseActiveForm}
         />
@@ -1096,6 +1133,7 @@ export function ChecklistWorkspaceView({
           concepts={concepts}
           debts={debts}
           savingsBuckets={savingsBuckets}
+          financialAccounts={financialAccounts}
           onAddOrCompleteMovement={onAddOrCompleteMovement}
           onCreateCustomMovement={onCreateCustomMovement}
           onSubmitted={handleCloseActiveForm}
@@ -1108,6 +1146,7 @@ export function ChecklistWorkspaceView({
         conceptById={conceptById}
         debts={debts}
         savingsBuckets={savingsBuckets}
+        financialAccounts={financialAccounts}
         budget={budget}
         incomesEditMode={incomesEditMode}
         incomesDeleteMode={incomesDeleteMode}

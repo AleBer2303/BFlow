@@ -55,6 +55,46 @@ export interface MonthEntry {
   status: EntryStatus;
   completedAt?: string;
   note?: string;
+  /** Card or bank account the movement went through (ADR 0034). */
+  accountId?: string;
+  /**
+   * Only for an expense on a credit card: `purchase` (bought with the card, default) or
+   * `payment` (money paid to the card). Other links ignore it.
+   */
+  accountRole?: AccountMovementRole;
+}
+
+export type FinancialAccountType = 'credit' | 'debit';
+export type DebitAccountKind = 'savings' | 'checking';
+export type AccountMovementRole = 'purchase' | 'payment';
+
+/**
+ * Credit card or debit (bank) account (ADR 0034). Its balance is never stored: it is derived
+ * from `openingBalance` plus the completed movements linked to it from `openingMonthKey` on.
+ */
+export interface FinancialAccount {
+  id: string;
+  type: FinancialAccountType;
+  name: string;
+  institution: string;
+  /** Last four digits of the card or account, for display only. */
+  lastFourDigits?: string;
+  /**
+   * Debit: balance at the start of `openingMonthKey`. Credit: amount owed on the card at the
+   * start of `openingMonthKey`.
+   */
+  openingBalance: number;
+  openingMonthKey: string;
+  /** Credit: total credit line (cupo). */
+  creditLimit?: number;
+  /** Credit: statement closing day (día de corte), 1..31. */
+  statementDay?: number;
+  /** Credit: payment due day (fecha límite de pago), 1..31. */
+  paymentDueDay?: number;
+  /** Credit: monthly interest rate in percent, informational. */
+  monthlyInterestRate?: number;
+  /** Debit: savings or checking account. */
+  debitKind?: DebitAccountKind;
 }
 
 export interface Debt {

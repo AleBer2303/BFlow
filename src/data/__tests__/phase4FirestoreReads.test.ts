@@ -271,18 +271,20 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
 
     // Exact getDoc & getDocs count verification:
     // - getDoc: users/{uid} (1) + provisionPlans/moto_ideal (1) = 2 getDoc calls total (previously 4)
-    // - getDocs: concepts, entries, debts, debtPayments, savingsBuckets, monthSnapshots = 6 getDocs calls
+    // - getDocs: concepts, entries, debts, debtPayments, savingsBuckets, monthSnapshots,
+    //   financialAccounts (ADR 0034) = 7 getDocs calls
     const userDocReads = state.getDocCalls.filter((p) => p === `users/${uid}`);
     expect(userDocReads).toHaveLength(1);
     expect(state.getDocCalls).toHaveLength(2);
-    expect(state.getDocsCalls).toHaveLength(6);
+    expect(state.getDocsCalls).toHaveLength(7);
 
     // Zero redundant writes to users/{uid} on boot when lastLoginAt < 24h and activeMonthKey matches
     expect(state.setDocCalls).toHaveLength(0);
 
     // Total documents read for 1-month seeded account:
-    // 1 (user) + 14 (concepts) + 12 (entries) + 2 (debts) + 1 (debtPayments) + 2 (savingsBuckets) + 1 (plan) + 1 (empty monthSnapshots query min) = 34 docs
-    expect(state.docsReadCount).toBe(34);
+    // 1 (user) + 14 (concepts) + 12 (entries) + 2 (debts) + 1 (debtPayments) + 2 (savingsBuckets) + 1 (plan)
+    // + 1 (empty monthSnapshots query min) + 1 (empty financialAccounts query min, ADR 0034) = 35 docs
+    expect(state.docsReadCount).toBe(35);
   });
 
   it('Scenario 2 (Login): deduplicates concurrent syncUserProfileDocument between signInWithEmail and onAuthStateChanged, reading users/{uid} only once in auth and writing lastLoginAt at most once per 24h', async () => {
@@ -323,7 +325,7 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
     const userDocReads = state.getDocCalls.filter((p) => p === `users/${uid}`);
     expect(userDocReads).toHaveLength(2);
     expect(state.getDocCalls).toHaveLength(3); // 2 users/{uid} + 1 provisionPlans/moto_ideal
-    expect(state.getDocsCalls).toHaveLength(6);
+    expect(state.getDocsCalls).toHaveLength(7);
 
     // Only 1 setDoc write for lastLoginAt (since previous was 48h ago), NOT 2 duplicate writes
     const userProfileWrites = state.setDocCalls.filter((w) => w.path === `users/${uid}`);
@@ -354,7 +356,7 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
       `users/${uid}`,
       `users/${uid}/provisionPlans/moto_ideal`,
     ]);
-    expect(state.getDocsCalls).toHaveLength(6);
+    expect(state.getDocsCalls).toHaveLength(7);
     // 1 batch commit to persist initial activeMonthKey + dataRevision on users/{uid} (0 seed collection writes)
     expect(state.batchCommitCount).toBe(1);
     expect(state.docsByPath.get(`users/${uid}`)?.dataRevision).toBeDefined();
@@ -429,6 +431,8 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
         'deleteConcept',
         'saveDebt',
         'deleteDebt',
+        'saveFinancialAccount',
+        'deleteFinancialAccount',
         'saveSavingsBucket',
         'deleteSavingsBucket',
         'saveProvisionPlan',
@@ -558,8 +562,8 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
         cachedSavedAt: nowIso,
       });
       expect(state.getDocCalls.filter((p) => p === `users/${uid}`)).toHaveLength(1);
-      expect(state.getDocsCalls).toHaveLength(6);
-      expect(state.docsReadCount).toBe(34);
+      expect(state.getDocsCalls).toHaveLength(7);
+      expect(state.docsReadCount).toBe(35);
 
       // Case B: Cache older than 24h -> full load
       state.getDocCalls.length = 0;
@@ -572,8 +576,8 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
         cachedDataRevision: 'rev_cloud_v2',
         cachedSavedAt: staleSavedAt,
       });
-      expect(state.getDocsCalls).toHaveLength(6);
-      expect(state.docsReadCount).toBe(34);
+      expect(state.getDocsCalls).toHaveLength(7);
+      expect(state.docsReadCount).toBe(35);
 
       // Case C: Manual sync (forceFullSync: true) -> always performs full load even when revision matches and cache < 24h
       state.getDocCalls.length = 0;
@@ -586,8 +590,8 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
         cachedDataRevision: 'rev_cloud_v2',
         cachedSavedAt: nowIso,
       });
-      expect(state.getDocsCalls).toHaveLength(6);
-      expect(state.docsReadCount).toBe(34);
+      expect(state.getDocsCalls).toHaveLength(7);
+      expect(state.docsReadCount).toBe(35);
     });
   });
 });

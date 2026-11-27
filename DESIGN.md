@@ -345,6 +345,14 @@ Fallback arquitectural idéntico visualmente mediante `expo-blur`:
      - **Cierre** (sección «Gráficos»): Flujo de Dinero, balance mensual, previsto vs real, pagado vs pendiente, distribución de gastos y la comparación de los dos últimos meses («Noviembre 2026 vs Octubre 2026»).
      - **Deudas:** evolución de la deuda con la proyección de cierre.
      - **Ahorros:** evolución de ahorros apilada.
+7. **Tarjetas de crédito y cuentas débito** ([ADR 0034](docs/decisions/0034-credit-cards-and-debit-accounts.md)):
+   - **Registro:** en **+ Nueva Deuda** (`debt-form-modal`), un selector segmentado **Deuda · Crédito · Débito** con el mismo estilo que `Gasto` / `Ingreso` de Nuevo Movimiento. Cada opción tiñe su opción activa, la insignia del título y el `HeroAmountField`: deuda `semantic.debt`, crédito `semantic.savings` y débito `semantic.provisions`. Al editar no aparece el selector: el tipo no cambia.
+   - **Débito en Deudas es solo cuenta corriente** («Registrar Cuenta Corriente», insignia «Débito · Corriente»). Las cuentas de ahorros se registran en Ahorros.
+   - **+ Nuevo Ahorro** (Ahorros, antes «+ Nuevo Fondo»): selector **Fondo · Cuenta de ahorros** con el mismo estilo. El fondo se tiñe de `semantic.savings` y la cuenta de `semantic.provisions`. Los modos de la sección son **Editar Ahorro** / **Eliminar Ahorro**. Las cuentas se listan en «Cuentas de ahorro» debajo de los fondos, y la tarjeta principal añade «En cuentas de ahorro» en `semantic.provisions`.
+   - **Campos:** crédito, valor pendiente de pago (monto héroe), nombre, banco, últimos 4 dígitos, cupo total (obligatorio, con vista previa del cupo disponible y del uso), día de corte, día límite de pago y tasa mensual opcional. Débito (corriente o de ahorros), saldo actual (monto héroe), nombre, banco y últimos 4 dígitos: el tipo lo fija la pestaña.
+   - **Tarjetas** (`FinancialAccountCard`, sección «Tarjetas y cuentas» bajo las obligaciones de Deudas y «Cuentas de ahorro» en Ahorros): una `GlassSurface` por cuenta, con el monto en `title1`. El crédito lleva una barra de uso del cupo (`ProgressFill` en `semantic.savings`) y las fechas de corte y de pago en `caption`. Un saldo débito negativo se pinta en `semantic.expense` («Saldo en sobregiro»). Editar y Eliminar reutilizan los modos globales de la pestaña.
+   - **Movimientos:** en «Más opciones», `AdaptiveSelectField` para elegir la tarjeta o cuenta. En un gasto con tarjeta de crédito aparece además el par **Compra con la tarjeta / Pago a la tarjeta**. La fila del checklist muestra la cuenta como `StatusBadge` (`savings` o `provisions`).
+   - **Cierre** (`AccountsMonthPanel`): baldosas como las del cierre de mes (gastado `expense`, pagado `income`, pendiente `debt`, saldo `provisions`), una frase sobre si la deuda en tarjetas subió o bajó, y una fila por cuenta con dos barras finas: gastado (`semantic.expense`) y pagado (`semantic.income`), con leyenda para que el dato no dependa del color.
 
 ---
 

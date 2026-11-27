@@ -350,6 +350,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
           savingsBucketsByMonth: state.savingsBucketsByMonth,
           provisionPlan: state.idealMotoPlan,
           closedSnapshots: state.closedSnapshots,
+          financialAccounts: state.financialAccounts,
           needsOnboarding: state.needsOnboarding,
         });
       }

@@ -11,3 +11,4 @@ export * from './month-close/monthClose';
 export * from './overview/monthlyCurve';
 export * from './analytics/chartSeries';
 export * from './auth/passwordPolicy';
+export * from './accounts/financialAccounts';

@@ -14,6 +14,7 @@ import {
   useActiveMonthKey,
   useActiveSavingsBuckets,
   useBudgetSummary,
+  useFinancialAccounts,
 } from '../../budget/hooks/useActiveMonthSummaries';
 import { useBudgetStore } from '../../budget/store/useBudgetStore';
 import {
@@ -30,6 +31,7 @@ export const ChecklistTab = React.memo(function ChecklistTab(): React.JSX.Elemen
   const budget = useBudgetSummary();
   const debts = useActiveDebts();
   const savingsBuckets = useActiveSavingsBuckets();
+  const financialAccounts = useFinancialAccounts();
   const actions = useBudgetStore(
     useShallow((state) => ({
       toggleEntryStatus: state.toggleEntryStatus,
@@ -100,6 +102,7 @@ export const ChecklistTab = React.memo(function ChecklistTab(): React.JSX.Elemen
       budget={budget}
       debts={debts}
       savingsBuckets={savingsBuckets}
+      financialAccounts={financialAccounts}
       onToggleEntry={handleToggleEntry}
       onAddOrCompleteMovement={handleAddMovement}
       onCreateCustomMovement={handleCreateCustomMovement}

@@ -469,6 +469,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       savingsBucketsByMonth: state.savingsBucketsByMonth,
       idealMotoPlan: state.idealMotoPlan,
       closedSnapshots: state.closedSnapshots,
+      financialAccounts: state.financialAccounts,
       needsOnboarding: state.needsOnboarding,
     };
 
@@ -491,6 +492,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       },
       idealMotoPlan: provisionPlan,
       closedSnapshots: {},
+      financialAccounts: [],
       isAccountHydrated: true,
       needsOnboarding: false,
       ...(updatedUser ? { authUser: updatedUser } : {}),
@@ -533,6 +535,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       savingsBucketsByMonth: state.savingsBucketsByMonth,
       idealMotoPlan: state.idealMotoPlan,
       closedSnapshots: state.closedSnapshots,
+      financialAccounts: state.financialAccounts,
       needsOnboarding: state.needsOnboarding,
     };
 
@@ -565,6 +568,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       },
       idealMotoPlan: { ...EMPTY_PROVISION_PLAN, items: [] },
       closedSnapshots: {},
+      financialAccounts: [],
       isAccountHydrated: true,
       needsOnboarding: true,
       ...(updatedUser ? { authUser: updatedUser } : {}),

@@ -4,6 +4,8 @@
  * Implements Screen `08-savings` (Fondos de Ahorro & Metas/Provisiones Programadas):
  * - Memoized Hero Card Total Ahorros Acumulados
  * - Standard buckets (Fondo de Reserva, Fondo Ahorros) + user-created custom savings funds
+ * - Savings bank accounts (ADR 0034): "+ Nuevo Ahorro" registers a fund or a savings account,
+ *   listed under "Cuentas de ahorro" and edited or deleted with the same Editar / Eliminar modes
  * - Adjust opening/previous-month balances for all savings funds
  * - Full CRUD (Create, Edit, Update, Delete) for user-configurable Provisions & Target Goals
  */
@@ -29,7 +31,10 @@ import {
   useBFlowTheme,
   usePrimaryActionLook,
 } from '../../../design-system';
+import { confirmDestructive } from '../../../platform/dialogs/confirmDestructive';
 import {
+  type FinancialAccount,
+  type FinancialAccountsSummary,
   type IdealMotoPlan,
   type MonthlySavingsSummary,
   type MotoIdealComparisonSummary,
@@ -38,13 +43,15 @@ import {
 } from '../../../domain';
 
 type ProvisionPlanItem = ProvisionPlan['items'][number];
-import type { SaveProvisionItemInput } from '../../budget/store/useBudgetStore';
+import type {
+  FinancialAccountInput,
+  FinancialAccountUpdates,
+  SaveProvisionItemInput,
+} from '../../budget/store/useBudgetStore';
+import { FinancialAccountCard } from '../../accounts/components/FinancialAccountCard';
 import { ProvisionItemForm, type EditableProvisionItem } from './ProvisionItemForm';
-import {
-  EditSavingsBucketForm,
-  NewSavingsBucketForm,
-  type EditableSavingsBucket,
-} from './SavingsBucketForms';
+import { EditSavingsBucketForm, type EditableSavingsBucket } from './SavingsBucketForms';
+import { SavingsForm } from './SavingsForm';
 
 type ListActionMode = 'edit' | 'delete' | null;
 
@@ -244,10 +251,13 @@ const SavingsHeroCard = React.memo(function SavingsHeroCard({
   activeBucketsCount,
   totalCurrentSavings,
   totalProjectedAfterPendingExpenses,
+  savingsAccountsBalance,
 }: {
   activeBucketsCount: number;
   totalCurrentSavings: number;
   totalProjectedAfterPendingExpenses: number;
+  /** Balance of the savings bank accounts, shown apart from the funds (ADR 0034). */
+  savingsAccountsBalance?: number;
 }): React.JSX.Element {
   const { formatAmount } = useAmountPrivacy();
   const { colors, spacing } = useBFlowTheme();
@@ -281,6 +291,15 @@ const SavingsHeroCard = React.memo(function SavingsHeroCard({
           <AppText variant="caption" color={colors.text.secondary}>
             {`Total proyectado tras pagar pendientes: ${formatAmount(totalProjectedAfterPendingExpenses)}`}
           </AppText>
+          {savingsAccountsBalance !== undefined ? (
+            <AppText
+              testID="savings-hero-accounts-balance"
+              variant="caption"
+              color={colors.semantic.provisions}
+            >
+              {`En cuentas de ahorro: ${formatAmount(savingsAccountsBalance)}`}
+            </AppText>
+          ) : null}
         </View>
       </GlassSurface>
     </ScrollDepthHero>
@@ -289,6 +308,7 @@ const SavingsHeroCard = React.memo(function SavingsHeroCard({
 
 interface SavingsBucketsListProps {
   savingsSummary: MonthlySavingsSummary;
+  hasSavingsAccounts: boolean;
   bucketActionMode: ListActionMode;
   canEditBucket: boolean;
   canDeleteBucket: boolean;
@@ -298,6 +318,7 @@ interface SavingsBucketsListProps {
 
 const SavingsBucketsList = React.memo(function SavingsBucketsList({
   savingsSummary,
+  hasSavingsAccounts,
   bucketActionMode,
   canEditBucket,
   canDeleteBucket,
@@ -431,15 +452,54 @@ const SavingsBucketsList = React.memo(function SavingsBucketsList({
         </GlassSurface>
       ))}
 
-      {activeBucketsCount === 0 ? (
+      {activeBucketsCount === 0 && !hasSavingsAccounts ? (
         <GlassSurface testID="empty-savings-buckets-card">
           <AppText variant="caption" color={colors.text.secondary}>
-            No tienes fondos de ahorro creados aún. Usa &quot;+ Nuevo Fondo&quot; para agregar tus
-            propios fondos y vincularles movimientos.
+            No tienes ahorros creados aún. Usa &quot;+ Nuevo Ahorro&quot; para agregar un fondo o
+            una cuenta de ahorros y vincularles movimientos.
           </AppText>
         </GlassSurface>
       ) : null}
     </>
+  );
+});
+
+interface SavingsAccountsSectionProps {
+  summary: FinancialAccountsSummary;
+  actionMode: ListActionMode;
+  onEdit: (accountId: string) => void;
+  onDelete: (accountId: string, name: string) => void;
+}
+
+/** "Cuentas de ahorro": one card per savings bank account active in the month (ADR 0034). */
+const SavingsAccountsSection = React.memo(function SavingsAccountsSection({
+  summary,
+  actionMode,
+  onEdit,
+  onDelete,
+}: SavingsAccountsSectionProps): React.JSX.Element | null {
+  const { colors, spacing } = useBFlowTheme();
+  const { formatAmount } = useAmountPrivacy();
+  if (!summary.hasAccounts) return null;
+
+  return (
+    <View style={{ gap: spacing.sm }} testID="savings-accounts-section">
+      <View style={{ gap: spacing.xxs }}>
+        <AppText variant="headline">Cuentas de ahorro</AppText>
+        <AppText variant="caption" color={colors.text.secondary}>
+          {`Saldo total: ${formatAmount(summary.debit.closingBalance)} · Depósitos del mes: ${formatAmount(summary.debit.paidThisMonth)}`}
+        </AppText>
+      </View>
+      {summary.accounts.map((account) => (
+        <FinancialAccountCard
+          key={account.accountId}
+          summary={account}
+          actionMode={actionMode}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
+      ))}
+    </View>
   );
 });
 
@@ -685,11 +745,20 @@ export interface SavingsAndMotoIdealViewProps {
   onDeleteSavingsBucket?: (bucketId: string) => void;
   onSaveProvisionItem?: (input: SaveProvisionItemInput) => void;
   onDeleteProvisionItem?: (itemId: string) => void;
+  /** Savings bank accounts (ADR 0034). */
+  savingsAccounts?: readonly FinancialAccount[];
+  savingsAccountsSummary?: FinancialAccountsSummary;
+  onCreateAccount?: (input: FinancialAccountInput) => void;
+  onUpdateAccount?: (accountId: string, updates: FinancialAccountUpdates) => void;
+  onDeleteAccount?: (accountId: string) => void;
 }
+
+const NO_ACCOUNTS: readonly FinancialAccount[] = [];
 
 type ActiveSavingsForm =
   | { kind: 'add-bucket'; key: number }
   | { kind: 'edit-bucket'; bucket: EditableSavingsBucket; key: number }
+  | { kind: 'edit-account'; account: FinancialAccount; key: number }
   | { kind: 'provision'; item: EditableProvisionItem | null; key: number }
   | null;
 
@@ -702,6 +771,11 @@ export function SavingsAndMotoIdealView({
   onDeleteSavingsBucket,
   onSaveProvisionItem,
   onDeleteProvisionItem,
+  savingsAccounts = NO_ACCOUNTS,
+  savingsAccountsSummary,
+  onCreateAccount,
+  onUpdateAccount,
+  onDeleteAccount,
 }: SavingsAndMotoIdealViewProps): React.JSX.Element {
   const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
   const primaryAction = usePrimaryActionLook();
@@ -715,6 +789,8 @@ export function SavingsAndMotoIdealView({
 
   const isAddingBucket = activeForm?.kind === 'add-bucket';
   const editingBucket = activeForm?.kind === 'edit-bucket' ? activeForm.bucket : null;
+  const editingAccount = activeForm?.kind === 'edit-account' ? activeForm.account : null;
+  const hasSavingsAccounts = Boolean(savingsAccountsSummary?.hasAccounts);
   const isProvisionFormOpen = activeForm?.kind === 'provision';
   const editingProvision = activeForm?.kind === 'provision' ? activeForm.item : null;
 
@@ -811,6 +887,36 @@ export function SavingsAndMotoIdealView({
     [onDeleteSavingsBucket]
   );
 
+  const handleOpenEditAccount = useCallback(
+    (accountId: string) => {
+      const account = savingsAccounts.find((a) => a.id === accountId);
+      if (!account) return;
+      hapticService.light();
+      setBucketActionMode(null);
+      setProvisionActionMode(null);
+      formKeyRef.current += 1;
+      setActiveForm({ kind: 'edit-account', account, key: formKeyRef.current });
+    },
+    [savingsAccounts]
+  );
+
+  const handleDeleteAccount = useCallback(
+    (accountId: string, name: string) => {
+      confirmDestructive({
+        title: 'Eliminar cuenta de ahorros',
+        message: `¿Deseas eliminar "${name}"? Los movimientos vinculados se conservan, pero dejarán de sumar a esta cuenta.`,
+        confirmLabel: 'Eliminar',
+        onConfirm: () => {
+          onDeleteAccount?.(accountId);
+          setActiveForm((prev) =>
+            prev?.kind === 'edit-account' && prev.account.id === accountId ? null : prev
+          );
+        },
+      });
+    },
+    [onDeleteAccount]
+  );
+
   const openProvisionForm = useCallback((item: EditableProvisionItem | null) => {
     hapticService.light();
     setBucketActionMode(null);
@@ -871,6 +977,9 @@ export function SavingsAndMotoIdealView({
             activeBucketsCount={activeBucketsCount}
             totalCurrentSavings={savingsSummary.totalCurrentSavings}
             totalProjectedAfterPendingExpenses={savingsSummary.totalProjectedAfterPendingExpenses}
+            savingsAccountsBalance={
+              hasSavingsAccounts ? savingsAccountsSummary?.debit.closingBalance : undefined
+            }
           />
 
           {/* Add New Fund Button (directly below Total Ahorros Acumulados, above the funds list) */}
@@ -878,7 +987,7 @@ export function SavingsAndMotoIdealView({
             testID="open-add-savings-bucket-button"
             accessibilityRole="button"
             accessibilityLabel={
-              isAddingBucket ? 'Cerrar formulario de nuevo fondo' : 'Nuevo fondo de ahorro'
+              isAddingBucket ? 'Cerrar formulario de nuevo ahorro' : 'Nuevo ahorro'
             }
             onPress={handleToggleAddBucket}
             style={{
@@ -903,36 +1012,49 @@ export function SavingsAndMotoIdealView({
                   : (primaryAction.labelColor ?? colors.text.primary)
               }
             >
-              {isAddingBucket ? 'Cerrar' : '+ Nuevo Fondo'}
+              {isAddingBucket ? 'Cerrar' : '+ Nuevo Ahorro'}
             </AppText>
           </AppPressable>
 
-          {/* Separate global Editar & Eliminar mode buttons below "+ Nuevo Fondo" */}
+          {/* Separate global Editar & Eliminar mode buttons below "+ Nuevo Ahorro" */}
           <ActionModeToggleRow
             activeMode={bucketActionMode}
             showEdit
             showDelete
-            editLabel="Editar Fondo"
-            deleteLabel="Eliminar Fondo"
+            editLabel="Editar Ahorro"
+            deleteLabel="Eliminar Ahorro"
             editTestID="bucket-action-edit-button"
             deleteTestID="bucket-action-delete-button"
             editAccessibilityLabel={
-              bucketActionMode === 'edit' ? 'Cancelar edición de fondos' : 'Editar fondo'
+              bucketActionMode === 'edit' ? 'Cancelar edición de ahorros' : 'Editar ahorro'
             }
             deleteAccessibilityLabel={
-              bucketActionMode === 'delete' ? 'Cancelar eliminación de fondos' : 'Eliminar fondo'
+              bucketActionMode === 'delete' ? 'Cancelar eliminación de ahorros' : 'Eliminar ahorro'
             }
             onToggleEdit={handleToggleEditBuckets}
             onToggleDelete={handleToggleDeleteBuckets}
           />
 
-          {/* Add New Custom Savings Fund Sheet */}
+          {/* "+ Nuevo Ahorro": a savings fund or a savings account */}
           <RevealDown visible={isAddingBucket}>
-            <NewSavingsBucketForm
+            <SavingsForm
               key={activeForm?.kind === 'add-bucket' ? activeForm.key : 'add-bucket-idle'}
               onCreateSavingsBucket={onCreateSavingsBucket}
+              onCreateAccount={onCreateAccount}
               onClose={handleCloseActiveForm}
             />
+          </RevealDown>
+
+          {/* Savings account edit sheet */}
+          <RevealDown visible={editingAccount !== null}>
+            {editingAccount ? (
+              <SavingsForm
+                key={activeForm?.kind === 'edit-account' ? activeForm.key : 'edit-account-idle'}
+                account={editingAccount}
+                onUpdateAccount={onUpdateAccount}
+                onClose={handleCloseActiveForm}
+              />
+            ) : null}
           </RevealDown>
 
           {/* Individual Savings Fund Edit Sheet */}
@@ -950,12 +1072,22 @@ export function SavingsAndMotoIdealView({
           {/* Savings Fund Cards */}
           <SavingsBucketsList
             savingsSummary={savingsSummary}
+            hasSavingsAccounts={hasSavingsAccounts}
             bucketActionMode={bucketActionMode}
             canEditBucket={Boolean(onUpdateOpeningBalance)}
             canDeleteBucket={Boolean(onDeleteSavingsBucket)}
             onEditBucket={handleOpenEditBucket}
             onDeleteBucket={handleDeleteBucket}
           />
+
+          {savingsAccountsSummary ? (
+            <SavingsAccountsSection
+              summary={savingsAccountsSummary}
+              actionMode={bucketActionMode}
+              onEdit={handleOpenEditAccount}
+              onDelete={handleDeleteAccount}
+            />
+          ) : null}
         </View>
 
         {/* Provisions & Target Goals Card (User-Configurable CRUD) */}

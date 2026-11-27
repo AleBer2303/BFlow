@@ -4,7 +4,8 @@
  * Forms to create a savings fund and to edit an existing one. Each owns its field state, so
  * typing re-renders only the open form and never the fund cards or the provisions list
  * (same pattern as the checklist forms, R-17). The parent mounts them with a new `key` each
- * time they open.
+ * time they open. `SavingsBucketFields` is the body of a new fund, shared by the onboarding
+ * (`NewSavingsBucketForm`) and the "+ Nuevo Ahorro" form of the Savings tab (`SavingsForm`).
  */
 
 import React, { useState } from 'react';
@@ -34,7 +35,8 @@ export interface NewSavingsBucketFormProps {
   onClose: () => void;
 }
 
-export const NewSavingsBucketForm = React.memo(function NewSavingsBucketForm({
+/** Fields and submit button of a new savings fund, without the card around them. */
+export const SavingsBucketFields = React.memo(function SavingsBucketFields({
   onCreateSavingsBucket,
   onClose,
 }: NewSavingsBucketFormProps): React.JSX.Element {
@@ -60,84 +62,118 @@ export const NewSavingsBucketForm = React.memo(function NewSavingsBucketForm({
   };
 
   return (
-    <GlassSurface elevated testID="add-savings-bucket-card">
-      <View style={{ gap: spacing.md }}>
-        {/* Header */}
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: spacing.xs,
-            flexWrap: 'wrap',
-          }}
-        >
-          <AppText variant="title2">Nuevo Fondo de Ahorro</AppText>
-          <View
-            style={{
-              paddingHorizontal: spacing.xs,
-              paddingVertical: 2,
-              borderRadius: radius.pill,
-              backgroundColor: colors.semantic.savingsSoft,
-            }}
-          >
-            <AppText variant="micro" color={colors.semantic.savings}>
-              Ahorro
-            </AppText>
-          </View>
-        </View>
+    <View style={{ gap: spacing.md }}>
+      {/* Single Interactive Hero Amount Input in semantic savings tone */}
+      <HeroAmountField
+        containerTestID="new-bucket-hero-amount"
+        inputTestID="new-bucket-balance-input"
+        label="Saldo inicial"
+        tone="savings"
+        value={balance}
+        onChangeText={(text) => {
+          setBalance(text);
+          if (error) setError(null);
+        }}
+      />
 
-        {/* Single Interactive Hero Amount Input in semantic savings tone */}
-        <HeroAmountField
-          containerTestID="new-bucket-hero-amount"
-          inputTestID="new-bucket-balance-input"
-          label="Saldo inicial"
-          tone="savings"
-          value={balance}
+      {/* Fund Name Input */}
+      <View style={{ gap: spacing.xs }}>
+        <AppText variant="caption" color={colors.text.secondary}>
+          Nombre del fondo
+        </AppText>
+        <AppTextInput
+          testID="new-bucket-name-input"
+          value={name}
           onChangeText={(text) => {
-            setBalance(text);
+            setName(text);
             if (error) setError(null);
           }}
+          placeholder="Ej. Fondo Viaje, Emergencias, Educación"
         />
+        <AppText variant="micro" color={colors.text.muted}>
+          Podrás vincular gastos del Checklist a este fondo para que sumen al pagarse.
+        </AppText>
+      </View>
 
-        {/* Fund Name Input */}
-        <View style={{ gap: spacing.xs }}>
-          <AppText variant="caption" color={colors.text.secondary}>
-            Nombre del fondo
-          </AppText>
-          <AppTextInput
-            testID="new-bucket-name-input"
-            value={name}
-            onChangeText={(text) => {
-              setName(text);
-              if (error) setError(null);
-            }}
-            placeholder="Ej. Fondo Viaje, Emergencias, Educación"
-          />
-          <AppText variant="micro" color={colors.text.muted}>
-            Podrás vincular gastos del Checklist a este fondo para que sumen al pagarse.
-          </AppText>
-        </View>
+      <FormMessage message={error} />
 
-        <FormMessage message={error} />
+      <AppPressable
+        testID="submit-new-bucket-button"
+        accessibilityRole="button"
+        onPress={handleCreate}
+        style={{
+          width: '100%',
+          minHeight: minTouchTarget,
+          borderRadius: radius.md,
+          borderCurve: 'continuous',
+          ...primaryAction.container,
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        <AppText variant="headline" color={primaryAction.labelColor ?? colors.semantic.savings}>
+          Guardar Fondo de Ahorro
+        </AppText>
+      </AppPressable>
+    </View>
+  );
+});
 
-        <AppPressable
-          testID="submit-new-bucket-button"
-          accessibilityRole="button"
-          onPress={handleCreate}
-          style={{
-            width: '100%',
-            minHeight: minTouchTarget,
-            borderRadius: radius.md,
-            borderCurve: 'continuous',
-            ...primaryAction.container,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <AppText variant="headline" color={primaryAction.labelColor ?? colors.semantic.savings}>
-            Guardar Fondo de Ahorro
-          </AppText>
-        </AppPressable>
+/** Header of the savings forms: title and a soft badge in the kind's tone. */
+export function SavingsFormHeader({
+  title,
+  badge,
+  color,
+  softColor,
+}: {
+  title: string;
+  badge: string;
+  color: string;
+  softColor: string;
+}): React.JSX.Element {
+  const { spacing, radius } = useBFlowTheme();
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+        flexWrap: 'wrap',
+      }}
+    >
+      <AppText variant="title2">{title}</AppText>
+      <View
+        style={{
+          paddingHorizontal: spacing.xs,
+          paddingVertical: 2,
+          borderRadius: radius.pill,
+          backgroundColor: softColor,
+        }}
+      >
+        <AppText variant="micro" color={color}>
+          {badge}
+        </AppText>
+      </View>
+    </View>
+  );
+}
+
+/** New savings fund card (onboarding). */
+export const NewSavingsBucketForm = React.memo(function NewSavingsBucketForm({
+  onCreateSavingsBucket,
+  onClose,
+}: NewSavingsBucketFormProps): React.JSX.Element {
+  const { colors, spacing } = useBFlowTheme();
+  return (
+    <GlassSurface elevated testID="add-savings-bucket-card">
+      <View style={{ gap: spacing.md }}>
+        <SavingsFormHeader
+          title="Nuevo Fondo de Ahorro"
+          badge="Ahorro"
+          color={colors.semantic.savings}
+          softColor={colors.semantic.savingsSoft}
+        />
+        <SavingsBucketFields onCreateSavingsBucket={onCreateSavingsBucket} onClose={onClose} />
       </View>
     </GlassSurface>
   );

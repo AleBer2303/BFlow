@@ -40,6 +40,7 @@ import type {
   Concept,
   Debt,
   DebtPayment,
+  FinancialAccount,
   ProvisionPlan as IdealMotoPlan,
   MonthEntry,
   MonthSnapshot,
@@ -62,6 +63,7 @@ import {
   parseConceptFromFirestore,
   parseDebtFromFirestore,
   parseDebtPaymentFromFirestore,
+  parseFinancialAccountFromFirestore,
   parseProvisionPlanFromFirestore as parseIdealMotoPlanFromFirestore,
   parseMonthEntryFromFirestore,
   parseMonthSnapshotFromFirestore,
@@ -69,6 +71,7 @@ import {
   serializeConceptForFirestore,
   serializeDebtForFirestore,
   serializeDebtPaymentForFirestore,
+  serializeFinancialAccountForFirestore,
   serializeProvisionPlanForFirestore as serializeIdealMotoPlanForFirestore,
   serializeMonthEntryForFirestore,
   serializeMonthSnapshotForFirestore,
@@ -97,6 +100,8 @@ export interface FullCloudAccountData {
   savingsBucketsByMonth: Record<string, SavingsBucket[]>;
   provisionPlan: IdealMotoPlan;
   closedSnapshots: Record<string, MonthSnapshot>;
+  /** Credit cards and debit accounts (ADR 0034); missing in caches written before it. */
+  financialAccounts?: FinancialAccount[];
   needsOnboarding?: boolean;
   dataRevision?: string;
   /** When this data last received everything the cloud had (ISO); see historyWindow.ts. */
@@ -216,6 +221,8 @@ export interface BudgetRepository {
   deleteConcept(uid: string, conceptId: string): Promise<void>;
   saveDebt(uid: string, debt: Debt): Promise<void>;
   deleteDebt(uid: string, debtId: string): Promise<void>;
+  saveFinancialAccount(uid: string, account: FinancialAccount): Promise<void>;
+  deleteFinancialAccount(uid: string, accountId: string): Promise<void>;
   saveSavingsBucket(
     uid: string,
     bucketId: string,
@@ -347,6 +354,7 @@ export class InMemoryBudgetRepository implements BudgetRepository {
   private savingsBucketsByMonth = new Map<string, SavingsBucket[]>();
   private provisionPlan: IdealMotoPlan;
   private snapshots = new Map<string, MonthSnapshot>();
+  private financialAccounts = new Map<string, FinancialAccount>();
   private seededUsers = new Set<string>();
   private resetUsers = new Set<string>();
   private onboardedUsers = new Set<string>();
@@ -539,6 +547,7 @@ export class InMemoryBudgetRepository implements BudgetRepository {
       savingsBucketsByMonth,
       provisionPlan: this.provisionPlan,
       closedSnapshots,
+      financialAccounts: Array.from(this.financialAccounts.values()).map((a) => ({ ...a })),
       needsOnboarding,
     };
   }
@@ -816,6 +825,14 @@ export class InMemoryBudgetRepository implements BudgetRepository {
     }
   }
 
+  async saveFinancialAccount(_uid: string, account: FinancialAccount): Promise<void> {
+    this.financialAccounts.set(account.id, { ...account });
+  }
+
+  async deleteFinancialAccount(_uid: string, accountId: string): Promise<void> {
+    this.financialAccounts.delete(accountId);
+  }
+
   async saveSavingsBucket(
     _uid: string,
     bucketId: string,
@@ -926,6 +943,7 @@ export class InMemoryBudgetRepository implements BudgetRepository {
     this.debtPayments.clear();
     this.savingsBucketsByMonth.clear();
     this.snapshots.clear();
+    this.financialAccounts.clear();
     this.provisionPlan = { ...EMPTY_PROVISION_PLAN, items: [] };
     this.seededUsers.delete(uid);
     this.onboardedUsers.delete(uid);
@@ -1272,6 +1290,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       planSnap,
       snapshotsSnap,
       archivedHistoryProbe,
+      financialAccountsSnap,
     ] = await Promise.all([
       preloadedUserSnap ? Promise.resolve(preloadedUserSnap) : getDoc(userDocRef),
       getDocs(collection(this.db, 'users', uid, 'concepts')),
@@ -1282,6 +1301,8 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       getDoc(doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal')),
       getDocs(collection(this.db, 'users', uid, 'monthSnapshots')),
       historyPlan ? this.readArchivedHistoryProbe(uid, historyPlan) : Promise.resolve(null),
+      // The October seed creates no accounts, so this read stays valid after seeding.
+      getDocs(collection(this.db, 'users', uid, 'financialAccounts')),
     ]);
 
     let userData = (userSnap.exists() ? userSnap.data() : undefined) as
@@ -1860,6 +1881,10 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       savingsBucketsByMonth,
       provisionPlan,
       closedSnapshots,
+      financialAccounts: safeParseList(
+        financialAccountsSnap.docs,
+        parseFinancialAccountFromFirestore
+      ),
       needsOnboarding,
       ...(resolvedDataRevision ? { dataRevision: resolvedDataRevision } : {}),
       historySyncedAt,
@@ -2459,6 +2484,27 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     });
   }
 
+  /**
+   * ADR 0034: full overwrite (no merge), so clearing an optional field (cupo, día de corte)
+   * removes it from the document too.
+   */
+  async saveFinancialAccount(uid: string, account: FinancialAccount): Promise<void> {
+    await this.commitUserDataMutationBatch(uid, (batch, updatedAt) => {
+      const accountRef = doc(this.db, 'users', uid, 'financialAccounts', account.id);
+      batch.set(accountRef, {
+        ...serializeFinancialAccountForFirestore(account),
+        updatedAt,
+      });
+    });
+  }
+
+  /** Linked entries keep their `accountId`; the domain ignores ids without an account. */
+  async deleteFinancialAccount(uid: string, accountId: string): Promise<void> {
+    await this.commitUserDataMutationBatch(uid, (batch) => {
+      batch.delete(doc(this.db, 'users', uid, 'financialAccounts', accountId));
+    });
+  }
+
   async saveSavingsBucket(
     uid: string,
     bucketId: string,
@@ -2616,6 +2662,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       'savingsBuckets',
       'provisionPlans',
       'monthSnapshots',
+      'financialAccounts',
     ] as const;
 
     const snapshots = await Promise.all(

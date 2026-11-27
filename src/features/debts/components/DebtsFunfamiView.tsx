@@ -5,6 +5,8 @@
  * - Hero Card Total Deudas & Deuda FUNFAMI (memoized so form toggles never re-render it)
  * - Milestone payoff banner with dismiss capability and automatic disappearance in subsequent months
  * - Complete CRUD for debts: Create, Edit, and Delete debts with monthly/annual interest rate calculation
+ * - Credit cards and debit accounts (ADR 0034): registered from the same form, listed under
+ *   "Tarjetas y cuentas", and edited or deleted with the same Editar / Eliminar modes
  * - 100% pure integers, >= minTouchTarget touch targets, smooth native layout transitions
  */
 
@@ -34,10 +36,17 @@ import { confirmDestructive } from '../../../platform/dialogs/confirmDestructive
 import {
   formatMonthKeyLabelEs,
   type DebtSummaryResult,
+  type FinancialAccount,
+  type FinancialAccountsSummary,
   type FunfamiDebtSummary,
   type MonthEntry,
 } from '../../../domain';
+import type {
+  FinancialAccountInput,
+  FinancialAccountUpdates,
+} from '../../budget/store/useBudgetStore';
 import { DebtForm, type CreateDebtInput, type DebtFormDebt, type UpdateDebtInput } from './DebtForm';
+import { FinancialAccountCard } from '../../accounts/components/FinancialAccountCard';
 
 export type { CreateDebtInput, UpdateDebtInput } from './DebtForm';
 
@@ -54,7 +63,15 @@ export interface DebtsFunfamiViewProps {
   onCreateDebt?: (input: CreateDebtInput) => void;
   onUpdateDebt?: (debtId: string, updates: UpdateDebtInput) => void;
   onDeleteDebt?: (debtId: string) => void;
+  /** Credit cards and debit accounts (ADR 0034). */
+  financialAccounts?: readonly FinancialAccount[];
+  accountsSummary?: FinancialAccountsSummary;
+  onCreateAccount?: (input: FinancialAccountInput) => void;
+  onUpdateAccount?: (accountId: string, updates: FinancialAccountUpdates) => void;
+  onDeleteAccount?: (accountId: string) => void;
 }
+
+const NO_ACCOUNTS: readonly FinancialAccount[] = [];
 
 const DebtHeroCard = React.memo(function DebtHeroCard({
   debtSummary,
@@ -311,7 +328,62 @@ const DebtObligationCard = React.memo(function DebtObligationCard({
 type ActiveDebtForm =
   | { kind: 'create'; key: number }
   | { kind: 'edit'; debt: DebtFormDebt; key: number }
+  | { kind: 'edit-account'; account: FinancialAccount; key: number }
   | null;
+
+interface FinancialAccountsSectionProps {
+  summary: FinancialAccountsSummary;
+  actionMode: DebtActionMode;
+  onEdit: (accountId: string) => void;
+  onDelete: (accountId: string, name: string) => void;
+}
+
+/** "Tarjetas y cuentas" below the debts: one card per account active in the month. */
+const FinancialAccountsSection = React.memo(function FinancialAccountsSection({
+  summary,
+  actionMode,
+  onEdit,
+  onDelete,
+}: FinancialAccountsSectionProps): React.JSX.Element | null {
+  const { colors, spacing } = useBFlowTheme();
+  const { formatAmountCompact } = useAmountPrivacy();
+  if (!summary.hasAccounts) return null;
+
+  const creditCount = summary.accounts.filter((a) => a.type === 'credit').length;
+  const parts: string[] = [];
+  if (creditCount > 0) {
+    parts.push(
+      `Pendiente en tarjetas: ${formatAmountCompact(summary.credit.closingBalance)}`
+    );
+  }
+  if (summary.accounts.length > creditCount) {
+    parts.push(
+      `Saldo en cuentas: ${formatAmountCompact(summary.debit.closingBalance)}`
+    );
+  }
+
+  return (
+    <View style={{ gap: spacing.sm }} testID="financial-accounts-section">
+      <View style={{ gap: spacing.xxs }}>
+        <AppText variant="headline">Tarjetas y cuentas</AppText>
+        <AppText variant="caption" color={colors.text.secondary}>
+          {parts.join(' · ')}
+        </AppText>
+      </View>
+      <ResponsiveColumns testID="financial-account-cards-grid">
+        {summary.accounts.map((account) => (
+          <FinancialAccountCard
+            key={account.accountId}
+            summary={account}
+            actionMode={actionMode}
+            onEdit={onEdit}
+            onDelete={onDelete}
+          />
+        ))}
+      </ResponsiveColumns>
+    </View>
+  );
+});
 
 interface DebtObligationsGridProps {
   obligations: readonly DebtFormDebt[];
@@ -349,6 +421,11 @@ export function DebtsFunfamiView({
   onCreateDebt,
   onUpdateDebt,
   onDeleteDebt,
+  financialAccounts = NO_ACCOUNTS,
+  accountsSummary,
+  onCreateAccount,
+  onUpdateAccount,
+  onDeleteAccount,
 }: DebtsFunfamiViewProps): React.JSX.Element {
   const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
   const primaryAction = usePrimaryActionLook();
@@ -362,6 +439,7 @@ export function DebtsFunfamiView({
 
   const isFormOpen = activeForm !== null;
   const editingDebt = activeForm?.kind === 'edit' ? activeForm.debt : null;
+  const editingAccount = activeForm?.kind === 'edit-account' ? activeForm.account : null;
 
   const handleResetTransientState = useCallback(() => {
     setActiveForm(null);
@@ -418,6 +496,30 @@ export function DebtsFunfamiView({
   }, []);
 
   const handleCloseForm = useCallback(() => setActiveForm(null), []);
+
+  const openAccountForm = useCallback(
+    (accountId: string) => {
+      const account = financialAccounts.find((a) => a.id === accountId);
+      if (!account) return;
+      hapticService.light();
+      setDebtActionMode(null);
+      formKeyRef.current += 1;
+      setActiveForm({ kind: 'edit-account', account, key: formKeyRef.current });
+    },
+    [financialAccounts]
+  );
+
+  const handleDeleteAccountConfirm = useCallback(
+    (accountId: string, name: string) => {
+      confirmDestructive({
+        title: 'Eliminar tarjeta o cuenta',
+        message: `¿Deseas eliminar "${name}"? Los movimientos vinculados se conservan, pero dejarán de sumar a esta cuenta.`,
+        confirmLabel: 'Eliminar',
+        onConfirm: () => onDeleteAccount?.(accountId),
+      });
+    },
+    [onDeleteAccount]
+  );
 
   const handleDeleteDebtConfirm = useCallback(
     (debtId: string, name: string) => {
@@ -545,8 +647,11 @@ export function DebtsFunfamiView({
         <DebtForm
           key={activeForm ? activeForm.key : 'debt-idle'}
           debt={editingDebt}
+          account={editingAccount}
           onCreateDebt={onCreateDebt}
           onUpdateDebt={onUpdateDebt}
+          onCreateAccount={onCreateAccount}
+          onUpdateAccount={onUpdateAccount}
           onClose={handleCloseForm}
         />
       </RevealDown>
@@ -596,6 +701,15 @@ export function DebtsFunfamiView({
         onEdit={openForm}
         onDelete={handleDeleteDebtConfirm}
       />
+
+      {accountsSummary ? (
+        <FinancialAccountsSection
+          summary={accountsSummary}
+          actionMode={debtActionMode}
+          onEdit={openAccountForm}
+          onDelete={handleDeleteAccountConfirm}
+        />
+      ) : null}
     </View>
   );
 }

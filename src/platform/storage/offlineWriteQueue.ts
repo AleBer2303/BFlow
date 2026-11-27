@@ -17,6 +17,7 @@ import type {
   Concept,
   Debt,
   DebtPayment,
+  FinancialAccount,
   IdealMotoPlan,
   MonthEntry,
   SavingsBucket,
@@ -31,6 +32,8 @@ export type QueuedWriteType =
   | 'delete_concept'
   | 'save_debt'
   | 'delete_debt'
+  | 'save_financial_account'
+  | 'delete_financial_account'
   | 'save_provision_plan'
   | 'save_savings_bucket'
   | 'delete_savings_bucket'
@@ -141,6 +144,13 @@ function getOperationTargetKey(type: QueuedWriteType, payload: Record<string, un
     case 'delete_debt': {
       const debt = (payload.debt as { id?: string } | undefined) ?? payload;
       return debt.id ? `debt_${debt.id}` : null;
+    }
+    case 'save_financial_account':
+    case 'delete_financial_account': {
+      const accountId =
+        (payload.account as { id?: string } | undefined)?.id ??
+        (payload.accountId as string | undefined);
+      return accountId ? `account_${accountId}` : null;
     }
     case 'save_savings_bucket':
     case 'delete_savings_bucket': {
@@ -421,6 +431,14 @@ async function executeQueuedOperation(
 
     case 'delete_debt':
       await repo.deleteDebt(uid, p.debtId as string);
+      break;
+
+    case 'save_financial_account':
+      await repo.saveFinancialAccount(uid, p.account as FinancialAccount);
+      break;
+
+    case 'delete_financial_account':
+      await repo.deleteFinancialAccount(uid, p.accountId as string);
       break;
 
     case 'save_provision_plan':

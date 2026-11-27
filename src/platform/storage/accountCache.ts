@@ -85,6 +85,7 @@ export function isEquivalentCloudAccount(
     if (!hasSameKeyCount(a.debtsByMonth, b.debtsByMonth)) return false;
     if (!hasSameKeyCount(a.savingsBucketsByMonth, b.savingsBucketsByMonth)) return false;
     if (!hasSameKeyCount(a.closedSnapshots, b.closedSnapshots)) return false;
+    if ((a.financialAccounts?.length ?? 0) !== (b.financialAccounts?.length ?? 0)) return false;
 
     // Every cloud write stamps a new `dataRevision` (ADR 0018), so two payloads of the same
     // shape that carry the same revision hold the same cloud data.
@@ -98,7 +99,8 @@ export function isEquivalentCloudAccount(
       JSON.stringify(a.debtPayments) === JSON.stringify(b.debtPayments) &&
       JSON.stringify(a.savingsBucketsByMonth) === JSON.stringify(b.savingsBucketsByMonth) &&
       JSON.stringify(a.provisionPlan) === JSON.stringify(b.provisionPlan) &&
-      JSON.stringify(a.closedSnapshots) === JSON.stringify(b.closedSnapshots)
+      JSON.stringify(a.closedSnapshots) === JSON.stringify(b.closedSnapshots) &&
+      JSON.stringify(a.financialAccounts ?? []) === JSON.stringify(b.financialAccounts ?? [])
     );
   } catch {
     return false;

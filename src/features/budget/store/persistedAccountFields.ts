@@ -20,6 +20,7 @@ export const PERSISTED_ACCOUNT_FIELDS = [
   'savingsBucketsByMonth',
   'idealMotoPlan',
   'closedSnapshots',
+  'financialAccounts',
   'needsOnboarding',
 ] as const satisfies readonly (keyof BudgetStoreState)[];
 

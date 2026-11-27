@@ -23,14 +23,18 @@ import {
 } from '../../../design-system';
 import {
   formatGroupedIntegerInput,
+  type AccountMovementRole,
   type Concept,
   type Debt,
+  type FinancialAccount,
   type MonthEntry,
   type SavingsBucket,
 } from '../../../domain';
 import type { EditEntryUpdates } from '../../budget/store/useBudgetStore';
+import { AccountLinkFields, describeAccountLink } from './AccountLinkFields';
 
 const NONE_OPTION_VALUE = '__none__';
+const NO_ACCOUNTS: readonly FinancialAccount[] = [];
 
 export interface ChecklistEditEntryFormProps {
   /** Live entry being edited; null if it disappeared while the editor was open. */
@@ -38,6 +42,8 @@ export interface ChecklistEditEntryFormProps {
   concept?: Concept;
   debts: readonly Debt[];
   savingsBuckets: readonly SavingsBucket[];
+  /** Credit cards and debit accounts a movement can go through (ADR 0034). */
+  financialAccounts?: readonly FinancialAccount[];
   onEditEntry?: (entryId: string, updates: EditEntryUpdates) => void;
   onClose: () => void;
 }
@@ -53,6 +59,7 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
   concept,
   debts,
   savingsBuckets,
+  financialAccounts = NO_ACCOUNTS,
   onEditEntry,
   onClose,
 }: ChecklistEditEntryFormProps): React.JSX.Element {
@@ -75,10 +82,19 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
   const [editPersistMonthly, setEditPersistMonthly] = useState<boolean>(() =>
     concept ? concept.recurrence.kind === 'monthly' : true
   );
+  const [editAccountId, setEditAccountId] = useState<string | null>(() =>
+    entry?.accountId && financialAccounts.some((a) => a.id === entry.accountId)
+      ? entry.accountId
+      : null
+  );
+  const [editAccountRole, setEditAccountRole] = useState<AccountMovementRole>(
+    () => entry?.accountRole ?? 'purchase'
+  );
   const [showMoreOptions, setShowMoreOptions] = useState<boolean>(false);
   const [editError, setEditError] = useState<string | null>(null);
 
   const isEditingExpense = entry?.type !== 'income';
+  const editMovementType = isEditingExpense ? 'expense' : 'income';
 
   const debtOptions = useMemo(
     () => [
@@ -107,8 +123,26 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
       const bucketName = savingsBuckets.find((b) => b.id === editSavingsBucketId)?.name;
       if (bucketName) parts.push(bucketName);
     }
+    const accountLabel = describeAccountLink(
+      financialAccounts,
+      editMovementType,
+      editAccountId,
+      editAccountRole
+    );
+    if (accountLabel) parts.push(accountLabel);
     return parts.join(' · ');
-  }, [debts, editNoteInput, editSavingsBucketId, editTargetDebtId, isEditingExpense, savingsBuckets]);
+  }, [
+    debts,
+    editAccountId,
+    editAccountRole,
+    editMovementType,
+    editNoteInput,
+    editSavingsBucketId,
+    editTargetDebtId,
+    financialAccounts,
+    isEditingExpense,
+    savingsBuckets,
+  ]);
 
   const handleSaveEditEntry = () => {
     if (!entry) return;
@@ -131,6 +165,10 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
         targetDebtId: isEditingExpense ? editTargetDebtId : null,
         savingsBucketId: isEditingExpense ? editSavingsBucketId : null,
         persistMonthly: editPersistMonthly,
+        // ADR 0034: null removes the link; without accounts the field is left as it was.
+        ...(financialAccounts.length > 0
+          ? { accountId: editAccountId, accountRole: editAccountRole }
+          : {}),
         ...(editNoteInput.trim() ? { note: editNoteInput.trim() } : {}),
       });
     }
@@ -322,8 +360,12 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
               >
                 {optionalSummary ||
                   (isEditingExpense
-                    ? 'Nota, vincular a deuda o fondo de ahorro'
-                    : 'Agregar nota opcional')}
+                    ? financialAccounts.length > 0
+                      ? 'Nota, tarjeta o cuenta, deuda o fondo de ahorro'
+                      : 'Nota, vincular a deuda o fondo de ahorro'
+                    : financialAccounts.length > 0
+                      ? 'Nota o cuenta donde se recibió'
+                      : 'Agregar nota opcional')}
               </AppText>
             </View>
             <AppText variant="micro" color={colors.text.secondary}>
@@ -349,6 +391,17 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
                   placeholder="Ej. Factura, referencia, detalle..."
                 />
               </View>
+
+              {/* Card or bank account the movement went through (ADR 0034) */}
+              <AccountLinkFields
+                accounts={financialAccounts}
+                movementType={editMovementType}
+                accountId={editAccountId}
+                accountRole={editAccountRole}
+                onChangeAccount={setEditAccountId}
+                onChangeRole={setEditAccountRole}
+                testIDPrefix="edit-entry"
+              />
 
               {/* Modern Adaptive Selectors for Debt & Savings Fund Linkage */}
               {isEditingExpense && debts.length > 0 ? (

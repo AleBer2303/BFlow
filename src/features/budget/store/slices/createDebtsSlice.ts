@@ -5,7 +5,9 @@
  */
 
 import {
+  annualToMonthlyRate,
   buildDebtPaymentsForInstallment,
+  monthlyToAnnualRate,
   type Debt,
   type DebtInterestRateType,
   type MonthEntry,
@@ -33,13 +35,13 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
     const rateType: DebtInterestRateType = input.interestRateType ?? 'monthly';
     const resolvedMonthlyRate =
       rateType === 'annual' && input.annualInterestRate !== undefined
-        ? Number((input.annualInterestRate / 12).toFixed(4))
+        ? annualToMonthlyRate(input.annualInterestRate)
         : input.monthlyInterestRate;
     const resolvedAnnualRate =
       rateType === 'annual' && input.annualInterestRate !== undefined
         ? input.annualInterestRate
         : input.monthlyInterestRate !== undefined
-          ? Number((input.monthlyInterestRate * 12).toFixed(4))
+          ? monthlyToAnnualRate(input.monthlyInterestRate)
           : undefined;
     const safeInstallment =
       input.monthlyInstallment !== undefined && input.monthlyInstallment >= 0
@@ -112,7 +114,7 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
         updates.interestRateType ?? d.interestRateType ?? 'monthly';
       const resolvedMonthlyRate =
         rateType === 'annual' && updates.annualInterestRate !== undefined
-          ? Number((updates.annualInterestRate / 12).toFixed(4))
+          ? annualToMonthlyRate(updates.annualInterestRate)
           : updates.monthlyInterestRate !== undefined
             ? updates.monthlyInterestRate
             : d.monthlyInterestRate;
@@ -120,7 +122,7 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
         rateType === 'annual' && updates.annualInterestRate !== undefined
           ? updates.annualInterestRate
           : updates.monthlyInterestRate !== undefined
-            ? Number((updates.monthlyInterestRate * 12).toFixed(4))
+            ? monthlyToAnnualRate(updates.monthlyInterestRate)
             : d.annualInterestRate;
       const resolvedInstallment =
         updates.monthlyInstallment !== undefined

@@ -46,7 +46,7 @@ export function useActiveDebts(): readonly Debt[] {
 
 export function useActiveSavingsBuckets(): readonly SavingsBucket[] {
   const rawBuckets = useTabStore((state) => state.savingsBucketsByMonth[state.activeMonthKey]);
-  return useMemo(() => ensureStandardSavingsBuckets(rawBuckets ?? [], 0, 0), [rawBuckets]);
+  return useMemo(() => ensureStandardSavingsBuckets(rawBuckets ?? []), [rawBuckets]);
 }
 
 export function useBudgetSummary(): MonthlyBudgetSummary {

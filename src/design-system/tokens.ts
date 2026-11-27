@@ -46,9 +46,18 @@ export interface PlatformSkinSpec {
    * vectorial en una piel, basta poner `vector` aquí (ADR 0014 explica por qué Android la usó).
    */
   curveStage: CurveStage;
+  /**
+   * Top padding of a full-screen page presented as a sheet (profile settings). iOS page sheets
+   * start below the status bar, so they only leave room for the sheet's navigation bar; null
+   * means the skin presents it edge to edge and the content uses the safe-area inset.
+   */
+  pageSheetTopInset: number | null;
 }
 
 export const MIN_TOUCH_TARGET_PT = 44 as const;
+
+/** Height of the navigation bar of an iOS page sheet (Apple HIG). */
+const IOS_PAGE_SHEET_TOP_INSET = 44;
 
 export const platformSkins: Record<PlatformSkinId, PlatformSkinSpec> = {
   ios: {
@@ -59,6 +68,7 @@ export const platformSkins: Record<PlatformSkinId, PlatformSkinSpec> = {
     pressFeedback: 'spring',
     minTouchTarget: MIN_TOUCH_TARGET_PT,
     curveStage: 'scene-3d',
+    pageSheetTopInset: IOS_PAGE_SHEET_TOP_INSET,
   },
   android: {
     id: 'android',
@@ -68,6 +78,7 @@ export const platformSkins: Record<PlatformSkinId, PlatformSkinSpec> = {
     pressFeedback: 'sink',
     minTouchTarget: 48,
     curveStage: 'scene-3d',
+    pageSheetTopInset: null,
   },
   web: {
     id: 'web',
@@ -77,6 +88,7 @@ export const platformSkins: Record<PlatformSkinId, PlatformSkinSpec> = {
     pressFeedback: 'step',
     minTouchTarget: MIN_TOUCH_TARGET_PT,
     curveStage: 'scene-3d',
+    pageSheetTopInset: null,
   },
 };
 

@@ -41,8 +41,10 @@ export function AccountHeaderAvatarButton({
       accessibilityRole="tab"
       accessibilityLabel="Cuenta"
       accessibilityState={{ selected: isSelected }}
-      onPressIn={() => hapticService.selection()}
-      onPress={onPress}
+      onPress={() => {
+        hapticService.selection();
+        onPress?.();
+      }}
       style={{
         width: minTouchTarget,
         height: minTouchTarget,
@@ -107,8 +109,10 @@ export function ThemeToggleIconButton({
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-      onPressIn={() => hapticService.light()}
-      onPress={toggleTheme}
+      onPress={() => {
+        hapticService.light();
+        toggleTheme();
+      }}
       style={{
         width: minTouchTarget,
         height: minTouchTarget,
@@ -217,8 +221,10 @@ export function AmountVisibilityIconButton({
       accessibilityRole="button"
       accessibilityLabel={amountsHidden ? 'Mostrar montos' : 'Ocultar montos'}
       accessibilityState={{ selected: amountsHidden }}
-      onPressIn={() => hapticService.light()}
-      onPress={toggleAmountsHidden}
+      onPress={() => {
+        hapticService.light();
+        toggleAmountsHidden();
+      }}
       style={{
         width: minTouchTarget,
         height: minTouchTarget,
@@ -394,6 +400,32 @@ export function TrashBinIcon({
         />
         <Line x1={10} y1={11} x2={10} y2={17} stroke={strokeColor} strokeWidth={1.8} strokeLinecap="round" />
         <Line x1={14} y1={11} x2={14} y2={17} stroke={strokeColor} strokeWidth={1.8} strokeLinecap="round" />
+      </Svg>
+    </View>
+  );
+}
+
+/**
+ * Cloud icon for the pending offline changes badge (replaces the ☁️ emoji, DESIGN.md).
+ */
+export function CloudSyncIcon({
+  size = 14,
+  color,
+  testID = 'icon-cloud-sync',
+}: VectorIconProps): React.JSX.Element {
+  const { colors } = useBFlowTheme();
+  const strokeColor = color ?? colors.semantic.pending;
+
+  return (
+    <View testID={testID} style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
+      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <Path
+          d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"
+          stroke={strokeColor}
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </Svg>
     </View>
   );

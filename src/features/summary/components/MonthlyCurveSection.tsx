@@ -11,10 +11,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import {
+  AppPressable,
   AppText,
   CurrencyText,
   MIN_TOUCH_TARGET_PT,
-  TactilePressable,
   hapticService,
   scheduleAfterTabTransition,
   useBFlowTheme,
@@ -213,18 +213,19 @@ const MetricButton = React.memo(function MetricButton({
   isSelected,
   onSelect,
 }: MetricButtonProps) {
-  const { colors, spacing, radius } = useBFlowTheme();
+  const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
   const { formatAmount } = useAmountPrivacy();
 
   return (
-    <TactilePressable
+    <AppPressable
       testID={`monthly-curve-metric-${metricId}`}
-      haptic="none"
+      accessibilityRole="button"
       accessibilityState={{ selected: isSelected }}
       accessibilityLabel={describeMetricAccessibility(curve, metricId, formatAmount)}
       onPress={() => onSelect(metricId)}
       style={{
         flex: 1,
+        minWidth: minTouchTarget,
         minHeight: METRIC_BUTTON_MIN_HEIGHT_PT,
         alignItems: 'center',
         justifyContent: 'center',
@@ -236,23 +237,26 @@ const MetricButton = React.memo(function MetricButton({
         backgroundColor: isSelected ? colors.glass.surfaceElevatedTint : colors.glass.surfaceTint,
       }}
     >
-      <View
-        style={{
-          width: IDENTITY_DOT_SIZE_PT,
-          height: IDENTITY_DOT_SIZE_PT,
-          borderRadius: radius.pill,
-          backgroundColor: getMetricColor(colors, metricId),
-          opacity: isSelected ? 1 : UNSELECTED_DOT_OPACITY,
-        }}
-      />
-      <AppText
-        variant="caption"
-        numberOfLines={1}
-        color={isSelected ? colors.text.primary : colors.text.secondary}
-      >
-        {METRIC_PRESENTATION[metricId].label}
-      </AppText>
-    </TactilePressable>
+      {/* Same centered column the old TactilePressable wrapped its content in. */}
+      <View style={{ width: '100%', alignItems: 'center', justifyContent: 'center' }}>
+        <View
+          style={{
+            width: IDENTITY_DOT_SIZE_PT,
+            height: IDENTITY_DOT_SIZE_PT,
+            borderRadius: radius.pill,
+            backgroundColor: getMetricColor(colors, metricId),
+            opacity: isSelected ? 1 : UNSELECTED_DOT_OPACITY,
+          }}
+        />
+        <AppText
+          variant="caption"
+          numberOfLines={1}
+          color={isSelected ? colors.text.primary : colors.text.secondary}
+        >
+          {METRIC_PRESENTATION[metricId].label}
+        </AppText>
+      </View>
+    </AppPressable>
   );
 });
 
@@ -273,9 +277,9 @@ const MetricRow = React.memo(function MetricRow({
   const series = curve.series[metricId];
 
   return (
-    <TactilePressable
+    <AppPressable
       testID={`monthly-curve-metric-${metricId}`}
-      haptic="none"
+      accessibilityRole="button"
       accessibilityState={{ selected: isSelected }}
       accessibilityLabel={describeMetricAccessibility(curve, metricId, formatAmount)}
       onPress={() => onSelect(metricId)}
@@ -324,7 +328,7 @@ const MetricRow = React.memo(function MetricRow({
           style={{ color: isSelected ? colors.text.primary : colors.text.secondary }}
         />
       </View>
-    </TactilePressable>
+    </AppPressable>
   );
 });
 

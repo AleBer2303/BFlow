@@ -6,23 +6,21 @@
  * mounts it with `key={entry.id}`, which loads the entry's values when it opens.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { View } from 'react-native';
 import {
-  AdaptiveSelectField,
-  animateNextLayout,
   AppPressable,
   AppText,
   AppTextInput,
   FormMessage,
   GlassSurface,
   hapticService,
-  HeroAmountField,
   useBFlowTheme,
   usePrimaryActionLook,
 } from '../../../design-system';
 import {
   formatGroupedIntegerInput,
+  parseDigitsInput,
   type AccountMovementRole,
   type Concept,
   type Debt,
@@ -31,9 +29,12 @@ import {
   type SavingsBucket,
 } from '../../../domain';
 import type { EditEntryUpdates } from '../../budget/store/useBudgetStore';
-import { AccountLinkFields, describeAccountLink } from './AccountLinkFields';
+import {
+  MovementAmountField,
+  MovementFrequencyField,
+  MovementOptionalFields,
+} from './MovementFormFields';
 
-const NONE_OPTION_VALUE = '__none__';
 const NO_ACCOUNTS: readonly FinancialAccount[] = [];
 
 export interface ChecklistEditEntryFormProps {
@@ -90,59 +91,10 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
   const [editAccountRole, setEditAccountRole] = useState<AccountMovementRole>(
     () => entry?.accountRole ?? 'purchase'
   );
-  const [showMoreOptions, setShowMoreOptions] = useState<boolean>(false);
   const [editError, setEditError] = useState<string | null>(null);
 
   const isEditingExpense = entry?.type !== 'income';
   const editMovementType = isEditingExpense ? 'expense' : 'income';
-
-  const debtOptions = useMemo(
-    () => [
-      { value: NONE_OPTION_VALUE, label: 'Sin deuda vinculada' },
-      ...debts.map((debt) => ({ value: debt.id, label: debt.name })),
-    ],
-    [debts]
-  );
-
-  const bucketOptions = useMemo(
-    () => [
-      { value: NONE_OPTION_VALUE, label: 'Sin fondo vinculado' },
-      ...savingsBuckets.map((bucket) => ({ value: bucket.id, label: bucket.name })),
-    ],
-    [savingsBuckets]
-  );
-
-  const optionalSummary = useMemo(() => {
-    const parts: string[] = [];
-    if (editNoteInput.trim()) parts.push('Nota');
-    if (isEditingExpense && editTargetDebtId) {
-      const debtName = debts.find((d) => d.id === editTargetDebtId)?.name;
-      if (debtName) parts.push(debtName);
-    }
-    if (isEditingExpense && editSavingsBucketId) {
-      const bucketName = savingsBuckets.find((b) => b.id === editSavingsBucketId)?.name;
-      if (bucketName) parts.push(bucketName);
-    }
-    const accountLabel = describeAccountLink(
-      financialAccounts,
-      editMovementType,
-      editAccountId,
-      editAccountRole
-    );
-    if (accountLabel) parts.push(accountLabel);
-    return parts.join(' · ');
-  }, [
-    debts,
-    editAccountId,
-    editAccountRole,
-    editMovementType,
-    editNoteInput,
-    editSavingsBucketId,
-    editTargetDebtId,
-    financialAccounts,
-    isEditingExpense,
-    savingsBuckets,
-  ]);
 
   const handleSaveEditEntry = () => {
     if (!entry) return;
@@ -150,8 +102,7 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
       setEditError('El nombre del movimiento no puede estar vacío.');
       return;
     }
-    const digitsOnly = editAmountInput.replace(/[^0-9]/g, '');
-    const parsedAmount = digitsOnly ? Number(digitsOnly) : 0;
+    const parsedAmount = parseDigitsInput(editAmountInput);
     if (!Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
       setEditError('Ingresa un monto entero válido mayor a $ 0.');
       return;
@@ -237,12 +188,11 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
           </AppPressable>
         </View>
 
-        {/* Single Interactive Hero Amount Input directly on the semantic red/green surface */}
-        <HeroAmountField
+        {/* Hero amount on the semantic red/green surface */}
+        <MovementAmountField
+          movementType={editMovementType}
           containerTestID="edit-entry-hero-amount"
           inputTestID="edit-entry-amount-input"
-          label={isEditingExpense ? 'Monto a pagar' : 'Monto a recibir'}
-          tone={isEditingExpense ? 'expense' : 'income'}
           value={editAmountInput}
           onChangeText={(text) => {
             setEditAmountInput(text);
@@ -270,176 +220,32 @@ export const ChecklistEditEntryForm = React.memo(function ChecklistEditEntryForm
           />
         </View>
 
-        {/* Month-to-month persistence toggle */}
-        <View style={{ gap: spacing.xs }}>
-          <AppText variant="caption" color={colors.text.secondary}>
-            Frecuencia
-          </AppText>
-          <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-            {(
-              [
-                { value: true, label: 'Cada mes', a11y: 'Se repite cada mes' },
-                { value: false, label: 'Solo este mes', a11y: 'Solo este mes' },
-              ] as const
-            ).map((opt) => {
-              const active = editPersistMonthly === opt.value;
-              return (
-                <AppPressable
-                  key={String(opt.value)}
-                  testID={`edit-entry-persist-${opt.value ? 'monthly' : 'once'}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={opt.a11y}
-                  accessibilityState={{ selected: active }}
-                  onPress={() => {
-                    hapticService.selection();
-                    setEditPersistMonthly(opt.value);
-                  }}
-                  style={{
-                    flex: 1,
-                    minHeight: minTouchTarget,
-                    borderRadius: radius.md,
-                    borderCurve: 'continuous',
-                    backgroundColor: active
-                      ? colors.accent.container
-                      : colors.glass.surfaceTint,
-                    borderWidth: 1,
-                    borderColor: active ? colors.accent.primary : colors.glass.subtleBorder,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                >
-                  <AppText
-                    variant="caption"
-                    color={active ? colors.accent.onContainer : colors.text.secondary}
-                  >
-                    {opt.label}
-                  </AppText>
-                </AppPressable>
-              );
-            })}
-          </View>
-        </View>
+        <MovementFrequencyField
+          persistMonthly={editPersistMonthly}
+          onChange={setEditPersistMonthly}
+          testIDPrefix="edit-entry"
+        />
 
-        {/* Progressive disclosure for optional note, debt and savings linkage */}
-        <View style={{ gap: spacing.xs }}>
-          <AppPressable
-            testID="edit-entry-more-options-toggle"
-            accessibilityRole="button"
-            accessibilityState={{ expanded: showMoreOptions }}
-            onPress={() => {
-              hapticService.selection();
-              animateNextLayout();
-              setShowMoreOptions((prev) => !prev);
-            }}
-            style={{
-              minHeight: minTouchTarget,
-              paddingHorizontal: spacing.md,
-              paddingVertical: spacing.xs,
-              borderRadius: radius.md,
-              borderCurve: 'continuous',
-              backgroundColor: colors.glass.surfaceTint,
-              borderWidth: 1,
-              borderColor:
-                showMoreOptions || optionalSummary
-                  ? colors.glass.specularBorder
-                  : colors.glass.subtleBorder,
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: spacing.xs,
-            }}
-          >
-            <View style={{ flex: 1, gap: spacing.xxs }}>
-              <AppText variant="caption" color={colors.text.primary}>
-                Más opciones
-              </AppText>
-              <AppText
-                variant="micro"
-                color={optionalSummary ? colors.accent.text : colors.text.secondary}
-                numberOfLines={1}
-              >
-                {optionalSummary ||
-                  (isEditingExpense
-                    ? financialAccounts.length > 0
-                      ? 'Nota, tarjeta o cuenta, deuda o fondo de ahorro'
-                      : 'Nota, vincular a deuda o fondo de ahorro'
-                    : financialAccounts.length > 0
-                      ? 'Nota o cuenta donde se recibió'
-                      : 'Agregar nota opcional')}
-              </AppText>
-            </View>
-            <AppText variant="micro" color={colors.text.secondary}>
-              {showMoreOptions ? 'Ocultar' : 'Mostrar'}
-            </AppText>
-          </AppPressable>
-
-          {/* Rendered directly (without nested RevealDown) to keep opening/closing instant */}
-          {showMoreOptions ? (
-            <View
-              testID="edit-entry-more-options-panel"
-              style={{ gap: spacing.sm, paddingTop: spacing.xs }}
-            >
-              {/* Note Input */}
-              <View style={{ gap: spacing.xxs }}>
-                <AppText variant="caption" color={colors.text.secondary}>
-                  Nota opcional
-                </AppText>
-                <AppTextInput
-                  testID="edit-entry-note-input"
-                  value={editNoteInput}
-                  onChangeText={setEditNoteInput}
-                  placeholder="Ej. Factura, referencia, detalle..."
-                />
-              </View>
-
-              {/* Card or bank account the movement went through (ADR 0034) */}
-              <AccountLinkFields
-                accounts={financialAccounts}
-                movementType={editMovementType}
-                accountId={editAccountId}
-                accountRole={editAccountRole}
-                onChangeAccount={setEditAccountId}
-                onChangeRole={setEditAccountRole}
-                testIDPrefix="edit-entry"
-              />
-
-              {/* Modern Adaptive Selectors for Debt & Savings Fund Linkage */}
-              {isEditingExpense && debts.length > 0 ? (
-                <AdaptiveSelectField
-                  label="Vincular pago a una deuda (opcional)"
-                  title="Vincular a deuda"
-                  options={debtOptions}
-                  selectedValue={editTargetDebtId ?? NONE_OPTION_VALUE}
-                  onSelect={(value) => {
-                    hapticService.selection();
-                    setEditTargetDebtId(value === NONE_OPTION_VALUE ? null : value);
-                  }}
-                  triggerTestID="edit-entry-debt-select"
-                  valueTestID="edit-entry-debt-value"
-                  pickerTestID="edit-entry-debt-picker"
-                  accessibilityLabel="Vincular pago a una deuda"
-                />
-              ) : null}
-
-              {isEditingExpense && savingsBuckets.length > 0 ? (
-                <AdaptiveSelectField
-                  label="Vincular gasto a un fondo de ahorro (opcional)"
-                  title="Vincular a fondo"
-                  options={bucketOptions}
-                  selectedValue={editSavingsBucketId ?? NONE_OPTION_VALUE}
-                  onSelect={(value) => {
-                    hapticService.selection();
-                    setEditSavingsBucketId(value === NONE_OPTION_VALUE ? null : value);
-                  }}
-                  triggerTestID="edit-entry-bucket-select"
-                  valueTestID="edit-entry-bucket-value"
-                  pickerTestID="edit-entry-bucket-picker"
-                  accessibilityLabel="Vincular gasto a un fondo de ahorro"
-                />
-              ) : null}
-            </View>
-          ) : null}
-        </View>
+        {/* Progressive disclosure for optional note, card or account, debt and savings fund */}
+        <MovementOptionalFields
+          testIDPrefix="edit-entry"
+          noteTestID="edit-entry-note-input"
+          movementType={editMovementType}
+          note={editNoteInput}
+          onChangeNote={setEditNoteInput}
+          notePlaceholder="Ej. Factura, referencia, detalle..."
+          financialAccounts={financialAccounts}
+          accountId={editAccountId}
+          accountRole={editAccountRole}
+          onChangeAccount={setEditAccountId}
+          onChangeRole={setEditAccountRole}
+          debts={debts}
+          targetDebtId={editTargetDebtId}
+          onChangeTargetDebt={setEditTargetDebtId}
+          savingsBuckets={savingsBuckets}
+          savingsBucketId={editSavingsBucketId}
+          onChangeSavingsBucket={setEditSavingsBucketId}
+        />
 
         <FormMessage message={editError} />
 

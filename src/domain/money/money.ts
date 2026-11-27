@@ -66,6 +66,22 @@ export function formatSignedCurrency(amount: number, options?: CurrencyFormatOpt
   return amount > 0 ? `+${formatted}` : formatted;
 }
 
+/** Keeps only the digits of a typed value: "$ 1.500.000" -> "1500000", "12/3" -> "123". */
+export function extractDigits(input: string): string {
+  return input.replace(/[^0-9]/g, '');
+}
+
+/**
+ * Reads a typed amount or count from a form field (CC-02): "$ 1.500.000" -> 1500000, and an empty
+ * field (no digits) -> `emptyValue` (0 by default). Unlike `parseCurrencyInteger` it never
+ * throws, so forms keep validating the result themselves with `Number.isSafeInteger` (a very long
+ * input can exceed it).
+ */
+export function parseDigitsInput(input: string, emptyValue = 0): number {
+  const digits = extractDigits(input);
+  return digits ? Number(digits) : emptyValue;
+}
+
 /**
  * Parses a formatted currency string like "$ 1.080.000", "$1,080,000", or "1080000" into a safe integer.
  */
@@ -78,7 +94,7 @@ export function parseCurrencyInteger(input: string | number): number {
     throw new TypeError('Cannot parse empty monetary string');
   }
   const isNegative = trimmed.startsWith('-');
-  const digitsOnly = trimmed.replace(/[^0-9]/g, '');
+  const digitsOnly = extractDigits(trimmed);
   if (!digitsOnly) {
     throw new TypeError(`Cannot parse monetary string: "${input}"`);
   }
@@ -99,7 +115,7 @@ export function formatGroupedIntegerInput(input: string | number): string {
     }
     rawDigits = String(Math.trunc(input));
   } else {
-    rawDigits = input.replace(/[^0-9]/g, '');
+    rawDigits = extractDigits(input);
   }
 
   if (!rawDigits) {

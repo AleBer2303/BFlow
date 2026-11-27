@@ -9,21 +9,19 @@
 import React, { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import {
-  AdaptiveSelectField,
-  animateNextLayout,
   AppPressable,
   AppText,
   AppTextInput,
   FormMessage,
   GlassSurface,
   hapticService,
-  HeroAmountField,
   useAmountPrivacy,
   useBFlowTheme,
   usePrimaryActionLook,
 } from '../../../design-system';
 import {
   formatGroupedIntegerInput,
+  parseDigitsInput,
   toAppIsoDate,
   type Concept,
   type ConceptGroup,
@@ -34,7 +32,11 @@ import {
   type MonthEntry,
   type SavingsBucket,
 } from '../../../domain';
-import { AccountLinkFields, describeAccountLink } from './AccountLinkFields';
+import {
+  MovementAmountField,
+  MovementFrequencyField,
+  MovementOptionalFields,
+} from './MovementFormFields';
 import type { ChecklistWorkspaceViewProps } from './ChecklistWorkspaceView';
 
 export interface ChecklistAddMovementFormProps {
@@ -52,7 +54,6 @@ export interface ChecklistAddMovementFormProps {
   onSubmitted: () => void;
 }
 
-const NONE_OPTION_VALUE = '__none__';
 const NO_ACCOUNTS: readonly FinancialAccount[] = [];
 
 function resolveConceptDebtId(concept: Concept | undefined, debts: readonly Debt[]): string | null {
@@ -87,7 +88,6 @@ export const ChecklistAddMovementForm = React.memo(function ChecklistAddMovement
   const [accountId, setAccountId] = useState<string | null>(null);
   const [accountRole, setAccountRole] = useState<AccountMovementRole>('purchase');
   const [persistMonthly, setPersistMonthly] = useState<boolean>(true);
-  const [showMoreOptions, setShowMoreOptions] = useState<boolean>(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   const trimmedName = conceptNameInput.trim();
@@ -118,59 +118,11 @@ export const ChecklistAddMovementForm = React.memo(function ChecklistAddMovement
       .slice(0, 3);
   }, [exactPendingMatch, monthEntries, movementType, normalizedQuery]);
 
-  const debtOptions = useMemo(
-    () => [
-      { value: NONE_OPTION_VALUE, label: 'Sin deuda vinculada' },
-      ...debts.map((debt) => ({ value: debt.id, label: debt.name })),
-    ],
-    [debts]
-  );
-
-  const bucketOptions = useMemo(
-    () => [
-      { value: NONE_OPTION_VALUE, label: 'Sin fondo vinculado' },
-      ...savingsBuckets.map((bucket) => ({ value: bucket.id, label: bucket.name })),
-    ],
-    [savingsBuckets]
-  );
-
-  const optionalSummary = useMemo(() => {
-    const parts: string[] = [];
-    if (noteInput.trim()) parts.push('Nota');
-    if (movementType === 'expense' && targetDebtId) {
-      const debtName = debts.find((d) => d.id === targetDebtId)?.name;
-      if (debtName) parts.push(debtName);
-    }
-    if (movementType === 'expense' && savingsBucketId) {
-      const bucketName = savingsBuckets.find((b) => b.id === savingsBucketId)?.name;
-      if (bucketName) parts.push(bucketName);
-    }
-    const accountLabel = describeAccountLink(
-      financialAccounts,
-      movementType,
-      accountId,
-      accountRole
-    );
-    if (accountLabel) parts.push(accountLabel);
-    return parts.join(' · ');
-  }, [
-    accountId,
-    accountRole,
-    debts,
-    financialAccounts,
-    movementType,
-    noteInput,
-    savingsBucketId,
-    savingsBuckets,
-    targetDebtId,
-  ]);
-
   const handleSelectSuggestion = (entry: MonthEntry) => {
     hapticService.selection();
     setConceptNameInput(entry.conceptName);
     setConceptGroup(entry.group);
-    const digitsOnly = amountInput.replace(/[^0-9]/g, '');
-    if ((!digitsOnly || Number(digitsOnly) === 0) && entry.plannedAmount > 0) {
+    if (parseDigitsInput(amountInput) === 0 && entry.plannedAmount > 0) {
       setAmountInput(formatGroupedIntegerInput(entry.plannedAmount));
     }
     const concept = concepts.find((c) => c.id === entry.conceptId);
@@ -189,8 +141,7 @@ export const ChecklistAddMovementForm = React.memo(function ChecklistAddMovement
       return;
     }
 
-    const digitsOnly = amountInput.replace(/[^0-9]/g, '');
-    const parsedAmount = digitsOnly ? Number(digitsOnly) : 0;
+    const parsedAmount = parseDigitsInput(amountInput);
     if (!Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
       setFormError('Ingresa un monto entero válido mayor a $ 0.');
       return;
@@ -327,12 +278,11 @@ export const ChecklistAddMovementForm = React.memo(function ChecklistAddMovement
           })}
         </View>
 
-        {/* Single Interactive Hero Amount Input directly on the semantic red/green surface */}
-        <HeroAmountField
+        {/* Hero amount on the semantic red/green surface */}
+        <MovementAmountField
+          movementType={movementType}
           containerTestID="add-movement-hero-amount"
           inputTestID="movement-amount-input"
-          label={movementType === 'income' ? 'Monto a recibir' : 'Monto a pagar'}
-          tone={movementType === 'income' ? 'income' : 'expense'}
           value={amountInput}
           onChangeText={(text) => {
             setAmountInput(text);
@@ -454,180 +404,38 @@ export const ChecklistAddMovementForm = React.memo(function ChecklistAddMovement
           </View>
         </View>
 
-        {/* Month-to-month persistence toggle */}
-        <View style={{ gap: spacing.xs }}>
-          <AppText variant="caption" color={colors.text.secondary}>
-            Frecuencia
-          </AppText>
-          <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-            {(
-              [
-                { value: true, label: 'Cada mes', a11y: 'Se repite cada mes' },
-                { value: false, label: 'Solo este mes', a11y: 'Solo este mes' },
-              ] as const
-            ).map((opt) => {
-              const active = persistMonthly === opt.value;
-              return (
-                <AppPressable
-                  key={String(opt.value)}
-                  testID={`add-movement-persist-${opt.value ? 'monthly' : 'once'}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={opt.a11y}
-                  accessibilityState={{ selected: active }}
-                  onPress={() => {
-                    hapticService.selection();
-                    setPersistMonthly(opt.value);
-                  }}
-                  style={{
-                    flex: 1,
-                    minHeight: minTouchTarget,
-                    borderRadius: radius.md,
-                    borderCurve: 'continuous',
-                    backgroundColor: active
-                      ? colors.accent.container
-                      : colors.glass.surfaceTint,
-                    borderWidth: 1,
-                    borderColor: active
-                      ? colors.accent.primary
-                      : colors.glass.subtleBorder,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
-                >
-                  <AppText
-                    variant="caption"
-                    color={active ? colors.accent.onContainer : colors.text.secondary}
-                  >
-                    {opt.label}
-                  </AppText>
-                </AppPressable>
-              );
-            })}
-          </View>
-        </View>
+        <MovementFrequencyField
+          persistMonthly={persistMonthly}
+          onChange={setPersistMonthly}
+          testIDPrefix="add-movement"
+        />
 
-        {/* Progressive disclosure for optional note, debt and savings linkage */}
-        <View style={{ gap: spacing.xs }}>
-          <AppPressable
-            testID="add-movement-more-options-toggle"
-            accessibilityRole="button"
-            accessibilityState={{ expanded: showMoreOptions }}
-            onPress={() => {
-              hapticService.selection();
-              animateNextLayout();
-              setShowMoreOptions((prev) => !prev);
-            }}
-            style={{
-              minHeight: minTouchTarget,
-              paddingHorizontal: spacing.md,
-              paddingVertical: spacing.xs,
-              borderRadius: radius.md,
-              borderCurve: 'continuous',
-              backgroundColor: colors.glass.surfaceTint,
-              borderWidth: 1,
-              borderColor:
-                showMoreOptions || optionalSummary
-                  ? colors.glass.specularBorder
-                  : colors.glass.subtleBorder,
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: spacing.xs,
-            }}
-          >
-            <View style={{ flex: 1, gap: spacing.xxs }}>
-              <AppText variant="caption" color={colors.text.primary}>
-                Más opciones
-              </AppText>
-              <AppText
-                variant="micro"
-                color={optionalSummary ? colors.accent.text : colors.text.secondary}
-                numberOfLines={1}
-              >
-                {optionalSummary ||
-                  (movementType === 'expense'
-                    ? financialAccounts.length > 0
-                      ? 'Nota, tarjeta o cuenta, deuda o fondo de ahorro'
-                      : 'Nota, vincular a deuda o fondo de ahorro'
-                    : financialAccounts.length > 0
-                      ? 'Nota o cuenta donde se recibió'
-                      : 'Agregar nota opcional')}
-              </AppText>
-            </View>
-            <AppText variant="micro" color={colors.text.secondary}>
-              {showMoreOptions ? 'Ocultar' : 'Mostrar'}
-            </AppText>
-          </AppPressable>
-
-          {/* Rendered directly (without nested RevealDown) to avoid frame-by-frame parent layout thrashing */}
-          {showMoreOptions ? (
-            <View
-              testID="add-movement-more-options-panel"
-              style={{ gap: spacing.sm, paddingTop: spacing.xs }}
-            >
-              {/* Note Input */}
-              <View style={{ gap: spacing.xxs }}>
-                <AppText variant="caption" color={colors.text.secondary}>
-                  Nota opcional
-                </AppText>
-                <AppTextInput
-                  testID="movement-note-input"
-                  value={noteInput}
-                  onChangeText={setNoteInput}
-                  placeholder="Ej. Factura No. 45, PSE, compra quincenal..."
-                />
-              </View>
-
-              {/* Card or bank account the movement went through (ADR 0034) */}
-              <AccountLinkFields
-                accounts={financialAccounts}
-                movementType={movementType}
-                accountId={accountId}
-                accountRole={accountRole}
-                onChangeAccount={setAccountId}
-                onChangeRole={setAccountRole}
-                testIDPrefix="add-movement"
-              />
-
-              {/* Modern Adaptive Selectors for Debt & Savings Fund Linkage */}
-              {movementType === 'expense' && debts.length > 0 ? (
-                <AdaptiveSelectField
-                  label="Vincular pago a una deuda (opcional)"
-                  title="Vincular a deuda"
-                  options={debtOptions}
-                  selectedValue={targetDebtId ?? NONE_OPTION_VALUE}
-                  onSelect={(value) => {
-                    hapticService.selection();
-                    setTargetDebtId(value === NONE_OPTION_VALUE ? null : value);
-                    setLinkageModified(true);
-                  }}
-                  triggerTestID="add-movement-debt-select"
-                  valueTestID="add-movement-debt-value"
-                  pickerTestID="add-movement-debt-picker"
-                  accessibilityLabel="Vincular pago a una deuda"
-                />
-              ) : null}
-
-              {movementType === 'expense' && savingsBuckets.length > 0 ? (
-                <AdaptiveSelectField
-                  label="Vincular gasto a un fondo de ahorro (opcional)"
-                  title="Vincular a fondo"
-                  options={bucketOptions}
-                  selectedValue={savingsBucketId ?? NONE_OPTION_VALUE}
-                  onSelect={(value) => {
-                    hapticService.selection();
-                    setSavingsBucketId(value === NONE_OPTION_VALUE ? null : value);
-                    setLinkageModified(true);
-                  }}
-                  triggerTestID="add-movement-bucket-select"
-                  valueTestID="add-movement-bucket-value"
-                  pickerTestID="add-movement-bucket-picker"
-                  accessibilityLabel="Vincular gasto a un fondo de ahorro"
-                />
-              ) : null}
-            </View>
-          ) : null}
-        </View>
+        {/* Progressive disclosure for optional note, card or account, debt and savings fund */}
+        <MovementOptionalFields
+          testIDPrefix="add-movement"
+          noteTestID="movement-note-input"
+          movementType={movementType}
+          note={noteInput}
+          onChangeNote={setNoteInput}
+          notePlaceholder="Ej. Factura No. 45, PSE, compra quincenal..."
+          financialAccounts={financialAccounts}
+          accountId={accountId}
+          accountRole={accountRole}
+          onChangeAccount={setAccountId}
+          onChangeRole={setAccountRole}
+          debts={debts}
+          targetDebtId={targetDebtId}
+          onChangeTargetDebt={(debtId) => {
+            setTargetDebtId(debtId);
+            setLinkageModified(true);
+          }}
+          savingsBuckets={savingsBuckets}
+          savingsBucketId={savingsBucketId}
+          onChangeSavingsBucket={(bucketId) => {
+            setSavingsBucketId(bucketId);
+            setLinkageModified(true);
+          }}
+        />
 
         <FormMessage message={formError} />
 

@@ -200,16 +200,6 @@ export interface SyncSlice {
   setActiveTab: (tab: BFlowWorkspaceTab) => void;
   setActiveMonthKey: (monthKey: string) => void;
   setSyncStatus: (message: string, isSyncing?: boolean) => void;
-  applyCloudWorkspace: (payload: {
-    monthKey: string;
-    concepts: Concept[];
-    entries: MonthEntry[];
-    debts: Debt[];
-    debtPayments: DebtPayment[];
-    savingsBuckets: SavingsBucket[];
-    provisionPlan: IdealMotoPlan;
-    closedSnapshot?: MonthSnapshot;
-  }) => void;
   applyFullCloudAccount: (payload: FullCloudAccountData) => void;
   syncActiveWidget: () => Promise<WidgetSyncResult>;
   flushOfflineWrites: () => Promise<void>;
@@ -514,7 +504,7 @@ export function buildCleanEmptyWorkspaceState(authUser: BFlowAuthUser | null) {
       : {}) as Record<string, Debt[]>,
     debtPayments: [] as DebtPayment[],
     savingsBucketsByMonth: (authUser
-      ? { [defaultMonth]: ensureStandardSavingsBuckets([], 0, 0) }
+      ? { [defaultMonth]: ensureStandardSavingsBuckets([]) }
       : {}) as Record<string, SavingsBucket[]>,
     idealMotoPlan: { ...EMPTY_PROVISION_PLAN, items: [] },
     closedSnapshots: {} as Record<string, MonthSnapshot>,

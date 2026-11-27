@@ -21,12 +21,11 @@ import {
   useBFlowTheme,
   usePrimaryActionLook,
 } from '../../../design-system';
-import { formatGroupedIntegerInput } from '../../../domain';
+import { formatGroupedIntegerInput, parseDigitsInput } from '../../../domain';
 
 /** Reads a grouped amount ("1.500.000"); null if it is not a safe non-negative integer. */
 function parseBalanceInput(value: string): number | null {
-  const digits = value.replace(/[^0-9]/g, '');
-  const parsed = digits ? Number(digits) : 0;
+  const parsed = parseDigitsInput(value);
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 

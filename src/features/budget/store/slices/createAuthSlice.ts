@@ -12,10 +12,13 @@ import {
 } from '../../../../data/repositories/budgetRepository';
 import {
   addMonthsToMonthKey,
+  annualToMonthlyRate,
   buildDebtPaymentsForInstallment,
   getMonthNumberFromMonthKey,
+  monthlyToAnnualRate,
   toAppIsoDate,
   toAppMonthKey,
+  toSlugId,
   type Concept,
   type Debt,
   type DebtInterestRateType,
@@ -205,11 +208,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
     const rawBuckets: SavingsBucket[] = input.savingsBuckets
       .filter((b) => b.name.trim().length > 0)
       .map((b, idx) => {
-        const slug = b.name
-          .trim()
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '_')
-          .replace(/^_|_$/g, '');
+        const slug = toSlugId(b.name);
         return {
           id: b.id ?? `bucket_${slug || idx}_${idx + 1}`,
           name: b.name.trim(),
@@ -217,25 +216,21 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
           monthKey,
         };
       });
-    const savingsBuckets = ensureStandardSavingsBuckets(rawBuckets, 0, 0);
+    const savingsBuckets = ensureStandardSavingsBuckets(rawBuckets);
 
     // 2. Build debts
     const debtIdByKey = new Map<string, Debt>();
     const debts: Debt[] = input.debts
       .filter((d) => d.name.trim().length > 0 && d.openingBalanceCop > 0)
       .map((d, idx) => {
-        const slug = d.name
-          .trim()
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '_')
-          .replace(/^_|_$/g, '');
+        const slug = toSlugId(d.name);
         const id = d.key || `debt_${slug || 'personal'}_${idx + 1}`;
         const rateType: DebtInterestRateType = d.interestRateType ?? 'monthly';
         const rawRate = d.interestRate ?? 0;
         const monthlyInterestRate =
-          rateType === 'annual' ? Number((rawRate / 12).toFixed(4)) : rawRate;
+          rateType === 'annual' ? annualToMonthlyRate(rawRate) : rawRate;
         const annualInterestRate =
-          rateType === 'annual' ? rawRate : Number((rawRate * 12).toFixed(4));
+          rateType === 'annual' ? rawRate : monthlyToAnnualRate(rawRate);
         const monthlyInstallment = Math.max(0, Math.round(d.monthlyInstallmentCop ?? 0));
 
         const built: Debt = {
@@ -268,10 +263,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       const safeAmount = Math.max(0, Math.round(inc.amountCop));
       if (!trimmedName || safeAmount <= 0) continue;
 
-      const slug = trimmedName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^_|_$/g, '');
+      const slug = toSlugId(trimmedName);
       const conceptId = `inc_${slug || orderCounter}_${orderCounter}`;
       const concept: Concept = {
         id: conceptId,
@@ -310,10 +302,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       const safeAmount = Math.max(0, Math.round(exp.amountCop));
       if (!trimmedName || safeAmount <= 0) continue;
 
-      const slug = trimmedName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^_|_$/g, '');
+      const slug = toSlugId(trimmedName);
       const conceptId = `exp_${slug || orderCounter}_${orderCounter}`;
 
       const linkedDebt = exp.targetDebtKey ? debtIdByKey.get(exp.targetDebtKey) : undefined;
@@ -542,7 +531,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       newStartMonthKey && /^\d{4}-(0[1-9]|1[0-2])$/.test(newStartMonthKey)
         ? newStartMonthKey
         : `${toAppMonthKey().slice(0, 4)}-01`;
-    const emptyBuckets = ensureStandardSavingsBuckets([], 0, 0);
+    const emptyBuckets = ensureStandardSavingsBuckets([]);
     const updatedUser = state.authUser
       ? { ...state.authUser, activeMonthKey: startMonth }
       : null;

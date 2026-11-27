@@ -52,6 +52,7 @@ import {
   type MonthlyBudgetSummary,
   type RegisterOrCompleteMovementInput,
   type SavingsBucket,
+  DEFAULT_DEBT_GROUP_KEY,
 } from '../../../domain';
 import type {
   CreateCustomConceptInput,
@@ -292,7 +293,7 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
               <StatusBadge label={`→ ${linkedBucket.name}`} status="reserve" />
             ) : concept?.savingsContribution?.bucketId ? (
               <StatusBadge
-                label={`→ ${concept.savingsContribution.bucketId === 'moto' ? 'Fondo de Reserva' : concept.savingsContribution.bucketId}`}
+                label={`→ ${concept.savingsContribution.bucketId === 'reserve' ? 'Fondo de Reserva' : concept.savingsContribution.bucketId}`}
                 status="reserve"
               />
             ) : null}
@@ -300,7 +301,7 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
               <StatusBadge label={`→ ${linkedDebt.name}`} status="debt" />
             ) : concept?.linkedDebtGroup ? (
               <StatusBadge
-                label={`→ Deuda ${concept.linkedDebtGroup !== 'FUNFAMI' ? `(${concept.linkedDebtGroup})` : ''}`.trim()}
+                label={`→ Deuda ${concept.linkedDebtGroup !== DEFAULT_DEBT_GROUP_KEY ? `(${concept.linkedDebtGroup})` : ''}`.trim()}
                 status="debt"
               />
             ) : null}

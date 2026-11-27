@@ -23,7 +23,7 @@ import {
   palettesBySkin,
   type PlatformSkinId,
 } from '../../../design-system/tokens';
-import { DEMO_OWNER_USER } from '../../../platform/auth/authAdapter';
+import { DEMO_USER } from '../../../platform/auth/authAdapter';
 import { WEB_HERO_COPY } from '../../auth/components/AuthScreen';
 import { useBudgetStore } from '../../budget/store/useBudgetStore';
 
@@ -51,18 +51,18 @@ function styleOf(testID: string): ViewStyle {
 
 const WORKSPACE_VIEWS = [
   ['checklist', 'checklist-workspace-view'],
-  ['debts', 'debts-funfami-view'],
-  ['savings', 'savings-and-moto-ideal-view'],
+  ['debts', 'debts-workspace-view'],
+  ['savings', 'savings-and-provisions-view'],
   ['analytics', 'analytics-and-history-view'],
   ['account', 'account-profile-workspace-view'],
   ['summary', 'net-flow-hero-card'],
 ] as const;
 
 beforeEach(() => {
-  // Each test starts signed in as the demo owner with the golden month, on a phone.
+  // Each test starts signed in as the demo user with the sample month, on a phone.
   act(() => {
-    useBudgetStore.setState({ authUser: DEMO_OWNER_USER, needsOnboarding: false });
-    useBudgetStore.getState().resetToOctober2026GoldenState();
+    useBudgetStore.setState({ authUser: DEMO_USER, needsOnboarding: false });
+    useBudgetStore.getState().resetToSampleWorkspace();
   });
   setWindowSize(390, 844);
 });
@@ -74,7 +74,7 @@ afterAll(() => {
 });
 
 describe.each(PLATFORM_SKIN_IDS)('core flows on the %s skin', (skin) => {
-  it('shows the golden October 2026 figures', () => {
+  it('shows the sample month figures', () => {
     renderApp(skin);
 
     expect(screen.getByTestId('golden-net-flow')).toHaveTextContent('$ 1.080.000');
@@ -109,7 +109,7 @@ describe.each(PLATFORM_SKIN_IDS)('core flows on the %s skin', (skin) => {
 
     expect(screen.getByTestId('analytics-and-history-view')).toBeTruthy();
     expect(screen.queryByTestId('checklist-workspace-view')).toBeNull();
-    expect(screen.queryByTestId('debts-funfami-view')).toBeNull();
+    expect(screen.queryByTestId('debts-workspace-view')).toBeNull();
     expect(screen.queryByTestId('net-flow-hero-card')).toBeNull();
 
     for (const hiddenTab of ['summary', 'checklist', 'debts'] as const) {
@@ -136,7 +136,7 @@ describe.each(PLATFORM_SKIN_IDS)('core flows on the %s skin', (skin) => {
     renderApp(skin);
 
     fireEvent.press(screen.getByTestId('workspace-tab-checklist'));
-    fireEvent.press(screen.getByTestId('checklist-workspace-item-2026-10_exp_cuota_funfami'));
+    fireEvent.press(screen.getByTestId('checklist-workspace-item-2026-10_exp_loan_installment'));
     fireEvent.press(screen.getByTestId('workspace-tab-summary'));
 
     expect(screen.getByText('Checklist 5 de 12')).toBeTruthy();
@@ -150,7 +150,7 @@ describe.each(PLATFORM_SKIN_IDS)('core flows on the %s skin', (skin) => {
 
     fireEvent.press(screen.getByTestId('workspace-tab-checklist'));
     fireEvent.press(screen.getByTestId('open-add-movement-modal-button'));
-    fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Seguro TR SURA');
+    fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Seguro');
     fireEvent.changeText(screen.getByTestId('movement-amount-input'), '130000');
     fireEvent.press(screen.getByTestId('submit-movement-button'));
 

@@ -3,12 +3,12 @@ import { toSlugId as fromIndex } from '../../index';
 
 describe('toSlugId (CC-02)', () => {
   it.each([
-    ['Salario Principal', 'salario_principal'],
+    ['Salario', 'salario'],
     ['  Arriendo  ', 'arriendo'],
     ['Niño & Ñandú', 'nino_nandu'],
-    ['Cuota FUNFAMI #3', 'cuota_funfami_3'],
+    ['Cuota de préstamo #3', 'cuota_de_prestamo_3'],
     ['---Ahorro---', 'ahorro'],
-    ['Plan de datos y baño Kábir', 'plan_de_datos_y_bano_kabir'],
+    ['Plan de datos y baño Ártico', 'plan_de_datos_y_bano_artico'],
     ['💰 Fondo 🚀', 'fondo'],
     ['', ''],
     ['!!!', ''],

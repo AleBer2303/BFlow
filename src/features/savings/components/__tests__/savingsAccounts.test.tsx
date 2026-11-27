@@ -15,13 +15,13 @@ import {
   type MonthlySavingsSummary,
   type ProvisionPlanComparisonSummary,
 } from '../../../../domain';
-import { SavingsAndMotoIdealView } from '../SavingsAndMotoIdealView';
+import { SavingsAndProvisionsView } from '../SavingsAndProvisionsView';
 
 const ORIGINAL_WINDOW = Dimensions.get('window');
 const ORIGINAL_SCREEN = Dimensions.get('screen');
 
 const EMPTY_BUCKET = {
-  bucketId: 'moto',
+  bucketId: 'reserve',
   name: 'Fondo de Reserva',
   openingBalance: 0,
   paidContributionsThisMonth: 0,
@@ -34,10 +34,8 @@ const EMPTY_BUCKET = {
 const NO_FUNDS_SUMMARY: MonthlySavingsSummary = {
   monthKey: '2026-10',
   hasReserveBucket: false,
-  hasMotoBucket: false,
   hasSavingsBucket: false,
   reserve: EMPTY_BUCKET,
-  moto: EMPTY_BUCKET,
   savings: {
     bucketId: 'savings',
     name: 'Fondo Ahorros',
@@ -57,15 +55,15 @@ const NO_PROVISIONS: ProvisionPlanComparisonSummary = {
   recurringItems: [],
   targetGoals: [],
   recurringMonthlyTotal: 0,
-  excelRecurringMonthlyTotalCop: 0,
+  recurringMonthlyTotalCop: 0,
   strictCeilRecurringMonthlyTotal: 0,
   strictCeilRecurringMonthlyTotalCop: 0,
   totalWithTargetGoals: 0,
   totalWithTargetGoalsCop: 0,
   actualContribution: 0,
-  actualMotoContributionCop: 0,
-  monthlyGapAgainstIdeal: 0,
-  monthlyGapAgainstIdealCop: 0,
+  actualContributionCop: 0,
+  monthlyGapAgainstPlan: 0,
+  monthlyGapAgainstPlanCop: 0,
 };
 
 const BOLSILLO: FinancialAccount = {
@@ -111,7 +109,7 @@ const EMPTY_ACCOUNTS_SUMMARY = calculateFinancialAccountsSummary([], [], '2026-1
 
 function renderView(
   skin: PlatformSkinId,
-  overrides?: Partial<React.ComponentProps<typeof SavingsAndMotoIdealView>>
+  overrides?: Partial<React.ComponentProps<typeof SavingsAndProvisionsView>>
 ) {
   const handlers = {
     onCreateSavingsBucket: jest.fn(),
@@ -123,9 +121,9 @@ function renderView(
   };
   const utils = render(
     <BFlowThemeProvider skin={skin} initialMode="dark">
-      <SavingsAndMotoIdealView
+      <SavingsAndProvisionsView
         savingsSummary={NO_FUNDS_SUMMARY}
-        motoIdealSummary={NO_PROVISIONS}
+        provisionPlanSummary={NO_PROVISIONS}
         savingsAccounts={[BOLSILLO]}
         savingsAccountsSummary={ACCOUNTS_SUMMARY}
         {...handlers}

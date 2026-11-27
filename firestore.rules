@@ -18,7 +18,7 @@ rules_version = '2';
 //      - authProvider: 'password' | 'google.com' | 'local' | null (optional, <= 40 chars)
 //      - createdAt: timestamp | string | null (optional, <= 64 chars)
 //      - lastLoginAt: timestamp | string | null (optional, <= 64 chars)
-//      - seededOctober2026: bool (optional)
+//      - seededOctober2026: bool (optional, legacy: removed by the next load, ADR 0037)
 //      - onboardingCompleted: bool | null (optional)
 //      - accountResetByUser: bool | null (optional)
 //      - activeMonthKey: string (optional, YYYY-MM)
@@ -156,6 +156,7 @@ service cloud.firestore {
           'authProvider',
           'createdAt',
           'lastLoginAt',
+          // Legacy field (ADR 0037): the next load of the account deletes it.
           'seededOctober2026',
           'onboardingCompleted',
           'accountResetByUser',
@@ -209,6 +210,8 @@ service cloud.firestore {
           'linkedDebtGroup',
           'defaultTargetDebtId',
           'savingsContribution',
+          'provisionCategoryKey',
+          // Legacy name (ADR 0037): still in documents a load has not rewritten yet.
           'idealMotoCategoryKey',
           'archived',
           'order',
@@ -231,6 +234,7 @@ service cloud.firestore {
         isOptionalString(data, 'linkedDebtGroup', 64) &&
         isOptionalString(data, 'defaultTargetDebtId', 120) &&
         isValidSavingsContribution(data) &&
+        isOptionalString(data, 'provisionCategoryKey', 64) &&
         isOptionalString(data, 'idealMotoCategoryKey', 64) &&
         isValidUpdatedAt(data);
     }

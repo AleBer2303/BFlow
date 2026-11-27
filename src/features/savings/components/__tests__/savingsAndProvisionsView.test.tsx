@@ -1,5 +1,5 @@
 /**
- * Tests for SavingsAndMotoIdealView (Provisions & Target Goals separate global Edit / Delete
+ * Tests for SavingsAndProvisionsView (Provisions & Target Goals separate global Edit / Delete
  * mode buttons acting directly on the existing items list) across all three platform skins.
  */
 
@@ -24,7 +24,7 @@ import type {
 } from '../../../../domain';
 import { calculateProvisionPlanSummary } from '../../../../domain';
 import { useBudgetStore } from '../../../budget/store/useBudgetStore';
-import { SavingsAndMotoIdealView } from '../SavingsAndMotoIdealView';
+import { SavingsAndProvisionsView } from '../SavingsAndProvisionsView';
 
 const ORIGINAL_WINDOW = Dimensions.get('window');
 const ORIGINAL_SCREEN = Dimensions.get('screen');
@@ -44,7 +44,7 @@ jest.mock('../../../../design-system/components/StatusBadge', () => {
 });
 
 const BASE_RESERVE_BUCKET = {
-  bucketId: 'moto',
+  bucketId: 'reserve',
   name: 'Fondo de Reserva',
   openingBalance: 1_000_000,
   paidContributionsThisMonth: 100_000,
@@ -57,10 +57,8 @@ const BASE_RESERVE_BUCKET = {
 const BASE_SAVINGS_SUMMARY: MonthlySavingsSummary = {
   monthKey: '2026-10',
   hasReserveBucket: true,
-  hasMotoBucket: true,
   hasSavingsBucket: true,
   reserve: BASE_RESERVE_BUCKET,
-  moto: BASE_RESERVE_BUCKET,
   savings: {
     bucketId: 'savings',
     name: 'Fondo Ahorros',
@@ -93,7 +91,7 @@ const BASE_PROVISION_PLAN: ProvisionPlan = {
   items: [
     {
       id: 'prov-1',
-      displayName: 'Seguro Moto',
+      displayName: 'Seguro Carro',
       monthlyAmountCop: 50_000,
       cycleCostCop: 600_000,
       periodMonths: 12,
@@ -117,9 +115,9 @@ const BASE_PROVISION_SUMMARY: ProvisionPlanComparisonSummary = {
   recurringItems: [
     {
       id: 'prov-1',
-      displayName: 'Seguro Moto',
+      displayName: 'Seguro Carro',
       monthlyAmount: 50_000,
-      excelMonthlyAmountCop: 50_000,
+      monthlyAmountCop: 50_000,
       strictCeilMonthly: 50_000,
       strictCeilMonthlyCop: 50_000,
       cycleCost: 600_000,
@@ -139,15 +137,15 @@ const BASE_PROVISION_SUMMARY: ProvisionPlanComparisonSummary = {
     },
   ],
   recurringMonthlyTotal: 50_000,
-  excelRecurringMonthlyTotalCop: 50_000,
+  recurringMonthlyTotalCop: 50_000,
   strictCeilRecurringMonthlyTotal: 50_000,
   strictCeilRecurringMonthlyTotalCop: 50_000,
   totalWithTargetGoals: 150_000,
   totalWithTargetGoalsCop: 150_000,
   actualContribution: 50_000,
-  actualMotoContributionCop: 50_000,
-  monthlyGapAgainstIdeal: 0,
-  monthlyGapAgainstIdealCop: 0,
+  actualContributionCop: 50_000,
+  monthlyGapAgainstPlan: 0,
+  monthlyGapAgainstPlanCop: 0,
 };
 
 function setWindowSize(width: number, height: number): void {
@@ -159,7 +157,7 @@ function setWindowSize(width: number, height: number): void {
 
 function renderView(
   skin: PlatformSkinId,
-  overrides?: Partial<React.ComponentProps<typeof SavingsAndMotoIdealView>>
+  overrides?: Partial<React.ComponentProps<typeof SavingsAndProvisionsView>>
 ) {
   const onUpdateOpeningBalance = jest.fn();
   const onCreateSavingsBucket = jest.fn();
@@ -168,9 +166,9 @@ function renderView(
   const onDeleteProvisionItem = jest.fn();
   const utils = render(
     <BFlowThemeProvider skin={skin} initialMode="dark">
-      <SavingsAndMotoIdealView
+      <SavingsAndProvisionsView
         savingsSummary={BASE_SAVINGS_SUMMARY}
-        motoIdealSummary={BASE_PROVISION_SUMMARY}
+        provisionPlanSummary={BASE_PROVISION_SUMMARY}
         provisionPlan={BASE_PROVISION_PLAN}
         onUpdateOpeningBalance={onUpdateOpeningBalance}
         onCreateSavingsBucket={onCreateSavingsBucket}
@@ -213,7 +211,7 @@ afterAll(() => {
   });
 });
 
-describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) => {
+describe.each(PLATFORM_SKIN_IDS)('SavingsAndProvisionsView on %s skin', (skin) => {
   it('places "+ Nuevo Fondo" below total savings and above funds list with separate Editar Fondo and Eliminar Fondo buttons', () => {
     const { toJSON } = renderView(skin);
 
@@ -222,17 +220,17 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) =>
     const addBtnIdx = order.indexOf('open-add-savings-bucket-button');
     const editBtnIdx = order.indexOf('bucket-action-edit-button');
     const deleteBtnIdx = order.indexOf('bucket-action-delete-button');
-    const motoCardIdx = order.indexOf('bucket-moto-card');
+    const reserveCardIdx = order.indexOf('bucket-reserve-card');
 
     expect(heroIdx).toBeGreaterThan(-1);
     expect(addBtnIdx).toBeGreaterThan(heroIdx);
     expect(editBtnIdx).toBeGreaterThan(addBtnIdx);
     expect(deleteBtnIdx).toBeGreaterThan(editBtnIdx);
-    expect(motoCardIdx).toBeGreaterThan(deleteBtnIdx);
+    expect(reserveCardIdx).toBeGreaterThan(deleteBtnIdx);
 
     // No per-fund edit or delete buttons are visible by default.
-    expect(screen.queryByTestId('edit-savings-bucket-moto')).toBeNull();
-    expect(screen.queryByTestId('delete-savings-bucket-moto')).toBeNull();
+    expect(screen.queryByTestId('edit-savings-bucket-reserve')).toBeNull();
+    expect(screen.queryByTestId('delete-savings-bucket-reserve')).toBeNull();
     expect(screen.queryByTestId('edit-savings-bucket-savings')).toBeNull();
     expect(screen.queryByTestId('delete-savings-bucket-savings')).toBeNull();
     expect(screen.queryByTestId('edit-savings-bucket-bucket_viaje')).toBeNull();
@@ -246,14 +244,14 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) =>
     expect(screen.getByText('Cancelar Edición')).toBeTruthy();
 
     // Only edit buttons appear on each fund card; delete buttons stay hidden.
-    expect(screen.getByTestId('edit-savings-bucket-moto')).toBeTruthy();
+    expect(screen.getByTestId('edit-savings-bucket-reserve')).toBeTruthy();
     expect(screen.getByTestId('edit-savings-bucket-savings')).toBeTruthy();
     expect(screen.getByTestId('edit-savings-bucket-bucket_viaje')).toBeTruthy();
-    expect(screen.queryByTestId('delete-savings-bucket-moto')).toBeNull();
+    expect(screen.queryByTestId('delete-savings-bucket-reserve')).toBeNull();
 
     // Select custom bucket to edit individually.
     fireEvent.press(screen.getByTestId('edit-savings-bucket-bucket_viaje'));
-    expect(screen.queryByTestId('edit-savings-bucket-moto')).toBeNull();
+    expect(screen.queryByTestId('edit-savings-bucket-reserve')).toBeNull();
     expect(screen.getByTestId('edit-savings-bucket-card')).toBeTruthy();
     expect(screen.getByTestId('edit-bucket-name-input').props.value).toBe('Fondo Viaje');
     expect(screen.getByTestId('edit-bucket-name-input').props.autoCapitalize).toBe('sentences');
@@ -267,13 +265,13 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) =>
 
     // Re-enter edit mode and update only the reserve fund.
     fireEvent.press(screen.getByTestId('bucket-action-edit-button'));
-    fireEvent.press(screen.getByTestId('edit-savings-bucket-moto'));
-    fireEvent.changeText(screen.getByTestId('edit-bucket-name-input'), 'Fondo Moto Personal');
+    fireEvent.press(screen.getByTestId('edit-savings-bucket-reserve'));
+    fireEvent.changeText(screen.getByTestId('edit-bucket-name-input'), 'Fondo de reserva personal');
     fireEvent.changeText(screen.getByTestId('edit-bucket-balance-input'), '1500000');
     fireEvent.press(screen.getByTestId('save-edit-bucket-button'));
 
     expect(onUpdateOpeningBalance).toHaveBeenCalledTimes(1);
-    expect(onUpdateOpeningBalance).toHaveBeenCalledWith('moto', 1_500_000, 'Fondo Moto Personal');
+    expect(onUpdateOpeningBalance).toHaveBeenCalledWith('reserve', 1_500_000, 'Fondo de reserva personal');
     expect(screen.queryByTestId('edit-savings-bucket-card')).toBeNull();
   });
 
@@ -283,10 +281,10 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) =>
     fireEvent.press(screen.getByTestId('bucket-action-delete-button'));
     expect(screen.getByText('Cancelar Eliminación')).toBeTruthy();
 
-    expect(screen.getByTestId('delete-savings-bucket-moto')).toBeTruthy();
+    expect(screen.getByTestId('delete-savings-bucket-reserve')).toBeTruthy();
     expect(screen.getByTestId('delete-savings-bucket-savings')).toBeTruthy();
     expect(screen.getByTestId('delete-savings-bucket-bucket_viaje')).toBeTruthy();
-    expect(screen.queryByTestId('edit-savings-bucket-moto')).toBeNull();
+    expect(screen.queryByTestId('edit-savings-bucket-reserve')).toBeNull();
 
     fireEvent.press(screen.getByTestId('delete-savings-bucket-bucket_viaje'));
     expect(onDeleteSavingsBucket).toHaveBeenCalledTimes(1);
@@ -294,7 +292,7 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) =>
 
     // Toggling off hides delete actions again.
     fireEvent.press(screen.getByTestId('bucket-action-delete-button'));
-    expect(screen.queryByTestId('delete-savings-bucket-moto')).toBeNull();
+    expect(screen.queryByTestId('delete-savings-bucket-reserve')).toBeNull();
   });
 
   it('switches cleanly between "+ Nuevo Fondo", edit mode, and delete mode for savings funds on desktop width', () => {
@@ -307,11 +305,11 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) =>
     // Entering edit mode closes the add form.
     fireEvent.press(screen.getByTestId('bucket-action-edit-button'));
     expect(screen.queryByTestId('add-savings-bucket-card')).toBeNull();
-    expect(screen.getByTestId('edit-savings-bucket-moto')).toBeTruthy();
+    expect(screen.getByTestId('edit-savings-bucket-reserve')).toBeTruthy();
 
     // Switching directly to delete mode replaces edit pills with delete pills.
     fireEvent.press(screen.getByTestId('bucket-action-delete-button'));
-    expect(screen.queryByTestId('edit-savings-bucket-moto')).toBeNull();
+    expect(screen.queryByTestId('edit-savings-bucket-reserve')).toBeNull();
     expect(screen.getByTestId('delete-savings-bucket-savings')).toBeTruthy();
 
     // Opening "+ Nuevo Fondo" clears delete mode and lets the user create a fund.
@@ -328,8 +326,8 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) =>
   it('renders separate Editar and Eliminar buttons below add button and hides per-item actions by default', () => {
     renderView(skin);
 
-    expect(screen.getByTestId('moto-ideal-item-prov-1')).toBeTruthy();
-    expect(screen.getByTestId('moto-target-goal-goal-1')).toBeTruthy();
+    expect(screen.getByTestId('provision-plan-item-prov-1')).toBeTruthy();
+    expect(screen.getByTestId('provision-target-goal-goal-1')).toBeTruthy();
 
     expect(screen.getByTestId('open-add-provision-button')).toBeTruthy();
     expect(screen.getByTestId('provision-action-edit-button')).toBeTruthy();
@@ -348,8 +346,8 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) =>
     fireEvent.press(screen.getByTestId('provision-action-edit-button'));
 
     // Exactly one row per item (no duplicate list) with only edit actions visible
-    expect(screen.getAllByTestId('moto-ideal-item-prov-1')).toHaveLength(1);
-    expect(screen.getAllByTestId('moto-target-goal-goal-1')).toHaveLength(1);
+    expect(screen.getAllByTestId('provision-plan-item-prov-1')).toHaveLength(1);
+    expect(screen.getAllByTestId('provision-target-goal-goal-1')).toHaveLength(1);
     expect(screen.getByTestId('edit-provision-prov-1')).toBeTruthy();
     expect(screen.getByTestId('edit-provision-goal-1')).toBeTruthy();
     expect(screen.queryByTestId('delete-provision-prov-1')).toBeNull();
@@ -359,14 +357,14 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) =>
     fireEvent.press(screen.getByTestId('edit-provision-prov-1'));
     expect(screen.queryByTestId('edit-provision-prov-1')).toBeNull();
     expect(screen.getByTestId('provision-form-card')).toBeTruthy();
-    expect(screen.getByTestId('provision-name-input').props.value).toBe('Seguro Moto');
+    expect(screen.getByTestId('provision-name-input').props.value).toBe('Seguro Carro');
 
-    fireEvent.changeText(screen.getByTestId('provision-name-input'), 'Seguro Moto 2027');
+    fireEvent.changeText(screen.getByTestId('provision-name-input'), 'Seguro Carro 2027');
     fireEvent.press(screen.getByTestId('submit-provision-button'));
 
     expect(onSaveProvisionItem).toHaveBeenCalledWith({
       id: 'prov-1',
-      name: 'Seguro Moto 2027',
+      name: 'Seguro Carro 2027',
       amount: 600_000,
       periodMonths: 12,
       priority: '1. Alta',
@@ -380,8 +378,8 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) =>
 
     fireEvent.press(screen.getByTestId('provision-action-delete-button'));
 
-    expect(screen.getAllByTestId('moto-ideal-item-prov-1')).toHaveLength(1);
-    expect(screen.getAllByTestId('moto-target-goal-goal-1')).toHaveLength(1);
+    expect(screen.getAllByTestId('provision-plan-item-prov-1')).toHaveLength(1);
+    expect(screen.getAllByTestId('provision-target-goal-goal-1')).toHaveLength(1);
     expect(screen.getByTestId('delete-provision-prov-1')).toBeTruthy();
     expect(screen.getByTestId('delete-provision-goal-1')).toBeTruthy();
     expect(screen.queryByTestId('edit-provision-prov-1')).toBeNull();
@@ -419,7 +417,7 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) =>
   });
 });
 
-describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView form state on %s skin', (skin) => {
+describe.each(PLATFORM_SKIN_IDS)('SavingsAndProvisionsView form state on %s skin', (skin) => {
   it('typing in the new fund form does not re-render the funds or the provisions', () => {
     const { onCreateSavingsBucket } = renderView(skin);
     fireEvent.press(screen.getByTestId('open-add-savings-bucket-button'));
@@ -456,7 +454,7 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView form state on %s skin'
     fireEvent.press(screen.getByTestId('open-add-provision-button'));
     mockStatusBadgeRender.mockClear();
 
-    fireEvent.changeText(screen.getByTestId('provision-name-input'), 'SOAT');
+    fireEvent.changeText(screen.getByTestId('provision-name-input'), 'Seguro anual');
     fireEvent.changeText(screen.getByTestId('provision-amount-input'), '690.000');
     fireEvent.changeText(screen.getByTestId('provision-months-input'), '12');
     fireEvent.changeText(screen.getByTestId('provision-notes-input'), 'Vence en marzo');
@@ -465,7 +463,7 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView form state on %s skin'
 
     fireEvent.press(screen.getByTestId('submit-provision-button'));
     expect(onSaveProvisionItem).toHaveBeenCalledWith({
-      name: 'SOAT',
+      name: 'Seguro anual',
       amount: 690_000,
       periodMonths: 12,
       priority: '1. Alta',
@@ -492,7 +490,7 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView form state on %s skin'
 
     fireEvent.press(screen.getByTestId('provision-action-edit-button'));
     fireEvent.press(screen.getByTestId('edit-provision-prov-1'));
-    expect(screen.getByTestId('provision-name-input').props.value).toBe('Seguro Moto');
+    expect(screen.getByTestId('provision-name-input').props.value).toBe('Seguro Carro');
     expect(screen.getByTestId('provision-amount-input').props.value).toBe('600.000');
     expect(screen.getByTestId('provision-months-input').props.value).toBe('12');
   });
@@ -556,9 +554,9 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView form state on %s skin'
     render(
       <BFlowThemeProvider skin={skin} initialMode="dark">
         <AmountPrivacyProvider initialHidden>
-          <SavingsAndMotoIdealView
+          <SavingsAndProvisionsView
             savingsSummary={BASE_SAVINGS_SUMMARY}
-            motoIdealSummary={BASE_PROVISION_SUMMARY}
+            provisionPlanSummary={BASE_PROVISION_SUMMARY}
             provisionPlan={BASE_PROVISION_PLAN}
             onSaveProvisionItem={jest.fn()}
           />
@@ -579,9 +577,9 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView form state on %s skin'
     const { rerender } = render(
       <BFlowThemeProvider skin={skin} initialMode="dark">
         <TabVisibilityProvider isActive>
-          <SavingsAndMotoIdealView
+          <SavingsAndProvisionsView
             savingsSummary={BASE_SAVINGS_SUMMARY}
-            motoIdealSummary={BASE_PROVISION_SUMMARY}
+            provisionPlanSummary={BASE_PROVISION_SUMMARY}
             provisionPlan={BASE_PROVISION_PLAN}
             onSaveProvisionItem={jest.fn()}
             onDeleteProvisionItem={jest.fn()}
@@ -602,9 +600,9 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView form state on %s skin'
     rerender(
       <BFlowThemeProvider skin={skin} initialMode="dark">
         <TabVisibilityProvider isActive={false}>
-          <SavingsAndMotoIdealView
+          <SavingsAndProvisionsView
             savingsSummary={BASE_SAVINGS_SUMMARY}
-            motoIdealSummary={BASE_PROVISION_SUMMARY}
+            provisionPlanSummary={BASE_PROVISION_SUMMARY}
             provisionPlan={BASE_PROVISION_PLAN}
             onSaveProvisionItem={jest.fn()}
             onDeleteProvisionItem={jest.fn()}
@@ -618,9 +616,9 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView form state on %s skin'
     rerender(
       <BFlowThemeProvider skin={skin} initialMode="dark">
         <TabVisibilityProvider isActive>
-          <SavingsAndMotoIdealView
+          <SavingsAndProvisionsView
             savingsSummary={BASE_SAVINGS_SUMMARY}
-            motoIdealSummary={BASE_PROVISION_SUMMARY}
+            provisionPlanSummary={BASE_PROVISION_SUMMARY}
             provisionPlan={BASE_PROVISION_PLAN}
             onSaveProvisionItem={jest.fn()}
             onDeleteProvisionItem={jest.fn()}
@@ -634,9 +632,9 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView form state on %s skin'
     rerender(
       <BFlowThemeProvider skin={skin} initialMode="dark">
         <TabVisibilityProvider isActive>
-          <SavingsAndMotoIdealView
+          <SavingsAndProvisionsView
             savingsSummary={{ ...BASE_SAVINGS_SUMMARY, monthKey: '2026-11' }}
-            motoIdealSummary={BASE_PROVISION_SUMMARY}
+            provisionPlanSummary={BASE_PROVISION_SUMMARY}
             provisionPlan={BASE_PROVISION_PLAN}
             onSaveProvisionItem={jest.fn()}
             onDeleteProvisionItem={jest.fn()}
@@ -648,7 +646,7 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView form state on %s skin'
   });
 
   it('persists targetMonthKey and calculates monthly saving when adding a goal in the store', async () => {
-    useBudgetStore.getState().resetToOctober2026GoldenState();
+    useBudgetStore.getState().resetToSampleWorkspace();
 
     await act(async () => {
       await useBudgetStore.getState().saveProvisionItem({
@@ -662,7 +660,7 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView form state on %s skin'
 
     const state = useBudgetStore.getState();
     const summary = calculateProvisionPlanSummary(
-      state.idealMotoPlan,
+      state.provisionPlan,
       state.entries,
       0,
       state.activeMonthKey

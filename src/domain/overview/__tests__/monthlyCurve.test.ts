@@ -1,4 +1,4 @@
-import seedFixture from '../../../../fixtures/seed-october-2026.json';
+import { buildSampleWorkspace } from '../../../data/sample/sampleWorkspace';
 import { calculateMonthlyBudgetSummary } from '../../budget/budgetCalculator';
 import { calculateDebtsSummary } from '../../debts/debtCalculator';
 import type {
@@ -11,11 +11,14 @@ import type {
 import { calculateMonthlySavingsSummary } from '../../savings/savingsCalculator';
 import { buildMonthlyCurve, MONTHLY_CURVE_METRIC_IDS } from '../monthlyCurve';
 
-const SEED_CONCEPTS = seedFixture.concepts as unknown as Concept[];
-const SEED_ENTRIES = seedFixture.entries as unknown as MonthEntry[];
-const SEED_PAYMENTS = seedFixture.debtPayments as unknown as DebtPayment[];
-const SEED_DEBTS = seedFixture.debts as unknown as Debt[];
-const SEED_BUCKETS = seedFixture.savingsBuckets as unknown as SavingsBucket[];
+/** The example budget of the showcase mode, in the month the tests pin. */
+const sample = buildSampleWorkspace();
+
+const SAMPLE_CONCEPTS = sample.concepts as unknown as Concept[];
+const SAMPLE_ENTRIES = sample.entries as unknown as MonthEntry[];
+const SAMPLE_PAYMENTS = sample.debtPayments as unknown as DebtPayment[];
+const SAMPLE_DEBTS = sample.debts as unknown as Debt[];
+const SAMPLE_BUCKETS = sample.savingsBuckets as unknown as SavingsBucket[];
 
 interface Scenario {
   monthKey?: string;
@@ -31,11 +34,11 @@ function curveFor(scenario: Scenario = {}) {
   const {
     monthKey = '2026-10',
     todayIso = '2026-10-27',
-    entries = SEED_ENTRIES,
-    concepts = SEED_CONCEPTS,
-    payments = SEED_PAYMENTS,
-    debts = SEED_DEBTS,
-    buckets = SEED_BUCKETS,
+    entries = SAMPLE_ENTRIES,
+    concepts = SAMPLE_CONCEPTS,
+    payments = SAMPLE_PAYMENTS,
+    debts = SAMPLE_DEBTS,
+    buckets = SAMPLE_BUCKETS,
   } = scenario;
   const budget = calculateMonthlyBudgetSummary(entries, monthKey);
 
@@ -85,7 +88,7 @@ function lastValue(values: readonly number[]): number | undefined {
 }
 
 describe('buildMonthlyCurve', () => {
-  it('ends every series on the October 2026 golden figures and projects the month end', () => {
+  it('ends every series on the sample month golden figures and projects the month end', () => {
     const { series, cutoffDay, daysInMonth, isCurrentMonth, hasProjection } = curveFor();
 
     expect({ cutoffDay, daysInMonth, isCurrentMonth, hasProjection }).toEqual({
@@ -127,8 +130,8 @@ describe('buildMonthlyCurve', () => {
   });
 
   it('projects a pending installment without moving the debt before it is paid', () => {
-    const entries = SEED_ENTRIES.map((candidate) =>
-      candidate.conceptId === 'exp_cuota_funfami'
+    const entries = SAMPLE_ENTRIES.map((candidate) =>
+      candidate.conceptId === 'exp_loan_installment'
         ? { ...candidate, status: 'pending' as const, completedAt: undefined }
         : candidate
     );
@@ -139,12 +142,12 @@ describe('buildMonthlyCurve', () => {
   });
 
   it('never projects a debt below zero', () => {
-    const entries = SEED_ENTRIES.map((candidate) =>
-      candidate.conceptId === 'exp_cuota_funfami'
+    const entries = SAMPLE_ENTRIES.map((candidate) =>
+      candidate.conceptId === 'exp_loan_installment'
         ? { ...candidate, status: 'pending' as const, completedAt: undefined }
         : candidate
     );
-    const debts = [{ ...(SEED_DEBTS[0] as Debt), openingBalance: 500_000 }];
+    const debts = [{ ...(SAMPLE_DEBTS[0] as Debt), openingBalance: 500_000 }];
 
     expect(curveFor({ entries, debts, payments: [] }).series.debt.projectedClose).toBe(0);
   });
@@ -209,7 +212,7 @@ describe('buildMonthlyCurve', () => {
       { id: 'p2', entryId: 'pending', monthKey: '2026-10', debtId: 'd', principalAmount: 9, interestAmount: 0, totalApplied: 9, active: true },
       { id: 'p3', entryId: 'e1', monthKey: '2026-09', debtId: 'd', principalAmount: 9, interestAmount: 0, totalApplied: 9, active: true },
     ];
-    const debts = [{ ...(SEED_DEBTS[0] as Debt), id: 'd', openingBalance: 1_000 }];
+    const debts = [{ ...(SAMPLE_DEBTS[0] as Debt), id: 'd', openingBalance: 1_000 }];
     const { series } = curveFor({ entries, payments, debts, concepts: [] });
 
     expect(lastValue(series.income.values)).toBe(500);
@@ -222,7 +225,7 @@ describe('buildMonthlyCurve', () => {
     const payments: DebtPayment[] = [
       { id: 'p1', entryId: 'e1', monthKey: '2026-10', debtId: 'd', principalAmount: 40, interestAmount: 0, totalApplied: 40, completedAt: '2026-10-12', active: true },
     ];
-    const debts = [{ ...(SEED_DEBTS[0] as Debt), id: 'd', openingBalance: 1_000 }];
+    const debts = [{ ...(SAMPLE_DEBTS[0] as Debt), id: 'd', openingBalance: 1_000 }];
     const { values } = curveFor({ entries, payments, debts, concepts: [] }).series.debt;
 
     expect(values[11]).toBe(1_000);
@@ -230,7 +233,7 @@ describe('buildMonthlyCurve', () => {
   });
 
   it('leaves net flow out of savings when there is no general savings bucket', () => {
-    const buckets = SEED_BUCKETS.filter((bucket) => bucket.id !== 'savings');
+    const buckets = SAMPLE_BUCKETS.filter((bucket) => bucket.id !== 'savings');
     const { savings } = curveFor({ buckets }).series;
 
     expect(savings.values[0]).toBe(1_600_000);
@@ -270,7 +273,7 @@ describe('buildMonthlyCurve', () => {
     const payments: DebtPayment[] = [
       { id: 'p1', entryId: 'e1', monthKey: '2026-10', debtId: 'd', principalAmount: 900, interestAmount: 0, totalApplied: 900, active: true },
     ];
-    const debts = [{ ...(SEED_DEBTS[0] as Debt), id: 'd', openingBalance: 300 }];
+    const debts = [{ ...(SAMPLE_DEBTS[0] as Debt), id: 'd', openingBalance: 300 }];
     const { values } = curveFor({ entries, payments, debts, concepts: [] }).series.debt;
 
     expect(lastValue(values)).toBe(0);

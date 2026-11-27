@@ -52,9 +52,9 @@ Las hojas de cálculo personales tradicionales son herramientas potentes pero pr
 ```mermaid
 graph TD
     A[BFlow App Core] --> B[1. Presupuesto & Checklist Mensual]
-    A --> C[2. Control Deuda FUNFAMI]
-    A --> D[3. Ahorros & Fondo Moto]
-    A --> E[4. Provisión Moto IDEAL]
+    A --> C[2. Control de Deudas]
+    A --> D[3. Ahorros & Fondo de Reserva]
+    A --> E[4. Provisiones y Metas]
     A --> F[5. Analítica & Historial Mes a Mes]
     A --> G[6. Cuenta, Auth & Sincronización]
 ```
@@ -69,20 +69,20 @@ graph TD
   - Al marcar un concepto no recurrente múltiple como completado, este desaparece del selector de "Agregar Movimiento" del mes en curso y reaparece automáticamente en el mes siguiente.
   - Al desmarcar o borrar un movimiento, el concepto se vuelve a habilitar de inmediato.
 
-### 2. Control de Deuda FUNFAMI
+### 2. Control de Deudas
 - **Derivación Pura del Saldo:** El saldo restante nunca se almacena de forma mutable para prevenir desfases; se deriva estrictamente como:
-  $$\text{SaldoActual}(d) = \text{SaldoApertura}(d) - \sum \text{AbonosActivosAprobados}(d)$$
-- **Abonos a Capital:** La cuota mensual de `$ 1.800.000` abona 100% a capital cuando se marca pagada en el presupuesto, descontándose prioritariamente de la deuda `CB300F - MOTO` (`$ 4.400.000` $\to$ `$ 2.600.000`), manteniendo `ESP. IA` en `$ 3.600.000` y el total del grupo en `$ 6.200.000`.
+  $\text{SaldoActual}(d) = \text{SaldoApertura}(d) - \sum \text{AbonosActivosAprobados}(d)$
+- **Abonos a Capital:** La cuota de un concepto vinculado a deudas abona 100% a capital cuando se marca pagada. Va primero a la deuda objetivo del concepto y el resto pasa a las demás del grupo, ordenadas por id (ADR 0036).
 
-### 3. Ahorros y Fondo Moto
+### 3. Ahorros y Fondo de Reserva
 - **Posición de Caja Doble:**
-  - **Saldo en Vivo:** Apertura mes pasado + Flujo Neto del mes (`$ 2.080.000` en octubre 2026).
-  - **Saldo Proyectado tras Pendientes:** Saldo en vivo menos los gastos pendientes restantes (`$ 2.080.000 - $ 450.000 = $ 1.630.000`), protegiendo al usuario de asumir liquidez que ya está comprometida.
-- **Fondo Moto:** Acumula automáticamente los aportes vinculados que ya están pagados (`CB300F` + `Gasolina Moto/Carro` = `$ 2.300.000` en octubre 2026).
+  - **Saldo en Vivo:** Apertura del mes más el flujo neto del mes.
+  - **Saldo Proyectado tras Pendientes:** Saldo en vivo menos los gastos pendientes, para no contar con liquidez ya comprometida.
+- **Fondo de Reserva y fondos propios:** Acumulan automáticamente los aportes vinculados que ya están pagados.
 
-### 4. Provisión "Moto IDEAL"
-- **Costos Recurrentes de Operación:** SOAT, Impuestos, Casco, Llantas, Mantenimiento, Parqueadero, Cambio de Aceite y Gasolina, calculados con redondeo hacia arriba en enteros COP (`Math.ceil(anual / 12)` = `$ 872.667`/mes).
-- **Metas Puntuales (`TargetGoal`):** Como el `Kit de arrastre Honda original ($ 500.000)` con fecha objetivo `Agosto 2027`, permitiendo comparar la provisión ideal frente al aporte real al fondo de la moto.
+### 4. Provisiones y Metas
+- **Provisiones recurrentes:** Gastos periódicos (seguros, impuestos, mantenimiento…) convertidos a cuota mensual con redondeo hacia arriba en enteros COP (`Math.ceil(costo / meses)`).
+- **Metas Puntuales (`TargetGoal`):** Un monto con fecha objetivo y el ahorro mensual sugerido para llegar, comparados con el aporte real.
 
 ### 5. Analítica & Historial Mes a Mes
 - Cierres mensuales inmutables mediante `MonthSnapshot`.
@@ -181,9 +181,9 @@ Toda la información del usuario vive de forma estrictamente privada bajo `users
 users/{uid}
 ├── concepts/{conceptId}          # Catálogo personal de ingresos y gastos
 ├── entries/{entryId}             # Movimientos mensuales (${monthKey}_${conceptId})
-├── debts/{debtId}                # Deudas registradas (FUNFAMI, etc.)
+├── debts/{debtId}                # Deudas registradas
 ├── debtPayments/{paymentId}      # Abonos aplicados a cada crédito
-├── savingsBuckets/{bucketId}     # Fondos de ahorro (Moto, General)
+├── savingsBuckets/{bucketId}     # Fondos de ahorro (reserva, ahorros y los propios)
 ├── provisionPlans/{planId}       # Plan IDEAL de provisiones y metas
 └── monthSnapshots/{monthKey}     # Cierres mensuales inmutables
 ```
@@ -238,11 +238,12 @@ BFlow/
 ├── scripts/                      # Scripts de utilidad (linting, guardias CI, start-demo.mjs del modo vitrina)
 ├── src/
 │   ├── app/                      # Expo Router (punto de entrada _layout.tsx, index.tsx)
-│   ├── data/                     # Repositorios Firestore, esquemas Zod, seeds
+│   ├── data/                     # Repositorios Firestore, esquemas Zod, datos de ejemplo
 │   │   ├── firebase/             # Configuración Firebase SDK, persistencia Auth por plataforma y emulador
 │   │   ├── mappers/              # Esquemas de validación Zod
-│   │   ├── repositories/         # budgetRepository.ts (acceso a datos) y historyWindow.ts (historial archivado en la carga completa, ADR 0028)
-│   │   └── seed/                 # Carga de datos iniciales de octubre 2026
+│   │   ├── repositories/         # budgetRepository.ts (fachada), firestoreBudgetRepository.ts, accountHydration.ts (pasos de la carga completa) y historyWindow.ts (historial archivado, ADR 0028)
+│   │   ├── migrations/           # legacyFieldMigration.ts: nombres guardados por versiones anteriores (ADR 0037)
+│   │   └── sample/               # Presupuesto de ejemplo del modo vitrina y los tests
 │   ├── design-system/            # Tokens por piel (iOS / Android / Web), tema, componentes base y movimiento (motion/)
 │   │   ├── components/           # AppPressable, AppText, CurrencyText, ResponsiveColumns…
 │   │   │   ├── charts/           # Gráficos animados SVG: barras, línea y dona (ADR 0020)
@@ -325,7 +326,6 @@ BFlow/
    | :--- | :--- | :--- |
    | `EXPO_PUBLIC_FIREBASE_API_KEY`, `EXPO_PUBLIC_FIREBASE_PROJECT_ID`, `EXPO_PUBLIC_FIREBASE_APP_ID` | Sí | Sin ellas la app no se conecta a Firebase y lo indica al iniciar sesión |
    | `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN`, `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET`, `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | No | Resto de la configuración del cliente (`AUTH_DOMAIN` hace falta para entrar con Google en Web) |
-   | `EXPO_PUBLIC_OWNER_SEED_EMAIL` | No | Correo de la cuenta que recibe la semilla de octubre de 2026; vacío, todas las cuentas arrancan sin datos |
    | `EXPO_PUBLIC_LOCAL_CIPHER_PEPPER` | No | Palabra secreta del cifrado local (ADR 0016) |
 
    Los tests y `npm run web:demo` no necesitan ninguna: usan un proyecto ficticio sin conexión. Los workflows de build leen las mismas variables de GitHub (Settings → Secrets and variables → Actions → Variables) y fallan si faltan las obligatorias.

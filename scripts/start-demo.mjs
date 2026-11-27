@@ -2,8 +2,8 @@
 /**
  * scripts/start-demo.mjs
  *
- * Arranca Expo en modo vitrina (EXPO_PUBLIC_BFLOW_DEMO=1): sesión demo local con el seed de
- * octubre 2026 y sin Firebase. Sirve para revisar las tres pieles (iOS, Android, Web) desde el
+ * Arranca Expo en modo vitrina (EXPO_PUBLIC_BFLOW_DEMO=1): sesión demo local con el presupuesto
+ * de ejemplo (src/data/sample/sampleWorkspace.ts) en el mes actual y sin Firebase. Sirve para revisar las tres pieles (iOS, Android, Web) desde el
  * navegador con `?skin=ios|android|web` y `?theme=dark|light`.
  *
  *   npm run web:demo                 # http://localhost:8081

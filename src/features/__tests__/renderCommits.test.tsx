@@ -10,7 +10,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
 import PhaseOneHomeScreen from '../../app/index';
 import { BFlowThemeProvider } from '../../design-system/theme/ThemeContext';
-import { DEMO_OWNER_USER } from '../../platform/auth/authAdapter';
+import { DEMO_USER } from '../../platform/auth/authAdapter';
 import { triggerWidgetSync } from '../budget/store/slices/sliceTypes';
 import { useBudgetStore } from '../budget/store/useBudgetStore';
 
@@ -191,8 +191,8 @@ function takeCounts(): Counts {
 
 describe('Fase 5: renders por acción', () => {
   beforeEach(() => {
-    useBudgetStore.setState({ authUser: DEMO_OWNER_USER, needsOnboarding: false });
-    useBudgetStore.getState().resetToOctober2026GoldenState();
+    useBudgetStore.setState({ authUser: DEMO_USER, needsOnboarding: false });
+    useBudgetStore.getState().resetToSampleWorkspace();
     takeCounts();
   });
 
@@ -234,7 +234,7 @@ describe('Fase 5: renders por acción', () => {
         debtsByMonth: { ...state.debtsByMonth },
         debtPayments: [...state.debtPayments],
         savingsBucketsByMonth: { ...state.savingsBucketsByMonth },
-        provisionPlan: state.idealMotoPlan,
+        provisionPlan: state.provisionPlan,
         closedSnapshots: state.closedSnapshots,
         needsOnboarding: false,
       });
@@ -244,7 +244,7 @@ describe('Fase 5: renders por acción', () => {
     const entry = store
       .getState()
       .entries.find((e) => e.monthKey === store.getState().activeMonthKey);
-    if (!entry) throw new Error('El seed de octubre debe tener movimientos');
+    if (!entry) throw new Error('El sample de octubre debe tener movimientos');
     const visibleRows = store
       .getState()
       .entries.filter((e) => e.monthKey === store.getState().activeMonthKey).length;
@@ -397,7 +397,7 @@ describe('Fase 5: renders por acción', () => {
 
       const monthKey = store.getState().activeMonthKey;
       const entry = store.getState().entries.find((e) => e.monthKey === monthKey);
-      if (!entry) throw new Error('El seed de octubre debe tener movimientos');
+      if (!entry) throw new Error('El sample de octubre debe tener movimientos');
       await act(async () => {
         fireEvent.press(screen.getByTestId(`checklist-workspace-item-${entry.id}`));
       });

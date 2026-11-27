@@ -288,10 +288,6 @@ export interface ColorPalette {
     reserveSoft: string;
     provisions: string;
     provisionsSoft: string;
-    /** @deprecated use reserve */
-    moto: string;
-    /** @deprecated use reserveSoft */
-    motoSoft: string;
     savings: string;
     savingsSoft: string;
   };
@@ -349,8 +345,6 @@ export const palettes: Record<ThemeMode, ColorPalette> = {
       reserveSoft: 'rgba(79, 143, 234, 0.10)',
       provisions: '#4F8FEA',
       provisionsSoft: 'rgba(79, 143, 234, 0.10)',
-      moto: '#4F8FEA',
-      motoSoft: 'rgba(79, 143, 234, 0.10)',
       savings: '#9D7FE6',
       savingsSoft: 'rgba(157, 127, 230, 0.10)',
     },
@@ -400,8 +394,6 @@ export const palettes: Record<ThemeMode, ColorPalette> = {
       reserveSoft: 'rgba(36, 95, 159, 0.10)',
       provisions: '#245F9F',
       provisionsSoft: 'rgba(36, 95, 159, 0.10)',
-      moto: '#245F9F',
-      motoSoft: 'rgba(36, 95, 159, 0.10)',
       savings: '#5F3DA6',
       savingsSoft: 'rgba(95, 61, 166, 0.10)',
     },
@@ -458,8 +450,6 @@ export const androidPalettes: Record<ThemeMode, ColorPalette> = {
       reserveSoft: 'rgba(79, 143, 234, 0.10)',
       provisions: '#4F8FEA',
       provisionsSoft: 'rgba(79, 143, 234, 0.10)',
-      moto: '#4F8FEA',
-      motoSoft: 'rgba(79, 143, 234, 0.10)',
       savings: '#9D7FE6',
       savingsSoft: 'rgba(157, 127, 230, 0.10)',
     },
@@ -509,8 +499,6 @@ export const androidPalettes: Record<ThemeMode, ColorPalette> = {
       reserveSoft: 'rgba(36, 95, 159, 0.10)',
       provisions: '#245F9F',
       provisionsSoft: 'rgba(36, 95, 159, 0.10)',
-      moto: '#245F9F',
-      motoSoft: 'rgba(36, 95, 159, 0.10)',
       savings: '#5F3DA6',
       savingsSoft: 'rgba(95, 61, 166, 0.10)',
     },
@@ -568,8 +556,6 @@ export const webPalettes: Record<ThemeMode, ColorPalette> = {
       reserveSoft: 'rgba(111, 164, 240, 0.12)',
       provisions: '#6FA4F0',
       provisionsSoft: 'rgba(111, 164, 240, 0.12)',
-      moto: '#6FA4F0',
-      motoSoft: 'rgba(111, 164, 240, 0.12)',
       savings: '#E08FB8',
       savingsSoft: 'rgba(224, 143, 184, 0.12)',
     },
@@ -619,8 +605,6 @@ export const webPalettes: Record<ThemeMode, ColorPalette> = {
       reserveSoft: 'rgba(31, 85, 144, 0.10)',
       provisions: '#1F5590',
       provisionsSoft: 'rgba(31, 85, 144, 0.10)',
-      moto: '#1F5590',
-      motoSoft: 'rgba(31, 85, 144, 0.10)',
       savings: '#8A3A66',
       savingsSoft: 'rgba(138, 58, 102, 0.10)',
     },

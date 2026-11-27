@@ -9,7 +9,7 @@
 export type ConceptType = 'income' | 'expense';
 export type ConceptGroup = 'fixed' | 'variable';
 export type EntryStatus = 'pending' | 'completed';
-export type SavingsBucketId = 'reserve' | 'savings' | 'moto' | (string & {});
+export type SavingsBucketId = 'reserve' | 'savings' | (string & {});
 export type DebtInterestRateType = 'monthly' | 'annual';
 
 export type MonthNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
@@ -37,8 +37,6 @@ export interface Concept {
   defaultTargetDebtId?: string;
   savingsContribution?: SavingsContributionRule;
   provisionCategoryKey?: string;
-  /** @deprecated use provisionCategoryKey */
-  idealMotoCategoryKey?: string;
   archived: boolean;
   order: number;
 }
@@ -131,7 +129,6 @@ export interface SavingsBucket {
 
 export interface ProvisionItemSpec {
   id: string;
-  excelRawName?: string;
   displayName: string;
   monthlyAmountCop: number;
   monthlyAmount?: number;
@@ -145,7 +142,6 @@ export interface ProvisionItemSpec {
   targetAmount?: number;
   targetMonthKey?: string;
   targetDateIso?: string;
-  includedInExcelTotalB43?: boolean;
   kind: 'recurring_provision' | 'target_goal';
   notes?: string;
 }
@@ -158,8 +154,6 @@ export interface ProvisionPlan {
   totalWithTargetGoal?: number;
 }
 
-/** @deprecated use ProvisionPlan */
-export type IdealMotoPlan = ProvisionPlan;
 
 export interface GroupBudgetBreakdown {
   planned: number;
@@ -217,8 +211,7 @@ export interface MonthSnapshot {
   }>;
   totalClosingDebt: number;
   closingSavings: {
-    reserveClosingBalance?: number;
-    motoClosingBalance: number;
+    reserveClosingBalance: number;
     savingsClosingBalance: number;
     totalClosingSavings: number;
     buckets?: ReadonlyArray<{

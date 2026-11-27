@@ -17,7 +17,7 @@ export interface SavingsTrendChartsProps {
   history: readonly MonthlyHistoryPoint[];
 }
 
-const RESERVE_BUCKET_IDS = new Set(['reserve', 'moto']);
+const RESERVE_BUCKET_IDS = new Set(['reserve']);
 
 export function SavingsTrendCharts({ history }: SavingsTrendChartsProps): React.JSX.Element {
   const { colors } = useBFlowTheme();

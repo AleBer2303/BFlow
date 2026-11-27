@@ -16,7 +16,7 @@ import {
   FirestoreBudgetRepository,
   type FullCloudAccountData,
 } from '../repositories/budgetRepository';
-import { buildOctober2026SeedPayload } from '../seed/october2026SeedData';
+import { buildSampleWorkspace } from '../sample/sampleWorkspace';
 
 interface MockConstraint {
   field: string;
@@ -69,8 +69,8 @@ const CLOSED_MONTHS = MONTHS.slice(0, -1);
 /** Con 19 cerrados y una ventana de 12, los 7 primeros son el historial archivado. */
 const CUTOFF_MONTH = '2025-08';
 
-const seed = buildOctober2026SeedPayload();
-const ENTRIES_PER_MONTH = seed.entries.length;
+const sample = buildSampleWorkspace();
+const ENTRIES_PER_MONTH = sample.entries.length;
 
 function matches(data: Record<string, unknown>, constraint: MockConstraint): boolean {
   const value = data[constraint.field];
@@ -98,11 +98,11 @@ function createCloud(): MockCloud {
   };
 
   const entries: MonthEntry[] = MONTHS.flatMap((monthKey) =>
-    seed.entries.map((entry) => ({ ...entry, id: `${monthKey}_${entry.conceptId}`, monthKey }))
+    sample.entries.map((entry) => ({ ...entry, id: `${monthKey}_${entry.conceptId}`, monthKey }))
   );
   cloud.collections.set(
     `users/${UID}/concepts`,
-    seed.concepts.map((c) => ({ id: c.id, data: serializeConceptForFirestore(c) }))
+    sample.concepts.map((c) => ({ id: c.id, data: serializeConceptForFirestore(c) }))
   );
   cloud.collections.set(
     ENTRIES_PATH,
@@ -119,7 +119,7 @@ function createCloud(): MockCloud {
         closeMonthAndRollover({
           closingMonthKey: monthKey,
           closedAtIso: `${monthKey}-28T23:00:00.000Z`,
-          concepts: seed.concepts,
+          concepts: sample.concepts,
           entries: entries.filter((e) => e.monthKey === monthKey),
           debts: [],
           savingsBuckets: [],
@@ -241,7 +241,7 @@ describe('loadFullCloudAccount con historial archivado (ADR 0028)', () => {
   });
 
   it('aplica un cambio hecho desde otro dispositivo en un mes archivado', async () => {
-    const edited = entryDoc(cloud, `2025-03_${seed.entries[0]!.conceptId}`);
+    const edited = entryDoc(cloud, `2025-03_${sample.entries[0]!.conceptId}`);
     edited.data = { ...edited.data, actualAmount: 987_654, updatedAt: new Date().toISOString() };
 
     const bounded = await reload();
@@ -252,7 +252,7 @@ describe('loadFullCloudAccount con historial archivado (ADR 0028)', () => {
   });
 
   it('si otro dispositivo borró un movimiento archivado, el conteo no cuadra y descarga todo', async () => {
-    const removedId = `2025-02_${seed.entries[0]!.conceptId}`;
+    const removedId = `2025-02_${sample.entries[0]!.conceptId}`;
     cloud.collections.set(
       ENTRIES_PATH,
       (cloud.collections.get(ENTRIES_PATH) ?? []).filter((item) => item.id !== removedId)

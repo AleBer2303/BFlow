@@ -135,7 +135,7 @@ export const ActionModeToggleRow = React.memo(function ActionModeToggleRow({
 
 export interface InlineItemActionPillProps {
   mode: ListActionMode;
-  /** Read after "Editar" / "Eliminar" by screen readers: "Editar deuda Moto". */
+  /** Read after "Editar" / "Eliminar" by screen readers: "Editar deuda Tarjeta". */
   itemName: string;
   editTestID: string;
   deleteTestID: string;

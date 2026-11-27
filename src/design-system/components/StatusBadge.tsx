@@ -11,7 +11,6 @@ export type BadgeStatus =
   | 'info'
   | 'reserve'
   | 'provisions'
-  | 'moto'
   | 'debt'
   | 'savings'
   | 'expense';
@@ -43,7 +42,6 @@ export function StatusBadge({
     savings: { bg: colors.semantic.savingsSoft, fg: colors.semantic.savings },
     reserve: { bg: colors.semantic.reserveSoft, fg: colors.semantic.reserve },
     provisions: { bg: colors.semantic.provisionsSoft, fg: colors.semantic.provisions },
-    moto: { bg: colors.semantic.reserveSoft, fg: colors.semantic.reserve },
     debt: { bg: colors.semantic.debtSoft, fg: colors.semantic.debt },
     expense: { bg: colors.semantic.expenseSoft, fg: colors.semantic.expense },
   };

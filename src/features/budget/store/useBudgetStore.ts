@@ -2,7 +2,7 @@
  * src/features/budget/store/useBudgetStore.ts
  *
  * Reactive Zustand store for BFlow orchestrating domain calculators,
- * Authentication Gate, persistent cloud session, October 2026 golden seed data,
+ * Authentication Gate, persistent cloud session, example budget for the showcase mode,
  * month rollover and real-time Cloud Firestore synchronization.
  *
  * Modularized into focused domain slices:

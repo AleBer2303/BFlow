@@ -15,7 +15,7 @@ import { useBudgetStore } from '../useBudgetStore';
 
 const realUser: BFlowAuthUser = {
   uid: 'uid_cloud_test_repo_getter',
-  email: 'demo.owner@bflow.example',
+  email: 'demo@bflow.example',
   displayName: 'Demo',
   authProvider: 'password',
   provider: 'firebase',
@@ -25,8 +25,8 @@ describe('getBudgetRepository (OPT-06)', () => {
   beforeEach(() => {
     __setBudgetRepositoryForTests(null);
     clearOfflineWriteQueue(realUser.uid);
-    useBudgetStore.getState().resetToOctober2026GoldenState();
-    useBudgetStore.getState().setAuthUser(realUser);
+    useBudgetStore.getState().resetToSampleWorkspace();
+    useBudgetStore.setState({ authUser: realUser });
   });
 
   afterEach(() => {
@@ -41,7 +41,7 @@ describe('getBudgetRepository (OPT-06)', () => {
     jest.spyOn(FirestoreBudgetRepository.prototype, 'saveDebt').mockResolvedValue();
 
     const [first, second] = useBudgetStore.getState().entries;
-    if (!first || !second) throw new Error('Expected seeded entries');
+    if (!first || !second) throw new Error('Expected sample entries');
     await useBudgetStore.getState().toggleEntryStatus(first.id);
     await useBudgetStore.getState().toggleEntryStatus(second.id);
     await useBudgetStore.getState().createDebt('2026-10', {

@@ -14,6 +14,9 @@ import { addMonthsToMonthKey, assertValidMonthKey } from '../date/monthKey';
 import { Debt, DebtPayment, MonthEntry } from '../models/types';
 import { assertSafeMoneyInteger, sumMoneyIntegers } from '../money/money';
 
+/** Group of a debt that does not name one (debts of the same group share installments). */
+export const DEFAULT_DEBT_GROUP_KEY = 'General';
+
 export interface DebtAllocationInput {
   debtId: string;
   principalAmount: number;
@@ -50,8 +53,25 @@ export interface DebtSummaryResult {
   projection: DebtPayoffProjection;
 }
 
-/** @deprecated use DebtSummaryResult */
-export type FunfamiDebtSummary = DebtSummaryResult;
+
+/**
+ * Order in which an installment cascades across debts (ADR 0036): the explicit target first
+ * (the concept's `defaultTargetDebtId` or the one chosen when paying), then the rest by `id`.
+ * Ordering by `id` keeps the result the same whatever order the debts were loaded in, so every
+ * device computes the same payments.
+ */
+export function orderDebtsForCascade(
+  debts: readonly Debt[],
+  explicitTargetDebtId?: string
+): Debt[] {
+  return [...debts].sort((a, b) => {
+    if (explicitTargetDebtId) {
+      if (a.id === explicitTargetDebtId) return -1;
+      if (b.id === explicitTargetDebtId) return 1;
+    }
+    return a.id.localeCompare(b.id);
+  });
+}
 
 /**
  * Generates or validates DebtPayment records for a debt installment MonthEntry.
@@ -105,28 +125,17 @@ export function buildDebtPaymentsForInstallment(
 
   // If a specific target debt is linked and exists in `debts`, target that debt first (and cascade within its group if needed)
   const explicitTarget =
-    preferredTargetDebtId && preferredTargetDebtId !== 'ALL_DEBTS' && preferredTargetDebtId !== 'ALL_FUNFAMI'
+    preferredTargetDebtId && preferredTargetDebtId !== 'ALL_DEBTS'
       ? debts.find((d) => d.id === preferredTargetDebtId)
       : undefined;
 
-  const targetGroupKey =
-    explicitTarget?.groupKey ??
-    (installmentEntry.conceptId === 'exp_cuota_funfami' ? 'FUNFAMI' : undefined);
+  const targetGroupKey = explicitTarget?.groupKey;
 
   const candidateDebts = targetGroupKey
     ? debts.filter((d) => (d.groupKey || targetGroupKey) === targetGroupKey)
     : debts;
 
-  const orderedDebts = [...candidateDebts].sort((a, b) => {
-    if (explicitTarget) {
-      if (a.id === explicitTarget.id) return -1;
-      if (b.id === explicitTarget.id) return 1;
-    }
-    // Backward compat priority for fixture
-    if (a.id === 'debt_cb300f_moto') return -1;
-    if (b.id === 'debt_cb300f_moto') return 1;
-    return a.id.localeCompare(b.id);
-  });
+  const orderedDebts = orderDebtsForCascade(candidateDebts, explicitTarget?.id);
 
   let remainingToApply = installmentAmount;
   const payments: DebtPayment[] = [];
@@ -189,7 +198,7 @@ export function calculateDebtsSummary(
   entries: readonly MonthEntry[],
   currentMonthKey: string,
   explicitPayments?: readonly DebtPayment[],
-  defaultMonthlyInstallment = 1_800_000
+  defaultMonthlyInstallment = 0
 ): DebtSummaryResult {
   assertValidMonthKey(currentMonthKey);
 
@@ -198,14 +207,20 @@ export function calculateDebtsSummary(
     monthEntries.filter((e) => e.status === 'completed').map((e) => e.id)
   );
 
-  const installmentEntry = monthEntries.find(
-    (e) =>
-      e.type === 'expense' &&
-      (e.conceptId.includes('cuota') ||
-        e.conceptId.includes('prestamo') ||
-        e.conceptId.includes('deuda') ||
-        e.conceptId === 'exp_cuota_funfami')
+  // The installment is the expense the month's payments come from; without payments, an expense
+  // whose id names an installment (ids come from the concept name, see toSlugId).
+  const paidEntryIds = new Set(
+    (explicitPayments ?? []).filter((p) => p.monthKey === currentMonthKey).map((p) => p.entryId)
   );
+  const installmentEntry =
+    monthEntries.find((e) => e.type === 'expense' && paidEntryIds.has(e.id)) ??
+    monthEntries.find(
+      (e) =>
+        e.type === 'expense' &&
+        (e.conceptId.includes('cuota') ||
+          e.conceptId.includes('prestamo') ||
+          e.conceptId.includes('deuda'))
+    );
 
   const activePayments: readonly DebtPayment[] = explicitPayments
     ? explicitPayments.filter(
@@ -284,5 +299,3 @@ export function calculateDebtsSummary(
   };
 }
 
-/** @deprecated use calculateDebtsSummary */
-export const calculateFunfamiDebtSummary = calculateDebtsSummary;

@@ -103,7 +103,7 @@ describe('InlineItemActionPill', () => {
       <BFlowThemeProvider skin={skin}>
         <InlineItemActionPill
           mode="delete"
-          itemName="deuda Moto"
+          itemName="deuda Carro"
           editTestID="pill-edit"
           deleteTestID="pill-delete"
           onEdit={jest.fn()}
@@ -112,7 +112,7 @@ describe('InlineItemActionPill', () => {
       </BFlowThemeProvider>
     );
     expect(screen.queryByTestId('pill-edit')).toBeNull();
-    expect(screen.getByLabelText('Eliminar deuda Moto')).toBeTruthy();
+    expect(screen.getByLabelText('Eliminar deuda Carro')).toBeTruthy();
     expect(minHeightOf('pill-delete')).toBeGreaterThanOrEqual(target);
     fireEvent.press(screen.getByTestId('pill-delete'));
     expect(onDelete).toHaveBeenCalledTimes(1);

@@ -88,7 +88,7 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
       debtsByMonth: payload.debtsByMonth,
       debtPayments: payload.debtPayments,
       savingsBucketsByMonth: payload.savingsBucketsByMonth,
-      idealMotoPlan: payload.provisionPlan,
+      provisionPlan: payload.provisionPlan,
       closedSnapshots: payload.closedSnapshots,
       financialAccounts: payload.financialAccounts ?? [],
       isAccountHydrated: true,

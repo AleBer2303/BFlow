@@ -101,8 +101,8 @@ export function useProvisionPlanSummary(
 ): ProvisionPlanSummary {
   const monthKey = useActiveMonthKey();
   const entries = useTabStore((state) => state.entries);
-  const plan = useTabStore((state) => state.idealMotoPlan);
-  const paidThisMonth = savingsSummary.moto.paidContributionsThisMonth;
+  const plan = useTabStore((state) => state.provisionPlan);
+  const paidThisMonth = savingsSummary.reserve.paidContributionsThisMonth;
   return useMemo(
     () => calculateProvisionPlanSummary(plan, entries, paidThisMonth, monthKey),
     [plan, entries, paidThisMonth, monthKey]

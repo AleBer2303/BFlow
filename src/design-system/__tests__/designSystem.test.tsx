@@ -13,10 +13,10 @@ import { palettes, radius, spacing, springConfigs, typography } from '../tokens'
 
 describe('design-system & PhaseOneHomeScreen (RNTL)', () => {
   beforeEach(() => {
-    useBudgetStore.getState().resetToOctober2026GoldenState();
+    useBudgetStore.getState().resetToSampleWorkspace();
   });
 
-  it('renders Golden October 2026 metrics and Liquid Glass cards accurately', () => {
+  it('renders Golden the sample month metrics and Liquid Glass cards accurately', () => {
     render(
       <BFlowThemeProvider initialMode="dark">
         <PhaseOneHomeScreen />
@@ -31,7 +31,7 @@ describe('design-system & PhaseOneHomeScreen (RNTL)', () => {
     expect(screen.queryByText('Control Ahorros')).toBeNull();
   });
 
-  it('toggles theme mode and updates the FUNFAMI debt when its checklist item changes', () => {
+  it('toggles theme mode and updates the General debt when its checklist item changes', () => {
     render(
       <BFlowThemeProvider initialMode="dark">
         <PhaseOneHomeScreen />
@@ -44,22 +44,22 @@ describe('design-system & PhaseOneHomeScreen (RNTL)', () => {
     fireEvent.press(themeBtn);
     expect(screen.getByTestId('theme-icon-moon')).toBeTruthy();
 
-    const toggleFunfamiFromChecklist = () => {
+    const toggleInstallmentFromChecklist = () => {
       fireEvent.press(screen.getByTestId('workspace-tab-checklist'));
-      fireEvent.press(screen.getByTestId('checklist-workspace-item-2026-10_exp_cuota_funfami'));
+      fireEvent.press(screen.getByTestId('checklist-workspace-item-2026-10_exp_loan_installment'));
       fireEvent.press(screen.getByTestId('workspace-tab-summary'));
     };
 
     const readDebtFromCurve = (): string =>
       screen.getByTestId('monthly-curve-metric-debt').props.accessibilityLabel;
 
-    // Unchecking Cuota FUNFAMI restores total debt to $ 8.000.000 and checklist to 5 de 12
-    toggleFunfamiFromChecklist();
+    // Unchecking Cuota de préstamo restores total debt to $ 8.000.000 and checklist to 5 de 12
+    toggleInstallmentFromChecklist();
     expect(readDebtFromCurve()).toContain('$ 8.000.000');
     expect(screen.getByText('Checklist 5 de 12')).toBeTruthy();
 
-    // Re-checking Cuota FUNFAMI brings total debt back to $ 6.200.000 and checklist to 6 de 12
-    toggleFunfamiFromChecklist();
+    // Re-checking Cuota de préstamo brings total debt back to $ 6.200.000 and checklist to 6 de 12
+    toggleInstallmentFromChecklist();
     expect(readDebtFromCurve()).toContain('$ 6.200.000');
     expect(screen.getByText('Checklist 6 de 12')).toBeTruthy();
   });

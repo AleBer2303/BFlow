@@ -1,8 +1,8 @@
 /**
  * src/domain/budget/budgetCalculator.ts
  *
- * Pure monthly budget metrics calculator reproducing the exact Excel formulas
- * while also exposing the disambiguated metrics (Resolving Inconsistencies #1 and #2).
+ * Pure monthly budget metrics: what came in and went out (completed entries) next to what was
+ * planned, by group, and the resulting cash flow (ADR 0004 resolves the ambiguous metrics).
  */
 
 import { assertValidMonthKey } from '../date/monthKey';
@@ -24,17 +24,13 @@ function computeGroupBreakdown(entries: readonly MonthEntry[]): GroupBudgetBreak
 /**
  * Calculates all monthly income, expense, and cash flow metrics for `monthKey`.
  *
- * Golden values for October 2026 (`2026-10`):
- * - `receivedIncome` (Excel B2 / B17): 4_000_000
- * - `plannedIncome`: 6_000_000
- * - `pendingIncome`: 2_000_000
- * - `plannedExpenses` (Excel B3): 3_370_000
- * - `paidExpenses` (Excel B4 / H25): 2_920_000
- * - `pendingExpenses` (Excel B5): 450_000
- * - `netCashFlow` (Excel B6 = B2 - B4): 1_080_000
- * - `projectedNetFlow` (plannedIncome - plannedExpenses): 2_630_000
- * - `expensesByGroup.fixed.paid` (Excel H18): 2_620_000 (planned: 2_970_000, pending: 350_000)
- * - `expensesByGroup.variable.paid` (Excel H24): 300_000 (planned: 400_000, pending: 100_000)
+ * - `receivedIncome` / `paidExpenses`: completed incomes / expenses (`actualAmount`).
+ * - `plannedIncome` / `plannedExpenses`: every entry of the month (`plannedAmount`).
+ * - `pendingIncome` / `pendingExpenses`: what is still pending.
+ * - `netCashFlow` = `receivedIncome - paidExpenses`.
+ * - `projectedNetFlow` = `plannedIncome - plannedExpenses`.
+ * - `expensesByGroup`: the same split for fixed and variable expenses.
+ * The parity with the original spreadsheet is checked by `domain/__tests__/golden-october-2026.test.ts`.
  */
 export function calculateMonthlyBudgetSummary(
   entries: readonly MonthEntry[],

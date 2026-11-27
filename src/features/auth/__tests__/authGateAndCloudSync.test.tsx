@@ -11,6 +11,7 @@ import * as accountEmailActions from '../../../platform/auth/accountEmailActions
 import * as authAdapter from '../../../platform/auth/authAdapter';
 import { __resetAuthRateLimiterForTests } from '../../../platform/auth/authRateLimiter';
 import {
+  DEMO_USER,
   loadPersistedSession,
   savePersistedSession,
   type BFlowAuthUser,
@@ -34,7 +35,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
   beforeEach(() => {
     persistentStorage.clear();
     savePersistedSession(null);
-    useBudgetStore.getState().resetToOctober2026GoldenState();
+    useBudgetStore.getState().resetToSampleWorkspace();
   });
 
   it('requires authentication first when no session is active and validates personal registration inputs', () => {
@@ -87,9 +88,9 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     );
 
     // Fill personal fields and test mismatched password confirmation
-    fireEvent.changeText(screen.getByTestId('auth-name-input'), 'Alejandro Bernal Garnica');
+    fireEvent.changeText(screen.getByTestId('auth-name-input'), 'Usuario de ejemplo');
     fireEvent.changeText(screen.getByTestId('auth-phone-input'), '+57 300 123 4567');
-    fireEvent.changeText(screen.getByTestId('auth-email-input'), 'demo.owner@bflow.example');
+    fireEvent.changeText(screen.getByTestId('auth-email-input'), 'demo@bflow.example');
     fireEvent.changeText(screen.getByTestId('auth-password-input'), 'Secreto123!');
     fireEvent.changeText(screen.getByTestId('auth-confirm-password-input'), 'otraClave');
 
@@ -102,16 +103,16 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
   it('persists user session with personal metadata and signs out back to the Auth Gate', async () => {
     const customUser: BFlowAuthUser = {
       uid: 'uid_alejandro_01',
-      email: 'demo.owner@bflow.example',
-      displayName: 'Alejandro Bernal Garnica',
+      email: 'demo@bflow.example',
+      displayName: 'Usuario de ejemplo',
       phone: '+57 300 987 6543',
-      financialGoal: 'Pagar CB300F y ahorrar para apartamento',
+      financialGoal: 'Pagar vehículo y ahorrar para apartamento',
       authProvider: 'password',
       provider: 'local-demo',
     };
 
     savePersistedSession(customUser);
-    expect(loadPersistedSession()?.displayName).toBe('Alejandro Bernal Garnica');
+    expect(loadPersistedSession()?.displayName).toBe('Usuario de ejemplo');
     expect(loadPersistedSession()?.phone).toBe('+57 300 987 6543');
 
     useBudgetStore.getState().setAuthUser(customUser);
@@ -126,9 +127,9 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     fireEvent.press(screen.getByTestId('workspace-tab-account'));
 
     expect(screen.getByTestId('authenticated-user-name')).toHaveTextContent(
-      'Hola, Alejandro Bernal Garnica'
+      'Hola, Usuario de ejemplo'
     );
-    expect(screen.getByText('Meta: Pagar CB300F y ahorrar para apartamento')).toBeTruthy();
+    expect(screen.getByText('Meta: Pagar vehículo y ahorrar para apartamento')).toBeTruthy();
 
     // Signing out clears the session and returns to the Auth Gate
     fireEvent.press(screen.getByTestId('sign-out-button'));
@@ -136,11 +137,11 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     expect(loadPersistedSession()).toBeNull();
   });
 
-  it('guarantees 100% account isolation when switching between a newly created user and demo.owner@bflow.example', async () => {
-    const ownerUser: BFlowAuthUser = {
-      uid: 'uid_owner_abernalg',
-      email: 'demo.owner@bflow.example',
-      displayName: 'Alejandro Bernal Garnica',
+  it('guarantees 100% account isolation when switching between a newly created user and demo@bflow.example', async () => {
+    const demoUser: BFlowAuthUser = {
+      uid: 'uid_demo_account',
+      email: 'demo@bflow.example',
+      displayName: 'Usuario de ejemplo',
       authProvider: 'password',
       activeMonthKey: '2026-10',
       provider: 'local-demo',
@@ -151,11 +152,11 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       displayName: 'Nuevo Usuario',
       authProvider: 'password',
       activeMonthKey: '2026-11',
-      provider: 'local-demo',
+      provider: 'firebase',
     };
 
-    // 1. Start in owner account (demo.owner@bflow.example) and verify canonical savings ($ 4.380.000)
-    useBudgetStore.getState().setAuthUser(ownerUser);
+    // 1. Start in the example account (demo@bflow.example) and verify canonical savings ($ 4.380.000)
+    useBudgetStore.getState().setAuthUser(demoUser);
     render(
       <BFlowThemeProvider initialMode="dark">
         <PhaseOneHomeScreen />
@@ -163,10 +164,10 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     );
     fireEvent.press(screen.getByTestId('workspace-tab-savings'));
     expect(screen.getByTestId('savings-hero-total')).toHaveTextContent('$ 4.380.000');
-    expect(screen.getByTestId('bucket-moto-current')).toHaveTextContent('$ 2.300.000');
+    expect(screen.getByTestId('bucket-reserve-current')).toHaveTextContent('$ 2.300.000');
     expect(screen.getByTestId('bucket-savings-current')).toHaveTextContent('$ 2.080.000');
 
-    // 2. Switch to a brand-new user account: workspace must immediately wipe owner data
+    // 2. Switch to a brand-new user account: workspace must immediately wipe the example data
     act(() => {
       useBudgetStore.getState().setAuthUser(secondUser);
     });
@@ -185,7 +186,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
         debts: [],
         savingsBuckets: [
           { id: 'savings', name: 'Fondo Ahorros', openingBalanceCop: 12_500_000 },
-          { id: 'moto', name: 'Fondo Moto', openingBalanceCop: 0 },
+          { id: 'reserve', name: 'Fondo de reserva', openingBalanceCop: 0 },
         ],
       });
     });
@@ -195,37 +196,37 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
         .savingsBucketsByMonth['2026-11']?.find((b) => b.id === 'savings')?.openingBalance
     ).toBe(12_500_000);
 
-    // 4. Sign out and log back into demo.owner@bflow.example:
-    // Zero data from secondUser may remain, and demo.owner@bflow.example must retain exact golden balances ($ 4.380.000)
+    // 4. Sign out and log back into demo@bflow.example:
+    // Zero data from secondUser may remain, and demo@bflow.example must retain exact golden balances ($ 4.380.000)
     act(() => {
       useBudgetStore.getState().clearWorkspaceSession();
     });
     expect(useBudgetStore.getState().savingsBucketsByMonth['2026-11']).toBeUndefined();
 
     act(() => {
-      useBudgetStore.getState().setAuthUser(ownerUser);
+      useBudgetStore.getState().setAuthUser(demoUser);
     });
     fireEvent.press(screen.getByTestId('workspace-tab-savings'));
     expect(screen.getByTestId('savings-hero-total')).toHaveTextContent('$ 4.380.000');
-    expect(screen.getByTestId('bucket-moto-current')).toHaveTextContent('$ 2.300.000');
+    expect(screen.getByTestId('bucket-reserve-current')).toHaveTextContent('$ 2.300.000');
     expect(screen.getByTestId('bucket-savings-current')).toHaveTextContent('$ 2.080.000');
   });
 
   it('persists updated debt interest rates across sign-out and sign-in', async () => {
     const repo = new InMemoryBudgetRepository();
     const initialCloud = await repo.loadFullCloudAccount(
-      'uid-owner-123',
-      'demo.owner@bflow.example'
+      'uid-demo-123',
+      'demo@bflow.example'
     );
 
-    const motoDebt = initialCloud.debtsByMonth['2026-10']?.find(
-      (d) => d.id === 'debt_cb300f_moto'
+    const loanDebt = initialCloud.debtsByMonth['2026-10']?.find(
+      (d) => d.id === 'debt_auto_loan'
     );
-    expect(motoDebt).toBeDefined();
+    expect(loanDebt).toBeDefined();
 
     // Update interest rate to 18% annual (1.5% monthly) and save to repository
-    await repo.saveDebt('uid-owner-123', {
-      ...motoDebt!,
+    await repo.saveDebt('uid-demo-123', {
+      ...loanDebt!,
       interestRateType: 'annual',
       annualInterestRate: 18,
       monthlyInterestRate: 1.5,
@@ -237,7 +238,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       useBudgetStore.getState().applyFullCloudAccount(initialCloud);
     });
     await act(async () => {
-      await useBudgetStore.getState().updateDebt('2026-10', 'debt_cb300f_moto', {
+      await useBudgetStore.getState().updateDebt('2026-10', 'debt_auto_loan', {
         interestRateType: 'annual',
         annualInterestRate: 18,
         monthlyInterestRate: 1.5,
@@ -250,20 +251,20 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       useBudgetStore.getState().clearWorkspaceSession();
     });
     const reloadedCloud = await repo.loadFullCloudAccount(
-      'uid-owner-123',
-      'demo.owner@bflow.example'
+      'uid-demo-123',
+      'demo@bflow.example'
     );
     act(() => {
       useBudgetStore.getState().applyFullCloudAccount(reloadedCloud);
     });
 
-    const persistedMotoDebt = useBudgetStore
+    const persistedLoanDebt = useBudgetStore
       .getState()
-      .debtsByMonth['2026-10']?.find((d) => d.id === 'debt_cb300f_moto');
-    expect(persistedMotoDebt?.interestRateType).toBe('annual');
-    expect(persistedMotoDebt?.annualInterestRate).toBe(18);
-    expect(persistedMotoDebt?.monthlyInterestRate).toBe(1.5);
-    expect(persistedMotoDebt?.monthlyInstallment).toBe(900_000);
+      .debtsByMonth['2026-10']?.find((d) => d.id === 'debt_auto_loan');
+    expect(persistedLoanDebt?.interestRateType).toBe('annual');
+    expect(persistedLoanDebt?.annualInterestRate).toBe(18);
+    expect(persistedLoanDebt?.monthlyInterestRate).toBe(1.5);
+    expect(persistedLoanDebt?.monthlyInstallment).toBe(900_000);
   });
 
   it('always opens in the latest month of the account after signing out and back in, even with 0 movements', async () => {
@@ -277,7 +278,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       debts: [],
       debtPayments: [],
       savingsBuckets: [
-        { id: 'moto', name: 'Fondo Moto', openingBalance: 0, monthKey: '2026-12' },
+        { id: 'reserve', name: 'Fondo de reserva', openingBalance: 0, monthKey: '2026-12' },
         { id: 'savings', name: 'Fondo Ahorros', openingBalance: 500_000, monthKey: '2026-12' },
       ],
       provisionPlan: {
@@ -319,7 +320,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     expect(useBudgetStore.getState().availableMonths).toEqual(['2026-12', '2027-01']);
   });
 
-  it('defaults onboarding to the current month with 0 default funds, never re-prompts after blank setup, and allows editing/deleting any fund including Moto & Ahorros', async () => {
+  it('defaults onboarding to the current month with 0 default funds, never re-prompts after blank setup, and allows editing/deleting any fund including the reserve and savings funds', async () => {
     const repo = new InMemoryBudgetRepository(false);
     const newUser: BFlowAuthUser = {
       uid: 'uid-blank-new-user',
@@ -350,9 +351,9 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     expect(screen.getByTestId('initial-account-setup-view')).toBeTruthy();
 
     // 2. Default month must match the user's current month (not hardcoded Enero or Octubre 2026),
-    // and Section 2 must have 0 pre-populated savings funds (no Fondo Moto, no Fondo Ahorros)
+    // and Section 2 must have 0 pre-populated savings funds (no Fondo de reserva, no Fondo Ahorros)
     expect(screen.queryByTestId('onboarding-bucket-balance-savings')).toBeNull();
-    expect(screen.queryByTestId('onboarding-bucket-balance-moto')).toBeNull();
+    expect(screen.queryByTestId('onboarding-bucket-balance-reserve')).toBeNull();
     expect(screen.getByTestId('complete-initial-setup-button')).toHaveTextContent(
       `Guardar e Iniciar ${formatMonthKeyLabelEs(toAppMonthKey())}`
     );
@@ -374,38 +375,32 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     );
     expect(subsequentLoginLoad.needsOnboarding).toBe(false);
 
-    // 4. Switch to owner account (demo.owner@bflow.example) and verify editing/deleting Fondo Moto & Fondo Ahorros
-    const ownerUser: BFlowAuthUser = {
-      uid: 'uid-owner-123',
-      email: 'demo.owner@bflow.example',
-      displayName: 'Alejandro Bernal',
-      provider: 'firebase',
-    };
+    // 4. Switch to the example account and verify editing/deleting its reserve and savings funds
     act(() => {
-      useBudgetStore.getState().setAuthUser(ownerUser);
+      useBudgetStore.getState().setAuthUser(DEMO_USER);
     });
 
     fireEvent.press(screen.getByTestId('workspace-tab-savings'));
-    expect(screen.getByTestId('bucket-moto-card')).toBeTruthy();
+    expect(screen.getByTestId('bucket-reserve-card')).toBeTruthy();
     expect(screen.getByTestId('bucket-savings-card')).toBeTruthy();
 
-    // Edit Fondo Moto name and balance individually via Editar Fondo mode
+    // Edit Fondo de reserva name and balance individually via Editar Fondo mode
     fireEvent.press(screen.getByTestId('bucket-action-edit-button'));
-    fireEvent.press(screen.getByTestId('edit-savings-bucket-moto'));
-    fireEvent.changeText(screen.getByTestId('edit-bucket-name-input'), 'Fondo Moto Personal');
+    fireEvent.press(screen.getByTestId('edit-savings-bucket-reserve'));
+    fireEvent.changeText(screen.getByTestId('edit-bucket-name-input'), 'Fondo de reserva personal');
     fireEvent.changeText(screen.getByTestId('edit-bucket-balance-input'), '2000000');
     await act(async () => {
       fireEvent.press(screen.getByTestId('save-edit-bucket-button'));
     });
     // The savings chart legend repeats the bucket name, so read it from the bucket card.
-    expect(within(screen.getByTestId('bucket-moto-card')).getByText('Fondo Moto Personal')).toBeTruthy();
+    expect(within(screen.getByTestId('bucket-reserve-card')).getByText('Fondo de reserva personal')).toBeTruthy();
 
-    // Delete Fondo Moto and Fondo Ahorros individually via global Eliminar Fondo mode
+    // Delete Fondo de reserva and Fondo Ahorros individually via global Eliminar Fondo mode
     fireEvent.press(screen.getByTestId('bucket-action-delete-button'));
     await act(async () => {
-      fireEvent.press(screen.getByTestId('delete-savings-bucket-moto'));
+      fireEvent.press(screen.getByTestId('delete-savings-bucket-reserve'));
     });
-    expect(screen.queryByTestId('bucket-moto-card')).toBeNull();
+    expect(screen.queryByTestId('bucket-reserve-card')).toBeNull();
 
     await act(async () => {
       fireEvent.press(screen.getByTestId('delete-savings-bucket-savings'));
@@ -443,19 +438,19 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
         'Escribe el correo electrónico con el que registraste tu cuenta.'
       );
 
-      fireEvent.changeText(screen.getByTestId('auth-email-input'), 'demo.owner@bflow.example');
+      fireEvent.changeText(screen.getByTestId('auth-email-input'), 'demo@bflow.example');
       await act(async () => {
         fireEvent.press(screen.getByTestId('auth-primary-submit-button'));
       });
 
-      expect(resetSpy).toHaveBeenCalledWith('demo.owner@bflow.example');
+      expect(resetSpy).toHaveBeenCalledWith('demo@bflow.example');
 
       // Back in Login mode, with a message that does not reveal whether the account exists
       expect(screen.getByText('Entra a tu cuenta personal')).toBeTruthy();
       expect(screen.getByTestId('auth-status-banner')).toHaveTextContent(
-        /Si demo.owner@bflow.example tiene una cuenta en BFlow, recibirás un enlace/i
+        /Si demo@bflow.example tiene una cuenta en BFlow, recibirás un enlace/i
       );
-      expect(screen.getByTestId('auth-email-input').props.value).toBe('demo.owner@bflow.example');
+      expect(screen.getByTestId('auth-email-input').props.value).toBe('demo@bflow.example');
     } finally {
       resetSpy.mockRestore();
     }
@@ -475,7 +470,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       );
 
       fireEvent.press(screen.getByTestId('auth-mode-recover'));
-      fireEvent.changeText(screen.getByTestId('auth-email-input'), 'demo.owner@bflow.example');
+      fireEvent.changeText(screen.getByTestId('auth-email-input'), 'demo@bflow.example');
       await act(async () => {
         fireEvent.press(screen.getByTestId('auth-primary-submit-button'));
       });
@@ -611,8 +606,8 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
   it('saves the profile to Firestore from the account window and reverts it when the cloud rejects it', async () => {
     const cloudUser: BFlowAuthUser = {
       uid: 'uid_cloud_test_profile_window',
-      email: 'demo.owner@bflow.example',
-      displayName: 'Alejandro Bernal',
+      email: 'demo@bflow.example',
+      displayName: 'Usuario de ejemplo',
       financialGoal: 'Meta anterior',
       authProvider: 'password',
       emailVerified: true,
@@ -638,21 +633,21 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       fireEvent.press(await screen.findByTestId('open-profile-settings-button'));
 
       // Saved: Firestore receives both fields and the account card shows the new name
-      fireEvent.changeText(screen.getByTestId('profile-input-name'), 'Alejandro Bernal G.');
+      fireEvent.changeText(screen.getByTestId('profile-input-name'), 'Usuario de ejemplo G.');
       fireEvent.changeText(screen.getByTestId('profile-input-goal'), 'Viaje a Japón');
       await act(async () => {
         fireEvent.press(screen.getByTestId('save-profile-settings-button'));
       });
 
       expect(saveSpy).toHaveBeenCalledWith(cloudUser.uid, {
-        displayName: 'Alejandro Bernal G.',
+        displayName: 'Usuario de ejemplo G.',
         financialGoal: 'Viaje a Japón',
       });
       expect(screen.getByTestId('profile-success-banner')).toHaveTextContent(
         'Perfil actualizado correctamente'
       );
       expect(screen.getByTestId('authenticated-user-name')).toHaveTextContent(
-        'Hola, Alejandro Bernal G.'
+        'Hola, Usuario de ejemplo G.'
       );
 
       // Rejected by the server: the name goes back and the form says why
@@ -670,9 +665,9 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
         'No se pudo guardar tu perfil en la nube. Inténtalo de nuevo.'
       );
       expect(screen.getByTestId('authenticated-user-name')).toHaveTextContent(
-        'Hola, Alejandro Bernal G.'
+        'Hola, Usuario de ejemplo G.'
       );
-      expect(useBudgetStore.getState().authUser?.displayName).toBe('Alejandro Bernal G.');
+      expect(useBudgetStore.getState().authUser?.displayName).toBe('Usuario de ejemplo G.');
     } finally {
       saveSpy.mockRestore();
       syncNameSpy.mockRestore();
@@ -727,12 +722,12 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       expect(changeSpy).toHaveBeenCalledWith('otro.correo@correo.com', 'claveActual1');
       view.unmount();
 
-      // A local session (showcase mode, demo owner) has no Firebase account to email.
+      // A local session (showcase mode, demo user) has no Firebase account to email.
       // The wait between reset emails belongs to the device: it is over by now.
       __resetAuthRateLimiterForTests();
       resetSpy.mockClear();
       act(() => {
-        useBudgetStore.getState().setAuthUser(authAdapter.DEMO_OWNER_USER);
+        useBudgetStore.getState().setAuthUser(authAdapter.DEMO_USER);
       });
       render(
         <BFlowThemeProvider initialMode="dark">
@@ -759,8 +754,8 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
 
     const mockUser: BFlowAuthUser = {
       uid: 'uid_test_dedup_01',
-      email: 'demo.owner@bflow.example',
-      displayName: 'Alejandro Bernal',
+      email: 'demo@bflow.example',
+      displayName: 'Usuario de ejemplo',
       authProvider: 'password',
       provider: 'local-demo',
     };
@@ -786,7 +781,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
         </BFlowThemeProvider>
       );
 
-      fireEvent.changeText(screen.getByTestId('auth-email-input'), 'demo.owner@bflow.example');
+      fireEvent.changeText(screen.getByTestId('auth-email-input'), 'demo@bflow.example');
       fireEvent.changeText(screen.getByTestId('auth-password-input'), 'claveValida123');
 
       await act(async () => {
@@ -839,12 +834,12 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       const repo = new InMemoryBudgetRepository();
       const cloudAccount = await repo.loadFullCloudAccount(
         'uid_signout_cleanup_01',
-        'demo.owner@bflow.example'
+        'demo@bflow.example'
       );
       const user: BFlowAuthUser = {
         uid: 'uid_signout_cleanup_01',
-        email: 'demo.owner@bflow.example',
-        displayName: 'Alejandro Bernal Garnica',
+        email: 'demo@bflow.example',
+        displayName: 'Usuario de ejemplo',
         authProvider: 'password',
         provider: 'local-demo',
       };
@@ -891,7 +886,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     }
   });
 
-  it('hydrates user account data synchronously on cold boot and never flashes the October 2026 template or $ 0 values', async () => {
+  it('hydrates user account data synchronously on cold boot and never flashes the sample month template or $ 0 values', async () => {
     const disk = new Map<string, string>();
     const diskBackend: RawStorageBackend = {
       getItem: (key) => disk.get(key) ?? null,
@@ -909,18 +904,18 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     persistentStorage.clear();
 
     try {
-      const ownerUser: BFlowAuthUser = {
-        uid: 'uid_real_owner_iphone',
-        email: 'demo.owner@bflow.example',
-        displayName: 'Alejandro Bernal Garnica',
+      const demoUser: BFlowAuthUser = {
+        uid: 'uid_real_iphone',
+        email: 'demo@bflow.example',
+        displayName: 'Usuario de ejemplo',
         authProvider: 'password',
         activeMonthKey: '2026-11',
         provider: 'firebase',
       };
 
-      savePersistedSession(ownerUser);
+      savePersistedSession(demoUser);
       act(() => {
-        useBudgetStore.getState().setAuthUser(ownerUser);
+        useBudgetStore.getState().setAuthUser(demoUser);
       });
 
       // Configure custom real user data in November 2026 ($ 7.500.000 income, $ 1.200.000 expense -> $ 6.300.000 Net Flow)
@@ -948,7 +943,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
           debts: [],
           savingsBuckets: [
             { id: 'savings', name: 'Fondo Ahorros', openingBalanceCop: 3_000_000 },
-            { id: 'moto', name: 'Fondo Moto', openingBalanceCop: 500_000 },
+            { id: 'reserve', name: 'Fondo de reserva', openingBalanceCop: 500_000 },
           ],
         });
       });
@@ -956,8 +951,8 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       // Simulate killing the app on iPhone (wiping in-memory cache while SQLite kv-store disk survives)
       __resetMemoryCacheForTests();
 
-      // Cold-start initial state for the owner must immediately contain their real November 2026 data,
-      // NOT the October 2026 template ($ 1.080.000) and NOT empty $ 0 arrays
+      // Cold-start initial state for the user must immediately contain their real November 2026 data,
+      // NOT the sample month template ($ 1.080.000) and NOT empty $ 0 arrays
       const coldBootState = buildInitialState(loadPersistedSession());
       expect(coldBootState.activeMonthKey).toBe('2026-11');
       expect(coldBootState.isAccountHydrated).toBe(true);
@@ -1024,8 +1019,8 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       act(() => {
         capturedAuthCallback!({
           uid: 'uid_fast_immediate',
-          email: 'demo.owner@bflow.example',
-          displayName: 'Alejandro',
+          email: 'demo@bflow.example',
+          displayName: 'Ana',
           providerData: [],
         });
       });

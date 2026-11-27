@@ -6,7 +6,7 @@
  * - Idempotent `ensureMonthPlan` respecting `recurrence` and excluding `allowMultiplePerMonth`.
  * - `getAvailableConcepts`: hides completed single-occurrence concepts for that month,
  *   keeps pending concepts and `allowMultiplePerMonth` concepts available.
- * - `calculateChecklistProgress`: counts only non-repeatable concepts (`6 / 12` in Oct 2026).
+ * - `calculateChecklistProgress`: counts only non-repeatable concepts.
  */
 
 import { assertValidMonthKey, toBogotaIsoDate } from '../date/monthKey';
@@ -104,7 +104,7 @@ export function ensureMonthPlan(
  * Returns the concepts available to select in "Add Movement" for a given month and type.
  * A concept is available if:
  * - It is not archived, matches `type`, and its recurrence is active in `monthKey`
- *   (or it already has a pending entry in `monthKey`, e.g. historical October 2026 Prima), AND
+ *   (or it already has a pending entry in `monthKey`, e.g. a bonus kept from an earlier month), AND
  * - Either `allowMultiplePerMonth === true`, OR it has NO `completed` entry in `monthKey`.
  */
 export function getAvailableConcepts(
@@ -152,7 +152,7 @@ export interface RegisterOrCompleteMovementInput {
  * - For standard (`!allowMultiplePerMonth`) concepts: updates existing pending entry (or creates
  *   deterministic entry) as `completed` with `actualAmount` (defaulting to `plannedAmount`).
  * - For `allowMultiplePerMonth` concepts: appends a new `completed` entry (or updates an existing
- *   zero-amount placeholder row if one was imported from Excel).
+ *   zero-amount placeholder row if one was imported).
  */
 export function registerMovement(
   entries: readonly MonthEntry[],
@@ -335,7 +335,6 @@ export function deleteMovement(
 /**
  * Calculates checklist progress for a given month.
  * Rule: Only concepts with `allowMultiplePerMonth === false` count toward checklist progress.
- * In October 2026: 6 of 12 completed (2 incomes + 10 expenses).
  */
 export function calculateChecklistProgress(
   concepts: readonly Concept[],

@@ -22,7 +22,7 @@ import {
 export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) => {
   const initial = getStoreInitialState();
   return {
-    idealMotoPlan: initial.idealMotoPlan,
+    provisionPlan: initial.provisionPlan,
 
   saveProvisionItem: async (input) => {
     const state = get();
@@ -42,7 +42,6 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
 
     const nextItem: ProvisionItemSpec = {
       id: itemId,
-      excelRawName: trimmedName,
       displayName: trimmedName,
       monthlyAmountCop: monthlyContribution,
       cycleCostCop: safeAmount,
@@ -51,20 +50,19 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
       ...(input.kind === 'target_goal'
         ? { targetAmountCop: safeAmount, targetMonthKey }
         : {}),
-      includedInExcelTotalB43: input.kind === 'recurring',
       kind: input.kind === 'target_goal' ? 'target_goal' : 'recurring_provision',
       ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
     };
 
-    const existingItems = state.idealMotoPlan.items;
-    const previousPlan = state.idealMotoPlan;
+    const existingItems = state.provisionPlan.items;
+    const previousPlan = state.provisionPlan;
     const exists = existingItems.some((i) => i.id === itemId);
     const nextItems = exists
       ? existingItems.map((i) => (i.id === itemId ? nextItem : i))
       : [...existingItems, nextItem];
 
     const nextPlan = recalculateProvisionPlan(nextItems);
-    set({ idealMotoPlan: nextPlan });
+    set({ provisionPlan: nextPlan });
 
     const authUser = state.authUser;
     if (isRealAuthUser(authUser)) {
@@ -80,7 +78,7 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
           await repo.saveProvisionPlan(uid, nextPlan);
         },
         rollback: () => {
-          set({ idealMotoPlan: previousPlan });
+          set({ provisionPlan: previousPlan });
         },
         friendlyErrorMessage: 'No se pudo guardar la provisión en la nube.',
         setStoreState: set,
@@ -90,10 +88,10 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
 
   deleteProvisionItem: async (itemId) => {
     const state = get();
-    const previousPlan = state.idealMotoPlan;
-    const nextItems = state.idealMotoPlan.items.filter((i) => i.id !== itemId);
+    const previousPlan = state.provisionPlan;
+    const nextItems = state.provisionPlan.items.filter((i) => i.id !== itemId);
     const nextPlan = recalculateProvisionPlan(nextItems);
-    set({ idealMotoPlan: nextPlan });
+    set({ provisionPlan: nextPlan });
 
     const authUser = state.authUser;
     if (isRealAuthUser(authUser)) {
@@ -109,7 +107,7 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
           await repo.saveProvisionPlan(uid, nextPlan);
         },
         rollback: () => {
-          set({ idealMotoPlan: previousPlan });
+          set({ provisionPlan: previousPlan });
         },
         friendlyErrorMessage: 'No se pudo eliminar la provisión en la nube.',
         setStoreState: set,

@@ -6,7 +6,7 @@
  * - Bars grow from the zero line on entrance and move to new values when the data changes.
  * - Negative values (a month with negative net flow, an overdrawn savings bucket) hang below
  *   the zero line; in a stack they pile downwards, so the stack still adds up to its total.
- * - Optional reference line (the ideal monthly provision).
+ * - Optional reference line (the planned monthly provision).
  * - Touching, hovering or focusing a category shows its figures in the readout; with
  *   nothing chosen the readout shows the last category (the active month).
  * - Only the most recent categories that fit a full touch target each are shown.
@@ -45,7 +45,7 @@ export interface BarChartReferenceLine {
 export interface BarChartProps {
   /** Short labels under the axis ("Oct"). */
   categories: readonly string[];
-  /** Full labels for the readout and screen readers ("Octubre 2026"). */
+  /** Full labels for the readout and screen readers ("Marzo 2027"). */
   categoryTitles: readonly string[];
   series: readonly ChartSeries[];
   layout?: 'grouped' | 'stacked';

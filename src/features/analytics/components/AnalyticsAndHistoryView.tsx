@@ -33,7 +33,6 @@ import {
   formatMonthKeyLabelEs,
   type ChecklistProgress,
   type DebtSummaryResult,
-  type FunfamiDebtSummary,
   type MonthSnapshot,
   type MonthlyBudgetSummary,
   type MonthlySavingsSummary,
@@ -46,7 +45,7 @@ export interface AnalyticsAndHistoryViewProps {
   availableMonths: readonly string[];
   budget?: MonthlyBudgetSummary;
   checklist: ChecklistProgress;
-  debtSummary: DebtSummaryResult | FunfamiDebtSummary;
+  debtSummary: DebtSummaryResult;
   savingsSummary: MonthlySavingsSummary;
   closedSnapshots: Readonly<Record<string, MonthSnapshot>>;
   onSelectMonth: (monthKey: string) => void;
@@ -389,7 +388,7 @@ export function AnalyticsAndHistoryView({
                   tone="reserve"
                 />
                 <AppText variant="micro" color={colors.text.muted}>
-                  {`${savingsSummary.moto.name || 'Reserva'}: ${formatAmount(savingsSummary.moto.currentBalance)} · Ahorro: ${formatAmount(savingsSummary.savings.currentBalance)}`}
+                  {`${savingsSummary.reserve.name || 'Reserva'}: ${formatAmount(savingsSummary.reserve.currentBalance)} · Ahorro: ${formatAmount(savingsSummary.savings.currentBalance)}`}
                 </AppText>
               </View>
             </View>

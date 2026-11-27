@@ -52,7 +52,7 @@ import { useSafeInsets } from '../../../platform/insets/useSafeInsets';
 import type { BFlowWorkspaceTab } from '../../budget/store/useBudgetStore';
 
 export interface WorkspaceShellProps {
-  /** "Octubre 2026" */
+  /** "Marzo 2027" */
   monthLabel: string;
   activeTab: BFlowWorkspaceTab;
   /**

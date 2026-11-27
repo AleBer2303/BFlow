@@ -10,10 +10,9 @@ import {
   EMPTY_PROVISION_PLAN,
   ensureStandardSavingsBuckets,
   FirestoreBudgetRepository,
-  isOwnerCanonicalEmail,
   type FullCloudAccountData,
 } from '../../../../data/repositories/budgetRepository';
-import { buildOctober2026SeedPayload } from '../../../../data/seed/october2026SeedData';
+import { buildSampleWorkspace } from '../../../../data/sample/sampleWorkspace';
 import {
   getMonthNumberFromMonthKey,
   sumMoneyIntegers,
@@ -29,7 +28,7 @@ import {
   type DebitAccountKind,
   type FinancialAccount,
   type FinancialAccountType,
-  type IdealMotoPlan,
+  type ProvisionPlan,
   type MonthEntry,
   type MonthSnapshot,
   type ProvisionItemSpec,
@@ -37,7 +36,7 @@ import {
   type SavingsBucket,
 } from '../../../../domain';
 import {
-  DEMO_OWNER_USER,
+  DEMO_USER,
   loadPersistedSession,
   type BFlowAuthUser,
 } from '../../../../platform/auth/authAdapter';
@@ -243,7 +242,8 @@ export interface BudgetSlice {
   closeCurrentMonth: (closedAtIso?: string) => Promise<CloseMonthResult>;
   reopenClosedMonth: (monthKey: string) => Promise<void>;
   deleteOrRevertMonth: (monthKey: string) => Promise<void>;
-  resetToOctober2026GoldenState: () => void;
+  /** Back to the example budget of the showcase mode and the tests. */
+  resetToSampleWorkspace: () => void;
 }
 
 export interface DebtsSlice {
@@ -277,8 +277,6 @@ export interface DebtsSlice {
     }
   ) => Promise<void>;
   deleteDebt: (monthKey: string, debtId: string) => Promise<void>;
-  updateInstallmentAmount: (monthKey: string, newAmount: number) => Promise<void>;
-  updateFunfamiInstallmentAmount: (monthKey: string, newAmountCop: number) => Promise<void>;
 }
 
 export interface SavingsSlice {
@@ -311,7 +309,7 @@ export interface AccountsSlice {
 }
 
 export interface ProvisionsSlice {
-  idealMotoPlan: IdealMotoPlan;
+  provisionPlan: ProvisionPlan;
 
   saveProvisionItem: (input: SaveProvisionItemInput) => Promise<void>;
   deleteProvisionItem: (itemId: string) => Promise<void>;
@@ -327,7 +325,7 @@ export type BudgetStoreState = AuthSlice &
 
 export type SliceCreator<T> = StateCreator<BudgetStoreState, [], [], T>;
 
-export function recalculateProvisionPlan(items: readonly ProvisionItemSpec[]): IdealMotoPlan {
+export function recalculateProvisionPlan(items: readonly ProvisionItemSpec[]): ProvisionPlan {
   const normalizedItems = items.map((item) => ({ ...item }));
   const recurringMonthlyTotalCop = sumMoneyIntegers(
     normalizedItems
@@ -471,7 +469,6 @@ export function isRealAuthUser(user: BFlowAuthUser | null): user is BFlowAuthUse
     user &&
       user.provider === 'firebase' &&
       user.uid &&
-      user.uid !== 'local-owner' &&
       user.uid !== 'local-demo' &&
       (process.env.NODE_ENV !== 'test' || user.uid.startsWith('uid_cloud_test'))
   );
@@ -479,7 +476,7 @@ export function isRealAuthUser(user: BFlowAuthUser | null): user is BFlowAuthUse
 
 export function resolveDefaultInitialAuthUser(): BFlowAuthUser | null {
   if (process.env.NODE_ENV === 'test' || isDemoModeEnabled()) {
-    return DEMO_OWNER_USER;
+    return DEMO_USER;
   }
   return loadPersistedSession();
 }
@@ -488,9 +485,7 @@ export function buildCleanEmptyWorkspaceState(authUser: BFlowAuthUser | null) {
   const defaultMonth =
     authUser?.activeMonthKey && /^\d{4}-(0[1-9]|1[0-2])$/.test(authUser.activeMonthKey)
       ? authUser.activeMonthKey
-      : isOwnerCanonicalEmail(authUser?.email)
-        ? '2026-10'
-        : `${toAppMonthKey().slice(0, 4)}-01`;
+      : `${toAppMonthKey().slice(0, 4)}-01`;
   const isTestOrDemo = process.env.NODE_ENV === 'test' || isDemoModeEnabled();
 
   return {
@@ -506,7 +501,7 @@ export function buildCleanEmptyWorkspaceState(authUser: BFlowAuthUser | null) {
     savingsBucketsByMonth: (authUser
       ? { [defaultMonth]: ensureStandardSavingsBuckets([]) }
       : {}) as Record<string, SavingsBucket[]>,
-    idealMotoPlan: { ...EMPTY_PROVISION_PLAN, items: [] },
+    provisionPlan: { ...EMPTY_PROVISION_PLAN, items: [] },
     closedSnapshots: {} as Record<string, MonthSnapshot>,
     financialAccounts: [] as FinancialAccount[],
     authUser,
@@ -539,7 +534,7 @@ export function buildHydratedWorkspaceState(
     debtsByMonth: account.debtsByMonth,
     debtPayments: account.debtPayments,
     savingsBucketsByMonth: account.savingsBucketsByMonth,
-    idealMotoPlan: account.provisionPlan,
+    provisionPlan: account.provisionPlan,
     closedSnapshots: account.closedSnapshots,
     financialAccounts: account.financialAccounts ?? [],
     authUser: hydratedUser,
@@ -551,23 +546,29 @@ export function buildHydratedWorkspaceState(
   };
 }
 
-export function buildOctober2026SeedWorkspaceState(authUser: BFlowAuthUser | null) {
-  const seed = buildOctober2026SeedPayload();
+/** True for the local user of the showcase mode and the tests, the only one with example data. */
+export function isSampleWorkspaceUser(user: BFlowAuthUser | null | undefined): boolean {
+  return user?.provider === 'local-demo';
+}
+
+/** The example budget of `sampleWorkspace.ts`, opened on its month. */
+export function buildSampleWorkspaceState(authUser: BFlowAuthUser | null) {
+  const sample = buildSampleWorkspace();
 
   return {
     activeTab: 'summary' as BFlowWorkspaceTab,
-    activeMonthKey: '2026-10',
-    availableMonths: ['2026-10'],
-    concepts: seed.concepts,
-    entries: seed.entries,
+    activeMonthKey: sample.monthKey,
+    availableMonths: [sample.monthKey],
+    concepts: sample.concepts,
+    entries: sample.entries,
     debtsByMonth: {
-      '2026-10': seed.debts,
+      [sample.monthKey]: sample.debts,
     },
-    debtPayments: seed.debtPayments,
+    debtPayments: sample.debtPayments,
     savingsBucketsByMonth: {
-      '2026-10': seed.savingsBuckets,
+      [sample.monthKey]: sample.savingsBuckets,
     },
-    idealMotoPlan: seed.provisionPlan,
+    provisionPlan: sample.provisionPlan,
     closedSnapshots: {} as Record<string, MonthSnapshot>,
     financialAccounts: [] as FinancialAccount[],
     authUser,
@@ -596,7 +597,6 @@ export function buildInitialState(authUserOverride?: BFlowAuthUser | null) {
 
   if (
     resolvedUser?.uid &&
-    resolvedUser.uid !== 'local-owner' &&
     resolvedUser.uid !== 'local-demo'
   ) {
     const cachedAccount = loadPersistedAccount(resolvedUser.uid);
@@ -615,9 +615,9 @@ export function buildInitialState(authUserOverride?: BFlowAuthUser | null) {
     };
   }
 
-  if (!isOwnerCanonicalEmail(resolvedUser?.email)) {
+  if (!isSampleWorkspaceUser(resolvedUser)) {
     return buildCleanEmptyWorkspaceState(resolvedUser);
   }
 
-  return buildOctober2026SeedWorkspaceState(resolvedUser);
+  return buildSampleWorkspaceState(resolvedUser);
 }

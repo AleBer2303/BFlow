@@ -18,7 +18,7 @@ import {
   type FinancialAccount,
   type MonthEntry,
 } from '../../../../domain';
-import { DebtsFunfamiView } from '../DebtsFunfamiView';
+import { DebtsWorkspaceView } from '../DebtsWorkspaceView';
 import { formatShortDayLabelEs } from '../../../accounts/components/FinancialAccountCard';
 
 const ORIGINAL_WINDOW = Dimensions.get('window');
@@ -98,7 +98,7 @@ function setWindowSize(width: number, height: number): void {
 
 function renderView(
   skin: PlatformSkinId,
-  overrides?: Partial<React.ComponentProps<typeof DebtsFunfamiView>>,
+  overrides?: Partial<React.ComponentProps<typeof DebtsWorkspaceView>>,
   hidden = false
 ) {
   const handlers = {
@@ -112,7 +112,7 @@ function renderView(
   const utils = render(
     <BFlowThemeProvider skin={skin} initialMode="dark">
       <AmountPrivacyProvider initialHidden={hidden}>
-        <DebtsFunfamiView
+        <DebtsWorkspaceView
           debtSummary={EMPTY_DEBT_SUMMARY}
           financialAccounts={ACCOUNTS}
           accountsSummary={SUMMARY}

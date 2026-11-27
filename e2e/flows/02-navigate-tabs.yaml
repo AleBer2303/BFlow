@@ -16,12 +16,12 @@ tags:
 - tapOn:
     id: workspace-tab-debts
 - assertVisible:
-    id: debts-funfami-view
+    id: debts-workspace-view
 
 - tapOn:
     id: workspace-tab-savings
 - assertVisible:
-    id: savings-and-moto-ideal-view
+    id: savings-and-provisions-view
 
 - tapOn:
     id: workspace-tab-analytics

@@ -20,7 +20,7 @@ function point(monthKey: string, totalDebt: number): MonthlyHistoryPoint {
     pendingExpenses: 0,
     netCashFlow: 0,
     totalDebt,
-    reserveName: 'Moto',
+    reserveName: 'Fondo de reserva',
     reserveBalance: 0,
     savingsName: 'Ahorros',
     savingsBalance: 0,
@@ -30,7 +30,7 @@ function point(monthKey: string, totalDebt: number): MonthlyHistoryPoint {
   };
 }
 
-const OCTOBER_PROJECTION: DebtPayoffProjection = { remainingMonths: 4, estimatedPayoffMonthKey: '2027-02' };
+const SAMPLE_MONTH_PROJECTION: DebtPayoffProjection = { remainingMonths: 4, estimatedPayoffMonthKey: '2027-02' };
 
 function renderChart(
   history: MonthlyHistoryPoint[],
@@ -45,8 +45,8 @@ function renderChart(
 }
 
 describe.each(PLATFORM_SKIN_IDS)('DebtTrendChart on the %s skin', (skin) => {
-  it('states the estimated payoff of October 2026 and reads the current balance', () => {
-    renderChart([point('2026-10', 6_200_000)], OCTOBER_PROJECTION, skin);
+  it('states the estimated payoff of the sample month and reads the current balance', () => {
+    renderChart([point('2026-10', 6_200_000)], SAMPLE_MONTH_PROJECTION, skin);
 
     expect(screen.getByTestId('debts-chart-trend')).toHaveTextContent(
       /Cierre estimado: Febrero 2027, en 4 meses/
@@ -59,7 +59,7 @@ describe.each(PLATFORM_SKIN_IDS)('DebtTrendChart on the %s skin', (skin) => {
 
 describe('DebtTrendChart', () => {
   it('shows the projected payoff point when touched', () => {
-    renderChart([point('2026-09', 8_000_000), point('2026-10', 6_200_000)], OCTOBER_PROJECTION);
+    renderChart([point('2026-09', 8_000_000), point('2026-10', 6_200_000)], SAMPLE_MONTH_PROJECTION);
     fireEvent.press(screen.getByTestId('debt-trend-chart-point-2'));
     const readout = screen.getByTestId('debt-trend-chart-readout');
     expect(readout).toHaveTextContent(/Febrero 2027 · cierre estimado/);

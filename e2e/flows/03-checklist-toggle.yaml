@@ -2,7 +2,7 @@
 #
 # Usa los filtros para comprobar el cambio de estado sin depender del aspecto de la fila:
 # un ítem marcado sale de «Pendientes» y aparece en «Completados», y al revés.
-# Ítem: Gemini Pro, pendiente en el seed (id `2026-10_exp_gemini_pro`).
+# Ítem: Suscripciones, pendiente en el presupuesto de ejemplo (id `<mes>_exp_subscriptions`; el mes es el actual).
 appId: com.bflow.app
 name: 03-checklist-toggle
 tags:
@@ -14,7 +14,7 @@ tags:
     id: workspace-tab-checklist
 - assertVisible:
     id: checklist-workspace-view
-# Seed de octubre 2026: 12 ítems, 6 pendientes y 6 completados.
+# Presupuesto de ejemplo: 12 ítems, 6 pendientes y 6 completados.
 - assertVisible: 'Pendientes \(6\)'
 - assertVisible: 'Completados \(6\)'
 
@@ -23,12 +23,12 @@ tags:
     id: checklist-filter-pending
 - scrollUntilVisible:
     element:
-      id: checklist-workspace-item-2026-10_exp_gemini_pro
+      id: 'checklist-workspace-item-[0-9]{4}-[0-9]{2}_exp_subscriptions'
     direction: DOWN
 - tapOn:
-    id: checklist-workspace-item-2026-10_exp_gemini_pro
+    id: 'checklist-workspace-item-[0-9]{4}-[0-9]{2}_exp_subscriptions'
 - assertNotVisible:
-    id: checklist-workspace-item-2026-10_exp_gemini_pro
+    id: 'checklist-workspace-item-[0-9]{4}-[0-9]{2}_exp_subscriptions'
 - scrollUntilVisible:
     element:
       id: checklist-filter-completed
@@ -41,13 +41,13 @@ tags:
     id: checklist-filter-completed
 - scrollUntilVisible:
     element:
-      id: checklist-workspace-item-2026-10_exp_gemini_pro
+      id: 'checklist-workspace-item-[0-9]{4}-[0-9]{2}_exp_subscriptions'
     direction: DOWN
 - takeScreenshot: 03-checklist-toggle-completed
 - tapOn:
-    id: checklist-workspace-item-2026-10_exp_gemini_pro
+    id: 'checklist-workspace-item-[0-9]{4}-[0-9]{2}_exp_subscriptions'
 - assertNotVisible:
-    id: checklist-workspace-item-2026-10_exp_gemini_pro
+    id: 'checklist-workspace-item-[0-9]{4}-[0-9]{2}_exp_subscriptions'
 - scrollUntilVisible:
     element:
       id: checklist-filter-all

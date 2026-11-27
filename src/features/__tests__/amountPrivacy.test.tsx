@@ -40,7 +40,7 @@ function visibleAmountTexts(): string[] {
 describe('privacy mode for amounts', () => {
   beforeEach(() => {
     persistentStorage.removeItem(AMOUNTS_HIDDEN_STORAGE_KEY);
-    useBudgetStore.getState().resetToOctober2026GoldenState();
+    useBudgetStore.getState().resetToSampleWorkspace();
   });
 
   afterAll(() => {

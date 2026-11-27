@@ -100,7 +100,7 @@ beforeEach(() => {
   });
 });
 
-function seedCollection(name: string, docs: StoredDoc[]): void {
+function sampleCollection(name: string, docs: StoredDoc[]): void {
   collections.set(`users/${uid}/${name}`, docs);
 }
 
@@ -110,11 +110,11 @@ function payment(id: string, debtId: string): StoredDoc {
 
 describe('FirestoreBudgetRepository · borrados en cascada', () => {
   it('deleteDebt limpia conceptos y abonos de la deuda en el mismo lote', async () => {
-    seedCollection('concepts', [
+    sampleCollection('concepts', [
       { id: 'c_cuota', data: { id: 'c_cuota', defaultTargetDebtId: 'debt_1' } },
       { id: 'c_otro', data: { id: 'c_otro', defaultTargetDebtId: 'debt_2' } },
     ]);
-    seedCollection('debtPayments', [payment('p1', 'debt_1'), payment('p2', 'debt_2')]);
+    sampleCollection('debtPayments', [payment('p1', 'debt_1'), payment('p2', 'debt_2')]);
 
     await new FirestoreBudgetRepository().deleteDebt(uid, 'debt_1');
 
@@ -136,7 +136,7 @@ describe('FirestoreBudgetRepository · borrados en cascada', () => {
   });
 
   it('deleteDebt reparte en lotes de menos de 500 operaciones y borra la deuda en el último', async () => {
-    seedCollection(
+    sampleCollection(
       'debtPayments',
       Array.from({ length: 1_000 }, (_, i) => payment(`p${i}`, 'debt_big'))
     );
@@ -156,10 +156,10 @@ describe('FirestoreBudgetRepository · borrados en cascada', () => {
   });
 
   it('deleteSavingsBucket quita savingsContribution de los conceptos del fondo en el mismo lote', async () => {
-    seedCollection('concepts', [
+    sampleCollection('concepts', [
       {
-        id: 'c_moto',
-        data: { id: 'c_moto', savingsContribution: { bucketId: 'moto', onlyWhenCompleted: true } },
+        id: 'c_reserve',
+        data: { id: 'c_reserve', savingsContribution: { bucketId: 'reserve', onlyWhenCompleted: true } },
       },
       {
         id: 'c_ahorro',
@@ -170,7 +170,7 @@ describe('FirestoreBudgetRepository · borrados en cascada', () => {
       },
     ]);
 
-    await new FirestoreBudgetRepository().deleteSavingsBucket(uid, 'moto');
+    await new FirestoreBudgetRepository().deleteSavingsBucket(uid, 'reserve');
 
     expect(batches).toHaveLength(1);
     const ops = batches[0] ?? [];
@@ -178,23 +178,23 @@ describe('FirestoreBudgetRepository · borrados en cascada', () => {
       expect.arrayContaining([
         {
           kind: 'update',
-          path: `users/${uid}/concepts/c_moto`,
+          path: `users/${uid}/concepts/c_reserve`,
           data: { savingsContribution: DELETE_FIELD, updatedAt: expect.any(String) },
         },
-        { kind: 'delete', path: `users/${uid}/savingsBuckets/moto` },
+        { kind: 'delete', path: `users/${uid}/savingsBuckets/reserve` },
       ])
     );
     expect(ops.some((op) => op.path.endsWith('/c_ahorro'))).toBe(false);
   });
 
   it('saveInitialAccountSetup es idempotente: repetirlo escribe los mismos documentos', async () => {
-    const seed = await new InMemoryBudgetRepository().loadFullCloudAccount('local-owner');
+    const sample = await new InMemoryBudgetRepository().loadFullCloudAccount('local-demo');
     const payload: InitialAccountSetupPayload = {
       monthKey: '2026-11',
-      concepts: seed.concepts,
-      entries: seed.entries,
-      debts: seed.debtsByMonth['2026-10'] ?? [],
-      debtPayments: seed.debtPayments,
+      concepts: sample.concepts,
+      entries: sample.entries,
+      debts: sample.debtsByMonth['2026-10'] ?? [],
+      debtPayments: sample.debtPayments,
       savingsBuckets: [],
       provisionPlan: { items: [], recurringMonthlyTotalCop: 0, totalWithTargetGoalCop: 0 },
     };
@@ -214,12 +214,12 @@ describe('FirestoreBudgetRepository · borrados en cascada', () => {
 describe('InMemoryBudgetRepository · misma limpieza en cascada', () => {
   it('borra abonos y vínculos de una deuda y de un fondo', async () => {
     const repo = new InMemoryBudgetRepository();
-    const before = await repo.loadFullCloudAccount('local-owner');
+    const before = await repo.loadFullCloudAccount('local-demo');
     const debtConcept = before.concepts.find((c) => c.defaultTargetDebtId);
     const savingsConcept = before.concepts.find((c) => c.savingsContribution);
     const debtId = debtConcept?.defaultTargetDebtId;
     const bucketId = savingsConcept?.savingsContribution?.bucketId;
-    if (!debtId || !bucketId) throw new Error('Expected seeded links');
+    if (!debtId || !bucketId) throw new Error('Expected sample links');
     const extraPayment: DebtPayment = {
       id: 'p_extra',
       entryId: 'entry_extra',
@@ -235,7 +235,7 @@ describe('InMemoryBudgetRepository · misma limpieza en cascada', () => {
     await repo.deleteDebt(uid, debtId);
     await repo.deleteSavingsBucket(uid, bucketId);
 
-    const after = await repo.loadFullCloudAccount('local-owner');
+    const after = await repo.loadFullCloudAccount('local-demo');
     expect(after.concepts.some((c) => c.defaultTargetDebtId === debtId)).toBe(false);
     expect(after.concepts.some((c) => c.savingsContribution?.bucketId === bucketId)).toBe(false);
     expect(after.debtPayments.some((dp) => dp.debtId === debtId)).toBe(false);

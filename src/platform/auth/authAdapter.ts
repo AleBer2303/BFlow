@@ -28,10 +28,8 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Platform } from 'react-native';
 import { getFirebaseAuth, getFirebaseDb } from '../../data/firebase/firebaseConfig';
 import { stripUndefinedFields } from '../../data/mappers/firestoreSchemas';
-import { isOwnerCanonicalEmail } from '../../data/repositories/budgetRepository';
 import { describeUnmetPasswordRule } from '../../domain/auth/passwordPolicy';
 import { toBogotaMonthKey } from '../../domain/date/monthKey';
-import { DEMO_OWNER_SEED_EMAIL } from '../mode/ownerSeedEmail';
 import { sanitizeProfilePhotoUrl } from '../media/profilePhotoValidation';
 import { clearPersistedAccount } from '../storage/accountCache';
 import { runPasswordAttempt, startCooldown } from './authRateLimiter';
@@ -70,10 +68,14 @@ export interface RegisterPersonalAccountInput {
   financialGoal?: string;
 }
 
-export const DEMO_OWNER_USER: BFlowAuthUser = {
-  uid: 'local-owner',
-  email: DEMO_OWNER_SEED_EMAIL,
-  displayName: 'Alejandro Bernal',
+/** Email of the local example user (`.example` is a reserved domain, RFC 2606). */
+export const DEMO_USER_EMAIL = 'demo@bflow.example';
+
+/** Local user of the showcase mode and the tests; it never reaches Firebase. */
+export const DEMO_USER: BFlowAuthUser = {
+  uid: 'local-demo',
+  email: DEMO_USER_EMAIL,
+  displayName: 'Usuario de ejemplo',
   phone: '+57 300 000 0000',
   financialGoal: 'Alcanzar libertad financiera y optimizar flujo de caja',
   authProvider: 'local',
@@ -321,20 +323,13 @@ async function syncUserProfileDocument(
         ? existingData.createdAt
         : persisted?.createdAt ?? nowIso;
 
-    const isOwner = isOwnerCanonicalEmail(firebaseUser.email);
     const hasValidExistingMonth =
       typeof existingData.activeMonthKey === 'string' &&
-      /^\d{4}-(0[1-9]|1[0-2])$/.test(existingData.activeMonthKey) &&
-      !(
-        !isOwner &&
-        existingData.activeMonthKey === '2026-10' &&
-        existingData.onboardingCompleted !== true
-      );
+      /^\d{4}-(0[1-9]|1[0-2])$/.test(existingData.activeMonthKey);
 
     const activeMonthKey = hasValidExistingMonth
       ? (existingData.activeMonthKey as string)
-      : persisted?.activeMonthKey ??
-        (isOwner ? '2026-10' : `${toBogotaMonthKey().slice(0, 4)}-01`);
+      : persisted?.activeMonthKey ?? `${toBogotaMonthKey().slice(0, 4)}-01`;
 
     const previousLastLoginAt =
       typeof existingData.lastLoginAt === 'string'
@@ -584,7 +579,6 @@ export function subscribeToAuthUser(
         }
         listener(current);
       } else {
-        const isOwner = isOwnerCanonicalEmail(firebaseUser.email);
         const initialPhotoUrl = sanitizeProfilePhotoUrl(firebaseUser.photoURL);
         const fastUser: BFlowAuthUser = {
           uid: firebaseUser.uid,
@@ -595,9 +589,7 @@ export function subscribeToAuthUser(
             'Usuario BFlow',
           ...(initialPhotoUrl ? { photoUrl: initialPhotoUrl } : {}),
           authProvider: resolveAuthProvider(firebaseUser),
-          activeMonthKey: isOwner
-            ? '2026-10'
-            : `${toBogotaMonthKey().slice(0, 4)}-01`,
+          activeMonthKey: `${toBogotaMonthKey().slice(0, 4)}-01`,
           ...resolveEmailVerificationState(firebaseUser),
           provider: 'firebase',
         };

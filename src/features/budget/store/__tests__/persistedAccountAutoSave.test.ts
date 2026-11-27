@@ -26,7 +26,7 @@ import { useBudgetStore } from '../useBudgetStore';
 
 const realUser: BFlowAuthUser = {
   uid: 'uid_cloud_test_autosave',
-  email: 'demo.owner@bflow.example',
+  email: 'demo@bflow.example',
   displayName: 'Demo',
   authProvider: 'password',
   provider: 'firebase',
@@ -58,7 +58,7 @@ function snapshotOfStore(): FullCloudAccountData {
     debtsByMonth: state.debtsByMonth,
     debtPayments: state.debtPayments,
     savingsBucketsByMonth: state.savingsBucketsByMonth,
-    provisionPlan: state.idealMotoPlan,
+    provisionPlan: state.provisionPlan,
     closedSnapshots: state.closedSnapshots,
     financialAccounts: state.financialAccounts,
   };
@@ -77,7 +77,7 @@ describe('OPT-02 · un solo punto de guardado de la caché', () => {
     __setStorageBackendForTests(createDiskBackend());
     __resetMemoryCacheForTests();
     clearOfflineWriteQueue(realUser.uid);
-    useBudgetStore.getState().resetToOctober2026GoldenState();
+    useBudgetStore.getState().resetToSampleWorkspace();
     useBudgetStore.setState({ authUser: realUser, isAccountHydrated: true, needsOnboarding: false });
     accountCache.flushPendingPersistedAccount();
     jest.spyOn(FirestoreBudgetRepository.prototype, 'saveOrUpdateEntry').mockResolvedValue();
@@ -105,14 +105,14 @@ describe('OPT-02 · un solo punto de guardado de la caché', () => {
     const cacheWrites = () => setItem.mock.calls.filter(([key]) => key === cacheKey).length;
 
     const entry = useBudgetStore.getState().entries[0];
-    if (!entry) throw new Error('Expected a seeded entry');
+    if (!entry) throw new Error('Expected a sample entry');
     await useBudgetStore.getState().toggleEntryStatus(entry.id);
     await Promise.resolve();
     const toggleSchedules = schedule.mock.calls.length;
 
     schedule.mockClear();
     await useBudgetStore.getState().deleteProvisionItem(
-      useBudgetStore.getState().idealMotoPlan.items[0]?.id ?? 'none'
+      useBudgetStore.getState().provisionPlan.items[0]?.id ?? 'none'
     );
     await Promise.resolve();
     const provisionSchedules = schedule.mock.calls.length;

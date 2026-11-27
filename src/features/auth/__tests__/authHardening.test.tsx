@@ -272,7 +272,7 @@ describe('PhaseOneHomeScreen: account limits and unverified accounts (ADR 0026)'
   beforeEach(() => {
     savePersistedSession(null);
     act(() => {
-      useBudgetStore.getState().resetToOctober2026GoldenState();
+      useBudgetStore.getState().resetToSampleWorkspace();
       useBudgetStore.getState().requireAuthenticationGate();
     });
     loadSpy = jest
@@ -283,8 +283,8 @@ describe('PhaseOneHomeScreen: account limits and unverified accounts (ADR 0026)'
   afterEach(() => {
     jest.restoreAllMocks();
     act(() => {
-      useBudgetStore.setState({ authUser: authAdapter.DEMO_OWNER_USER, needsOnboarding: false });
-      useBudgetStore.getState().resetToOctober2026GoldenState();
+      useBudgetStore.setState({ authUser: authAdapter.DEMO_USER, needsOnboarding: false });
+      useBudgetStore.getState().resetToSampleWorkspace();
     });
   });
 
@@ -382,7 +382,7 @@ describe('PhaseOneHomeScreen: account limits and unverified accounts (ADR 0026)'
   it('reads the whole account once however many times the manual sync is pressed', async () => {
     act(() => {
       useBudgetStore.setState({ authUser: verifiedUser, needsOnboarding: false });
-      useBudgetStore.getState().resetToOctober2026GoldenState();
+      useBudgetStore.getState().resetToSampleWorkspace();
     });
     renderApp();
     fireEvent.press(screen.getByTestId('workspace-tab-account'));

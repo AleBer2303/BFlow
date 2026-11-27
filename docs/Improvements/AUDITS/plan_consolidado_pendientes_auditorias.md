@@ -2,7 +2,7 @@
 
 > **Tipo Diátaxis:** *Reference* (estado verificado) + *How-To* (fases con prompts).
 > **Fecha de verificación:** 2026-11-26 · **Rama:** `audit` (desde `develop` en `25e2b91`).
-> **Avance:** Fase 1 (`e272b42`, ADR 0035), Fase 2 (`90a96c2`, `PERF_BASELINE.md` §20) y Fase 3 (`efa88ab`) integradas en `audit` el 2026-11-26 (`9de58f0`, `6a23fee` y `da2bdd5`). Las líneas citadas en el prompt de la Fase 4 se actualizaron sobre ese `audit`; las de las Fases 5 y 6 siguen siendo las del 2026-11-26 y hay que volver a comprobarlas antes de empezarlas.
+> **Avance:** Fase 1 (`e272b42`, ADR 0035), Fase 2 (`90a96c2`, `PERF_BASELINE.md` §20) y Fase 3 (`efa88ab`) integradas en `audit` el 2026-11-26 (`9de58f0`, `6a23fee` y `da2bdd5`). Las líneas citadas en el prompt de la Fase 4 se actualizaron sobre ese `audit`; las de las Fases 5 y 6 siguen siendo las del 2026-11-26 y hay que volver a comprobarlas antes de empezarlas. La Fase 4 está hecha en `refactor/split-repository-and-onboarding` (ADR 0036), pendiente de integrar en `audit`. En la misma rama, el ADR 0037 elimina la cuenta semilla y los nombres del Excel del código y de Firestore (con migración), lo que amplía el cierre de CC-05.
 > **Fuentes:** [`auditoria_produccion_bflow.md`](auditoria_produccion_bflow.md) (hallazgos `AUD-01` a `AUD-09`) y [`auditoria_documentacion_clean_code_y_optimizacion.md`](auditoria_documentacion_clean_code_y_optimizacion.md) (hallazgos `DOC-*`, `BUG-*`, `CC-*`, `OPT-*`).
 
 > [!IMPORTANT]
@@ -71,16 +71,16 @@ OPT-01, 02, 04, 05 y 06 se resolvieron en la Fase 2, con el antes y el después 
 
 ### 3.3. Clean code (`CC-*`)
 
-CC-02, CC-03 y CC-04 se resolvieron en la Fase 3; su evidencia es la de `25e2b91`. Quedan CC-01, CC-05 y CC-06 (Fase 4).
+CC-02, CC-03 y CC-04 se resolvieron en la Fase 3; su evidencia es la de `25e2b91`. CC-01, CC-05 y CC-06 se resolvieron en la Fase 4; su evidencia es la de `0fd197d`.
 
 | ID | Estado | Evidencia de hoy |
 | :--- | :---: | :--- |
-| **CC-01** | ❌ Abierto | `budgetRepository.ts` creció a 2.703 líneas y `loadFullCloudAccount` a ~670. El onboarding bajó a 1.025 líneas y ya no tiene la errata «ve al al final». |
+| **CC-01** | ✅ Resuelto (Fase 4) | `budgetRepository.ts` creció a 2.703 líneas y `loadFullCloudAccount` a ~670. El onboarding bajó a 1.025 líneas y ya no tiene la errata «ve al al final». |
 | **CC-02** | ✅ Resuelto (Fase 3) | **Slugs:** 7 copias sin `normalize('NFD')` (`createAuthSlice.ts:212`, `:231`, `:274`, `:316`; `createBudgetSlice.ts:231`; `createProvisionsSlice.ts:43`; `createSavingsSlice.ts:106`) y 1 con tildes (`InitialAccountSetupView.tsx:78`). **Tasas:** 8 conversiones `/12` y `*12` (`createAuthSlice.ts:237-239`, `createDebtsSlice.ts:36-42` y `:115-123`, `DebtForm.tsx:200-202`). **Montos:** 16 `replace(/[^0-9]/g…)`/`replace(/\D/g…)` en `features` y `design-system`, cuando ya existe `parseCurrencyInteger` (`money.ts:72`). **Formularios de checklist:** la háptica ya es coherente, pero `ChecklistAddMovementForm` (662 líneas) y `ChecklistEditEntryForm` (473) siguen duplicando el monto, los chips y la frecuencia. **Editar / Eliminar:** `ActionModeToggleRow`/`InlineItemActionPill` solo se usan en Ahorros; Checklist y Deudas mantienen su propia versión. |
 | **CC-03** | ✅ Resuelto (Fase 3) | Ya resuelto: `zzSpikeGesture.test.tsx` se borró, y los imports de `createBudgetSlice` ya se usan (línea 959). Sigue abierto: `applyCloudWorkspace` sin llamadores (`createSyncSlice.ts:73`, `sliceTypes.ts:203`); `_defaultMotoOpening`/`_defaultSavingsOpening` (`budgetRepository.ts:164-165`); props muertas en `AnalyticsAndHistoryView.tsx:224-235` y `DebtsFunfamiView.tsx:57-62`; `EMPTY_PROVISION_PLAN` importado y sin uso (`createProvisionsSlice.ts:8`). |
 | **CC-04** | ✅ Resuelto (Fase 3) | Ya resuelto: el `fontSize: 20` literal. Sigue abierto: `testID` distinto por piel (`WorkspaceShell.tsx:550`, `:607`, `:655`) y `borderRadius` 10/8/6 literal; `Platform.OS === 'ios' ? 44 : …` (`AccountProfileWorkspaceView.tsx:426`); háptica en `onPressIn` (`AnalyticsAndHistoryView.tsx:121`; `BrandAndThemeIcons.tsx:44`, `:106` y `:216`); emojis `☁️` (`WorkspaceShell.tsx:561`, `:616`, `:666`) y `✨` (`AnalyticsAndHistoryView.tsx:315`, `DebtsFunfamiView.tsx:665`, `SummaryOverview.tsx:102`); `BFlow v1.0.0` hardcodeado (`AccountProfileWorkspaceView.tsx:640`) frente a `0.1.0` en `package.json` (`expo-constants` ya está instalado). |
-| **CC-05** | ❌ Abierto (y más amplio) | Saneamiento con `14_800_000`/`13_800_000`/`16_880_000` (`budgetRepository.ts:1450-1452`); `debt_cb300f_moto`/`debt_esp_ia`/`debt_especializacion` (`budgetRepository.ts:1677-1680` y `:1746-1749`; `DebtsFunfamiView.tsx:456`). **Nuevo:** también en el dominio, en `debtCalculator.ts:126-127` (orden de prioridad «Backward compat priority for fixture»). |
-| **CC-06** | ❌ Abierto | `proxyBatch … as unknown as ReturnType<typeof writeBatch>` en `budgetRepository.ts:2355-2362` y `:2385-2395`. |
+| **CC-05** | ✅ Resuelto (Fase 4, ADR 0036) | Saneamiento con `14_800_000`/`13_800_000`/`16_880_000` (`budgetRepository.ts:1450-1452`); `debt_cb300f_moto`/`debt_esp_ia`/`debt_especializacion` (`budgetRepository.ts:1677-1680` y `:1746-1749`; `DebtsFunfamiView.tsx:456`). **Nuevo:** también en el dominio, en `debtCalculator.ts:126-127` (orden de prioridad «Backward compat priority for fixture»). |
+| **CC-06** | ✅ Resuelto (Fase 4) | `proxyBatch … as unknown as ReturnType<typeof writeBatch>` en `budgetRepository.ts:2355-2362` y `:2385-2395`. |
 
 ### 3.4. Documentación (`DOC-*`)
 
@@ -105,7 +105,7 @@ Las fases van **de mayor a menor riesgo para los datos del usuario**. La documen
 | **1** ✅ | Cola offline e integridad de borrados (integrada en `audit`) | BUG-01, BUG-02, BUG-03, BUG-04 | Alto (datos) | Sí: enmienda al 0017 o un ADR nuevo (borrado en cascada) |
 | **2** ✅ | Rendimiento de runtime y caché cifrada (integrada en `audit`) | OPT-01, OPT-02, OPT-04, OPT-05, OPT-06, AUD-07 (cifrado) | Medio | No (registrar en `PERF_BASELINE.md`) |
 | **3** ✅ | DRY, código muerto y reglas de diseño (integrada en `audit`) | CC-02, CC-03, CC-04 | Bajo/Medio | No |
-| **4** | Refactor estructural del repositorio y del onboarding | CC-01, CC-05, CC-06 | Medio | Sí, si se elimina el saneamiento o cambia el orden de deudas en el dominio |
+| **4** ✅ | Refactor estructural del repositorio y del onboarding | CC-01, CC-05, CC-06 | Medio | Sí, si se elimina el saneamiento o cambia el orden de deudas en el dominio |
 | **5** | Seguridad residual y preparación para tiendas | AUD-01 (App Check), AUD-04 (pepper), AUD-05, AUD-07 (iconos), AUD-03 (opcional) | Medio | Sí para App Check |
 | **6** | Documentación y Docs-as-Code | DOC-01 a DOC-07 | Nulo | No |
 

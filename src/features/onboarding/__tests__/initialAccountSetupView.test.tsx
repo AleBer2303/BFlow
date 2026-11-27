@@ -116,35 +116,35 @@ describe('InitialAccountSetupView (Onboarding / Account Reset Wizard)', () => {
     expect(screen.getByTestId('debt-form-amount-input').props.keyboardType).toBe('number-pad');
     fireEvent.changeText(screen.getByTestId('debt-form-amount-input'), '2000000');
     expect(screen.getByTestId('debt-form-amount-input').props.value).toBe('2.000.000');
-    fireEvent.changeText(screen.getByTestId('debt-form-name-input'), 'Crédito Moto');
+    fireEvent.changeText(screen.getByTestId('debt-form-name-input'), 'Crédito Carro');
     fireEvent.changeText(screen.getByTestId('debt-form-lender-input'), 'Bancolombia');
     fireEvent.changeText(screen.getByTestId('debt-form-installment-input'), '200000');
     fireEvent.press(screen.getByTestId('debt-form-submit-button'));
-    expect(screen.getByText('Crédito Moto (Bancolombia)')).toBeTruthy();
+    expect(screen.getByText('Crédito Carro (Bancolombia)')).toBeTruthy();
     expect(screen.queryByTestId('debt-form-modal')).toBeNull();
 
     // 3. Add income via ChecklistAddMovementForm
     fireEvent.press(screen.getByTestId('onboarding-toggle-add-movement'));
     fireEvent.press(screen.getByTestId('modal-type-income'));
     fireEvent.changeText(screen.getByTestId('movement-amount-input'), '3500000');
-    fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Salario Principal');
+    fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Salario');
     fireEvent.press(screen.getByTestId('custom-group-fixed'));
     fireEvent.press(screen.getByTestId('submit-movement-button'));
-    expect(screen.getByText('Salario Principal')).toBeTruthy();
+    expect(screen.getByText('Salario')).toBeTruthy();
     expect(screen.queryByTestId('add-movement-modal-card')).toBeNull();
 
     // 4. Add expense linked to debt via ChecklistAddMovementForm ("Más opciones" -> AdaptiveSelectField)
     fireEvent.press(screen.getByTestId('onboarding-toggle-add-movement'));
     fireEvent.changeText(screen.getByTestId('movement-amount-input'), '200000');
-    fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Cuota Préstamo Moto');
+    fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Cuota Préstamo Carro');
     fireEvent.press(screen.getByTestId('custom-group-fixed'));
     fireEvent.press(screen.getByTestId('add-movement-more-options-toggle'));
     fireEvent.press(screen.getByTestId('add-movement-debt-select'));
-    fireEvent.press(screen.getByText('Crédito Moto'));
+    fireEvent.press(screen.getByText('Crédito Carro'));
     fireEvent.press(screen.getByTestId('add-movement-debt-picker-confirm'));
     fireEvent.press(screen.getByTestId('submit-movement-button'));
-    expect(screen.getByText('Cuota Préstamo Moto')).toBeTruthy();
-    expect(screen.getByText(/Abona a: Crédito Moto/)).toBeTruthy();
+    expect(screen.getByText('Cuota Préstamo Carro')).toBeTruthy();
+    expect(screen.getByText(/Abona a: Crédito Carro/)).toBeTruthy();
     expect(screen.queryByTestId('add-movement-modal-card')).toBeNull();
 
     // 5. Add provision via ProvisionItemForm
@@ -175,17 +175,17 @@ describe('InitialAccountSetupView (Onboarding / Account Reset Wizard)', () => {
     expect(config?.savingsBuckets[0]?.openingBalanceCop).toBe(500000);
 
     expect(config?.debts).toHaveLength(1);
-    expect(config?.debts[0]?.name).toBe('Crédito Moto');
+    expect(config?.debts[0]?.name).toBe('Crédito Carro');
     expect(config?.debts[0]?.openingBalanceCop).toBe(2000000);
     expect(config?.debts[0]?.monthlyInstallmentCop).toBe(200000);
 
     expect(config?.incomes).toHaveLength(1);
-    expect(config?.incomes[0]?.name).toBe('Salario Principal');
+    expect(config?.incomes[0]?.name).toBe('Salario');
     expect(config?.incomes[0]?.amountCop).toBe(3500000);
     expect(config?.incomes[0]?.group).toBe('fixed');
 
     expect(config?.expenses).toHaveLength(1);
-    expect(config?.expenses[0]?.name).toBe('Cuota Préstamo Moto');
+    expect(config?.expenses[0]?.name).toBe('Cuota Préstamo Carro');
     expect(config?.expenses[0]?.amountCop).toBe(200000);
     expect(config?.expenses[0]?.targetDebtKey).toContain('debt_');
 
@@ -327,5 +327,67 @@ describe('InitialAccountSetupView (Onboarding / Account Reset Wizard)', () => {
     expect(screen.getByTestId('complete-initial-setup-button')).toHaveTextContent(
       `Guardar e Iniciar Octubre ${previousYear}`
     );
+  });
+});
+
+describe('InitialAccountSetupView steps (CC-01)', () => {
+  function addMovement(name: string, amount: string, type: 'income' | 'expense') {
+    fireEvent.press(screen.getByTestId('onboarding-toggle-add-movement'));
+    if (type === 'income') fireEvent.press(screen.getByTestId('modal-type-income'));
+    fireEvent.changeText(screen.getByTestId('movement-amount-input'), amount);
+    fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), name);
+    fireEvent.press(screen.getByTestId('custom-group-fixed'));
+    fireEvent.press(screen.getByTestId('submit-movement-button'));
+  }
+
+  it('removes incomes, expenses, provisions and debts from their own step, unlinking expenses', () => {
+    const { onCompleteSetup } = renderSetup({ defaultMonthKey: '2026-10' });
+
+    fireEvent.press(screen.getByTestId('onboarding-toggle-add-debt'));
+    fireEvent.changeText(screen.getByTestId('debt-form-amount-input'), '900000');
+    fireEvent.changeText(screen.getByTestId('debt-form-name-input'), 'Tarjeta');
+    fireEvent.changeText(screen.getByTestId('debt-form-lender-input'), 'Banco');
+    fireEvent.press(screen.getByTestId('debt-form-submit-button'));
+    const debtItem = screen.getByTestId(/^onboarding-debt-item-debt_/);
+    const debtKey = String(debtItem.props.testID).replace('onboarding-debt-item-', '');
+
+    addMovement('Salario', '3000000', 'income');
+    addMovement('Arriendo', '1200000', 'expense');
+    fireEvent.press(screen.getByTestId('onboarding-toggle-add-movement'));
+    fireEvent.changeText(screen.getByTestId('movement-amount-input'), '100000');
+    fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Abono tarjeta');
+    fireEvent.press(screen.getByTestId('custom-group-fixed'));
+    fireEvent.press(screen.getByTestId('add-movement-more-options-toggle'));
+    fireEvent.press(screen.getByTestId('add-movement-debt-select'));
+    fireEvent.press(screen.getByText('Tarjeta'));
+    fireEvent.press(screen.getByTestId('add-movement-debt-picker-confirm'));
+    fireEvent.press(screen.getByTestId('submit-movement-button'));
+    expect(screen.getByText(/Abona a: Tarjeta/)).toBeTruthy();
+    expect(screen.getByText('1 ing. · 2 gas.')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('onboarding-toggle-add-provision'));
+    fireEvent.changeText(screen.getByTestId('provision-amount-input'), '120000');
+    fireEvent.changeText(screen.getByTestId('provision-name-input'), 'Seguro');
+    fireEvent.changeText(screen.getByTestId('provision-months-input'), '12');
+    fireEvent.press(screen.getByTestId('submit-provision-button'));
+    expect(screen.getByTestId('onboarding-provision-item-0')).toHaveTextContent(/10\.000\/mes/);
+
+    fireEvent.press(screen.getByTestId(`onboarding-remove-debt-${debtKey}`));
+    expect(screen.queryByText(/Abona a: Tarjeta/)).toBeNull();
+    fireEvent.press(screen.getByTestId('onboarding-remove-income-0'));
+    fireEvent.press(screen.getByTestId('onboarding-remove-expense-0'));
+    fireEvent.press(screen.getByTestId('onboarding-remove-provision-0'));
+    expect(screen.getByText('0 ing. · 1 gas.')).toBeTruthy();
+    expect(screen.getByText(/Sin provisiones registradas/)).toBeTruthy();
+    expect(screen.getByText(/Sin deudas registradas/)).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('complete-initial-setup-button'));
+    const config = onCompleteSetup.mock.calls[0]?.[0];
+    expect(config?.debts).toEqual([]);
+    expect(config?.incomes).toEqual([]);
+    expect(config?.provisions).toEqual([]);
+    expect(config?.expenses).toEqual([
+      expect.objectContaining({ name: 'Abono tarjeta', targetDebtKey: null }),
+    ]);
   });
 });

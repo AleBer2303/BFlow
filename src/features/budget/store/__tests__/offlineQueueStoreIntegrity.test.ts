@@ -17,7 +17,7 @@ import { useBudgetStore } from '../useBudgetStore';
 
 const testUser: BFlowAuthUser = {
   uid: 'uid_cloud_test_queue_integrity',
-  email: 'demo.owner@bflow.example',
+  email: 'demo@bflow.example',
   displayName: 'Demo',
   authProvider: 'password',
   provider: 'firebase',
@@ -37,8 +37,8 @@ function permissionError(): Error {
 
 beforeEach(() => {
   clearOfflineWriteQueue(testUser.uid);
-  useBudgetStore.getState().resetToOctober2026GoldenState();
-  useBudgetStore.getState().setAuthUser(testUser);
+  useBudgetStore.getState().resetToSampleWorkspace();
+  useBudgetStore.setState({ authUser: testUser });
 });
 
 afterEach(() => {
@@ -49,7 +49,7 @@ afterEach(() => {
 describe('BUG-01 · borrar un movimiento sin red', () => {
   it('encola delete_entry_completely y al reconectar lo borra en vez de restablecerlo', async () => {
     const entry = useBudgetStore.getState().entries[0];
-    if (!entry) throw new Error('Expected a seeded entry');
+    if (!entry) throw new Error('Expected a sample entry');
     jest
       .spyOn(FirestoreBudgetRepository.prototype, 'deleteEntryCompletely')
       .mockRejectedValueOnce(offlineError());
@@ -76,7 +76,7 @@ describe('BUG-01 · borrar un movimiento sin red', () => {
 
   it('restablecer un movimiento sigue usando delete_or_reset_entry', async () => {
     const entry = useBudgetStore.getState().entries[0];
-    if (!entry) throw new Error('Expected a seeded entry');
+    if (!entry) throw new Error('Expected a sample entry');
     jest
       .spyOn(FirestoreBudgetRepository.prototype, 'deleteOrResetEntry')
       .mockRejectedValueOnce(offlineError());
@@ -92,7 +92,7 @@ describe('BUG-01 · borrar un movimiento sin red', () => {
 describe('BUG-02 · editar y luego borrar sin red', () => {
   it('deja una sola operación sobre el movimiento: el borrado', async () => {
     const entry = useBudgetStore.getState().entries.find((e) => e.type === 'expense');
-    if (!entry) throw new Error('Expected a seeded expense');
+    if (!entry) throw new Error('Expected a sample expense');
     jest
       .spyOn(FirestoreBudgetRepository.prototype, 'saveOrUpdateEntry')
       .mockRejectedValue(offlineError());
@@ -170,7 +170,7 @@ describe('BUG-03 · configuración inicial con la cola offline', () => {
 });
 
 describe('BUG-04 · limpieza en cascada (ADR 0035)', () => {
-  const DEBT_ID = 'debt_cb300f_moto';
+  const DEBT_ID = 'debt_auto_loan';
 
   it('al borrar una deuda quita defaultTargetDebtId de los conceptos y sus abonos', async () => {
     const before = useBudgetStore.getState();

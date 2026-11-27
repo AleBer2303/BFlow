@@ -1,6 +1,6 @@
 /**
  * Phase 6 charts inside the real app, on the three skins: they appear in the Cierre, Deudas
- * and Ahorros tabs with the golden October 2026 figures and follow the store when a
+ * and Ahorros tabs with the sample month figures and follow the store when a
  * movement is completed or the month is closed. The demo user is not a real account, so
  * nothing here writes to Firestore.
  */
@@ -11,7 +11,7 @@ import { Dimensions } from 'react-native';
 import PhaseOneHomeScreen from '../../../../app/index';
 import { BFlowThemeProvider } from '../../../../design-system/theme/ThemeContext';
 import { PLATFORM_SKIN_IDS, type PlatformSkinId } from '../../../../design-system/tokens';
-import { DEMO_OWNER_USER } from '../../../../platform/auth/authAdapter';
+import { DEMO_USER } from '../../../../platform/auth/authAdapter';
 import { useBudgetStore } from '../../../budget/store/useBudgetStore';
 
 function renderApp(skin: PlatformSkinId) {
@@ -34,8 +34,8 @@ function setWindowSize(width: number, height: number): void {
 
 beforeEach(() => {
   act(() => {
-    useBudgetStore.setState({ authUser: DEMO_OWNER_USER, needsOnboarding: false });
-    useBudgetStore.getState().resetToOctober2026GoldenState();
+    useBudgetStore.setState({ authUser: DEMO_USER, needsOnboarding: false });
+    useBudgetStore.getState().resetToSampleWorkspace();
   });
   setWindowSize(390, 844);
 });
@@ -57,13 +57,13 @@ describe.each(PLATFORM_SKIN_IDS)('charts in the app on the %s skin', (skin) => {
     expect(screen.getByTestId('balance-chart-readout')).toHaveTextContent(/\$ 1\.080\.000/);
 
     fireEvent.press(screen.getByTestId('workspace-tab-debts'));
-    expect(screen.getByTestId('debts-funfami-view')).toBeTruthy();
+    expect(screen.getByTestId('debts-workspace-view')).toBeTruthy();
     expect(screen.getByTestId('debts-chart-trend')).toHaveTextContent(/Cierre estimado: Febrero 2027/);
     expect(screen.getByTestId('debt-trend-chart-readout')).toHaveTextContent(/\$ 6\.200\.000/);
 
     fireEvent.press(screen.getByTestId('workspace-tab-savings'));
-    expect(screen.getByTestId('savings-and-moto-ideal-view')).toBeTruthy();
-    expect(screen.getByTestId('savings-trend-chart-readout')).toHaveTextContent(/Moto\s*\$ 2\.300\.000/);
+    expect(screen.getByTestId('savings-and-provisions-view')).toBeTruthy();
+    expect(screen.getByTestId('savings-trend-chart-readout')).toHaveTextContent(/Fondo de reserva\s*\$ 2\.300\.000/);
     expect(screen.queryByTestId('savings-chart-provision')).toBeNull();
   });
 });
@@ -77,13 +77,13 @@ describe('charts follow the store', () => {
     );
 
     await act(async () => {
-      await useBudgetStore.getState().toggleEntryStatus('2026-10_inc_prima', '2026-10-30');
+      await useBudgetStore.getState().toggleEntryStatus('2026-10_inc_bonus', '2026-10-30');
     });
     expect(screen.getByTestId('cash-flow-chart-readout')).toHaveTextContent(/Recibido\s*\$ 6\.000\.000/);
     expect(screen.getByTestId('balance-chart-readout')).toHaveTextContent(/\$ 3\.080\.000/);
 
     await act(async () => {
-      await useBudgetStore.getState().toggleEntryStatus('2026-10_exp_smart_fit', '2026-10-30');
+      await useBudgetStore.getState().toggleEntryStatus('2026-10_exp_gym', '2026-10-30');
     });
     expect(screen.getByTestId('cash-flow-chart-readout')).toHaveTextContent(/Pendiente\s*\$ 350\.000/);
     expect(screen.getByTestId('paid-pending-chart-legend')).toHaveTextContent(/Pendiente\s*10 %/);
@@ -123,7 +123,7 @@ describe('charts and cards agree', () => {
     // Back to the closed October, then a pending expense is paid.
     fireEvent.press(screen.getByTestId('history-month-pill-2026-10'));
     await act(async () => {
-      await useBudgetStore.getState().toggleEntryStatus('2026-10_exp_smart_fit', '2026-10-31');
+      await useBudgetStore.getState().toggleEntryStatus('2026-10_exp_gym', '2026-10-31');
     });
 
     // The card and the charts read the same live month: $ 1.080.000 - $ 100.000.

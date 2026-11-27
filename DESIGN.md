@@ -61,7 +61,7 @@ Tonalidades minerales calibradas para erradicar cualquier sensación de interfaz
 | `semantic.completed` | `#2EBD85` (Salvia Esmeralda Noble) | `#127551` (Bosque Salvia Profundo) | `rgba(46, 189, 133, 0.08)` | `rgba(18, 117, 81, 0.10)` | Ítems completados en el Checklist. |
 | `semantic.pending` | `#E5A84B` (Ámbar Dorado Miel) | `#8F5206` (Ocre Miel Dorado) | `rgba(229, 168, 75, 0.10)` | `rgba(143, 82, 6, 0.10)` | Ítems pendientes por pagar o recibir. |
 | `semantic.debt` | `#D9824C` (Canela Siena Tostada) | `#92440F` (Cuero Canela Profundo) | `rgba(217, 130, 76, 0.10)` | `rgba(146, 68, 15, 0.10)` | Obligaciones financieras y amortizaciones. |
-| `semantic.moto` | `#4F8FEA` (Zafiro Clásico Suave) | `#245F9F` (Zafiro Clásico Azul) | `rgba(79, 143, 234, 0.10)` | `rgba(36, 95, 159, 0.10)` | Fondo Moto Ideal y provisiones recurrentes. |
+| `semantic.reserve` | `#4F8FEA` (Zafiro Clásico Suave) | `#245F9F` (Zafiro Clásico Azul) | `rgba(79, 143, 234, 0.10)` | `rgba(36, 95, 159, 0.10)` | Fondo de reserva y provisiones recurrentes. |
 | `semantic.savings` | `#9D7FE6` (Lavanda Amatista Noble) | `#5F3DA6` (Amatista Terciopelo) | `rgba(157, 127, 230, 0.10)` | `rgba(95, 61, 166, 0.10)` | Fondos de ahorro general y reserva líquida. |
 
 ---

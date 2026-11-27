@@ -18,7 +18,7 @@
 ```text
 src/
 ├── domain/          # Funciones 100% puras (TS estricto, CERO imports de React/RN/Firebase/Expo)
-├── data/            # Repositorios Firestore JS SDK, mappers Zod y seeds idempotentes
+├── data/            # Repositorios Firestore JS SDK, mappers Zod, migraciones y datos de ejemplo
 ├── platform/        # Adaptadores Modo A (Expo Go / Web) vs Modo B (Build nativo .ipa iOS 26), insets, sistema, modo vitrina
 ├── design-system/   # Tokens por piel (iOS / Android / Web), tema, layout responsive, componentes base (DESIGN.md)
 ├── features/        # Módulos por dominio funcional (budget, checklist, debts, savings, analytics, onboarding, auth, summary, shell)
@@ -67,7 +67,7 @@ La documentación en BFlow es tratada con el mismo nivel de exigencia, revisión
 Todo documento técnico generado o modificado debe encajar en una de las cuatro tipologías del marco Diátaxis:
 - **Tutorial (Aprendizaje):** Guías paso a paso para que un desarrollador nuevo pase de cero a un entorno funcional en Windows 11 / Expo Go / iloader.
 - **How-To Guide (Tareas):** Instrucciones orientadas a objetivos concretos (ej. "Cómo firmar un Release con iloader", "Cómo agregar un nuevo concepto con persistencia en Firestore").
-- **Reference (Información Estructurada):** Esquemas de datos Firestore, tokens de `DESIGN.md`, contratos `WidgetSnapshotV2`, tablas de variables de entorno y catálogo semilla.
+- **Reference (Información Estructurada):** Esquemas de datos Firestore, tokens de `DESIGN.md`, contratos `WidgetSnapshotV2`, tablas de variables de entorno y datos de ejemplo.
 - **Explanation (Comprensión y Razonamiento):** Registros de Decisión de Arquitectura (`docs/decisions/` ADRs) y justificaciones de diseño contable.
 
 ### 5.2. Criterios Obligatorios para Redactar un Nuevo ADR (`docs/decisions/`)

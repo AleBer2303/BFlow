@@ -52,9 +52,9 @@ Las hojas de cálculo personales tradicionales son herramientas potentes pero pr
 ```mermaid
 graph TD
     A[BFlow App Core] --> B[1. Presupuesto & Checklist Mensual]
-    A --> C[2. Control Deuda FUNFAMI]
-    A --> D[3. Ahorros & Fondo Moto]
-    A --> E[4. Provisión Moto IDEAL]
+    A --> C[2. Control de Deudas]
+    A --> D[3. Ahorros & Fondo de Reserva]
+    A --> E[4. Provisiones y Metas]
     A --> F[5. Analítica & Historial Mes a Mes]
     A --> G[6. Cuenta, Auth & Sincronización]
 ```
@@ -69,20 +69,20 @@ graph TD
   - Al marcar un concepto no recurrente múltiple como completado, este desaparece del selector de "Agregar Movimiento" del mes en curso y reaparece automáticamente en el mes siguiente.
   - Al desmarcar o borrar un movimiento, el concepto se vuelve a habilitar de inmediato.
 
-### 2. Control de Deuda FUNFAMI
+### 2. Control de Deudas
 - **Derivación Pura del Saldo:** El saldo restante nunca se almacena de forma mutable para prevenir desfases; se deriva estrictamente como:
-  $$\text{SaldoActual}(d) = \text{SaldoApertura}(d) - \sum \text{AbonosActivosAprobados}(d)$$
-- **Abonos a Capital:** La cuota mensual de `$ 1.800.000` abona 100% a capital cuando se marca pagada en el presupuesto, descontándose prioritariamente de la deuda `CB300F - MOTO` (`$ 4.400.000` $\to$ `$ 2.600.000`), manteniendo `ESP. IA` en `$ 3.600.000` y el total del grupo en `$ 6.200.000`.
+  $\text{SaldoActual}(d) = \text{SaldoApertura}(d) - \sum \text{AbonosActivosAprobados}(d)$
+- **Abonos a Capital:** La cuota de un concepto vinculado a deudas abona 100% a capital cuando se marca pagada. Va primero a la deuda objetivo del concepto y el resto pasa a las demás del grupo, ordenadas por id (ADR 0036).
 
-### 3. Ahorros y Fondo Moto
+### 3. Ahorros y Fondo de Reserva
 - **Posición de Caja Doble:**
-  - **Saldo en Vivo:** Apertura mes pasado + Flujo Neto del mes (`$ 2.080.000` en octubre 2026).
-  - **Saldo Proyectado tras Pendientes:** Saldo en vivo menos los gastos pendientes restantes (`$ 2.080.000 - $ 450.000 = $ 1.630.000`), protegiendo al usuario de asumir liquidez que ya está comprometida.
-- **Fondo Moto:** Acumula automáticamente los aportes vinculados que ya están pagados (`CB300F` + `Gasolina Moto/Carro` = `$ 2.300.000` en octubre 2026).
+  - **Saldo en Vivo:** Apertura del mes más el flujo neto del mes.
+  - **Saldo Proyectado tras Pendientes:** Saldo en vivo menos los gastos pendientes, para no contar con liquidez ya comprometida.
+- **Fondo de Reserva y fondos propios:** Acumulan automáticamente los aportes vinculados que ya están pagados.
 
-### 4. Provisión "Moto IDEAL"
-- **Costos Recurrentes de Operación:** SOAT, Impuestos, Casco, Llantas, Mantenimiento, Parqueadero, Cambio de Aceite y Gasolina, calculados con redondeo hacia arriba en enteros COP (`Math.ceil(anual / 12)` = `$ 872.667`/mes).
-- **Metas Puntuales (`TargetGoal`):** Como el `Kit de arrastre Honda original ($ 500.000)` con fecha objetivo `Agosto 2027`, permitiendo comparar la provisión ideal frente al aporte real al fondo de la moto.
+### 4. Provisiones y Metas
+- **Provisiones recurrentes:** Gastos periódicos (seguros, impuestos, mantenimiento…) convertidos a cuota mensual con redondeo hacia arriba en enteros COP (`Math.ceil(costo / meses)`).
+- **Metas Puntuales (`TargetGoal`):** Un monto con fecha objetivo y el ahorro mensual sugerido para llegar, comparados con el aporte real.
 
 ### 5. Analítica & Historial Mes a Mes
 - Cierres mensuales inmutables mediante `MonthSnapshot`.
@@ -181,9 +181,9 @@ Toda la información del usuario vive de forma estrictamente privada bajo `users
 users/{uid}
 ├── concepts/{conceptId}          # Catálogo personal de ingresos y gastos
 ├── entries/{entryId}             # Movimientos mensuales (${monthKey}_${conceptId})
-├── debts/{debtId}                # Deudas registradas (FUNFAMI, etc.)
+├── debts/{debtId}                # Deudas registradas
 ├── debtPayments/{paymentId}      # Abonos aplicados a cada crédito
-├── savingsBuckets/{bucketId}     # Fondos de ahorro (Moto, General)
+├── savingsBuckets/{bucketId}     # Fondos de ahorro (reserva, ahorros y los propios)
 ├── provisionPlans/{planId}       # Plan IDEAL de provisiones y metas
 └── monthSnapshots/{monthKey}     # Cierres mensuales inmutables
 ```
@@ -241,7 +241,7 @@ BFlow/
 │   ├── data/                     # Repositorios Firestore, esquemas Zod, datos de ejemplo
 │   │   ├── firebase/             # Configuración Firebase SDK, persistencia Auth por plataforma y emulador
 │   │   ├── mappers/              # Esquemas de validación Zod
-│   │   ├── repositories/         # budgetRepository.ts (fachada), firestoreBudgetRepository.ts, accountHydration.ts (pasos de la carga completa), legacySeedHealing.ts (ADR 0036) y historyWindow.ts (historial archivado, ADR 0028)
+│   │   ├── repositories/         # budgetRepository.ts (fachada), firestoreBudgetRepository.ts, accountHydration.ts (pasos de la carga completa) y historyWindow.ts (historial archivado, ADR 0028)
 │   │   ├── migrations/           # legacyFieldMigration.ts: nombres guardados por versiones anteriores (ADR 0037)
 │   │   └── sample/               # Presupuesto de ejemplo del modo vitrina y los tests
 │   ├── design-system/            # Tokens por piel (iOS / Android / Web), tema, componentes base y movimiento (motion/)

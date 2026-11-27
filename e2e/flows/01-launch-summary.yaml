@@ -1,4 +1,4 @@
-# Arranque: la app abre con la sesión demo y muestra el Resumen de octubre 2026.
+# Arranque: la app abre con la sesión demo y muestra el Resumen del presupuesto de ejemplo.
 appId: com.bflow.app
 name: 01-launch-summary
 tags:
@@ -7,10 +7,10 @@ tags:
 ---
 - runFlow: ../subflows/launch-demo.yaml
 
-# No hay puerta de autenticación y el mes activo es el del seed.
+# No hay puerta de autenticación y el mes activo es el actual (el del presupuesto de ejemplo).
 - assertNotVisible:
     id: auth-gate-screen
-- assertVisible: '.*Octubre 2026'
+- assertVisible: '.*(Enero|Febrero|Marzo|Abril|Mayo|Junio|Julio|Agosto|Septiembre|Octubre|Noviembre|Diciembre) [0-9]{4}'
 - assertVisible:
     id: workspace-tab-summary
 
@@ -21,7 +21,7 @@ tags:
     id: golden-net-flow
 - assertVisible:
     id: checklist-progress-badge
-# Valor dorado del seed: 6 de 12 ítems completados (fixtures/october-2026.json).
+# Presupuesto de ejemplo (src/data/sample/sampleWorkspace.ts): 6 de 12 ítems completados.
 - assertVisible: 'Checklist 6 de 12'
 - assertVisible:
     id: income-summary-card

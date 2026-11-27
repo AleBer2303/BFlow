@@ -1,6 +1,6 @@
 # 0036. Saneamiento de la cuenta semilla aislado y orden genérico de la cascada de cuotas
 
-- **Estado:** Aceptado
+- **Estado:** Aceptado. El §2.1 (adaptador `legacySeedHealing.ts`) y el §2.3 quedan sustituidos por el [ADR 0037](0037-remove-seed-account-and-neutral-stored-names.md), que elimina la cuenta semilla; el §2.2 (orden de la cascada) sigue vigente.
 - **Fecha:** Noviembre 2026
 - **Contexto:** Extiende el ADR [0005](0005-universal-domain-refactoring-and-bias-elimination.md) (dominio universal) y el [0028](0028-archived-history-window-and-widget-sync-coalescing.md) (carga de la cuenta). Implementa la parte de CC-05 de la Fase 4 del [plan consolidado de auditorías](../Improvements/AUDITS/plan_consolidado_pendientes_auditorias.md).
 - **Autores:** Architect, QA Engineer y Reviewer

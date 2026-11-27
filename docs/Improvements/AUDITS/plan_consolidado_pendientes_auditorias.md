@@ -2,7 +2,7 @@
 
 > **Tipo Diátaxis:** *Reference* (estado verificado) + *How-To* (fases con prompts).
 > **Fecha de verificación:** 2026-11-26 · **Rama:** `audit` (desde `develop` en `25e2b91`).
-> **Avance:** Fase 1 (`e272b42`, ADR 0035), Fase 2 (`90a96c2`, `PERF_BASELINE.md` §20) y Fase 3 (`efa88ab`) integradas en `audit` el 2026-11-26 (`9de58f0`, `6a23fee` y `da2bdd5`). Las líneas citadas en el prompt de la Fase 4 se actualizaron sobre ese `audit`; las de las Fases 5 y 6 siguen siendo las del 2026-11-26 y hay que volver a comprobarlas antes de empezarlas. La Fase 4 está hecha en `refactor/split-repository-and-onboarding` (ADR 0036), pendiente de integrar en `audit`.
+> **Avance:** Fase 1 (`e272b42`, ADR 0035), Fase 2 (`90a96c2`, `PERF_BASELINE.md` §20) y Fase 3 (`efa88ab`) integradas en `audit` el 2026-11-26 (`9de58f0`, `6a23fee` y `da2bdd5`). Las líneas citadas en el prompt de la Fase 4 se actualizaron sobre ese `audit`; las de las Fases 5 y 6 siguen siendo las del 2026-11-26 y hay que volver a comprobarlas antes de empezarlas. La Fase 4 está hecha en `refactor/split-repository-and-onboarding` (ADR 0036), pendiente de integrar en `audit`. En la misma rama, el ADR 0037 elimina la cuenta semilla y los nombres del Excel del código y de Firestore (con migración), lo que amplía el cierre de CC-05.
 > **Fuentes:** [`auditoria_produccion_bflow.md`](auditoria_produccion_bflow.md) (hallazgos `AUD-01` a `AUD-09`) y [`auditoria_documentacion_clean_code_y_optimizacion.md`](auditoria_documentacion_clean_code_y_optimizacion.md) (hallazgos `DOC-*`, `BUG-*`, `CC-*`, `OPT-*`).
 
 > [!IMPORTANT]

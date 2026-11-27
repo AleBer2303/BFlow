@@ -399,12 +399,25 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
   describe('Phase 4 Part B: Account dataRevision, Write Path Guard & Conditional Cache Validation (R-13)', () => {
     it('Guard Test: fails if any write method on FirestoreBudgetRepository bypasses commitUserDataMutationBatch or calls raw setDoc/deleteDoc', () => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const fs = require('fs') as { readFileSync: (p: string, enc: string) => string };
-      const source = fs.readFileSync('src/data/repositories/budgetRepository.ts', 'utf8');
+      const fs = require('fs') as {
+        readFileSync: (p: string, enc: string) => string;
+        readdirSync: (p: string) => string[];
+      };
+      const repositoriesDir = 'src/data/repositories';
+      const source = fs.readFileSync(`${repositoriesDir}/firestoreBudgetRepository.ts`, 'utf8');
 
-      // 1. Forbidden raw setDoc / deleteDoc imports or calls in budgetRepository.ts
-      expect(source).not.toMatch(/\bsetDoc\s*\(/);
-      expect(source).not.toMatch(/\bdeleteDoc\s*\(/);
+      // 1. Forbidden raw setDoc / deleteDoc calls in any budget repository file (Fase 4 split)
+      const budgetRepositoryFiles = fs
+        .readdirSync(repositoriesDir)
+        .filter((name) => name.endsWith('.ts') && name !== 'widgetSnapshotRepository.ts');
+      expect(budgetRepositoryFiles).toEqual(
+        expect.arrayContaining(['budgetRepository.ts', 'firestoreBudgetRepository.ts'])
+      );
+      for (const fileName of budgetRepositoryFiles) {
+        const fileSource = fs.readFileSync(`${repositoriesDir}/${fileName}`, 'utf8');
+        expect(fileSource).not.toMatch(/\bsetDoc\s*\(/);
+        expect(fileSource).not.toMatch(/\bdeleteDoc\s*\(/);
+      }
 
       // 2. Every public method on FirestoreBudgetRepository must be either a known read/helper method
       //    or a write method that routes through this.commitUserDataMutationBatch(...)

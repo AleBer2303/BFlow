@@ -241,7 +241,7 @@ BFlow/
 │   ├── data/                     # Repositorios Firestore, esquemas Zod, seeds
 │   │   ├── firebase/             # Configuración Firebase SDK, persistencia Auth por plataforma y emulador
 │   │   ├── mappers/              # Esquemas de validación Zod
-│   │   ├── repositories/         # budgetRepository.ts (acceso a datos) y historyWindow.ts (historial archivado en la carga completa, ADR 0028)
+│   │   ├── repositories/         # budgetRepository.ts (fachada), firestoreBudgetRepository.ts, accountHydration.ts (pasos de la carga completa), legacySeedHealing.ts (ADR 0036) y historyWindow.ts (historial archivado, ADR 0028)
 │   │   └── seed/                 # Carga de datos iniciales de octubre 2026
 │   ├── design-system/            # Tokens por piel (iOS / Android / Web), tema, componentes base y movimiento (motion/)
 │   │   ├── components/           # AppPressable, AppText, CurrencyText, ResponsiveColumns…

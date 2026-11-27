@@ -707,7 +707,7 @@ describe('AccountProfileWorkspaceView', () => {
       </BFlowThemeProvider>
     );
 
-    expect(screen.getByText('BFlow v1.0.0 (Liquid Glass)')).toBeTruthy();
+    expect(screen.getByText('BFlow (Liquid Glass)')).toBeTruthy();
     // Verify technical UID / timezone details are no longer shown
     expect(screen.queryByText('Identificador (UID)')).toBeNull();
     expect(screen.queryByText('Zona Horaria')).toBeNull();

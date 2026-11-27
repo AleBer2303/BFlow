@@ -5,9 +5,10 @@
  */
 
 import {
-  EMPTY_PROVISION_PLAN,
-} from '../../../../data/repositories/budgetRepository';
-import { addMonthsToMonthKey, type ProvisionItemSpec } from '../../../../domain';
+  addMonthsToMonthKey,
+  toSlugId,
+  type ProvisionItemSpec,
+} from '../../../../domain';
 import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
   getBudgetRepository,
@@ -37,10 +38,7 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
         : undefined;
     const itemId =
       input.id ??
-      `prov_${trimmedName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^_|_$/g, '')}_${Date.now().toString(36)}`;
+      `prov_${toSlugId(trimmedName)}_${Date.now().toString(36)}`;
 
     const nextItem: ProvisionItemSpec = {
       id: itemId,

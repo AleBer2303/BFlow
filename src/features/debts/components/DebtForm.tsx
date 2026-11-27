@@ -24,7 +24,10 @@ import {
   usePrimaryActionLook,
 } from '../../../design-system';
 import {
+  annualToMonthlyRate,
   formatGroupedIntegerInput,
+  monthlyToAnnualRate,
+  parseDigitsInput,
   type DebtInterestRateType,
   type DebtSummaryResult,
   type FinancialAccount,
@@ -143,8 +146,7 @@ const DebtFormFields = React.memo(function DebtFormFields({
   const [error, setError] = useState<string | null>(null);
 
   const interestPreview = useMemo(() => {
-    const cleanBalance = openingBalance.replace(/[^0-9]/g, '');
-    const parsedBalance = cleanBalance ? Number(cleanBalance) : 0;
+    const parsedBalance = parseDigitsInput(openingBalance);
     const cleanRate = interestRate.replace(',', '.').trim();
     const parsedRate = cleanRate ? parseFloat(cleanRate) : 0;
     const maxAllowedRate = interestRateType === 'annual' ? 200 : 100;
@@ -157,7 +159,8 @@ const DebtFormFields = React.memo(function DebtFormFields({
     ) {
       return null;
     }
-    const monthlyRate = interestRateType === 'annual' ? parsedRate / 12 : parsedRate;
+    const monthlyRate =
+      interestRateType === 'annual' ? annualToMonthlyRate(parsedRate) : parsedRate;
     const estimatedMonthlyInterest = Math.round(parsedBalance * (monthlyRate / 100));
     return {
       monthlyRate,
@@ -174,8 +177,7 @@ const DebtFormFields = React.memo(function DebtFormFields({
       setError('Escribe la entidad o persona acreedora.');
       return;
     }
-    const cleanBalance = openingBalance.replace(/[^0-9]/g, '');
-    const parsedBalance = cleanBalance ? Number(cleanBalance) : 0;
+    const parsedBalance = parseDigitsInput(openingBalance);
     if (!Number.isSafeInteger(parsedBalance) || parsedBalance <= 0) {
       setError('Ingresa un saldo inicial válido.');
       return;
@@ -189,17 +191,16 @@ const DebtFormFields = React.memo(function DebtFormFields({
       return;
     }
 
-    const cleanInstallment = monthlyInstallment.replace(/[^0-9]/g, '');
-    const parsedInstallment = cleanInstallment ? Number(cleanInstallment) : 0;
+    const parsedInstallment = parseDigitsInput(monthlyInstallment);
 
     const input: CreateDebtInput = {
       name: name.trim(),
       lender: lender.trim(),
       openingBalance: parsedBalance,
       monthlyInterestRate:
-        interestRateType === 'annual' ? Number((parsedRate / 12).toFixed(4)) : parsedRate,
+        interestRateType === 'annual' ? annualToMonthlyRate(parsedRate) : parsedRate,
       annualInterestRate:
-        interestRateType === 'annual' ? parsedRate : Number((parsedRate * 12).toFixed(4)),
+        interestRateType === 'annual' ? parsedRate : monthlyToAnnualRate(parsedRate),
       interestRateType,
       monthlyInstallment: parsedInstallment,
     };

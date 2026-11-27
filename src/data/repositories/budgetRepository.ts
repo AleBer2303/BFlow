@@ -209,11 +209,8 @@ export const EMPTY_PROVISION_PLAN: IdealMotoPlan = {
   totalWithTargetGoalCop: 0,
 };
 
-export function ensureStandardSavingsBuckets(
-  buckets: readonly SavingsBucket[],
-  _defaultMotoOpening = 0,
-  _defaultSavingsOpening = 0
-): SavingsBucket[] {
+/** Copy of the user's buckets (the standard Moto / Ahorros buckets are no longer forced in). */
+export function ensureStandardSavingsBuckets(buckets: readonly SavingsBucket[]): SavingsBucket[] {
   return buckets.map((b) => ({ ...b }));
 }
 
@@ -1712,12 +1709,8 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       }
     }
 
-    const defaultMotoOpening = isOwner && !isResetByUser ? 1_600_000 : 0;
-    const defaultSavingsOpening = isOwner && !isResetByUser ? 1_000_000 : 0;
     const baseBuckets = ensureStandardSavingsBuckets(
-      rawBuckets,
-      defaultMotoOpening,
-      defaultSavingsOpening
+      rawBuckets
     );
 
     // Ensure every completed entry for a debt-linked concept has an active debtPayment in memory
@@ -1756,9 +1749,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
           );
           debtsByMonth[mk] = reconstructed.debts;
           savingsBucketsByMonth[mk] = ensureStandardSavingsBuckets(
-            reconstructed.savingsBuckets,
-            defaultMotoOpening,
-            defaultSavingsOpening
+            reconstructed.savingsBuckets
           );
         } else {
           // If this first month is '2026-10' for the owner and currentDebts/baseBuckets was already rolled to a later month,
@@ -1878,9 +1869,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
 
         // Roll over savings buckets from prevMk to mk
         const prevBuckets = ensureStandardSavingsBuckets(
-          savingsBucketsByMonth[prevMk] ?? baseBuckets,
-          defaultMotoOpening,
-          defaultSavingsOpening
+          savingsBucketsByMonth[prevMk] ?? baseBuckets
         );
         const prevBudget = calculateMonthlyBudgetSummary(entries, prevMk);
         const prevSavings = calculateMonthlySavingsSummary(
@@ -1900,9 +1889,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
             baseBuckets
           );
           savingsBucketsByMonth[mk] = ensureStandardSavingsBuckets(
-            reconstructed.savingsBuckets,
-            defaultMotoOpening,
-            defaultSavingsOpening
+            reconstructed.savingsBuckets
           );
         } else {
           const customClosingById = new Map<string, number>(
@@ -2735,7 +2722,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
           });
         }
 
-        const buckets = ensureStandardSavingsBuckets(payload.savingsBuckets, 0, 0);
+        const buckets = ensureStandardSavingsBuckets(payload.savingsBuckets);
         const configuredBucketIds = new Set(buckets.map((b) => b.id));
         if (!configuredBucketIds.has('moto')) {
           batch.delete(doc(this.db, 'users', uid, 'savingsBuckets', 'moto'));

@@ -29,6 +29,7 @@ import {
   formatCurrency,
   formatMonthKeyLabelEs,
   toAppMonthKey,
+  toSlugId,
   type Concept,
   type Debt,
   type MonthEntry,
@@ -72,13 +73,7 @@ const EMPTY_CONCEPTS: readonly Concept[] = [];
 const NOOP_COMPLETE_MOVEMENT: ChecklistWorkspaceViewProps['onAddOrCompleteMovement'] = () => {};
 
 function buildBucketSlug(name: string, existingIds: ReadonlySet<string>): string {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
+  const slug = toSlugId(name);
   const base = `bucket_${slug || Date.now().toString(36)}`;
   if (!existingIds.has(base)) return base;
   let suffix = 2;

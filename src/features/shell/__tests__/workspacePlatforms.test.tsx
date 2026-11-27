@@ -410,7 +410,7 @@ describe('Web skin · redesigned frame', () => {
 
     fireEvent.press(screen.getByTestId('workspace-tab-account'));
     expect(styleOf('account-panels-row-0').flexDirection).toBe('row');
-    expect(screen.getByText('BFlow v1.0.0 (Web)')).toBeTruthy();
+    expect(screen.getByText('BFlow (Web)')).toBeTruthy();
   });
 
   it('on a phone: the same workspaces stack in one column', () => {

@@ -118,7 +118,7 @@ BFlow se entrega en tres plataformas con **una piel cada una**: iOS (Liquid Glas
 
 ### 7.3. Interacción
 
-1. Todo elemento interactivo de `src/features/` y `src/app/` es un `AppPressable` (o `TactilePressable`). `npm run lint` rechaza el `Pressable` de React Native en esas carpetas.
+1. Todo elemento interactivo de `src/features/` y `src/app/` es un `AppPressable`. `npm run lint` rechaza el `Pressable` de React Native en esas carpetas.
 2. Objetivo táctil mínimo: 44 pt en iOS y Web, 48 dp en Android. Un control que declare menos lo compensa `AppPressable` (hit slop en nativo, crecimiento en Web); no se desactiva ni se sobrescribe.
 3. Una vista tiene **una** acción principal, con `usePrimaryActionLook()`.
 

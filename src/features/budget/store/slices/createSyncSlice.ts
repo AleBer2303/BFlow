@@ -4,9 +4,6 @@
  * Workspace navigation, active month selection and cloud synchronization slice.
  */
 
-import {
-  ensureStandardSavingsBuckets,
-} from '../../../../data/repositories/budgetRepository';
 import { savePersistedSession } from '../../../../platform/auth/authAdapter';
 import {
   isEquivalentCloudAccount,
@@ -76,38 +73,6 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
   },
 
   setSyncStatus: (message, isSyncing = false) => set({ syncMessage: message, isSyncing }),
-
-  applyCloudWorkspace: (payload) => {
-    set((state) => ({
-      activeMonthKey: payload.monthKey,
-      availableMonths: state.availableMonths.includes(payload.monthKey)
-        ? state.availableMonths
-        : [...state.availableMonths, payload.monthKey],
-      concepts: payload.concepts,
-      entries: [
-        ...state.entries.filter((e) => e.monthKey !== payload.monthKey),
-        ...payload.entries,
-      ],
-      debtsByMonth: {
-        ...state.debtsByMonth,
-        [payload.monthKey]: payload.debts,
-      },
-      debtPayments: [
-        ...state.debtPayments.filter((dp) => dp.monthKey !== payload.monthKey),
-        ...payload.debtPayments,
-      ],
-      savingsBucketsByMonth: {
-        ...state.savingsBucketsByMonth,
-        [payload.monthKey]: ensureStandardSavingsBuckets(payload.savingsBuckets),
-      },
-      idealMotoPlan: payload.provisionPlan,
-      closedSnapshots: payload.closedSnapshot
-        ? { ...state.closedSnapshots, [payload.monthKey]: payload.closedSnapshot }
-        : state.closedSnapshots,
-      isAccountHydrated: true,
-    }));
-    triggerWidgetSync(get());
-  },
 
   applyFullCloudAccount: (payload) => {
     const currentUser = get().authUser;

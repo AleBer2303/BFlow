@@ -20,7 +20,7 @@ import {
   useBFlowTheme,
   usePrimaryActionLook,
 } from '../../../design-system';
-import { formatGroupedIntegerInput } from '../../../domain';
+import { formatGroupedIntegerInput, parseDigitsInput } from '../../../domain';
 import type { SaveProvisionItemInput } from '../../budget/store/useBudgetStore';
 
 type ProvisionKind = 'recurring' | 'target_goal';
@@ -65,10 +65,8 @@ export const ProvisionItemForm = React.memo(function ProvisionItemForm({
   const [error, setError] = useState<string | null>(null);
 
   const monthlyPreview = useMemo(() => {
-    const amountDigits = amount.replace(/[^0-9]/g, '');
-    const parsedAmount = amountDigits ? Number(amountDigits) : 0;
-    const monthsDigits = months.replace(/[^0-9]/g, '');
-    const parsedMonths = monthsDigits ? Number(monthsDigits) : 0;
+    const parsedAmount = parseDigitsInput(amount);
+    const parsedMonths = parseDigitsInput(months);
     if (
       !Number.isSafeInteger(parsedAmount) ||
       parsedAmount <= 0 ||
@@ -85,14 +83,12 @@ export const ProvisionItemForm = React.memo(function ProvisionItemForm({
       setError('Escribe el nombre de la provisión o meta.');
       return;
     }
-    const amountDigits = amount.replace(/[^0-9]/g, '');
-    const parsedAmount = amountDigits ? Number(amountDigits) : 0;
+    const parsedAmount = parseDigitsInput(amount);
     if (!Number.isSafeInteger(parsedAmount) || parsedAmount <= 0) {
       setError('Ingresa un monto entero válido mayor a 0.');
       return;
     }
-    const monthsDigits = months.replace(/[^0-9]/g, '');
-    const parsedMonths = monthsDigits ? Number(monthsDigits) : 1;
+    const parsedMonths = parseDigitsInput(months, 1);
     if (!Number.isSafeInteger(parsedMonths) || parsedMonths < 1) {
       setError('El periodo en meses debe ser un entero mayor o igual a 1.');
       return;

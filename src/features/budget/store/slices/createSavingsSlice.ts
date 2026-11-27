@@ -7,7 +7,7 @@
 import {
   ensureStandardSavingsBuckets,
 } from '../../../../data/repositories/budgetRepository';
-import { type SavingsBucket } from '../../../../domain';
+import { toSlugId, type SavingsBucket } from '../../../../domain';
 import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
   getBudgetRepository,
@@ -101,10 +101,7 @@ export const createSavingsSlice: SliceCreator<SavingsSlice> = (set, get) => {
     if (!trimmedName) return null;
 
     const safeAmount = Math.max(0, Math.round(openingBalanceCop));
-    const slug = trimmedName
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_|_$/g, '');
+    const slug = toSlugId(trimmedName);
     const bucketId = `bucket_${slug || 'ahorro'}_${Date.now().toString(36)}`;
     const newBucket: SavingsBucket = {
       id: bucketId,

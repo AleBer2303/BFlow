@@ -22,7 +22,6 @@ import {
 } from '../components/navigation/WebNavigation';
 import { WORKSPACE_TABS } from '../components/navigation/workspaceTabs';
 import { ResponsiveColumns } from '../components/ResponsiveColumns';
-import { TactilePressable } from '../components/TactilePressable';
 import { AppText } from '../components/Typography';
 import { resolveResponsiveLayout } from '../layout/responsiveLayout';
 import { BFlowThemeProvider, useBFlowTheme } from '../theme/ThemeContext';
@@ -296,23 +295,14 @@ describe('AppPressable feedback per skin', () => {
   });
 });
 
-describe('TactilePressable and theme toggle sizes', () => {
+describe('theme toggle sizes', () => {
   it.each([
     ['ios', 44],
     ['android', 48],
     ['web', 44],
   ] as const)('uses the %s minimum touch target (%i)', (skin, size) => {
-    renderWithSkin(
-      skin,
-      <>
-        <TactilePressable testID="tactile" haptic="none">
-          <Text>Acción</Text>
-        </TactilePressable>
-        <ThemeToggleIconButton testID="toggle" />
-      </>
-    );
+    renderWithSkin(skin, <ThemeToggleIconButton testID="toggle" />);
 
-    expect(restingStyle('tactile')).toMatchObject({ minHeight: size, minWidth: size });
     expect(restingStyle('toggle')).toMatchObject({ width: size, height: size });
   });
 

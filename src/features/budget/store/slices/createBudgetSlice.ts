@@ -16,6 +16,7 @@ import {
   registerMovement,
   toAppIsoDate,
   toggleMovementStatus,
+  toSlugId,
   type Concept,
   type DebtPayment,
   type MonthEntry,
@@ -226,10 +227,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
 
     const monthDebts =
       state.debtsByMonth[input.monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
-    const slug = trimmedName
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_|_$/g, '');
+    const slug = toSlugId(trimmedName);
     const customConceptId = `${input.type === 'income' ? 'inc' : 'exp'}_custom_${slug}_${Date.now().toString(36)}`;
     const baseConcept: Concept = {
       id: customConceptId,

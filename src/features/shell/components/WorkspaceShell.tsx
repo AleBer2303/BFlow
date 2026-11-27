@@ -29,6 +29,7 @@ import {
   AccountHeaderAvatarButton,
   AmbientParticles,
   AppText,
+  CloudSyncIcon,
   DOCK_BOTTOM_OFFSET,
   DOCK_CAPSULE_HEIGHT,
   FloatingLiquidGlassDock,
@@ -203,6 +204,46 @@ export function stepDockChromeOnUI(
     dockHidden: wasHidden,
     direction: wasDirection,
   };
+}
+
+/**
+ * Pending offline changes, the same in the three skins (CC-04): one testID, the skin's radius
+ * and a vector cloud instead of an emoji. Web has room for the word "pendientes".
+ */
+function PendingSyncBadge({
+  count,
+  showLabel,
+}: {
+  count: number;
+  showLabel: boolean;
+}): React.JSX.Element {
+  const { colors, spacing, radius } = useBFlowTheme();
+  const description =
+    count === 1 ? '1 cambio pendiente por sincronizar' : `${count} cambios pendientes por sincronizar`;
+  return (
+    <View
+      testID="pending-offline-sync-badge"
+      accessible
+      accessibilityLabel={description}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xxs,
+        paddingHorizontal: spacing.sm,
+        paddingVertical: spacing.xxs,
+        borderRadius: radius.sm,
+        borderCurve: 'continuous',
+        backgroundColor: colors.background.secondary,
+        borderWidth: 1,
+        borderColor: colors.glass.subtleBorder,
+      }}
+    >
+      <CloudSyncIcon size={14} color={colors.semantic.pending} />
+      <AppText variant="caption" color={colors.semantic.pending}>
+        {showLabel ? `${count} pendientes` : String(count)}
+      </AppText>
+    </View>
+  );
 }
 
 export function WorkspaceShell({
@@ -546,21 +587,7 @@ export function WorkspaceShell({
                     {title}
                   </AppText>
                   {pendingSyncCount && pendingSyncCount > 0 ? (
-                    <View
-                      testID="pending-offline-sync-badge"
-                      style={{
-                        paddingHorizontal: spacing.sm,
-                        paddingVertical: 2,
-                        borderRadius: 10,
-                        backgroundColor: colors.background.secondary,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                      }}
-                    >
-                      <AppText variant="caption" color={colors.semantic.pending}>
-                        {`☁️ ${pendingSyncCount}`}
-                      </AppText>
-                    </View>
+                    <PendingSyncBadge count={pendingSyncCount} showLabel={false} />
                   ) : null}
                 </View>
                 {showNavigation ? (
@@ -603,19 +630,7 @@ export function WorkspaceShell({
                     {title}
                   </AppText>
                   {pendingSyncCount && pendingSyncCount > 0 ? (
-                    <View
-                      testID="pending-offline-sync-badge-android"
-                      style={{
-                        paddingHorizontal: spacing.sm,
-                        paddingVertical: 2,
-                        borderRadius: 8,
-                        backgroundColor: colors.background.secondary,
-                      }}
-                    >
-                      <AppText variant="caption" color={colors.semantic.pending}>
-                        {`☁️ ${pendingSyncCount}`}
-                      </AppText>
-                    </View>
+                    <PendingSyncBadge count={pendingSyncCount} showLabel={false} />
                   ) : null}
                 </View>
                 {showNavigation ? (
@@ -651,21 +666,7 @@ export function WorkspaceShell({
                   {monthLabel}
                 </AppText>
                 {pendingSyncCount && pendingSyncCount > 0 ? (
-                  <View
-                    testID="pending-offline-sync-badge-web"
-                    style={{
-                      paddingHorizontal: spacing.sm,
-                      paddingVertical: 2,
-                      borderRadius: 6,
-                      backgroundColor: colors.background.secondary,
-                      borderWidth: 1,
-                      borderColor: colors.glass.subtleBorder,
-                    }}
-                  >
-                    <AppText variant="caption" color={colors.semantic.pending}>
-                      {`☁️ ${pendingSyncCount} pendientes`}
-                    </AppText>
-                  </View>
+                  <PendingSyncBadge count={pendingSyncCount} showLabel />
                 ) : null}
               </View>
             ) : null}

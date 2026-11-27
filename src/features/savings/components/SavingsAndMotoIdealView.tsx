@@ -13,23 +13,24 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import {
+  ActionModeToggleRow,
   animateNextLayout,
   AppPressable,
   AppText,
   CurrencyText,
   GlassSurface,
   hapticService,
-  PencilEditIcon,
+  InlineItemActionPill,
   ResponsiveColumns,
   RevealDown,
   ScrollDepthHero,
   ScrollRevealSection,
   StatusBadge,
   TabLeaveResetter,
-  TrashBinIcon,
   useAmountPrivacy,
   useBFlowTheme,
   usePrimaryActionLook,
+  type ListActionMode,
 } from '../../../design-system';
 import { confirmDestructive } from '../../../platform/dialogs/confirmDestructive';
 import {
@@ -52,200 +53,6 @@ import { FinancialAccountCard } from '../../accounts/components/FinancialAccount
 import { ProvisionItemForm, type EditableProvisionItem } from './ProvisionItemForm';
 import { EditSavingsBucketForm, type EditableSavingsBucket } from './SavingsBucketForms';
 import { SavingsForm } from './SavingsForm';
-
-type ListActionMode = 'edit' | 'delete' | null;
-
-interface ActionModeToggleRowProps {
-  activeMode: ListActionMode;
-  showEdit: boolean;
-  showDelete: boolean;
-  editLabel: string;
-  deleteLabel: string;
-  editTestID: string;
-  deleteTestID: string;
-  editAccessibilityLabel: string;
-  deleteAccessibilityLabel: string;
-  onToggleEdit: () => void;
-  onToggleDelete: () => void;
-}
-
-/** Renders a two-button Editar / Eliminar mode toggle row for a list section. */
-const ActionModeToggleRow = React.memo(function ActionModeToggleRow({
-  activeMode,
-  showEdit,
-  showDelete,
-  editLabel,
-  deleteLabel,
-  editTestID,
-  deleteTestID,
-  editAccessibilityLabel,
-  deleteAccessibilityLabel,
-  onToggleEdit,
-  onToggleDelete,
-}: ActionModeToggleRowProps): React.JSX.Element | null {
-  const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
-  if (!showEdit && !showDelete) return null;
-
-  const isEditActive = activeMode === 'edit';
-  const isDeleteActive = activeMode === 'delete';
-
-  return (
-    <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
-      {showEdit ? (
-        <AppPressable
-          testID={editTestID}
-          accessibilityRole="button"
-          accessibilityLabel={editAccessibilityLabel}
-          onPress={onToggleEdit}
-          style={{
-            flex: 1,
-            minHeight: minTouchTarget,
-            paddingHorizontal: spacing.md,
-            borderRadius: radius.pill,
-            borderCurve: 'continuous',
-            backgroundColor: isEditActive
-              ? colors.glass.surfaceElevatedTint
-              : colors.glass.surfaceTint,
-            borderWidth: 1.5,
-            borderColor: isEditActive ? colors.semantic.income : colors.glass.subtleBorder,
-            flexDirection: 'row',
-            gap: spacing.xs,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <PencilEditIcon
-            size={16}
-            color={isEditActive ? colors.semantic.income : colors.text.secondary}
-          />
-          <AppText
-            variant="caption"
-            color={isEditActive ? colors.semantic.income : colors.text.secondary}
-          >
-            {isEditActive ? 'Cancelar Edición' : editLabel}
-          </AppText>
-        </AppPressable>
-      ) : null}
-
-      {showDelete ? (
-        <AppPressable
-          testID={deleteTestID}
-          accessibilityRole="button"
-          accessibilityLabel={deleteAccessibilityLabel}
-          onPress={onToggleDelete}
-          style={{
-            flex: 1,
-            minHeight: minTouchTarget,
-            paddingHorizontal: spacing.md,
-            borderRadius: radius.pill,
-            borderCurve: 'continuous',
-            backgroundColor: isDeleteActive
-              ? colors.semantic.expenseSoft
-              : colors.glass.surfaceTint,
-            borderWidth: 1.5,
-            borderColor: isDeleteActive ? colors.semantic.expense : colors.glass.subtleBorder,
-            flexDirection: 'row',
-            gap: spacing.xs,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <TrashBinIcon
-            size={16}
-            color={isDeleteActive ? colors.semantic.expense : colors.text.secondary}
-          />
-          <AppText
-            variant="caption"
-            color={isDeleteActive ? colors.semantic.expense : colors.text.secondary}
-          >
-            {isDeleteActive ? 'Cancelar Eliminación' : deleteLabel}
-          </AppText>
-        </AppPressable>
-      ) : null}
-    </View>
-  );
-});
-
-interface InlineItemActionPillProps {
-  mode: ListActionMode;
-  itemName: string;
-  editTestID: string;
-  deleteTestID: string;
-  onEdit?: () => void;
-  onDelete?: () => void;
-}
-
-/** Renders the per-item Editar or Eliminar pill when the section action mode is active. */
-function InlineItemActionPill({
-  mode,
-  itemName,
-  editTestID,
-  deleteTestID,
-  onEdit,
-  onDelete,
-}: InlineItemActionPillProps): React.JSX.Element | null {
-  const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
-
-  if (mode === 'edit' && onEdit) {
-    return (
-      <AppPressable
-        testID={editTestID}
-        accessibilityRole="button"
-        accessibilityLabel={`Editar ${itemName}`}
-        onPress={onEdit}
-        style={{
-          minHeight: minTouchTarget,
-          paddingHorizontal: spacing.md,
-          borderRadius: radius.pill,
-          borderCurve: 'continuous',
-          backgroundColor: colors.glass.surfaceElevatedTint,
-          borderWidth: 1,
-          borderColor: colors.glass.specularBorder,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: spacing.xs,
-          justifyContent: 'center',
-        }}
-      >
-        <PencilEditIcon size={14} color={colors.semantic.income} />
-        <AppText variant="caption" color={colors.semantic.income}>
-          Editar
-        </AppText>
-      </AppPressable>
-    );
-  }
-
-  if (mode === 'delete' && onDelete) {
-    return (
-      <AppPressable
-        testID={deleteTestID}
-        accessibilityRole="button"
-        accessibilityLabel={`Eliminar ${itemName}`}
-        onPress={onDelete}
-        style={{
-          minHeight: minTouchTarget,
-          paddingHorizontal: spacing.md,
-          borderRadius: radius.pill,
-          borderCurve: 'continuous',
-          backgroundColor: colors.semantic.expenseSoft,
-          borderWidth: 1,
-          borderColor: colors.semantic.expense,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: spacing.xs,
-          justifyContent: 'center',
-        }}
-      >
-        <TrashBinIcon size={14} color={colors.semantic.expense} />
-        <AppText variant="caption" color={colors.semantic.expense}>
-          Eliminar
-        </AppText>
-      </AppPressable>
-    );
-  }
-
-  return null;
-}
 
 const SavingsHeroCard = React.memo(function SavingsHeroCard({
   activeBucketsCount,

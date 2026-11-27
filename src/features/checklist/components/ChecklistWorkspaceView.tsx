@@ -16,6 +16,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, View } from 'react-native';
 import {
+  ActionModeToggleRow,
   animateNextLayout,
   AppPressable,
   AppText,
@@ -24,9 +25,9 @@ import {
   estimateTextWidth,
   GlassSurface,
   hapticService,
+  InlineItemActionPill,
   IS_MOTION_STATIC,
   MIN_TOUCH_TARGET_PT,
-  PencilEditIcon,
   resolvePresenceSpec,
   ResponsiveColumns,
   RevealDown,
@@ -35,11 +36,10 @@ import {
   StatusBadge,
   TabLeaveResetter,
   toEasing,
-  TrashBinIcon,
   USE_NATIVE_DRIVER,
+  useAmountPrivacy,
   useBFlowTheme,
   usePrimaryActionLook,
-  useAmountPrivacy,
 } from '../../../design-system';
 import {
   formatFinancialAccountLabel,
@@ -134,7 +134,7 @@ export function ActionRevealSlot({
   children: React.ReactNode;
 }): React.JSX.Element | null {
   const skipMotion = IS_MOTION_STATIC;
-  const { skin, reducedMotion } = useBFlowTheme();
+  const { skin, reducedMotion, minTouchTarget } = useBFlowTheme();
   const { open, close } = resolvePresenceSpec({ skin, reducedMotion }, 'control');
   const progress = useRef(new Animated.Value(visible ? 1 : 0)).current;
   const [mounted, setMounted] = useState(visible);
@@ -181,7 +181,7 @@ export function ActionRevealSlot({
   return (
     <Animated.View
       style={{
-        width: MIN_TOUCH_TARGET_PT,
+        width: minTouchTarget,
         opacity: progress,
         justifyContent: 'center',
         transform: [
@@ -342,51 +342,29 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
 
       {/* In-situ Edit Action Button (only visible in edit mode) */}
       <ActionRevealSlot visible={isEditMode} gap={spacing.xs}>
-        <AppPressable
-          testID={`edit-entry-${entry.id}`}
-          accessibilityRole="button"
-          accessibilityLabel={`Editar ${entry.conceptName}`}
-          onPress={() => {
+        <InlineItemActionPill
+          iconOnly
+          mode="edit"
+          itemName={entry.conceptName}
+          editTestID={`edit-entry-${entry.id}`}
+          deleteTestID={`delete-entry-${entry.id}`}
+          onEdit={() => {
             hapticService.light();
             onEdit(entry);
           }}
-          style={{
-            minHeight: MIN_TOUCH_TARGET_PT,
-            minWidth: MIN_TOUCH_TARGET_PT,
-            borderRadius: radius.md,
-            borderCurve: 'continuous',
-            backgroundColor: colors.glass.surfaceElevatedTint,
-            borderWidth: 1,
-            borderColor: colors.glass.specularBorder,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <PencilEditIcon size={16} color={colors.semantic.income} />
-        </AppPressable>
+        />
       </ActionRevealSlot>
 
       {/* In-situ Delete Action Button (only visible in delete mode) */}
       <ActionRevealSlot visible={isDeleteMode} gap={spacing.xs}>
-        <AppPressable
-          testID={`delete-entry-${entry.id}`}
-          accessibilityRole="button"
-          accessibilityLabel={`Eliminar ${entry.conceptName}`}
-          onPress={() => onDelete(entry)}
-          style={{
-            minHeight: MIN_TOUCH_TARGET_PT,
-            minWidth: MIN_TOUCH_TARGET_PT,
-            borderRadius: radius.md,
-            borderCurve: 'continuous',
-            backgroundColor: colors.semantic.expense,
-            borderWidth: 1,
-            borderColor: colors.semantic.expense,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <TrashBinIcon size={16} color={colors.text.inverse} />
-        </AppPressable>
+        <InlineItemActionPill
+          iconOnly
+          mode="delete"
+          itemName={entry.conceptName}
+          editTestID={`edit-entry-${entry.id}`}
+          deleteTestID={`delete-entry-${entry.id}`}
+          onDelete={() => onDelete(entry)}
+        />
       </ActionRevealSlot>
     </View>
   );
@@ -483,73 +461,20 @@ const ChecklistIncomesCard = React.memo(function ChecklistIncomesCard({
             </View>
 
             {/* Incomes Section Action Controls: Editar & Eliminar */}
-            <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
-              <AppPressable
-                testID="incomes-edit-action-button"
-                accessibilityRole="button"
-                accessibilityLabel="Editar ingresos"
-                onPress={onToggleEdit}
-                style={{
-                  minHeight: 34,
-                  paddingHorizontal: spacing.sm,
-                  paddingVertical: spacing.xxs,
-                  borderRadius: radius.pill,
-                  backgroundColor: isEditMode
-                    ? colors.glass.surfaceElevatedTint
-                    : colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: isEditMode
-                    ? colors.glass.specularBorder
-                    : colors.glass.subtleBorder,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.xxs,
-                }}
-              >
-                <PencilEditIcon
-                  size={14}
-                  color={isEditMode ? colors.semantic.income : colors.text.secondary}
-                />
-                <AppText
-                  variant="micro"
-                  color={isEditMode ? colors.semantic.income : colors.text.secondary}
-                >
-                  {isEditMode ? 'Listo' : 'Editar'}
-                </AppText>
-              </AppPressable>
-
-              <AppPressable
-                testID="incomes-delete-action-button"
-                accessibilityRole="button"
-                accessibilityLabel="Eliminar ingresos"
-                onPress={onToggleDelete}
-                style={{
-                  minHeight: 34,
-                  paddingHorizontal: spacing.sm,
-                  paddingVertical: spacing.xxs,
-                  borderRadius: radius.pill,
-                  backgroundColor: isDeleteMode
-                    ? colors.semantic.expense
-                    : colors.semantic.expenseSoft,
-                  borderWidth: 1,
-                  borderColor: colors.semantic.expense,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.xxs,
-                }}
-              >
-                <TrashBinIcon
-                  size={14}
-                  color={isDeleteMode ? colors.text.inverse : colors.semantic.expense}
-                />
-                <AppText
-                  variant="micro"
-                  color={isDeleteMode ? colors.text.inverse : colors.semantic.expense}
-                >
-                  {isDeleteMode ? 'Listo' : 'Eliminar'}
-                </AppText>
-              </AppPressable>
-            </View>
+            <ActionModeToggleRow
+              compact
+              activeMode={isEditMode ? 'edit' : isDeleteMode ? 'delete' : null}
+              editLabel="Editar"
+              deleteLabel="Eliminar"
+              activeEditLabel="Listo"
+              activeDeleteLabel="Listo"
+              editTestID="incomes-edit-action-button"
+              deleteTestID="incomes-delete-action-button"
+              editAccessibilityLabel="Editar ingresos"
+              deleteAccessibilityLabel="Eliminar ingresos"
+              onToggleEdit={onToggleEdit}
+              onToggleDelete={onToggleDelete}
+            />
           </View>
 
           <AppText variant="caption" color={colors.text.secondary}>
@@ -643,73 +568,20 @@ const ChecklistExpensesCard = React.memo(function ChecklistExpensesCard({
             </View>
 
             {/* Expenses Section Action Controls: Editar & Eliminar */}
-            <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
-              <AppPressable
-                testID="expenses-edit-action-button"
-                accessibilityRole="button"
-                accessibilityLabel="Editar gastos"
-                onPress={onToggleEdit}
-                style={{
-                  minHeight: 34,
-                  paddingHorizontal: spacing.sm,
-                  paddingVertical: spacing.xxs,
-                  borderRadius: radius.pill,
-                  backgroundColor: isEditMode
-                    ? colors.glass.surfaceElevatedTint
-                    : colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: isEditMode
-                    ? colors.glass.specularBorder
-                    : colors.glass.subtleBorder,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.xxs,
-                }}
-              >
-                <PencilEditIcon
-                  size={14}
-                  color={isEditMode ? colors.semantic.income : colors.text.secondary}
-                />
-                <AppText
-                  variant="micro"
-                  color={isEditMode ? colors.semantic.income : colors.text.secondary}
-                >
-                  {isEditMode ? 'Listo' : 'Editar'}
-                </AppText>
-              </AppPressable>
-
-              <AppPressable
-                testID="expenses-delete-action-button"
-                accessibilityRole="button"
-                accessibilityLabel="Eliminar gastos"
-                onPress={onToggleDelete}
-                style={{
-                  minHeight: 34,
-                  paddingHorizontal: spacing.sm,
-                  paddingVertical: spacing.xxs,
-                  borderRadius: radius.pill,
-                  backgroundColor: isDeleteMode
-                    ? colors.semantic.expense
-                    : colors.semantic.expenseSoft,
-                  borderWidth: 1,
-                  borderColor: colors.semantic.expense,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.xxs,
-                }}
-              >
-                <TrashBinIcon
-                  size={14}
-                  color={isDeleteMode ? colors.text.inverse : colors.semantic.expense}
-                />
-                <AppText
-                  variant="micro"
-                  color={isDeleteMode ? colors.text.inverse : colors.semantic.expense}
-                >
-                  {isDeleteMode ? 'Listo' : 'Eliminar'}
-                </AppText>
-              </AppPressable>
-            </View>
+            <ActionModeToggleRow
+              compact
+              activeMode={isEditMode ? 'edit' : isDeleteMode ? 'delete' : null}
+              editLabel="Editar"
+              deleteLabel="Eliminar"
+              activeEditLabel="Listo"
+              activeDeleteLabel="Listo"
+              editTestID="expenses-edit-action-button"
+              deleteTestID="expenses-delete-action-button"
+              editAccessibilityLabel="Editar gastos"
+              deleteAccessibilityLabel="Eliminar gastos"
+              onToggleEdit={onToggleEdit}
+              onToggleDelete={onToggleDelete}
+            />
           </View>
 
           <AppText variant="caption" color={colors.text.secondary}>

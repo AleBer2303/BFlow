@@ -20,8 +20,10 @@ import {
   usePrimaryActionLook,
 } from '../../../design-system';
 import {
+  extractDigits,
   formatGroupedIntegerInput,
   isValidAccountDay,
+  parseDigitsInput,
   type DebitAccountKind,
   type FinancialAccount,
   type FinancialAccountType,
@@ -41,8 +43,7 @@ export interface FinancialAccountFormFieldsProps {
 }
 
 function parseAmount(text: string): number {
-  const digits = text.replace(/[^0-9]/g, '');
-  return digits ? Number(digits) : 0;
+  return parseDigitsInput(text);
 }
 
 function parseDay(text: string): number | undefined | null {
@@ -109,7 +110,7 @@ export const FinancialAccountFormFields = React.memo(function FinancialAccountFo
       setError('Escribe el banco o la entidad.');
       return;
     }
-    const digits = lastFour.replace(/[^0-9]/g, '');
+    const digits = extractDigits(lastFour);
     if (digits.length > 0 && digits.length !== 4) {
       setError('Los últimos dígitos deben ser exactamente 4 números.');
       return;
@@ -223,7 +224,7 @@ export const FinancialAccountFormFields = React.memo(function FinancialAccountFo
             testID="account-form-last-four-input"
             value={lastFour}
             onChangeText={(text) => {
-              setLastFour(text.replace(/[^0-9]/g, '').slice(0, 4));
+              setLastFour(extractDigits(text).slice(0, 4));
               clearError();
             }}
             keyboardType="number-pad"
@@ -266,7 +267,7 @@ export const FinancialAccountFormFields = React.memo(function FinancialAccountFo
                 testID="account-form-statement-day-input"
                 value={statementDay}
                 onChangeText={(text) => {
-                  setStatementDay(text.replace(/[^0-9]/g, '').slice(0, 2));
+                  setStatementDay(extractDigits(text).slice(0, 2));
                   clearError();
                 }}
                 keyboardType="number-pad"
@@ -283,7 +284,7 @@ export const FinancialAccountFormFields = React.memo(function FinancialAccountFo
                 testID="account-form-due-day-input"
                 value={paymentDueDay}
                 onChangeText={(text) => {
-                  setPaymentDueDay(text.replace(/[^0-9]/g, '').slice(0, 2));
+                  setPaymentDueDay(extractDigits(text).slice(0, 2));
                   clearError();
                 }}
                 keyboardType="number-pad"

@@ -99,7 +99,7 @@ export function SummaryOverview({
             testID="checklist-progress-badge"
             label={
               checklist.isMonthComplete
-                ? `✨ Mes completo (${checklist.completedCount} de ${checklist.totalTrackableCount})`
+                ? `Mes completo (${checklist.completedCount} de ${checklist.totalTrackableCount})`
                 : `Checklist ${checklist.completedCount} de ${checklist.totalTrackableCount}`
             }
             status={checklist.isMonthComplete ? 'completed' : 'pending'}

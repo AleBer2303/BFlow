@@ -26,6 +26,7 @@ import {
 import type { BFlowAuthUser } from '../../../platform/auth/authAdapter';
 import { getCooldownRemainingMs, startCooldown } from '../../../platform/auth/authRateLimiter';
 import { useSafeInsets } from '../../../platform/insets/useSafeInsets';
+import { formatAppVersionLabel } from '../../../platform/mode/appVersion';
 import { useCountdown } from '../hooks/useCountdown';
 import { AccountEmailForm, AccountPasswordCard, ProfileDetailsForm } from './AccountProfileForms';
 
@@ -131,7 +132,7 @@ export function AccountProfileWorkspaceView({
   onResetFullAccount,
   testID = 'account-profile-workspace-view',
 }: AccountProfileWorkspaceViewProps): React.JSX.Element {
-  const { colors, mode, radius, spacing, skin, minTouchTarget } = useBFlowTheme();
+  const { colors, mode, radius, spacing, skin, skinSpec, minTouchTarget } = useBFlowTheme();
   const layout = useResponsiveLayout();
   const insets = useSafeInsets();
 
@@ -422,8 +423,8 @@ export function AccountProfileWorkspaceView({
           style={{
             flex: 1,
             backgroundColor: colors.background.primary,
-            // iOS page sheets start below the status bar; Android is edge to edge.
-            paddingTop: Platform.OS === 'ios' ? 44 : Math.max(insets.top, spacing.md),
+            // iOS page sheets start below the status bar; Android and Web are edge to edge.
+            paddingTop: skinSpec.pageSheetTopInset ?? Math.max(insets.top, spacing.md),
           }}
         >
           {isProfileModalOpen ? <AmbientParticles /> : null}
@@ -637,7 +638,7 @@ export function AccountProfileWorkspaceView({
           marginBottom: spacing.lg,
         }}
       >
-        {`BFlow v1.0.0 (${APP_EDITION_LABEL[skin]})`}
+        {formatAppVersionLabel(APP_EDITION_LABEL[skin])}
       </AppText>
     </View>
   );

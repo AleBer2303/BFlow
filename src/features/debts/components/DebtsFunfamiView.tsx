@@ -13,13 +13,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import {
+  ActionModeToggleRow,
   animateNextLayout,
   AppPressable,
   AppText,
   CurrencyText,
   GlassSurface,
   hapticService,
-  PencilEditIcon,
+  InlineItemActionPill,
   ProgressFill,
   ResponsiveColumns,
   RevealDown,
@@ -27,10 +28,10 @@ import {
   ScrollRevealSection,
   StatusBadge,
   TabLeaveResetter,
-  TrashBinIcon,
   useAmountPrivacy,
   useBFlowTheme,
   usePrimaryActionLook,
+  type ListActionMode,
 } from '../../../design-system';
 import { confirmDestructive } from '../../../platform/dialogs/confirmDestructive';
 import {
@@ -39,7 +40,6 @@ import {
   type FinancialAccount,
   type FinancialAccountsSummary,
   type FunfamiDebtSummary,
-  type MonthEntry,
 } from '../../../domain';
 import type {
   FinancialAccountInput,
@@ -50,16 +50,10 @@ import { FinancialAccountCard } from '../../accounts/components/FinancialAccount
 
 export type { CreateDebtInput, UpdateDebtInput } from './DebtForm';
 
-type DebtActionMode = 'edit' | 'delete' | null;
+type DebtActionMode = ListActionMode;
 
 export interface DebtsFunfamiViewProps {
   debtSummary: FunfamiDebtSummary | DebtSummaryResult;
-  funfamiEntry?: MonthEntry;
-  installmentEntry?: MonthEntry;
-  onToggleFunfamiInstallment?: (entry: MonthEntry) => void;
-  onToggleInstallment?: (entry: MonthEntry) => void;
-  onUpdateFunfamiInstallmentAmount?: (newAmountCop: number) => void;
-  onUpdateInstallmentAmount?: (newAmount: number) => void;
   onCreateDebt?: (input: CreateDebtInput) => void;
   onUpdateDebt?: (debtId: string, updates: UpdateDebtInput) => void;
   onDeleteDebt?: (debtId: string) => void;
@@ -267,57 +261,14 @@ const DebtObligationCard = React.memo(function DebtObligationCard({
             </View>
 
             {/* Contextual Edit or Delete Action Button on Existing Debt Card */}
-            {debtActionMode === 'edit' ? (
-              <AppPressable
-                testID={`debt-edit-${debt.debtId}`}
-                accessibilityRole="button"
-                accessibilityLabel={`Editar deuda ${debt.name}`}
-                onPress={() => onEdit(debt)}
-                style={{
-                  minHeight: minTouchTarget,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.pill,
-                  borderCurve: 'continuous',
-                  backgroundColor: colors.glass.surfaceElevatedTint,
-                  borderWidth: 1,
-                  borderColor: colors.glass.specularBorder,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: spacing.xs,
-                }}
-              >
-                <PencilEditIcon size={14} color={colors.semantic.income} />
-                <AppText variant="caption" color={colors.semantic.income}>
-                  Editar
-                </AppText>
-              </AppPressable>
-            ) : debtActionMode === 'delete' ? (
-              <AppPressable
-                testID={`debt-delete-${debt.debtId}`}
-                accessibilityRole="button"
-                accessibilityLabel={`Eliminar deuda ${debt.name}`}
-                onPress={() => onDelete(debt.debtId, debt.name)}
-                style={{
-                  minHeight: minTouchTarget,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.pill,
-                  borderCurve: 'continuous',
-                  backgroundColor: colors.semantic.expenseSoft,
-                  borderWidth: 1,
-                  borderColor: colors.semantic.expense,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: spacing.xs,
-                }}
-              >
-                <TrashBinIcon size={14} color={colors.semantic.expense} />
-                <AppText variant="caption" color={colors.semantic.expense}>
-                  Eliminar
-                </AppText>
-              </AppPressable>
-            ) : null}
+            <InlineItemActionPill
+              mode={debtActionMode}
+              itemName={`deuda ${debt.name}`}
+              editTestID={`debt-edit-${debt.debtId}`}
+              deleteTestID={`debt-delete-${debt.debtId}`}
+              onEdit={() => onEdit(debt)}
+              onDelete={() => onDelete(debt.debtId, debt.name)}
+            />
           </View>
         </View>
       </GlassSurface>
@@ -483,6 +434,14 @@ export function DebtsFunfamiView({
       return next;
     });
   }, []);
+  const handleToggleEditMode = useCallback(
+    () => toggleDebtActionMode('edit'),
+    [toggleDebtActionMode]
+  );
+  const handleToggleDeleteMode = useCallback(
+    () => toggleDebtActionMode('delete'),
+    [toggleDebtActionMode]
+  );
 
   const openForm = useCallback((debt: DebtFormDebt | null) => {
     hapticService.light();
@@ -581,65 +540,19 @@ export function DebtsFunfamiView({
         </AppPressable>
 
         {/* Global Edit & Delete Mode Buttons */}
-        <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
-          {(
-            [
-              {
-                mode: 'edit' as const,
-                testID: 'debt-action-edit-button',
-                label: 'Editar',
-                cancelLabel: 'Cancelar Edición',
-                a11yLabel: 'Editar obligaciones activas',
-                cancelA11yLabel: 'Cancelar edición de obligaciones',
-                activeColor: colors.semantic.income,
-                activeBg: colors.glass.surfaceElevatedTint,
-                Icon: PencilEditIcon,
-              },
-              {
-                mode: 'delete' as const,
-                testID: 'debt-action-delete-button',
-                label: 'Eliminar',
-                cancelLabel: 'Cancelar Eliminación',
-                a11yLabel: 'Eliminar obligaciones activas',
-                cancelA11yLabel: 'Cancelar eliminación de obligaciones',
-                activeColor: colors.semantic.expense,
-                activeBg: colors.semantic.expenseSoft,
-                Icon: TrashBinIcon,
-              },
-            ] as const
-          ).map((btn) => {
-            const isActive = debtActionMode === btn.mode;
-            const fgColor = isActive ? btn.activeColor : colors.text.secondary;
-            return (
-              <AppPressable
-                key={btn.mode}
-                testID={btn.testID}
-                accessibilityRole="button"
-                accessibilityLabel={isActive ? btn.cancelA11yLabel : btn.a11yLabel}
-                onPress={() => toggleDebtActionMode(btn.mode)}
-                style={{
-                  flex: 1,
-                  minHeight: minTouchTarget,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.pill,
-                  borderCurve: 'continuous',
-                  backgroundColor: isActive ? btn.activeBg : colors.glass.surfaceTint,
-                  borderWidth: 1.5,
-                  borderColor: isActive ? btn.activeColor : colors.glass.subtleBorder,
-                  flexDirection: 'row',
-                  gap: spacing.xs,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <btn.Icon size={16} color={fgColor} />
-                <AppText variant="caption" color={fgColor}>
-                  {isActive ? btn.cancelLabel : btn.label}
-                </AppText>
-              </AppPressable>
-            );
-          })}
-        </View>
+        <ActionModeToggleRow
+          activeMode={debtActionMode}
+          editLabel="Editar"
+          deleteLabel="Eliminar"
+          editTestID="debt-action-edit-button"
+          deleteTestID="debt-action-delete-button"
+          editAccessibilityLabel="Editar obligaciones activas"
+          deleteAccessibilityLabel="Eliminar obligaciones activas"
+          activeEditAccessibilityLabel="Cancelar edición de obligaciones"
+          activeDeleteAccessibilityLabel="Cancelar eliminación de obligaciones"
+          onToggleEdit={handleToggleEditMode}
+          onToggleDelete={handleToggleDeleteMode}
+        />
       </View>
 
       {/* Form Drawer / Card for Creating or Editing a Debt */}
@@ -662,7 +575,7 @@ export function DebtsFunfamiView({
           <View style={{ gap: spacing.xs }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <AppText variant="headline" color={colors.semantic.completed}>
-                {`✨ ¡Deuda "${paidOffDebt?.name ?? 'Obligación'}" liquidada al 100%!`}
+                {`¡Deuda "${paidOffDebt?.name ?? 'Obligación'}" liquidada al 100%!`}
               </AppText>
               <AppPressable
                 testID="moto-debt-banner-dismiss-button"

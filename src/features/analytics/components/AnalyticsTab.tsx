@@ -41,7 +41,6 @@ export const AnalyticsTab = React.memo(function AnalyticsTab(): React.JSX.Elemen
       closeCurrentMonth: state.closeCurrentMonth,
       reopenClosedMonth: state.reopenClosedMonth,
       deleteOrRevertMonth: state.deleteOrRevertMonth,
-      resetToOctober2026GoldenState: state.resetToOctober2026GoldenState,
     }))
   );
 
@@ -78,7 +77,6 @@ export const AnalyticsTab = React.memo(function AnalyticsTab(): React.JSX.Elemen
         onCloseCurrentMonth={handleCloseMonth}
         onReopenClosedMonth={handleReopenClosedMonth}
         onDeleteOrRevertMonth={handleDeleteOrRevertMonth}
-        onResetOctoberSeed={actions.resetToOctober2026GoldenState}
       />
       {accountsSummary.hasAccounts ? (
         <ScrollRevealSection>

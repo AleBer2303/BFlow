@@ -401,20 +401,14 @@ export function DebtsFunfamiView({
     handleResetTransientState();
   }, [debtSummary.monthKey, handleResetTransientState]);
 
+  // Milestone banner: the first debt that had a balance > 0 this month and reached 0, until the
+  // user dismisses it. In later months its openingBalance is 0, so it never appears again.
   const paidOffDebt = useMemo(
-    () =>
-      debtSummary.debts.find((d) => d.openingBalance > 0 && d.remainingBalance === 0) ??
-      debtSummary.debts.find((d) => d.debtId === 'debt_cb300f_moto'),
+    () => debtSummary.debts.find((d) => d.openingBalance > 0 && d.remainingBalance === 0),
     [debtSummary.debts]
   );
-
-  // Milestone banner: Only show banner if a debt had a balance > 0 in this month AND reached 0,
-  // and user has not dismissed it. In subsequent months (where openingBalance is 0), it never appears!
-  const isMotoDebtPaidOff = Boolean(
-    paidOffDebt &&
-    paidOffDebt.openingBalance > 0 &&
-    paidOffDebt.remainingBalance === 0 &&
-    dismissedBannerMonth !== debtSummary.monthKey
+  const isPaidOffBannerVisible = Boolean(
+    paidOffDebt && dismissedBannerMonth !== debtSummary.monthKey
   );
 
   // When a debt is 100% paid off (remainingBalance === 0), remove it from active obligations
@@ -570,7 +564,7 @@ export function DebtsFunfamiView({
       </RevealDown>
 
       {/* Banner when a debt is 100% paid off (Dismissible, only in month of completion) */}
-      <RevealDown visible={isMotoDebtPaidOff}>
+      <RevealDown visible={isPaidOffBannerVisible}>
         <GlassSurface testID="moto-debt-completed-banner">
           <View style={{ gap: spacing.xs }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>

@@ -4,6 +4,7 @@ import {
   calculateFunfamiDebtSummary,
   Debt,
   MonthEntry,
+  orderDebtsForCascade,
   projectDebtPayoff,
   uncompleteMovement,
 } from '../../index';
@@ -124,5 +125,65 @@ describe('domain/debts — FUNFAMI Debt Calculator & Payoff Projections', () => 
     const cardStatus = summary.debts.find((d) => d.debtId === 'debt_credit_card')!;
     expect(cardStatus.accruedInterestThisMonth).toBe(20_000);
     expect(cardStatus.monthlyInterestRate).toBe(2.0);
+  });
+});
+
+describe('domain/debts — cascade order (CC-05, ADR 0036)', () => {
+  const debt = (id: string, openingBalance: number): Debt => ({
+    id,
+    groupKey: 'General',
+    name: id,
+    lender: 'Banco',
+    openingBalance,
+    monthKey: '2026-11',
+  });
+  const installment: MonthEntry = {
+    id: '2026-11_exp_cuota',
+    monthKey: '2026-11',
+    conceptId: 'exp_cuota',
+    plannedAmount: 500_000,
+    actualAmount: 500_000,
+    status: 'completed',
+    completedAt: '2026-11-05',
+  } as MonthEntry;
+
+  it('puts the explicit target first and the rest by id, whatever the input order', () => {
+    const list = [debt('debt_zeta', 1), debt('debt_cb300f_moto', 1), debt('debt_alfa', 1)];
+    expect(orderDebtsForCascade(list).map((d) => d.id)).toEqual([
+      'debt_alfa',
+      'debt_cb300f_moto',
+      'debt_zeta',
+    ]);
+    expect(orderDebtsForCascade([...list].reverse(), 'debt_zeta').map((d) => d.id)).toEqual([
+      'debt_zeta',
+      'debt_alfa',
+      'debt_cb300f_moto',
+    ]);
+    expect(list.map((d) => d.id)).toEqual(['debt_zeta', 'debt_cb300f_moto', 'debt_alfa']);
+  });
+
+  it('no longer gives the seed debt priority without an explicit target', () => {
+    const payments = buildDebtPaymentsForInstallment(installment, [
+      debt('debt_cb300f_moto', 1_000_000),
+      debt('debt_auto', 300_000),
+    ]);
+    expect(payments.map((p) => [p.debtId, p.principalAmount])).toEqual([
+      ['debt_auto', 300_000],
+      ['debt_cb300f_moto', 200_000],
+    ]);
+  });
+
+  it('spills from the explicit target into the next debts by id', () => {
+    const payments = buildDebtPaymentsForInstallment(
+      installment,
+      [debt('debt_b', 400_000), debt('debt_c', 400_000), debt('debt_a', 50_000)],
+      undefined,
+      'debt_c'
+    );
+    expect(payments.map((p) => [p.debtId, p.principalAmount])).toEqual([
+      ['debt_c', 400_000],
+      ['debt_a', 50_000],
+      ['debt_b', 50_000],
+    ]);
   });
 });

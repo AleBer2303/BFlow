@@ -371,3 +371,29 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView form state on %s skin', (skin
     expect(screen.queryByTestId('debt-edit-debt_cb300f_moto')).toBeNull();
   });
 });
+
+describe('DebtsFunfamiView paid-off banner (CC-05)', () => {
+  const paidOff = (debtId: string, openingBalance: number) => ({
+    ...BASE_DEBT_SUMMARY,
+    debts: BASE_DEBT_SUMMARY.debts.map((d) =>
+      d.debtId === debtId ? { ...d, openingBalance, remainingBalance: 0 } : d
+    ),
+  });
+
+  it('celebrates whichever debt reached 0 this month, not a fixed seed debt', () => {
+    renderView('ios', { debtSummary: paidOff('debt_esp_ia', 3_600_000) });
+    expect(screen.getByTestId('moto-debt-completed-banner')).toBeTruthy();
+    expect(screen.getByText('¡Deuda "Especialización IA" liquidada al 100%!')).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId('moto-debt-banner-dismiss-button'));
+    expect(screen.queryByTestId('moto-debt-completed-banner')).toBeNull();
+  });
+
+  it('shows no banner when no debt was paid off this month', () => {
+    renderView('ios');
+    expect(screen.queryByTestId('moto-debt-completed-banner')).toBeNull();
+
+    renderView('android', { debtSummary: paidOff('debt_cb300f_moto', 0) });
+    expect(screen.queryByTestId('moto-debt-completed-banner')).toBeNull();
+  });
+});

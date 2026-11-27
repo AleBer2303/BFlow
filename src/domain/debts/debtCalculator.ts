@@ -54,6 +54,25 @@ export interface DebtSummaryResult {
 export type FunfamiDebtSummary = DebtSummaryResult;
 
 /**
+ * Order in which an installment cascades across debts (ADR 0036): the explicit target first
+ * (the concept's `defaultTargetDebtId` or the one chosen when paying), then the rest by `id`.
+ * Ordering by `id` keeps the result the same whatever order the debts were loaded in, so every
+ * device computes the same payments.
+ */
+export function orderDebtsForCascade(
+  debts: readonly Debt[],
+  explicitTargetDebtId?: string
+): Debt[] {
+  return [...debts].sort((a, b) => {
+    if (explicitTargetDebtId) {
+      if (a.id === explicitTargetDebtId) return -1;
+      if (b.id === explicitTargetDebtId) return 1;
+    }
+    return a.id.localeCompare(b.id);
+  });
+}
+
+/**
  * Generates or validates DebtPayment records for a debt installment MonthEntry.
  * - If `entry.status !== 'completed'`, returns payments with `active: false` so debt is not reduced.
  * - If no `customAllocations` are provided, cascades across debts starting with preferredTargetDebtId
@@ -117,16 +136,7 @@ export function buildDebtPaymentsForInstallment(
     ? debts.filter((d) => (d.groupKey || targetGroupKey) === targetGroupKey)
     : debts;
 
-  const orderedDebts = [...candidateDebts].sort((a, b) => {
-    if (explicitTarget) {
-      if (a.id === explicitTarget.id) return -1;
-      if (b.id === explicitTarget.id) return 1;
-    }
-    // Backward compat priority for fixture
-    if (a.id === 'debt_cb300f_moto') return -1;
-    if (b.id === 'debt_cb300f_moto') return 1;
-    return a.id.localeCompare(b.id);
-  });
+  const orderedDebts = orderDebtsForCascade(candidateDebts, explicitTarget?.id);
 
   let remainingToApply = installmentAmount;
   const payments: DebtPayment[] = [];

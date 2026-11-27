@@ -12,7 +12,7 @@ import type {
   Debt,
   DebtPayment,
   FinancialAccount,
-  ProvisionPlan as IdealMotoPlan,
+  ProvisionPlan,
   MonthEntry,
   MonthSnapshot,
   SavingsBucket,
@@ -25,7 +25,7 @@ export interface MonthWorkspaceData {
   debts: Debt[];
   debtPayments: DebtPayment[];
   savingsBuckets: SavingsBucket[];
-  provisionPlan: IdealMotoPlan;
+  provisionPlan: ProvisionPlan;
   closedSnapshot?: MonthSnapshot;
 }
 
@@ -37,7 +37,7 @@ export interface FullCloudAccountData {
   debtsByMonth: Record<string, Debt[]>;
   debtPayments: DebtPayment[];
   savingsBucketsByMonth: Record<string, SavingsBucket[]>;
-  provisionPlan: IdealMotoPlan;
+  provisionPlan: ProvisionPlan;
   closedSnapshots: Record<string, MonthSnapshot>;
   /** Credit cards and debit accounts (ADR 0034); missing in caches written before it. */
   financialAccounts?: FinancialAccount[];
@@ -54,7 +54,7 @@ export interface InitialAccountSetupPayload {
   debts: Debt[];
   debtPayments: DebtPayment[];
   savingsBuckets: SavingsBucket[];
-  provisionPlan: IdealMotoPlan;
+  provisionPlan: ProvisionPlan;
 }
 
 /**
@@ -140,7 +140,7 @@ export interface BudgetRepository {
     bucketName?: string
   ): Promise<void>;
   deleteSavingsBucket(uid: string, bucketId: string): Promise<void>;
-  saveProvisionPlan(uid: string, plan: IdealMotoPlan): Promise<void>;
+  saveProvisionPlan(uid: string, plan: ProvisionPlan): Promise<void>;
   saveInitialAccountSetup(uid: string, payload: InitialAccountSetupPayload): Promise<void>;
   saveActiveMonthKey(uid: string, monthKey: string): Promise<void>;
   saveUserProfile(uid: string, profile: UserProfileFields): Promise<void>;

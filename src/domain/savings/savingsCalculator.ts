@@ -37,8 +37,6 @@ export interface ReserveBucketSummary {
   }>;
 }
 
-/** @deprecated use ReserveBucketSummary */
-export type MotoBucketSummary = ReserveBucketSummary;
 
 export interface GeneralSavingsBucketSummary {
   bucketId: 'savings';
@@ -71,10 +69,7 @@ export interface CustomSavingsBucketSummary {
 export interface MonthlySavingsSummary {
   monthKey: string;
   hasReserveBucket: boolean;
-  hasMotoBucket: boolean;
   reserve: ReserveBucketSummary;
-  /** @deprecated use reserve */
-  moto: ReserveBucketSummary;
   hasSavingsBucket: boolean;
   savings: GeneralSavingsBucketSummary;
   customBuckets: CustomSavingsBucketSummary[];
@@ -224,9 +219,7 @@ export function calculateMonthlySavingsSummary(
   return {
     monthKey,
     hasReserveBucket,
-    hasMotoBucket: hasReserveBucket,
     reserve: reserveSummary,
-    moto: reserveSummary,
     hasSavingsBucket,
     savings: {
       bucketId: 'savings',

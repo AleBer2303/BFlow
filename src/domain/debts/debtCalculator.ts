@@ -50,8 +50,6 @@ export interface DebtSummaryResult {
   projection: DebtPayoffProjection;
 }
 
-/** @deprecated use DebtSummaryResult */
-export type FunfamiDebtSummary = DebtSummaryResult;
 
 /**
  * Order in which an installment cascades across debts (ADR 0036): the explicit target first
@@ -124,13 +122,11 @@ export function buildDebtPaymentsForInstallment(
 
   // If a specific target debt is linked and exists in `debts`, target that debt first (and cascade within its group if needed)
   const explicitTarget =
-    preferredTargetDebtId && preferredTargetDebtId !== 'ALL_DEBTS' && preferredTargetDebtId !== 'ALL_FUNFAMI'
+    preferredTargetDebtId && preferredTargetDebtId !== 'ALL_DEBTS'
       ? debts.find((d) => d.id === preferredTargetDebtId)
       : undefined;
 
-  const targetGroupKey =
-    explicitTarget?.groupKey ??
-    (installmentEntry.conceptId === 'exp_cuota_funfami' ? 'FUNFAMI' : undefined);
+  const targetGroupKey = explicitTarget?.groupKey;
 
   const candidateDebts = targetGroupKey
     ? debts.filter((d) => (d.groupKey || targetGroupKey) === targetGroupKey)
@@ -199,7 +195,7 @@ export function calculateDebtsSummary(
   entries: readonly MonthEntry[],
   currentMonthKey: string,
   explicitPayments?: readonly DebtPayment[],
-  defaultMonthlyInstallment = 1_800_000
+  defaultMonthlyInstallment = 0
 ): DebtSummaryResult {
   assertValidMonthKey(currentMonthKey);
 
@@ -213,8 +209,7 @@ export function calculateDebtsSummary(
       e.type === 'expense' &&
       (e.conceptId.includes('cuota') ||
         e.conceptId.includes('prestamo') ||
-        e.conceptId.includes('deuda') ||
-        e.conceptId === 'exp_cuota_funfami')
+        e.conceptId.includes('deuda'))
   );
 
   const activePayments: readonly DebtPayment[] = explicitPayments
@@ -294,5 +289,3 @@ export function calculateDebtsSummary(
   };
 }
 
-/** @deprecated use calculateDebtsSummary */
-export const calculateFunfamiDebtSummary = calculateDebtsSummary;

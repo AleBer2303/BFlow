@@ -1,5 +1,5 @@
 import {
-  calculateFunfamiDebtSummary,
+  calculateDebtsSummary,
   calculateMonthlyBudgetSummary,
   calculateMonthlySavingsSummary,
 } from '../../domain';
@@ -50,7 +50,7 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
     expect(budget.pendingExpenses).toBe(450_000);
     expect(budget.netCashFlow).toBe(1_080_000);
 
-    const debtsSummary = calculateFunfamiDebtSummary(
+    const debtsSummary = calculateDebtsSummary(
       seed.debts,
       seed.entries,
       '2026-10',
@@ -158,7 +158,7 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
     expect(uncompleteResult.updatedDebtPayment?.active).toBe(false);
 
     const afterUncomplete = await repo.loadMonthWorkspace('user_123', '2026-10');
-    const debtSummaryPending = calculateFunfamiDebtSummary(
+    const debtSummaryPending = calculateDebtsSummary(
       afterUncomplete.debts,
       afterUncomplete.entries,
       '2026-10',
@@ -210,7 +210,7 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
 
     // Historical October 2026 workspace must preserve its original opening balances (no double-subtraction)
     const octClosedWorkspace = await repo.loadMonthWorkspace('user_123', '2026-10');
-    const octClosedDebtSummary = calculateFunfamiDebtSummary(
+    const octClosedDebtSummary = calculateDebtsSummary(
       octClosedWorkspace.debts,
       octClosedWorkspace.entries,
       '2026-10',
@@ -230,7 +230,7 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
       novBudget,
       '2026-11'
     );
-    expect(novSavings.moto.openingBalance).toBe(2_300_000);
+    expect(novSavings.reserve.openingBalance).toBe(2_300_000);
 
     // Test new persistent cloud methods: saveOrUpdateEntry, saveCustomConceptAndEntry, deleteEntryCompletely, reopenMonthInCloud
     const sampleEntry = octClosedWorkspace.entries[0]!;

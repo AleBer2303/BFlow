@@ -4,7 +4,7 @@ import { useAmountPrivacy } from '../privacy/AmountPrivacyContext';
 import { useBFlowTheme } from '../theme/ThemeContext';
 import { AppText, TypographyVariant } from './Typography';
 
-export type CurrencyTone = 'neutral' | 'income' | 'expense' | 'debt' | 'reserve' | 'provisions' | 'moto' | 'savings';
+export type CurrencyTone = 'neutral' | 'income' | 'expense' | 'debt' | 'reserve' | 'provisions' | 'savings';
 
 export interface CurrencyTextProps {
   amount: number;
@@ -39,7 +39,6 @@ export function CurrencyText({
     debt: colors.semantic.debt,
     reserve: colors.semantic.reserve,
     provisions: colors.semantic.provisions,
-    moto: colors.semantic.reserve,
     savings: colors.semantic.savings,
   };
 

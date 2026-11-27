@@ -18,7 +18,7 @@ import type {
   Debt,
   DebtPayment,
   FinancialAccount,
-  ProvisionPlan as IdealMotoPlan,
+  ProvisionPlan,
   MonthEntry,
   MonthSnapshot,
   SavingsBucket,
@@ -50,7 +50,7 @@ export class InMemoryBudgetRepository implements BudgetRepository {
   private debtsByMonth = new Map<string, Debt[]>();
   private debtPayments = new Map<string, DebtPayment>();
   private savingsBucketsByMonth = new Map<string, SavingsBucket[]>();
-  private provisionPlan: IdealMotoPlan;
+  private provisionPlan: ProvisionPlan;
   private snapshots = new Map<string, MonthSnapshot>();
   private financialAccounts = new Map<string, FinancialAccount>();
   private seededUsers = new Set<string>();
@@ -595,7 +595,7 @@ export class InMemoryBudgetRepository implements BudgetRepository {
     }
   }
 
-  async saveProvisionPlan(_uid: string, plan: IdealMotoPlan): Promise<void> {
+  async saveProvisionPlan(_uid: string, plan: ProvisionPlan): Promise<void> {
     this.provisionPlan = {
       items: plan.items.map((item) => ({ ...item })),
       recurringMonthlyTotalCop: plan.recurringMonthlyTotalCop,

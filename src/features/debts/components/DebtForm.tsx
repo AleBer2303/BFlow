@@ -32,7 +32,6 @@ import {
   type DebtSummaryResult,
   type FinancialAccount,
   type FinancialAccountType,
-  type FunfamiDebtSummary,
 } from '../../../domain';
 import type {
   FinancialAccountInput,
@@ -60,7 +59,7 @@ export interface UpdateDebtInput {
   monthlyInstallment?: number;
 }
 
-export type DebtFormDebt = (FunfamiDebtSummary | DebtSummaryResult)['debts'][number];
+export type DebtFormDebt = (DebtSummaryResult)['debts'][number];
 
 export type ObligationKind = 'debt' | FinancialAccountType;
 

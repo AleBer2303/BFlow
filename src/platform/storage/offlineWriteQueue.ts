@@ -27,7 +27,7 @@ import type {
   Debt,
   DebtPayment,
   FinancialAccount,
-  IdealMotoPlan,
+  ProvisionPlan,
   MonthEntry,
 } from '../../domain';
 import { persistentStorage } from './persistentStorageAdapter';
@@ -56,7 +56,7 @@ export interface QueuedWritePayloads {
   delete_debt: { debtId: string };
   save_financial_account: { account: FinancialAccount };
   delete_financial_account: { accountId: string };
-  save_provision_plan: { plan: IdealMotoPlan };
+  save_provision_plan: { plan: ProvisionPlan };
   save_savings_bucket: {
     bucketId: string;
     openingBalanceCop: number;

@@ -158,8 +158,6 @@ export interface ProvisionPlan {
   totalWithTargetGoal?: number;
 }
 
-/** @deprecated use ProvisionPlan */
-export type IdealMotoPlan = ProvisionPlan;
 
 export interface GroupBudgetBreakdown {
   planned: number;

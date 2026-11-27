@@ -9,7 +9,7 @@ import { sumMoneyIntegers } from '../../domain/money/money';
 import type {
   Concept,
   Debt,
-  ProvisionPlan as IdealMotoPlan,
+  ProvisionPlan,
   MonthEntry,
   MonthSnapshot,
   SavingsBucket,
@@ -46,7 +46,7 @@ export function isOwnerCanonicalEmail(email?: string | null): boolean {
   return OWNER_SEED_EMAILS.has(email.trim().toLowerCase());
 }
 
-export const EMPTY_PROVISION_PLAN: IdealMotoPlan = {
+export const EMPTY_PROVISION_PLAN: ProvisionPlan = {
   items: [],
   recurringMonthlyTotalCop: 0,
   totalWithTargetGoalCop: 0,

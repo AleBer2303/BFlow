@@ -39,7 +39,6 @@ import {
   type DebtSummaryResult,
   type FinancialAccount,
   type FinancialAccountsSummary,
-  type FunfamiDebtSummary,
 } from '../../../domain';
 import type {
   FinancialAccountInput,
@@ -53,7 +52,7 @@ export type { CreateDebtInput, UpdateDebtInput } from './DebtForm';
 type DebtActionMode = ListActionMode;
 
 export interface DebtsFunfamiViewProps {
-  debtSummary: FunfamiDebtSummary | DebtSummaryResult;
+  debtSummary: DebtSummaryResult;
   onCreateDebt?: (input: CreateDebtInput) => void;
   onUpdateDebt?: (debtId: string, updates: UpdateDebtInput) => void;
   onDeleteDebt?: (debtId: string) => void;
@@ -70,7 +69,7 @@ const NO_ACCOUNTS: readonly FinancialAccount[] = [];
 const DebtHeroCard = React.memo(function DebtHeroCard({
   debtSummary,
 }: {
-  debtSummary: FunfamiDebtSummary | DebtSummaryResult;
+  debtSummary: DebtSummaryResult;
 }): React.JSX.Element {
   const { formatAmount } = useAmountPrivacy();
   const { colors, spacing, radius } = useBFlowTheme();

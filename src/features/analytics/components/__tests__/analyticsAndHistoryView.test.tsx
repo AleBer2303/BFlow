@@ -89,9 +89,7 @@ const mockGeneralSavings: GeneralSavingsBucketSummary = {
 const mockSavingsSummary: MonthlySavingsSummary = {
   monthKey: '2026-10',
   hasReserveBucket: true,
-  hasMotoBucket: true,
   reserve: mockReserveSummary,
-  moto: mockReserveSummary,
   hasSavingsBucket: true,
   savings: mockGeneralSavings,
   customBuckets: [],

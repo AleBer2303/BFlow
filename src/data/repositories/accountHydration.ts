@@ -720,7 +720,7 @@ function rollSavingsIntoMonth(input: {
     }
     const closingBalance =
       b.id === 'moto'
-        ? prevSavings.moto.currentBalance
+        ? prevSavings.reserve.currentBalance
         : b.id === 'savings'
           ? prevSavings.savings.currentBalance
           : (customClosingById.get(b.id) ?? b.openingBalance);

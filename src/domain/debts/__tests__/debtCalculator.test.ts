@@ -1,7 +1,7 @@
 import octoberFixture from '../../../../fixtures/october-2026.json';
 import {
   buildDebtPaymentsForInstallment,
-  calculateFunfamiDebtSummary,
+  calculateDebtsSummary,
   Debt,
   MonthEntry,
   orderDebtsForCascade,
@@ -20,7 +20,7 @@ describe('domain/debts — FUNFAMI Debt Calculator & Payoff Projections', () => 
       { debtId: 'debt_esp_ia', principalAmount: 800_000 },
     ]);
 
-    const summary = calculateFunfamiDebtSummary(debts, octoberEntries, '2026-10', payments);
+    const summary = calculateDebtsSummary(debts, octoberEntries, '2026-10', payments);
     expect(summary.totalRemainingDebt).toBe(6_200_000);
     expect(summary.debts.find((d) => d.debtId === 'debt_cb300f_moto')?.remainingBalance).toBe(
       3_400_000
@@ -73,7 +73,7 @@ describe('domain/debts — FUNFAMI Debt Calculator & Payoff Projections', () => 
       },
     ];
 
-    const summary = calculateFunfamiDebtSummary(smallMotoDebts, octoberEntries, '2026-10');
+    const summary = calculateDebtsSummary(smallMotoDebts, octoberEntries, '2026-10');
     expect(summary.debts.find((d) => d.debtId === 'debt_cb300f_moto')?.remainingBalance).toBe(0);
     expect(summary.debts.find((d) => d.debtId === 'debt_esp_ia')?.remainingBalance).toBe(
       2_600_000
@@ -101,10 +101,10 @@ describe('domain/debts — FUNFAMI Debt Calculator & Payoff Projections', () => 
 
     // Unchecked installment entry produces inactive payments
     const uncheckedEntries = uncompleteMovement(octoberEntries, '2026-10_exp_cuota_funfami');
-    const summaryWithoutEntry = calculateFunfamiDebtSummary(debts, [], '2026-10');
+    const summaryWithoutEntry = calculateDebtsSummary(debts, [], '2026-10');
     expect(summaryWithoutEntry.totalRemainingDebt).toBe(8_000_000);
     expect(
-      calculateFunfamiDebtSummary(debts, uncheckedEntries, '2026-10').isInstallmentPaid
+      calculateDebtsSummary(debts, uncheckedEntries, '2026-10').isInstallmentPaid
     ).toBe(false);
   });
 
@@ -113,15 +113,16 @@ describe('domain/debts — FUNFAMI Debt Calculator & Payoff Projections', () => 
       {
         id: 'debt_credit_card',
         groupKey: 'PERSONAL',
-        name: 'Tarjeta Nu',
-        lender: 'Nu Colombia',
+        name: 'Tarjeta de crédito',
+        lender: 'Banco',
         openingBalance: 1_000_000,
         monthKey: '2026-10',
         monthlyInterestRate: 2.0,
       },
     ];
 
-    const summary = calculateFunfamiDebtSummary(interestDebts, octoberEntries, '2026-10');
+    // No installment this month: only the interest on the untouched balance.
+    const summary = calculateDebtsSummary(interestDebts, [], '2026-10');
     const cardStatus = summary.debts.find((d) => d.debtId === 'debt_credit_card')!;
     expect(cardStatus.accruedInterestThisMonth).toBe(20_000);
     expect(cardStatus.monthlyInterestRate).toBe(2.0);

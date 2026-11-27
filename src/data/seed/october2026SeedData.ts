@@ -11,7 +11,7 @@ import type {
   Concept,
   Debt,
   DebtPayment,
-  IdealMotoPlan,
+  ProvisionPlan,
   MonthEntry,
   ProvisionItemSpec,
   SavingsBucket,
@@ -20,7 +20,7 @@ import {
   parseConceptFromFirestore,
   parseDebtFromFirestore,
   parseDebtPaymentFromFirestore,
-  parseIdealMotoPlanFromFirestore,
+  parseProvisionPlanFromFirestore,
   parseMonthEntryFromFirestore,
   parseSavingsBucketFromFirestore,
 } from '../mappers/firestoreSchemas';
@@ -32,7 +32,7 @@ export interface October2026SeedPayload {
   debts: Debt[];
   debtPayments: DebtPayment[];
   savingsBuckets: SavingsBucket[];
-  provisionPlan: IdealMotoPlan;
+  provisionPlan: ProvisionPlan;
 }
 
 /**
@@ -128,7 +128,7 @@ export function buildOctober2026SeedPayload(): October2026SeedPayload {
     })
   );
 
-  const provisionPlan = parseIdealMotoPlanFromFirestore({
+  const provisionPlan = parseProvisionPlanFromFirestore({
     items: provisionItems,
     recurringMonthlyTotalCop: october2026Fixture.idealMotoPlan.recurringMonthlyTotalCop,
     totalWithTargetGoalCop: october2026Fixture.idealMotoPlan.totalWithTargetGoalCop,

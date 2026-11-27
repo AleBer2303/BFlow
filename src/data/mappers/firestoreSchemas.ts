@@ -189,8 +189,6 @@ export const provisionPlanSchema: z.ZodType<ProvisionPlan> = z.object({
   totalWithTargetGoal: nonNegativeIntSchema.optional(),
 });
 
-/** @deprecated use provisionPlanSchema */
-export const idealMotoPlanSchema = provisionPlanSchema;
 
 const groupBudgetBreakdownSchema = z.object({
   planned: nonNegativeIntSchema,
@@ -345,10 +343,6 @@ export function parseProvisionPlanFromFirestore(raw: unknown): ProvisionPlan {
   return provisionPlanSchema.parse(raw);
 }
 
-/** @deprecated use serializeProvisionPlanForFirestore */
-export const serializeIdealMotoPlanForFirestore = serializeProvisionPlanForFirestore;
-/** @deprecated use parseProvisionPlanFromFirestore */
-export const parseIdealMotoPlanFromFirestore = parseProvisionPlanFromFirestore;
 
 export function serializeMonthSnapshotForFirestore(snapshot: MonthSnapshot): Record<string, unknown> {
   const validated = monthSnapshotSchema.parse(snapshot);

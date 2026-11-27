@@ -278,7 +278,7 @@ export function calculateFinancialAccountsSummary(
 }
 
 export interface EntryAccountLinkUpdate {
-  /** null or '' removes the link; undefined leaves it as it is. */
+  /** null or '' removes the link; undefined leaves it is. */
   accountId?: string | null;
   accountRole?: AccountMovementRole | null;
 }

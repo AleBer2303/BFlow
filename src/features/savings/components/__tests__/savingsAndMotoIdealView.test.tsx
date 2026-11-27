@@ -57,10 +57,8 @@ const BASE_RESERVE_BUCKET = {
 const BASE_SAVINGS_SUMMARY: MonthlySavingsSummary = {
   monthKey: '2026-10',
   hasReserveBucket: true,
-  hasMotoBucket: true,
   hasSavingsBucket: true,
   reserve: BASE_RESERVE_BUCKET,
-  moto: BASE_RESERVE_BUCKET,
   savings: {
     bucketId: 'savings',
     name: 'Fondo Ahorros',
@@ -119,7 +117,7 @@ const BASE_PROVISION_SUMMARY: ProvisionPlanComparisonSummary = {
       id: 'prov-1',
       displayName: 'Seguro Moto',
       monthlyAmount: 50_000,
-      excelMonthlyAmountCop: 50_000,
+      monthlyAmountCop: 50_000,
       strictCeilMonthly: 50_000,
       strictCeilMonthlyCop: 50_000,
       cycleCost: 600_000,
@@ -139,15 +137,15 @@ const BASE_PROVISION_SUMMARY: ProvisionPlanComparisonSummary = {
     },
   ],
   recurringMonthlyTotal: 50_000,
-  excelRecurringMonthlyTotalCop: 50_000,
+  recurringMonthlyTotalCop: 50_000,
   strictCeilRecurringMonthlyTotal: 50_000,
   strictCeilRecurringMonthlyTotalCop: 50_000,
   totalWithTargetGoals: 150_000,
   totalWithTargetGoalsCop: 150_000,
   actualContribution: 50_000,
-  actualMotoContributionCop: 50_000,
-  monthlyGapAgainstIdeal: 0,
-  monthlyGapAgainstIdealCop: 0,
+  actualContributionCop: 50_000,
+  monthlyGapAgainstPlan: 0,
+  monthlyGapAgainstPlanCop: 0,
 };
 
 function setWindowSize(width: number, height: number): void {

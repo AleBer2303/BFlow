@@ -34,10 +34,8 @@ const EMPTY_BUCKET = {
 const NO_FUNDS_SUMMARY: MonthlySavingsSummary = {
   monthKey: '2026-10',
   hasReserveBucket: false,
-  hasMotoBucket: false,
   hasSavingsBucket: false,
   reserve: EMPTY_BUCKET,
-  moto: EMPTY_BUCKET,
   savings: {
     bucketId: 'savings',
     name: 'Fondo Ahorros',
@@ -57,15 +55,15 @@ const NO_PROVISIONS: ProvisionPlanComparisonSummary = {
   recurringItems: [],
   targetGoals: [],
   recurringMonthlyTotal: 0,
-  excelRecurringMonthlyTotalCop: 0,
+  recurringMonthlyTotalCop: 0,
   strictCeilRecurringMonthlyTotal: 0,
   strictCeilRecurringMonthlyTotalCop: 0,
   totalWithTargetGoals: 0,
   totalWithTargetGoalsCop: 0,
   actualContribution: 0,
-  actualMotoContributionCop: 0,
-  monthlyGapAgainstIdeal: 0,
-  monthlyGapAgainstIdealCop: 0,
+  actualContributionCop: 0,
+  monthlyGapAgainstPlan: 0,
+  monthlyGapAgainstPlanCop: 0,
 };
 
 const BOLSILLO: FinancialAccount = {

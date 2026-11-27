@@ -36,10 +36,8 @@ import { confirmDestructive } from '../../../platform/dialogs/confirmDestructive
 import {
   type FinancialAccount,
   type FinancialAccountsSummary,
-  type IdealMotoPlan,
-  type MonthlySavingsSummary,
-  type MotoIdealComparisonSummary,
   type ProvisionPlan,
+  type MonthlySavingsSummary,
   type ProvisionPlanComparisonSummary,
 } from '../../../domain';
 
@@ -136,10 +134,10 @@ const SavingsBucketsList = React.memo(function SavingsBucketsList({
   const { colors, spacing } = useBFlowTheme();
 
   const customBuckets = savingsSummary.customBuckets ?? [];
-  const hasMotoBucket = savingsSummary.hasMotoBucket !== false;
+  const hasReserveBucket = savingsSummary.hasReserveBucket !== false;
   const hasSavingsBucket = savingsSummary.hasSavingsBucket !== false;
   const activeBucketsCount =
-    (hasMotoBucket ? 1 : 0) + (hasSavingsBucket ? 1 : 0) + customBuckets.length;
+    (hasReserveBucket ? 1 : 0) + (hasSavingsBucket ? 1 : 0) + customBuckets.length;
 
   const renderBucketRowAction = (
     bucketId: string,
@@ -158,9 +156,9 @@ const SavingsBucketsList = React.memo(function SavingsBucketsList({
 
   return (
     <>
-      {hasMotoBucket || hasSavingsBucket ? (
+      {hasReserveBucket || hasSavingsBucket ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
-          {hasMotoBucket ? (
+          {hasReserveBucket ? (
             <GlassSurface style={{ flex: 1, minWidth: 200 }} testID="bucket-moto-card">
               <View style={{ gap: spacing.xs }}>
                 <View
@@ -173,25 +171,25 @@ const SavingsBucketsList = React.memo(function SavingsBucketsList({
                   }}
                 >
                   <AppText variant="headline" style={{ flex: 1, minWidth: 120 }}>
-                    {savingsSummary.moto.name || 'Fondo de Reserva'}
+                    {savingsSummary.reserve.name || 'Fondo de Reserva'}
                   </AppText>
                   {renderBucketRowAction(
                     'moto',
-                    savingsSummary.moto.name || 'Fondo de Reserva',
-                    savingsSummary.moto.openingBalance
+                    savingsSummary.reserve.name || 'Fondo de Reserva',
+                    savingsSummary.reserve.openingBalance
                   )}
                 </View>
                 <CurrencyText
                   testID="bucket-moto-current"
-                  amount={savingsSummary.moto.currentBalance}
+                  amount={savingsSummary.reserve.currentBalance}
                   variant="title2"
                   tone="reserve"
                 />
                 <AppText variant="micro" color={colors.text.secondary}>
-                  {`Saldo mes anterior: ${formatAmount(savingsSummary.moto.openingBalance)}`}
+                  {`Saldo mes anterior: ${formatAmount(savingsSummary.reserve.openingBalance)}`}
                 </AppText>
                 <AppText variant="micro" color={colors.semantic.income}>
-                  {`+ Aportes pagados: ${formatAmount(savingsSummary.moto.paidContributionsThisMonth)}`}
+                  {`+ Aportes pagados: ${formatAmount(savingsSummary.reserve.paidContributionsThisMonth)}`}
                 </AppText>
               </View>
             </GlassSurface>
@@ -313,7 +311,7 @@ const SavingsAccountsSection = React.memo(function SavingsAccountsSection({
 const ProvisionsCardHeader = React.memo(function ProvisionsCardHeader({
   motoIdealSummary,
 }: {
-  motoIdealSummary: MotoIdealComparisonSummary | ProvisionPlanComparisonSummary;
+  motoIdealSummary: ProvisionPlanComparisonSummary;
 }): React.JSX.Element {
   const { formatAmount } = useAmountPrivacy();
   const { spacing } = useBFlowTheme();
@@ -332,7 +330,7 @@ const ProvisionsCardHeader = React.memo(function ProvisionsCardHeader({
         <AppText variant="title2">Provisiones y Metas</AppText>
       </View>
       <StatusBadge
-        label={`Cuota ideal: ${formatAmount(motoIdealSummary.excelRecurringMonthlyTotalCop)}/mes`}
+        label={`Cuota ideal: ${formatAmount(motoIdealSummary.recurringMonthlyTotalCop)}/mes`}
         status="provisions"
       />
     </View>
@@ -340,7 +338,7 @@ const ProvisionsCardHeader = React.memo(function ProvisionsCardHeader({
 });
 
 interface ProvisionsItemsListProps {
-  motoIdealSummary: MotoIdealComparisonSummary | ProvisionPlanComparisonSummary;
+  motoIdealSummary: ProvisionPlanComparisonSummary;
   planItemById: ReadonlyMap<string, ProvisionPlanItem>;
   provisionActionMode: ListActionMode;
   canEditProvision: boolean;
@@ -522,7 +520,7 @@ const ProvisionsItemsList = React.memo(function ProvisionsItemsList({
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                     <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
                       <CurrencyText
-                        amount={item.excelMonthlyAmountCop}
+                        amount={item.monthlyAmountCop}
                         variant="callout"
                         tone="provisions"
                       />
@@ -541,8 +539,8 @@ const ProvisionsItemsList = React.memo(function ProvisionsItemsList({
 
 export interface SavingsAndMotoIdealViewProps {
   savingsSummary: MonthlySavingsSummary;
-  motoIdealSummary: MotoIdealComparisonSummary | ProvisionPlanComparisonSummary;
-  provisionPlan?: IdealMotoPlan | ProvisionPlan;
+  motoIdealSummary: ProvisionPlanComparisonSummary;
+  provisionPlan?: ProvisionPlan | ProvisionPlan;
   onUpdateOpeningBalance?: (
     bucketId: string,
     newBalanceCop: number,
@@ -610,10 +608,10 @@ export function SavingsAndMotoIdealView({
 
   const activeBucketsCount = useMemo(() => {
     const customCount = savingsSummary.customBuckets?.length ?? 0;
-    const motoCount = savingsSummary.hasMotoBucket !== false ? 1 : 0;
+    const motoCount = savingsSummary.hasReserveBucket !== false ? 1 : 0;
     const savingsCount = savingsSummary.hasSavingsBucket !== false ? 1 : 0;
     return motoCount + savingsCount + customCount;
-  }, [savingsSummary.customBuckets, savingsSummary.hasMotoBucket, savingsSummary.hasSavingsBucket]);
+  }, [savingsSummary.customBuckets, savingsSummary.hasReserveBucket, savingsSummary.hasSavingsBucket]);
 
   const handleResetTransientState = useCallback(() => {
     setActiveForm(null);

@@ -1,16 +1,16 @@
 import octoberFixture from '../../../fixtures/october-2026.json';
 import {
   calculateChecklistProgress,
-  calculateFunfamiDebtSummary,
+  calculateDebtsSummary,
   calculateMonthlyBudgetSummary,
   calculateMonthlySavingsSummary,
-  calculateMotoIdealSummary,
+  calculateProvisionPlanSummary,
   closeMonthAndRollover,
   Concept,
   Debt,
   DebtPayment,
   ensureMonthPlan,
-  IdealMotoPlan,
+  ProvisionPlan,
   MonthEntry,
   SavingsBucket,
   uncompleteMovement,
@@ -21,12 +21,12 @@ const entries = octoberFixture.monthEntries as unknown as MonthEntry[];
 const debts = octoberFixture.debts as unknown as Debt[];
 const debtPayments = octoberFixture.debtPayments as unknown as DebtPayment[];
 const savingsBuckets = octoberFixture.savingsBuckets as unknown as SavingsBucket[];
-const idealMotoPlan = octoberFixture.idealMotoPlan as unknown as IdealMotoPlan;
+const idealMotoPlan = octoberFixture.idealMotoPlan as unknown as ProvisionPlan;
 
 describe('Golden Parity Suite — Octubre 2026 (Control_Ingresos_y_gastos_mensuales.xlsx)', () => {
   it('reproduces all exact golden formula outputs from the October 2026 sheet', () => {
     const budget = calculateMonthlyBudgetSummary(entries, '2026-10');
-    const debt = calculateFunfamiDebtSummary(debts, entries, '2026-10', debtPayments);
+    const debt = calculateDebtsSummary(debts, entries, '2026-10', debtPayments);
     const savings = calculateMonthlySavingsSummary(
       savingsBuckets,
       concepts,
@@ -35,10 +35,10 @@ describe('Golden Parity Suite — Octubre 2026 (Control_Ingresos_y_gastos_mensua
       '2026-10'
     );
     const checklist = calculateChecklistProgress(concepts, entries, '2026-10');
-    const motoIdeal = calculateMotoIdealSummary(
+    const motoIdeal = calculateProvisionPlanSummary(
       idealMotoPlan,
       entries,
-      savings.moto.paidContributionsThisMonth,
+      savings.reserve.paidContributionsThisMonth,
       '2026-10'
     );
 
@@ -53,11 +53,11 @@ describe('Golden Parity Suite — Octubre 2026 (Control_Ingresos_y_gastos_mensua
     expect(budget.expensesByGroup.variable.paid).toBe(300_000); // H24
 
     expect(debt.totalRemainingDebt).toBe(6_200_000); // H6
-    expect(savings.moto.currentBalance).toBe(2_300_000); // K4
+    expect(savings.reserve.currentBalance).toBe(2_300_000); // K4
     expect(savings.savings.currentBalance).toBe(2_080_000); // K5
     expect(savings.totalCurrentSavings).toBe(4_380_000); // K6
 
-    expect(motoIdeal.excelRecurringMonthlyTotalCop).toBe(872_667); // B43
+    expect(motoIdeal.recurringMonthlyTotalCop).toBe(872_667); // B43
     expect(motoIdeal.totalWithTargetGoalsCop).toBe(1_372_667);
 
     expect(checklist.completedCount).toBe(6);
@@ -89,7 +89,7 @@ describe('Golden Parity Suite — Octubre 2026 (Control_Ingresos_y_gastos_mensua
     });
 
     it('Inconsistency #3: reduces FUNFAMI debt ONLY when installment is completed, applying 100% principal (1.8M) to CB300F - MOTO', () => {
-      const paidState = calculateFunfamiDebtSummary(debts, entries, '2026-10');
+      const paidState = calculateDebtsSummary(debts, entries, '2026-10');
       expect(paidState.totalRemainingDebt).toBe(6_200_000);
       expect(paidState.debts.find((d) => d.debtId === 'debt_cb300f_moto')?.remainingBalance).toBe(
         2_600_000
@@ -99,7 +99,7 @@ describe('Golden Parity Suite — Octubre 2026 (Control_Ingresos_y_gastos_mensua
       );
 
       const entriesUnchecked = uncompleteMovement(entries, '2026-10_exp_cuota_funfami');
-      const unpaidState = calculateFunfamiDebtSummary(debts, entriesUnchecked, '2026-10');
+      const unpaidState = calculateDebtsSummary(debts, entriesUnchecked, '2026-10');
       expect(unpaidState.totalRemainingDebt).toBe(8_000_000);
     });
 
@@ -112,7 +112,7 @@ describe('Golden Parity Suite — Octubre 2026 (Control_Ingresos_y_gastos_mensua
         budget,
         '2026-10'
       );
-      expect(savingsPaid.moto.currentBalance).toBe(2_300_000);
+      expect(savingsPaid.reserve.currentBalance).toBe(2_300_000);
 
       const entriesWithoutCb300f = uncompleteMovement(entries, '2026-10_exp_cb300f');
       const budgetAfterUncheck = calculateMonthlyBudgetSummary(entriesWithoutCb300f, '2026-10');
@@ -123,7 +123,7 @@ describe('Golden Parity Suite — Octubre 2026 (Control_Ingresos_y_gastos_mensua
         budgetAfterUncheck,
         '2026-10'
       );
-      expect(savingsUnchecked.moto.currentBalance).toBe(1_800_000);
+      expect(savingsUnchecked.reserve.currentBalance).toBe(1_800_000);
     });
 
     it('Inconsistency #5: exposes both live Savings balance (2.08M, K5) and projected balance after pending expenses (1.63M)', () => {
@@ -162,8 +162,8 @@ describe('Golden Parity Suite — Octubre 2026 (Control_Ingresos_y_gastos_mensua
     });
 
     it('Inconsistency #7: models IDEAL Moto items as COP integers and Kit de Arrastre (500k) as a TargetGoal for 2027-08', () => {
-      const motoIdeal = calculateMotoIdealSummary(idealMotoPlan, entries, 700_000, '2026-10');
-      expect(motoIdeal.excelRecurringMonthlyTotalCop).toBe(872_667);
+      const motoIdeal = calculateProvisionPlanSummary(idealMotoPlan, entries, 700_000, '2026-10');
+      expect(motoIdeal.recurringMonthlyTotalCop).toBe(872_667);
       expect(motoIdeal.totalWithTargetGoalsCop).toBe(1_372_667);
       expect(motoIdeal.targetGoals[0]).toEqual({
         id: 'ideal_kit_de_arrastre_honda_original',
@@ -184,7 +184,7 @@ describe('Golden Parity Suite — Octubre 2026 (Control_Ingresos_y_gastos_mensua
     });
 
     it('Inconsistency #9: links IDEAL Gasolina (200k) to budget Gasolina Moto/Carro while keeping IDEAL Parqueadero (210k) separate from Parqueadero CEM (120k)', () => {
-      const motoIdeal = calculateMotoIdealSummary(idealMotoPlan, entries, 700_000, '2026-10');
+      const motoIdeal = calculateProvisionPlanSummary(idealMotoPlan, entries, 700_000, '2026-10');
       const gasolina = motoIdeal.recurringItems.find((i) => i.id === 'ideal_gasolina');
       const parqueadero = motoIdeal.recurringItems.find((i) => i.id === 'ideal_parqueadero');
 

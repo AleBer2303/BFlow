@@ -29,7 +29,7 @@ import {
   type DebitAccountKind,
   type FinancialAccount,
   type FinancialAccountType,
-  type IdealMotoPlan,
+  type ProvisionPlan,
   type MonthEntry,
   type MonthSnapshot,
   type ProvisionItemSpec,
@@ -311,7 +311,7 @@ export interface AccountsSlice {
 }
 
 export interface ProvisionsSlice {
-  idealMotoPlan: IdealMotoPlan;
+  idealMotoPlan: ProvisionPlan;
 
   saveProvisionItem: (input: SaveProvisionItemInput) => Promise<void>;
   deleteProvisionItem: (itemId: string) => Promise<void>;
@@ -327,7 +327,7 @@ export type BudgetStoreState = AuthSlice &
 
 export type SliceCreator<T> = StateCreator<BudgetStoreState, [], [], T>;
 
-export function recalculateProvisionPlan(items: readonly ProvisionItemSpec[]): IdealMotoPlan {
+export function recalculateProvisionPlan(items: readonly ProvisionItemSpec[]): ProvisionPlan {
   const normalizedItems = items.map((item) => ({ ...item }));
   const recurringMonthlyTotalCop = sumMoneyIntegers(
     normalizedItems

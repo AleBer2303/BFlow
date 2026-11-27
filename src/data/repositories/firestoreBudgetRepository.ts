@@ -35,7 +35,7 @@ import type {
   Debt,
   DebtPayment,
   FinancialAccount,
-  ProvisionPlan as IdealMotoPlan,
+  ProvisionPlan,
   MonthEntry,
   MonthSnapshot,
 } from '../../domain/models/types';
@@ -47,7 +47,7 @@ import {
   parseDebtFromFirestore,
   parseDebtPaymentFromFirestore,
   parseFinancialAccountFromFirestore,
-  parseProvisionPlanFromFirestore as parseIdealMotoPlanFromFirestore,
+  parseProvisionPlanFromFirestore,
   parseMonthEntryFromFirestore,
   parseMonthSnapshotFromFirestore,
   parseSavingsBucketFromFirestore,
@@ -55,7 +55,7 @@ import {
   serializeDebtForFirestore,
   serializeDebtPaymentForFirestore,
   serializeFinancialAccountForFirestore,
-  serializeProvisionPlanForFirestore as serializeIdealMotoPlanForFirestore,
+  serializeProvisionPlanForFirestore,
   serializeMonthEntryForFirestore,
   serializeMonthSnapshotForFirestore,
   serializeSavingsBucketForFirestore,
@@ -266,7 +266,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
         const planRef = doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal');
         batch.set(planRef, {
           id: 'moto_ideal',
-          ...serializeIdealMotoPlanForFirestore(payload.provisionPlan),
+          ...serializeProvisionPlanForFirestore(payload.provisionPlan),
           updatedAt,
         });
       },
@@ -333,7 +333,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     let provisionPlan = EMPTY_PROVISION_PLAN;
     if (planSnap.exists()) {
       try {
-        provisionPlan = parseIdealMotoPlanFromFirestore(planSnap.data());
+        provisionPlan = parseProvisionPlanFromFirestore(planSnap.data());
       } catch {
         provisionPlan = EMPTY_PROVISION_PLAN;
       }
@@ -1252,14 +1252,14 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     }
   }
 
-  async saveProvisionPlan(uid: string, plan: IdealMotoPlan): Promise<void> {
+  async saveProvisionPlan(uid: string, plan: ProvisionPlan): Promise<void> {
     await this.commitUserDataMutationBatch(uid, (batch, updatedAt) => {
       const planRef = doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal');
       batch.set(
         planRef,
         {
           id: 'moto_ideal',
-          ...serializeIdealMotoPlanForFirestore(plan),
+          ...serializeProvisionPlanForFirestore(plan),
           updatedAt,
         },
         { merge: true }
@@ -1328,7 +1328,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
         const planRef = doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal');
         batch.set(planRef, {
           id: 'moto_ideal',
-          ...serializeIdealMotoPlanForFirestore(payload.provisionPlan),
+          ...serializeProvisionPlanForFirestore(payload.provisionPlan),
           updatedAt,
         });
       },
@@ -1398,7 +1398,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
         const planRef = doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal');
         setupBatch.set(planRef, {
           id: 'moto_ideal',
-          ...serializeIdealMotoPlanForFirestore(EMPTY_PROVISION_PLAN),
+          ...serializeProvisionPlanForFirestore(EMPTY_PROVISION_PLAN),
           updatedAt,
         });
       },

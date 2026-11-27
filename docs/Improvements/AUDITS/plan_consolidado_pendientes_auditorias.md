@@ -2,6 +2,7 @@
 
 > **Tipo Diátaxis:** *Reference* (estado verificado) + *How-To* (fases con prompts).
 > **Fecha de verificación:** 2026-11-26 · **Rama:** `audit` (desde `develop` en `25e2b91`).
+> **Avance:** Fase 1 (`e272b42`, ADR 0035) y Fase 2 (`90a96c2`, `PERF_BASELINE.md` §20) integradas en `audit` el 2026-11-26 (`9de58f0` y `6a23fee`). Las líneas citadas en los prompts de la Fase 3 se actualizaron sobre ese `audit`; las de las Fases 4 a 6 siguen siendo las del 2026-11-26 y hay que volver a comprobarlas antes de empezarlas.
 > **Fuentes:** [`auditoria_produccion_bflow.md`](auditoria_produccion_bflow.md) (hallazgos `AUD-01` a `AUD-09`) y [`auditoria_documentacion_clean_code_y_optimizacion.md`](auditoria_documentacion_clean_code_y_optimizacion.md) (hallazgos `DOC-*`, `BUG-*`, `CC-*`, `OPT-*`).
 
 > [!IMPORTANT]
@@ -44,25 +45,29 @@ Las seis fases de esa auditoría ya tienen commit (`81eef52`, `6292ba8`, `b4ab90
 
 ## 3. Estado de la auditoría de documentación, clean code y optimización
 
-### 3.1. Bugs de la cola offline e integridad (`BUG-*`) — **todos siguen abiertos**
+### 3.1. Bugs de la cola offline e integridad (`BUG-*`) — **resueltos en la Fase 1**
+
+La evidencia de la tabla es la que motivó la Fase 1 (estado de `25e2b91`). La solución está en el [ADR 0035](../../decisions/0035-offline-queue-integrity-and-cascade-deletes.md).
 
 | ID | Estado | Evidencia de hoy |
 | :--- | :---: | :--- |
-| **BUG-01** | ❌ Abierto | `deleteEntryById` encola `type: 'delete_or_reset_entry'` (`createBudgetSlice.ts:639`) aunque en línea llama a `deleteEntryCompletely`. Al drenar, `offlineWriteQueue.ts:404` ejecuta `deleteOrResetEntry`, que en conceptos no múltiples deja el movimiento en `pending` en vez de borrarlo. |
-| **BUG-02** | ❌ Abierto | `getOperationTargetKey` (`offlineWriteQueue.ts:131-171`) lee `payload.id`/`entry.id`/`concept.id`/`debt.id`, pero `delete_concept` envía `{ conceptId }` (`createBudgetSlice.ts:474`), `delete_debt` envía `{ debtId }` (`createDebtsSlice.ts:238`) y el borrado de `createBudgetSlice.ts:639` envía `{ entryId }` sin `entry`. Todos devuelven `null` y no se deduplican. `save_custom_concept_and_entry` cae en `default → null`. El `payload` sigue siendo `Record<string, unknown>` (`offlineWriteQueue.ts:49`). |
-| **BUG-03** | ❌ Abierto | `completeInitialAccountSetup` (`createAuthSlice.ts:505-521`) muestra «Se sincronizará al conectar», pero no encola nada ni usa `executeOptimisticCloudWrite`. |
-| **BUG-04** | ❌ Abierto | `deleteSavingsBucket` limpia `savingsContribution` solo en memoria (`createSavingsSlice.ts:178-185`); el repositorio borra únicamente el documento del fondo (`budgetRepository.ts:2538-2543`). `deleteDebt` borra solo el documento de la deuda (`budgetRepository.ts:2480-2485`); el slice tampoco quita `debtPayments` ni `defaultTargetDebtId` en memoria (`createDebtsSlice.ts:215-250`). |
+| **BUG-01** | ✅ Resuelto (Fase 1) | `deleteEntryById` encola `type: 'delete_or_reset_entry'` (`createBudgetSlice.ts:639`) aunque en línea llama a `deleteEntryCompletely`. Al drenar, `offlineWriteQueue.ts:404` ejecuta `deleteOrResetEntry`, que en conceptos no múltiples deja el movimiento en `pending` en vez de borrarlo. |
+| **BUG-02** | ✅ Resuelto (Fase 1) | `getOperationTargetKey` (`offlineWriteQueue.ts:131-171`) lee `payload.id`/`entry.id`/`concept.id`/`debt.id`, pero `delete_concept` envía `{ conceptId }` (`createBudgetSlice.ts:474`), `delete_debt` envía `{ debtId }` (`createDebtsSlice.ts:238`) y el borrado de `createBudgetSlice.ts:639` envía `{ entryId }` sin `entry`. Todos devuelven `null` y no se deduplican. `save_custom_concept_and_entry` cae en `default → null`. El `payload` sigue siendo `Record<string, unknown>` (`offlineWriteQueue.ts:49`). |
+| **BUG-03** | ✅ Resuelto (Fase 1) | `completeInitialAccountSetup` (`createAuthSlice.ts:505-521`) muestra «Se sincronizará al conectar», pero no encola nada ni usa `executeOptimisticCloudWrite`. |
+| **BUG-04** | ✅ Resuelto (Fase 1) | `deleteSavingsBucket` limpia `savingsContribution` solo en memoria (`createSavingsSlice.ts:178-185`); el repositorio borra únicamente el documento del fondo (`budgetRepository.ts:2538-2543`). `deleteDebt` borra solo el documento de la deuda (`budgetRepository.ts:2480-2485`); el slice tampoco quita `debtPayments` ni `defaultTargetDebtId` en memoria (`createDebtsSlice.ts:215-250`). |
 
 ### 3.2. Optimización (`OPT-*`)
 
+OPT-01, 02, 04, 05 y 06 se resolvieron en la Fase 2, con el antes y el después en [`PERF_BASELINE.md` §20](../../../PERF_BASELINE.md). La evidencia de la tabla es la de `25e2b91`. En OPT-04 quedan dos salvedades: el store no llama a `addMonthEntry`, y los calculadores del dominio siguen recorriendo todos los movimientos en cada mes de `loadFullCloudAccount`.
+
 | ID | Estado | Evidencia de hoy |
 | :--- | :---: | :--- |
-| **OPT-01** | ❌ Abierto | Las 6 pestañas son `React.memo` sin props, pero se suscriben al store y ninguna lee `useIsTabActive()` para congelar sus cálculos. Las ocultas siguen recalculando con cada mutación. |
-| **OPT-02** | ❌ Abierto | El guardado se programa dos veces: `index.tsx:343` y `triggerWidgetSync → persistHydratedAccountSnapshot` (`sliceTypes.ts:403-444`), más 4 llamadas directas en `createProvisionsSlice.ts`. `savePersistedAccount` y `updatePersistedAccountRevision` siguen llamando a `readValidatedEnvelope` (`accountCache.ts:160` y `:203`), que descifra y parsea toda la cuenta. |
+| **OPT-01** | ✅ Resuelto (Fase 2) | Las 6 pestañas son `React.memo` sin props, pero se suscriben al store y ninguna lee `useIsTabActive()` para congelar sus cálculos. Las ocultas siguen recalculando con cada mutación. |
+| **OPT-02** | ✅ Resuelto (Fase 2) | El guardado se programa dos veces: `index.tsx:343` y `triggerWidgetSync → persistHydratedAccountSnapshot` (`sliceTypes.ts:403-444`), más 4 llamadas directas en `createProvisionsSlice.ts`. `savePersistedAccount` y `updatePersistedAccountRevision` siguen llamando a `readValidatedEnvelope` (`accountCache.ts:160` y `:203`), que descifra y parsea toda la cuenta. |
 | **OPT-03** | ✅ Casi resuelto | El onboarding pasó de 26 a 10 `useState` y reutiliza los formularios del workspace (`27a7987`). Queda el tamaño del archivo (va en CC-01). |
-| **OPT-04** | 🟡 Parcial | `buildMonthlyHistory` ya se limita a una ventana de 6 meses y solo calcula en vivo el mes activo y los abiertos: impacto bajo. En `loadFullCloudAccount` siguen 3 `filter(... monthKey === ...)` dentro del bucle de meses. `addMonthEntry` sigue haciendo 2 `getDocs` (`budgetRepository.ts:2004` y `:2010`). |
-| **OPT-05** | ❌ Abierto | `aes256EncryptBlock` reserva `new Uint8Array(16)` por bloque (`storageCipher.ts:328`). |
-| **OPT-06** | ❌ Abierto | 30 `new FirestoreBudgetRepository()` en los slices (Budget 12, Debts 4, Accounts 3, Auth 3, Savings 3, Sync 3, Provisions 2). `swapStyle` de `ThemeToggleIconButton` se recrea en cada render (`BrandAndThemeIcons.tsx:92-99`). |
+| **OPT-04** | ✅ Resuelto (Fase 2) | `buildMonthlyHistory` ya se limita a una ventana de 6 meses y solo calcula en vivo el mes activo y los abiertos: impacto bajo. En `loadFullCloudAccount` siguen 3 `filter(... monthKey === ...)` dentro del bucle de meses. `addMonthEntry` sigue haciendo 2 `getDocs` (`budgetRepository.ts:2004` y `:2010`). |
+| **OPT-05** | ✅ Resuelto (Fase 2) | `aes256EncryptBlock` reserva `new Uint8Array(16)` por bloque (`storageCipher.ts:328`). |
+| **OPT-06** | ✅ Resuelto (Fase 2) | 30 `new FirestoreBudgetRepository()` en los slices (Budget 12, Debts 4, Accounts 3, Auth 3, Savings 3, Sync 3, Provisions 2). `swapStyle` de `ThemeToggleIconButton` se recrea en cada render (`BrandAndThemeIcons.tsx:92-99`). |
 
 ### 3.3. Clean code (`CC-*`)
 
@@ -95,8 +100,8 @@ Las fases van **de mayor a menor riesgo para los datos del usuario**. La documen
 
 | Fase | Tema | Hallazgos | Riesgo | ¿ADR? |
 | :---: | :--- | :--- | :---: | :---: |
-| **1** | Cola offline e integridad de borrados | BUG-01, BUG-02, BUG-03, BUG-04 | Alto (datos) | Sí: enmienda al 0017 o un ADR nuevo (borrado en cascada) |
-| **2** | Rendimiento de runtime y caché cifrada | OPT-01, OPT-02, OPT-04, OPT-05, OPT-06, AUD-07 (cifrado) | Medio | No (registrar en `PERF_BASELINE.md`) |
+| **1** ✅ | Cola offline e integridad de borrados (integrada en `audit`) | BUG-01, BUG-02, BUG-03, BUG-04 | Alto (datos) | Sí: enmienda al 0017 o un ADR nuevo (borrado en cascada) |
+| **2** ✅ | Rendimiento de runtime y caché cifrada (integrada en `audit`) | OPT-01, OPT-02, OPT-04, OPT-05, OPT-06, AUD-07 (cifrado) | Medio | No (registrar en `PERF_BASELINE.md`) |
 | **3** | DRY, código muerto y reglas de diseño | CC-02, CC-03, CC-04 | Bajo/Medio | No |
 | **4** | Refactor estructural del repositorio y del onboarding | CC-01, CC-05, CC-06 | Medio | Sí, si se elimina el saneamiento o cambia el orden de deudas en el dominio |
 | **5** | Seguridad residual y preparación para tiendas | AUD-01 (App Check), AUD-04 (pepper), AUD-05, AUD-07 (iconos), AUD-03 (opcional) | Medio | Sí para App Check |
@@ -182,20 +187,20 @@ Actúa coordinando UI Builder, Architect, QA Engineer y Reviewer según `AGENTS.
 Implementa la Fase 3 de `docs/Improvements/AUDITS/plan_consolidado_pendientes_auditorias.md`.
 
 1. **Helpers puros en `src/domain/`** (exportados desde `src/domain/index.ts`, con tests y cobertura ≥ 90 %):
-   - `toSlugId(value)`, con `normalize('NFD')`, para sustituir las 8 copias: `createAuthSlice.ts:212`, `:231`, `:274` y `:316`; `createBudgetSlice.ts:231`; `createProvisionsSlice.ts:43`; `createSavingsSlice.ts:106`; `InitialAccountSetupView.tsx:78`. **Ojo:** solo afecta a ids nuevos. Comprueba que ningún flujo regenera el id de un concepto existente a partir de su nombre; si alguno lo hace, conserva el id guardado.
-   - `annualToMonthlyRate`/`monthlyToAnnualRate` en `src/domain/debts/`, para las 8 conversiones de `createAuthSlice.ts:237-239`, `createDebtsSlice.ts:36-42` y `:115-123` y `DebtForm.tsx:200-202`.
+   - `toSlugId(value)`, con `normalize('NFD')`, para sustituir las 8 copias: `createAuthSlice.ts:211`, `:230`, `:273` y `:315`; `createBudgetSlice.ts:231`; `createProvisionsSlice.ts:42`; `createSavingsSlice.ts:106`; `InitialAccountSetupView.tsx:78`. **Ojo:** solo afecta a ids nuevos. Comprueba que ningún flujo regenera el id de un concepto existente a partir de su nombre; si alguno lo hace, conserva el id guardado.
+   - `annualToMonthlyRate`/`monthlyToAnnualRate` en `src/domain/debts/`, para las 8 conversiones de `createAuthSlice.ts:236-238`, `createDebtsSlice.ts:36-42` y `:115-123` y `DebtForm.tsx:200-202`.
    - Sustituye los 16 `replace(/[^0-9]/g…)`/`replace(/\D/g…)` de `features` y `design-system` por `parseCurrencyInteger` (`src/domain/money/money.ts:72`) o por un helper nuevo si hace falta otra semántica.
 
 2. **Componentes compartidos**:
    - Lleva `ActionModeToggleRow` e `InlineItemActionPill` (hoy solo en `SavingsAndMotoIdealView.tsx`) a `src/design-system/components/` y úsalos en `ChecklistWorkspaceView.tsx` y `DebtsFunfamiView.tsx`. Respeta `RevealDown`, la háptica `warning` al eliminar y `confirmDestructive`.
    - Extrae las piezas comunes de `ChecklistAddMovementForm.tsx` y `ChecklistEditEntryForm.tsx` (tarjeta del monto, chips de deuda, ahorro y cuenta, frecuencia) sin subir su estado de texto a la vista (ADR 0028).
 
-3. **Código muerto**: borra `applyCloudWorkspace` (`createSyncSlice.ts:73`, `sliceTypes.ts:203`), los parámetros `_defaultMotoOpening`/`_defaultSavingsOpening` (`budgetRepository.ts:164-165`), las props muertas de `AnalyticsAndHistoryView.tsx:224-235` y `DebtsFunfamiView.tsx:57-62` (y de sus llamadores), y el import `EMPTY_PROVISION_PLAN` (`createProvisionsSlice.ts:8`).
+3. **Código muerto**: borra `applyCloudWorkspace` (`createSyncSlice.ts:80`, `sliceTypes.ts:203`), los parámetros `_defaultMotoOpening`/`_defaultSavingsOpening` (`budgetRepository.ts:214-215`), las props muertas de `AnalyticsAndHistoryView.tsx:224-235` y `DebtsFunfamiView.tsx:57-62` (y de sus llamadores), y el import `EMPTY_PROVISION_PLAN` (`createProvisionsSlice.ts:8`).
 
 4. **Reglas de diseño**:
    - `WorkspaceShell.tsx:550`, `:607` y `:655`: un solo `testID="pending-offline-sync-badge"` en las 3 pieles y `radius` del tema. Actualiza los tests y los flujos de `e2e/` que usen los ids antiguos (`scripts/workflow-guards.test.mjs` lo comprueba).
    - Cambia los emojis `☁️` y `✨` por iconos SVG del sistema de diseño o por texto (`WorkspaceShell.tsx:561`, `:616` y `:666`; `AnalyticsAndHistoryView.tsx:315`; `DebtsFunfamiView.tsx:665`; `SummaryOverview.tsx:102`). Los `✓`, `○` y `✕` de las listas de requisitos y del botón de cerrar pueden quedarse si se leen bien con lector de pantalla.
-   - Pasa la háptica de `onPressIn` a `onPress` (`AnalyticsAndHistoryView.tsx:121`; `BrandAndThemeIcons.tsx:44`, `:106` y `:216`), según `DESIGN.md` §6.3.
+   - Pasa la háptica de `onPressIn` a `onPress` (`AnalyticsAndHistoryView.tsx:121`; `BrandAndThemeIcons.tsx:44`, `:110` y `:220`), según `DESIGN.md` §6.3.
    - `AccountProfileWorkspaceView.tsx:426`: quita `Platform.OS === 'ios' ? 44 : …` y usa los insets seguros o un token.
    - `AccountProfileWorkspaceView.tsx:640`: lee la versión de `Constants.expoConfig?.version` (de `expo-constants`) con un respaldo seguro.
    - Evalúa si `TactilePressable` todavía hace falta: su único consumidor, `MonthlyCurveSection.tsx`, le pasa `haptic="none"`.

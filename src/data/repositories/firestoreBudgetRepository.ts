@@ -18,21 +18,16 @@ import {
   query,
   where,
   writeBatch,
+  type DocumentSnapshot,
   type Firestore,
 } from 'firebase/firestore';
 import {
-  ensureMonthPlan,
   registerMovement,
   toggleMovementStatus,
   uncompleteMovement,
   type RegisterOrCompleteMovementInput,
 } from '../../domain/checklist/checklist';
-import { calculateMonthlyBudgetSummary } from '../../domain/budget/budgetCalculator';
-import { addMonthsToMonthKey, toAppIsoDate, toAppMonthKey } from '../../domain/date/monthKey';
-import {
-  buildDebtPaymentsForInstallment,
-  calculateDebtsSummary,
-} from '../../domain/debts/debtCalculator';
+import { toAppIsoDate, toAppMonthKey } from '../../domain/date/monthKey';
 import { closeMonthAndRollover, type CloseMonthResult } from '../../domain/month-close/monthClose';
 import type {
   Concept,
@@ -42,19 +37,10 @@ import type {
   ProvisionPlan as IdealMotoPlan,
   MonthEntry,
   MonthSnapshot,
-  SavingsBucket,
 } from '../../domain/models/types';
-import { calculateMonthlySavingsSummary } from '../../domain/savings/savingsCalculator';
 import { getFirebaseDb } from '../firebase/firebaseConfig';
-import {
-  isCacheFreshWithin24Hours,
-  updatePersistedAccountRevision,
-} from '../../platform/storage/accountCache';
-import {
-  planArchivedHistory,
-  resolveArchivedEntries,
-  type ArchivedHistoryPlan,
-} from './historyWindow';
+import { updatePersistedAccountRevision } from '../../platform/storage/accountCache';
+import { planArchivedHistory, type ArchivedHistoryPlan } from './historyWindow';
 import {
   parseConceptFromFirestore,
   parseDebtFromFirestore,
@@ -75,12 +61,32 @@ import {
 } from '../mappers/firestoreSchemas';
 import { buildOctober2026SeedPayload } from '../seed/october2026SeedData';
 import {
+  canCheckRevisionFirst,
+  chainMonthlyBalances,
+  collectSavingsBuckets,
+  dropUnusedLegacyDefaultBuckets,
+  hasConfiguredAccountData,
+  markOwnerAccountSeeded,
+  mergeArchivedHistoryEntries,
+  parseClosedSnapshots,
+  parseSavedActiveMonthKey,
+  planUserDocumentSync,
+  resolveAccountIdentity,
+  resolveAvailableMonths,
+  resolveFallbackActiveMonthKey,
+  resolveNeedsOnboarding,
+  resolveProvisionPlan,
+  reuseCachedAccountIfRevisionMatches,
+  shouldSeedOwnerAccount,
+  withPlannedOpenMonths,
+  type ArchivedHistoryProbe,
+  type UserDocumentData,
+} from './accountHydration';
+import {
   EMPTY_PROVISION_PLAN,
   ensureStandardSavingsBuckets,
   generateDataRevision,
-  groupByMonthKey,
   isOwnerCanonicalEmail,
-  paymentEntryKey,
   reconstructClosedMonthBalances,
   safeParseList,
 } from './budgetRepositoryShared';
@@ -94,6 +100,11 @@ import type {
   ToggleEntryCompletionResult,
   UserProfileFields,
 } from './budgetRepositoryTypes';
+
+/** `users/{uid}` fields, or undefined when the document does not exist. */
+function readUserDocumentData(snap: DocumentSnapshot): UserDocumentData {
+  return snap.exists() ? (snap.data() as Record<string, unknown>) : undefined;
+}
 
 /** One write of a cascade delete, applied inside `commitUserDataMutationBatch`. */
 type CascadeWrite = (batch: ReturnType<typeof writeBatch>, updatedAt: string) => void;
@@ -158,6 +169,18 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     await batch.commit();
     updatePersistedAccountRevision(uid, dataRevision, updatedAt);
     return dataRevision;
+  }
+
+  /**
+   * Fire-and-forget `commitUserDataMutationBatch` for the fixes a load writes back: the load does
+   * not wait for it, and a failure (offline) is not fatal because memory already has the result.
+   */
+  private commitUserDataMutationBatchInBackground(
+    uid: string,
+    extraUserFields?: Record<string, unknown>,
+    buildBatch: (batch: ReturnType<typeof writeBatch>, updatedAt: string) => void = () => {}
+  ): void {
+    void this.commitUserDataMutationBatch(uid, buildBatch, extraUserFields).catch(() => {});
   }
 
   async seedOctober2026IfEmpty(
@@ -362,41 +385,23 @@ export class FirestoreBudgetRepository implements BudgetRepository {
 
   /**
    * Loads the user's entire budget, all months' entries, debts, savings, and closed monthSnapshots
-   * when signing in on any device.
+   * when signing in on any device. The steps between the reads are the pure functions of
+   * `accountHydration.ts`.
    */
   async loadFullCloudAccount(
     uid: string,
     userEmail?: string | null,
     options?: LoadCloudAccountOptions
   ): Promise<FullCloudAccountData> {
-    const userDocRef = doc(this.db, 'users', uid);
-
-    const canCheckRevisionFirst =
-      !options?.forceFullSync &&
-      !options?.isRegistration &&
-      Boolean(options?.cachedAccount) &&
-      typeof options?.cachedDataRevision === 'string' &&
-      options.cachedDataRevision.length > 0 &&
-      isCacheFreshWithin24Hours(options?.cachedSavedAt);
-
-    let preloadedUserSnap: Awaited<ReturnType<typeof getDoc<Record<string, unknown>, Record<string, unknown>>>> | null = null;
-
-    if (canCheckRevisionFirst && options?.cachedAccount) {
-      preloadedUserSnap = await getDoc(userDocRef);
-      const remoteData = (preloadedUserSnap.exists() ? preloadedUserSnap.data() : undefined) as
-        | Record<string, unknown>
-        | undefined;
-      const remoteRevision =
-        typeof remoteData?.dataRevision === 'string' ? remoteData.dataRevision : undefined;
-
-      // R-13: If remote dataRevision matches the local cache envelope (< 24h old),
-      // skip all 7 collection/plan queries (reading only 1 document: users/{uid}).
-      if (remoteRevision && remoteRevision === options.cachedDataRevision) {
-        return {
-          ...options.cachedAccount,
-          dataRevision: remoteRevision,
-        };
-      }
+    let preloadedUserSnap: DocumentSnapshot | null = null;
+    if (canCheckRevisionFirst(options)) {
+      preloadedUserSnap = await getDoc(doc(this.db, 'users', uid));
+      // R-13: same revision as the fresh cache, so 1 document read (users/{uid}) instead of all.
+      const cachedAccount = reuseCachedAccountIfRevisionMatches(
+        readUserDocumentData(preloadedUserSnap),
+        options
+      );
+      if (cachedAccount) return cachedAccount;
     }
 
     // ADR 0028: with enough closed months in the cache, the old history is not downloaded
@@ -405,9 +410,154 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     const historyPlan = options?.isRegistration
       ? null
       : planArchivedHistory(options?.cachedAccount);
-    const entriesCollection = collection(this.db, 'users', uid, 'entries');
+    const [firstReads, financialAccountsSnap] = await Promise.all([
+      this.readCloudAccountDocuments(uid, historyPlan, preloadedUserSnap),
+      // The October seed creates no accounts, so this read stays valid after seeding.
+      getDocs(collection(this.db, 'users', uid, 'financialAccounts')),
+    ]);
+    let reads = firstReads;
+    let userData = readUserDocumentData(reads.userSnap);
+    const identity = resolveAccountIdentity(userData, userEmail);
+    let fallbackActiveMonthKey = resolveFallbackActiveMonthKey(userData, identity.isOwner);
 
-    let [
+    // R-11 & R-12: no pre-flight seedOctober2026IfEmpty round-trip nor a second users/{uid} read.
+    if (shouldSeedOwnerAccount(identity, userData)) {
+      if (reads.conceptsSnap.docs.length > 0) {
+        this.commitUserDataMutationBatchInBackground(uid, {
+          seededOctober2026: true,
+          onboardingCompleted: true,
+          activeMonthKey: fallbackActiveMonthKey,
+        });
+        userData = markOwnerAccountSeeded(userData, generateDataRevision());
+      } else {
+        const seedInfo = await this.seedOctober2026IfEmpty(uid, identity.resolvedEmail, userData);
+        fallbackActiveMonthKey = seedInfo.monthKey;
+        if (seedInfo.seeded) {
+          // Everything the seed just wrote, without the history window.
+          reads = await this.readCloudAccountDocuments(uid, null, null);
+          userData = readUserDocumentData(reads.userSnap);
+        }
+      }
+    }
+
+    const savedActiveMonthKey = parseSavedActiveMonthKey(userData);
+    const concepts = safeParseList(reads.conceptsSnap.docs, parseConceptFromFirestore).sort(
+      (a, b) => a.order - b.order
+    );
+    const closedSnapshots = parseClosedSnapshots(reads.snapshotsSnap.docs);
+    const storedEntries =
+      mergeArchivedHistoryEntries({
+        plan: historyPlan,
+        probe: reads.archivedHistoryProbe,
+        cachedAccount: options?.cachedAccount,
+        remoteSnapshots: closedSnapshots,
+      }) ??
+      // No usable cache (or the cloud changed under it): the whole collection, as before.
+      safeParseList(
+        (reads.entriesSnap ?? (await getDocs(collection(this.db, 'users', uid, 'entries')))).docs,
+        parseMonthEntryFromFirestore
+      );
+    const currentDebts = safeParseList(reads.debtsSnap.docs, parseDebtFromFirestore);
+    const debtPayments = safeParseList(reads.paymentsSnap.docs, parseDebtPaymentFromFirestore);
+
+    const collectedBuckets = collectSavingsBuckets(reads.bucketsSnap.docs, identity);
+    const { healedSavingsBucket, staleRefs } = collectedBuckets;
+    if (identity.isOwnerSeedAccount && (healedSavingsBucket || staleRefs.length > 0)) {
+      // Non-fatal if offline: the healed state is already in memory.
+      this.commitUserDataMutationBatchInBackground(uid, undefined, (batch, updatedAt) => {
+        for (const staleRef of staleRefs) {
+          batch.delete(staleRef);
+        }
+        if (healedSavingsBucket) {
+          batch.set(doc(this.db, 'users', uid, 'savingsBuckets', healedSavingsBucket.id), {
+            ...serializeSavingsBucketForFirestore(healedSavingsBucket),
+            updatedAt,
+          });
+        }
+      });
+    }
+    const contents = { concepts, entries: storedEntries, debts: currentDebts };
+    const rawBuckets = dropUnusedLegacyDefaultBuckets(collectedBuckets.buckets, identity, contents);
+
+    const needsOnboarding = resolveNeedsOnboarding({
+      identity,
+      isRegistration: options?.isRegistration,
+      hasConfiguredData: hasConfiguredAccountData({ ...contents, buckets: rawBuckets, userData }),
+    });
+    const { availableMonths, activeMonthKey } = resolveAvailableMonths({
+      ...contents,
+      identity,
+      userData,
+      savedActiveMonthKey,
+      buckets: rawBuckets,
+      closedSnapshots,
+      fallbackActiveMonthKey,
+    });
+
+    const userDocumentSync = planUserDocumentSync({
+      identity,
+      isRegistration: options?.isRegistration,
+      needsOnboarding,
+      userData,
+      savedActiveMonthKey,
+      activeMonthKey,
+    });
+    if (userDocumentSync.fieldsToWrite) {
+      this.commitUserDataMutationBatchInBackground(uid, userDocumentSync.fieldsToWrite);
+    }
+
+    const { entries, entriesByMonth } = withPlannedOpenMonths(
+      storedEntries,
+      availableMonths,
+      closedSnapshots,
+      concepts
+    );
+    const balances = chainMonthlyBalances({
+      identity,
+      availableMonths,
+      closedSnapshots,
+      concepts,
+      entries,
+      entriesByMonth,
+      currentDebts,
+      rawBuckets,
+      debtPayments,
+    });
+
+    return {
+      activeMonthKey,
+      availableMonths,
+      concepts,
+      entries,
+      debtsByMonth: balances.debtsByMonth,
+      debtPayments: balances.debtPayments,
+      savingsBucketsByMonth: balances.savingsBucketsByMonth,
+      provisionPlan: resolveProvisionPlan(
+        reads.planSnap.exists() ? reads.planSnap.data() : undefined,
+        identity
+      ),
+      closedSnapshots,
+      financialAccounts: safeParseList(
+        financialAccountsSnap.docs,
+        parseFinancialAccountFromFirestore
+      ),
+      needsOnboarding,
+      dataRevision: userDocumentSync.existingDataRevision ?? generateDataRevision(),
+      historySyncedAt,
+    };
+  }
+
+  /**
+   * Every collection `loadFullCloudAccount` needs, in parallel. With a history plan (ADR 0028)
+   * the full `entries` read is replaced by `readArchivedHistoryProbe`.
+   */
+  private async readCloudAccountDocuments(
+    uid: string,
+    historyPlan: ArchivedHistoryPlan | null,
+    preloadedUserSnap: DocumentSnapshot | null
+  ) {
+    const userCollection = (name: string) => collection(this.db, 'users', uid, name);
+    const [
       userSnap,
       conceptsSnap,
       entriesSnap,
@@ -417,607 +567,27 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       planSnap,
       snapshotsSnap,
       archivedHistoryProbe,
-      financialAccountsSnap,
     ] = await Promise.all([
-      preloadedUserSnap ? Promise.resolve(preloadedUserSnap) : getDoc(userDocRef),
-      getDocs(collection(this.db, 'users', uid, 'concepts')),
-      historyPlan ? Promise.resolve(null) : getDocs(entriesCollection),
-      getDocs(collection(this.db, 'users', uid, 'debts')),
-      getDocs(collection(this.db, 'users', uid, 'debtPayments')),
-      getDocs(collection(this.db, 'users', uid, 'savingsBuckets')),
+      preloadedUserSnap ? Promise.resolve(preloadedUserSnap) : getDoc(doc(this.db, 'users', uid)),
+      getDocs(userCollection('concepts')),
+      historyPlan ? Promise.resolve(null) : getDocs(userCollection('entries')),
+      getDocs(userCollection('debts')),
+      getDocs(userCollection('debtPayments')),
+      getDocs(userCollection('savingsBuckets')),
       getDoc(doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal')),
-      getDocs(collection(this.db, 'users', uid, 'monthSnapshots')),
+      getDocs(userCollection('monthSnapshots')),
       historyPlan ? this.readArchivedHistoryProbe(uid, historyPlan) : Promise.resolve(null),
-      // The October seed creates no accounts, so this read stays valid after seeding.
-      getDocs(collection(this.db, 'users', uid, 'financialAccounts')),
     ]);
-
-    let userData = (userSnap.exists() ? userSnap.data() : undefined) as
-      | Record<string, unknown>
-      | undefined;
-    const resolvedEmail =
-      userEmail ?? (typeof userData?.email === 'string' ? userData.email : null);
-    const isOwner = isOwnerCanonicalEmail(resolvedEmail);
-    const isResetByUser = userData?.accountResetByUser === true;
-
-    let seedMonthKey =
-      typeof userData?.activeMonthKey === 'string'
-        ? (userData.activeMonthKey as string)
-        : isOwner
-          ? '2026-10'
-          : `${toAppMonthKey().slice(0, 4)}-01`;
-
-    // R-11 & R-12: Avoid pre-flight seedOctober2026IfEmpty round-trip and duplicate users/{uid} read.
-    // Only seed when the account is the canonical owner and has 0 concepts yet.
-    if (
-      isOwner &&
-      !isResetByUser &&
-      userData?.seededOctober2026 !== true &&
-      userData?.onboardingCompleted !== true
-    ) {
-      if (conceptsSnap.docs.length > 0) {
-        const nextRev = generateDataRevision();
-        void this.commitUserDataMutationBatch(
-          uid,
-          () => {},
-          {
-            seededOctober2026: true,
-            onboardingCompleted: true,
-            activeMonthKey: seedMonthKey,
-          }
-        ).catch(() => {});
-        userData = {
-          ...(userData ?? {}),
-          seededOctober2026: true,
-          onboardingCompleted: true,
-          dataRevision: nextRev,
-        };
-      } else {
-        const seedInfo = await this.seedOctober2026IfEmpty(uid, resolvedEmail, userData);
-        seedMonthKey = seedInfo.monthKey;
-        if (seedInfo.seeded) {
-          [
-            userSnap,
-            conceptsSnap,
-            entriesSnap,
-            debtsSnap,
-            paymentsSnap,
-            bucketsSnap,
-            planSnap,
-            snapshotsSnap,
-          ] = await Promise.all([
-            getDoc(userDocRef),
-            getDocs(collection(this.db, 'users', uid, 'concepts')),
-            getDocs(collection(this.db, 'users', uid, 'entries')),
-            getDocs(collection(this.db, 'users', uid, 'debts')),
-            getDocs(collection(this.db, 'users', uid, 'debtPayments')),
-            getDocs(collection(this.db, 'users', uid, 'savingsBuckets')),
-            getDoc(doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal')),
-            getDocs(collection(this.db, 'users', uid, 'monthSnapshots')),
-          ]);
-          archivedHistoryProbe = null;
-          userData = userSnap.exists() ? userSnap.data() : undefined;
-        }
-      }
-    }
-
-    const seedInfo = { monthKey: seedMonthKey };
-
-    const savedActiveMonthKey =
-      typeof userData?.activeMonthKey === 'string' &&
-      /^\d{4}-(0[1-9]|1[0-2])$/.test(userData.activeMonthKey)
-        ? (userData.activeMonthKey as string)
-        : undefined;
-
-    const concepts = safeParseList(conceptsSnap.docs, parseConceptFromFirestore).sort(
-      (a, b) => a.order - b.order
-    );
-    const closedSnapshots: Record<string, MonthSnapshot> = {};
-    for (const snapDoc of snapshotsSnap.docs) {
-      try {
-        const parsed = parseMonthSnapshotFromFirestore(snapDoc.data());
-        closedSnapshots[parsed.monthKey] = parsed;
-      } catch {
-        // Ignore malformed snapshot doc
-      }
-    }
-
-    const archivedEntries =
-      historyPlan && archivedHistoryProbe && options?.cachedAccount
-        ? resolveArchivedEntries({
-            plan: historyPlan,
-            cachedEntries: options.cachedAccount.entries,
-            cachedSnapshots: options.cachedAccount.closedSnapshots,
-            remoteSnapshots: closedSnapshots,
-            changedEntries: safeParseList(
-              archivedHistoryProbe.changedSnap.docs,
-              parseMonthEntryFromFirestore
-            ),
-            remoteArchivedCount: archivedHistoryProbe.archivedCount,
-          })
-        : null;
-    let entries: MonthEntry[];
-    if (archivedEntries && archivedHistoryProbe) {
-      entries = [
-        ...archivedEntries,
-        ...safeParseList(archivedHistoryProbe.recentSnap.docs, parseMonthEntryFromFirestore),
-      ];
-    } else {
-      // No usable cache (or the cloud changed under it): the whole collection, as before.
-      const fullEntriesSnap = entriesSnap ?? (await getDocs(entriesCollection));
-      entries = safeParseList(fullEntriesSnap.docs, parseMonthEntryFromFirestore);
-    }
-    const currentDebts = safeParseList(debtsSnap.docs, parseDebtFromFirestore);
-    const debtPayments = safeParseList(paymentsSnap.docs, parseDebtPaymentFromFirestore);
-
-    // Deduplicate savings buckets by bucket.id (preferring direct doc ID matches)
-    // and heal only the specific 16.88M cross-account corruption if present, while
-    // allowing all users (including the owner) to freely edit or delete any bucket.
-    const bucketMap = new Map<string, SavingsBucket>();
-    const staleBucketRefsToDelete: Array<ReturnType<typeof doc>> = [];
-    let needsOwnerSavingsHeal = false;
-
-    for (const bDoc of bucketsSnap.docs) {
-      let parsed: SavingsBucket;
-      try {
-        parsed = parseSavingsBucketFromFirestore(bDoc.data());
-      } catch {
-        continue;
-      }
-
-      if (bDoc.id !== parsed.id) {
-        staleBucketRefsToDelete.push(bDoc.ref);
-        continue;
-      }
-
-      if (
-        isOwner &&
-        !isResetByUser &&
-        parsed.id === 'savings' &&
-        (parsed.openingBalance === 14_800_000 ||
-          parsed.openingBalance === 13_800_000 ||
-          parsed.openingBalance === 16_880_000)
-      ) {
-        needsOwnerSavingsHeal = true;
-        bucketMap.set('savings', {
-          ...parsed,
-          openingBalance: 1_000_000,
-          monthKey: '2026-10',
-        });
-        continue;
-      }
-
-      bucketMap.set(parsed.id, parsed);
-    }
-
-    if (isOwner && !isResetByUser && (needsOwnerSavingsHeal || staleBucketRefsToDelete.length > 0)) {
-      try {
-        void this.commitUserDataMutationBatch(uid, (healBatch, updatedAt) => {
-          for (const staleRef of staleBucketRefsToDelete) {
-            healBatch.delete(staleRef);
-          }
-          const savingsBucket = bucketMap.get('savings');
-          if (needsOwnerSavingsHeal && savingsBucket) {
-            healBatch.set(doc(this.db, 'users', uid, 'savingsBuckets', 'savings'), {
-              ...serializeSavingsBucketForFirestore(savingsBucket),
-              updatedAt,
-            });
-          }
-        }).catch(() => {});
-      } catch {
-        // Non-fatal if offline; in-memory state is already healed
-      }
-    }
-
-    let rawBuckets = Array.from(bucketMap.values());
-    // If a non-owner account has 0 configured concepts/entries/debts and only has 0-balance default 'moto'/'savings'
-    // buckets from legacy initialization, strip them so new users only see funds they explicitly create.
-    if (
-      (!isOwner || isResetByUser) &&
-      concepts.length === 0 &&
-      entries.length === 0 &&
-      currentDebts.length === 0 &&
-      rawBuckets.every(
-        (b) => (b.id === 'moto' || b.id === 'savings') && b.openingBalance === 0
-      )
-    ) {
-      rawBuckets = [];
-    }
-
-    let provisionPlan: IdealMotoPlan =
-      isOwner && !isResetByUser
-        ? buildOctober2026SeedPayload().provisionPlan
-        : EMPTY_PROVISION_PLAN;
-    if (planSnap.exists()) {
-      try {
-        provisionPlan = parseIdealMotoPlanFromFirestore(planSnap.data());
-      } catch {
-        // Keep fallback provisionPlan
-      }
-    }
-
-    const hasConfiguredData =
-      concepts.length > 0 ||
-      entries.length > 0 ||
-      currentDebts.length > 0 ||
-      rawBuckets.length > 0 ||
-      userData?.onboardingCompleted === true ||
-      userData?.seededOctober2026 === true;
-
-    let needsOnboarding: boolean;
-    if (isResetByUser) {
-      needsOnboarding = true;
-    } else if (options?.isRegistration === true && !isOwner) {
-      needsOnboarding = true;
-    } else if (options?.isRegistration === false) {
-      // User is signing in to an existing account (not registering for the first time):
-      // never show the initial setup wizard again even if they left everything blank on registration.
-      needsOnboarding = false;
-    } else {
-      needsOnboarding = !hasConfiguredData && !isOwner;
-    }
-
-    const hasOctoberData =
-      entries.some((e) => e.monthKey === '2026-10') ||
-      currentDebts.some((d) => d.monthKey === '2026-10') ||
-      Boolean(closedSnapshots['2026-10']);
-
-    const dataMonthsSet = new Set<string>();
-    for (const e of entries) {
-      dataMonthsSet.add(e.monthKey);
-    }
-    for (const d of currentDebts) {
-      dataMonthsSet.add(d.monthKey);
-    }
-    for (const mk of Object.keys(closedSnapshots)) {
-      dataMonthsSet.add(mk);
-      dataMonthsSet.add(addMonthsToMonthKey(mk, 1));
-    }
-    for (const b of rawBuckets) {
-      if (!b.monthKey) continue;
-      // Ignore legacy default '2026-10' on non-owner buckets if the account has no October data
-      if (b.monthKey === '2026-10' && (!isOwner || isResetByUser) && !hasOctoberData) {
-        continue;
-      }
-      dataMonthsSet.add(b.monthKey);
-    }
-
-    const monthsSet = new Set<string>(dataMonthsSet);
-    if (isOwner && !isResetByUser && (userData?.seededOctober2026 === true || concepts.length > 0)) {
-      monthsSet.add('2026-10');
-    }
-
-    if (savedActiveMonthKey) {
-      const isStaleDefaultOctoberOnNonOwner =
-        savedActiveMonthKey === '2026-10' &&
-        (!isOwner || isResetByUser) &&
-        !hasOctoberData &&
-        (Array.from(dataMonthsSet).some((m) => m !== '2026-10') ||
-          userData?.onboardingCompleted !== true);
-
-      if (!isStaleDefaultOctoberOnNonOwner) {
-        monthsSet.add(savedActiveMonthKey);
-      }
-    }
-
-    if (monthsSet.size === 0) {
-      const fallbackStartMonth =
-        isOwner && !isResetByUser ? '2026-10' : `${toAppMonthKey().slice(0, 4)}-01`;
-      monthsSet.add(fallbackStartMonth);
-    }
-
-    const availableMonths = Array.from(monthsSet).sort();
-    // Always open on the latest month the account is in, even if there are 0 movements in that month
-    const activeMonthKey =
-      availableMonths[availableMonths.length - 1] ?? seedInfo.monthKey;
-
-    // Mark onboardingCompleted: true in Firestore once the initial registration wizard is served
-    // or when an existing user signs in, so subsequent logins never re-prompt the wizard.
-    const shouldMarkOnboardingDoneInCloud =
-      !isResetByUser &&
-      (options?.isRegistration === true ||
-        options?.isRegistration === false ||
-        needsOnboarding) &&
-      userData?.onboardingCompleted !== true;
-
-    let resolvedDataRevision =
-      typeof userData?.dataRevision === 'string' && userData.dataRevision.length > 0
-        ? userData.dataRevision
-        : undefined;
-
-    if (
-      savedActiveMonthKey !== activeMonthKey ||
-      shouldMarkOnboardingDoneInCloud ||
-      !resolvedDataRevision
-    ) {
-      const generatedRev = generateDataRevision();
-      if (!resolvedDataRevision) {
-        resolvedDataRevision = generatedRev;
-      }
-      try {
-        void this.commitUserDataMutationBatch(
-          uid,
-          () => {},
-          {
-            activeMonthKey,
-            ...(shouldMarkOnboardingDoneInCloud
-              ? { onboardingCompleted: true, accountResetByUser: false }
-              : {}),
-          }
-        ).catch(() => {});
-      } catch {
-        // Non-fatal if offline
-      }
-    }
-
-    // Entries and payments grouped by month once, instead of filtering the whole lists in every
-    // month of the loops below (OPT-04). The indexes follow every push that comes after.
-    const entriesByMonth = groupByMonthKey(entries);
-
-    // Ensure any open month without entries yet has its recurring checklist concepts populated
-    for (const mk of availableMonths) {
-      if (!closedSnapshots[mk] && concepts.length > 0 && !entriesByMonth.has(mk)) {
-        const plannedEntries = ensureMonthPlan(mk, concepts, []);
-        entries.push(...plannedEntries);
-        if (plannedEntries.length > 0) {
-          entriesByMonth.set(mk, [...plannedEntries]);
-        }
-      }
-    }
-
-    const baseBuckets = ensureStandardSavingsBuckets(
-      rawBuckets
-    );
-
-    // Ensure every completed entry for a debt-linked concept has an active debtPayment in memory
-    const paymentList: DebtPayment[] = [...debtPayments];
-    const paymentsByMonth = groupByMonthKey(paymentList);
-    const paidEntryKeys = new Set(
-      paymentList.map((dp) => paymentEntryKey(dp.entryId, dp.monthKey))
-    );
-    const addSynthesizedPayment = (payment: DebtPayment): void => {
-      paymentList.push(payment);
-      const monthPayments = paymentsByMonth.get(payment.monthKey);
-      if (monthPayments) {
-        monthPayments.push(payment);
-      } else {
-        paymentsByMonth.set(payment.monthKey, [payment]);
-      }
-      paidEntryKeys.add(paymentEntryKey(payment.entryId, payment.monthKey));
-    };
-    const conceptById = new Map<string, Concept>(concepts.map((c) => [c.id, c]));
-
-    const debtsByMonth: Record<string, Debt[]> = {};
-    const savingsBucketsByMonth: Record<string, SavingsBucket[]> = {};
-
-    for (let idx = 0; idx < availableMonths.length; idx += 1) {
-      const mk = availableMonths[idx]!;
-      const snap = closedSnapshots[mk];
-
-      if (idx === 0) {
-        if (snap) {
-          const reconstructed = reconstructClosedMonthBalances(
-            snap,
-            concepts,
-            entries,
-            currentDebts,
-            baseBuckets
-          );
-          debtsByMonth[mk] = reconstructed.debts;
-          savingsBucketsByMonth[mk] = ensureStandardSavingsBuckets(
-            reconstructed.savingsBuckets
-          );
-        } else {
-          // If this first month is '2026-10' for the owner and currentDebts/baseBuckets was already rolled to a later month,
-          // restore '2026-10' canonical opening balances so subsequent months don't double-compound.
-          debtsByMonth[mk] = currentDebts.map((d) => {
-            if (isOwner && !isResetByUser && mk === '2026-10' && d.monthKey && d.monthKey !== '2026-10') {
-              if (d.id === 'debt_cb300f_moto') {
-                return { ...d, openingBalance: 4_400_000, monthKey: '2026-10' };
-              }
-              if (d.id === 'debt_esp_ia' || d.id === 'debt_especializacion') {
-                return { ...d, openingBalance: 3_600_000, monthKey: '2026-10' };
-              }
-            }
-            return {
-              ...d,
-              monthKey: mk,
-            };
-          });
-          savingsBucketsByMonth[mk] = baseBuckets.map((b) => {
-            if (isOwner && !isResetByUser && mk === '2026-10' && b.monthKey && b.monthKey !== '2026-10') {
-              if (b.id === 'moto') {
-                return { ...b, openingBalance: 1_600_000, monthKey: '2026-10' };
-              }
-              if (b.id === 'savings') {
-                return { ...b, openingBalance: 1_000_000, monthKey: '2026-10' };
-              }
-            }
-            return { ...b };
-          });
-        }
-      } else {
-        const prevMk = availableMonths[idx - 1]!;
-        const prevDebts = debtsByMonth[prevMk] ?? currentDebts;
-        const prevEntries = entriesByMonth.get(prevMk) ?? [];
-
-        // Synthesize missing debt payments for completed debt-linked entries in prevMk
-        for (const entry of prevEntries) {
-          if (entry.status !== 'completed') continue;
-          const concept = conceptById.get(entry.conceptId);
-          if (!concept?.linkedDebtGroup && !concept?.defaultTargetDebtId) continue;
-          const hasPayment = paidEntryKeys.has(paymentEntryKey(entry.id, prevMk));
-          if (!hasPayment && prevDebts.length > 0) {
-            const synthesized = buildDebtPaymentsForInstallment(
-              entry,
-              prevDebts,
-              undefined,
-              concept.defaultTargetDebtId
-            );
-            for (const s of synthesized) {
-              addSynthesizedPayment(s);
-            }
-          }
-        }
-
-        const prevPayments = [...(paymentsByMonth.get(prevMk) ?? [])];
-        const prevDebtSummary = calculateDebtsSummary(
-          prevDebts,
-          entries,
-          prevMk,
-          prevPayments
-        );
-        const currentDebtById = new Map<string, Debt>(currentDebts.map((d) => [d.id, d]));
-
-        // Chain each debt's remainingBalance from prevMk as the new openingBalance for mk,
-        // while preserving interest rate & installment metadata from currentDebts.
-        const rolledDebts: Debt[] = prevDebtSummary.debts.map((item) => {
-          const meta = currentDebtById.get(item.debtId);
-          const prevDebt = prevDebts.find((d) => d.id === item.debtId);
-          const rolledOpening = Math.max(0, item.remainingBalance);
-
-          // If the user explicitly edited the debt in month `mk` (and it wasn't the old 4.4M/3.6M reset bug),
-          // honor their direct edit in `mk`; otherwise use the rolled-over opening balance from `prevMk`.
-          const isLegacyResetValue =
-            (item.debtId === 'debt_cb300f_moto' &&
-              meta?.openingBalance === 4_400_000 &&
-              rolledOpening !== 4_400_000) ||
-            ((item.debtId === 'debt_especializacion' || item.debtId === 'debt_esp_ia') &&
-              meta?.openingBalance === 3_600_000 &&
-              rolledOpening !== 3_600_000);
-
-          const effectiveOpening =
-            meta?.monthKey === mk && !isLegacyResetValue
-              ? meta.openingBalance
-              : rolledOpening;
-
-          const monthlyRate =
-            meta?.monthlyInterestRate ?? prevDebt?.monthlyInterestRate ?? item.monthlyInterestRate;
-          const annualRate =
-            meta?.annualInterestRate ?? prevDebt?.annualInterestRate ?? item.annualInterestRate;
-          const rateType =
-            meta?.interestRateType ?? prevDebt?.interestRateType ?? item.interestRateType;
-          const installment =
-            meta?.monthlyInstallment ?? prevDebt?.monthlyInstallment ?? item.monthlyInstallment;
-
-          return {
-            id: item.debtId,
-            groupKey: meta?.groupKey ?? prevDebt?.groupKey ?? 'FUNFAMI',
-            name: meta?.name ?? item.name,
-            lender: meta?.lender ?? prevDebt?.lender ?? item.lender,
-            openingBalance: effectiveOpening,
-            monthKey: mk,
-            ...(monthlyRate !== undefined ? { monthlyInterestRate: monthlyRate } : {}),
-            ...(annualRate !== undefined ? { annualInterestRate: annualRate } : {}),
-            ...(rateType ? { interestRateType: rateType } : {}),
-            ...(installment !== undefined ? { monthlyInstallment: installment } : {}),
-          };
-        });
-
-        // Include any newly created debts in `currentDebts` that were created in `mk` and didn't exist in `prevMk`
-        for (const d of currentDebts) {
-          if (!rolledDebts.some((rd) => rd.id === d.id) && d.monthKey >= mk) {
-            rolledDebts.push({ ...d, monthKey: mk });
-          }
-        }
-
-        debtsByMonth[mk] = rolledDebts;
-
-        // Roll over savings buckets from prevMk to mk
-        const prevBuckets = ensureStandardSavingsBuckets(
-          savingsBucketsByMonth[prevMk] ?? baseBuckets
-        );
-        const prevBudget = calculateMonthlyBudgetSummary(entries, prevMk);
-        const prevSavings = calculateMonthlySavingsSummary(
-          prevBuckets,
-          concepts,
-          entries,
-          prevBudget,
-          prevMk
-        );
-
-        if (snap) {
-          const reconstructed = reconstructClosedMonthBalances(
-            snap,
-            concepts,
-            entries,
-            rolledDebts,
-            baseBuckets
-          );
-          savingsBucketsByMonth[mk] = ensureStandardSavingsBuckets(
-            reconstructed.savingsBuckets
-          );
-        } else {
-          const customClosingById = new Map<string, number>(
-            prevSavings.customBuckets.map((cb) => [cb.id, cb.currentBalance])
-          );
-          savingsBucketsByMonth[mk] = prevBuckets.map((b) => {
-            const directBucket = rawBuckets.find((rb) => rb.id === b.id);
-            if (directBucket?.monthKey === mk) {
-              return { ...directBucket };
-            }
-            if (b.id === 'moto') {
-              return {
-                ...b,
-                openingBalance: Math.max(0, prevSavings.moto.currentBalance),
-                monthKey: mk,
-              };
-            }
-            if (b.id === 'savings') {
-              return {
-                ...b,
-                openingBalance: Math.max(0, prevSavings.savings.currentBalance),
-                monthKey: mk,
-              };
-            }
-            return {
-              ...b,
-              openingBalance: Math.max(0, customClosingById.get(b.id) ?? b.openingBalance),
-              monthKey: mk,
-            };
-          });
-        }
-      }
-
-      // Also synthesize missing debt payments for completed debt-linked entries in the current month `mk`
-      const mkEntries = entriesByMonth.get(mk) ?? [];
-      const mkDebts = debtsByMonth[mk] ?? [];
-      for (const entry of mkEntries) {
-        if (entry.status !== 'completed') continue;
-        const concept = conceptById.get(entry.conceptId);
-        if (!concept?.linkedDebtGroup && !concept?.defaultTargetDebtId) continue;
-        const hasPayment = paidEntryKeys.has(paymentEntryKey(entry.id, mk));
-        if (!hasPayment && mkDebts.length > 0) {
-          const synthesized = buildDebtPaymentsForInstallment(
-            entry,
-            mkDebts,
-            undefined,
-            concept.defaultTargetDebtId
-          );
-          for (const s of synthesized) {
-            addSynthesizedPayment(s);
-          }
-        }
-      }
-    }
-
     return {
-      activeMonthKey,
-      availableMonths,
-      concepts,
-      entries,
-      debtsByMonth,
-      debtPayments: paymentList,
-      savingsBucketsByMonth,
-      provisionPlan,
-      closedSnapshots,
-      financialAccounts: safeParseList(
-        financialAccountsSnap.docs,
-        parseFinancialAccountFromFirestore
-      ),
-      needsOnboarding,
-      ...(resolvedDataRevision ? { dataRevision: resolvedDataRevision } : {}),
-      historySyncedAt,
+      userSnap,
+      conceptsSnap,
+      entriesSnap,
+      debtsSnap,
+      paymentsSnap,
+      bucketsSnap,
+      planSnap,
+      snapshotsSnap,
+      archivedHistoryProbe,
     };
   }
 
@@ -1026,7 +596,10 @@ export class FirestoreBudgetRepository implements BudgetRepository {
    * cutoff month on, the entries written since the last load, and how many entries the
    * cloud holds before the cutoff. Null if any of them fails; the caller then reads everything.
    */
-  private async readArchivedHistoryProbe(uid: string, plan: ArchivedHistoryPlan) {
+  private async readArchivedHistoryProbe(
+    uid: string,
+    plan: ArchivedHistoryPlan
+  ): Promise<ArchivedHistoryProbe | null> {
     try {
       const entriesCollection = collection(this.db, 'users', uid, 'entries');
       const [recentSnap, changedSnap, archivedCountSnap] = await Promise.all([
@@ -1034,7 +607,11 @@ export class FirestoreBudgetRepository implements BudgetRepository {
         getDocs(query(entriesCollection, where('updatedAt', '>', plan.changedSinceIso))),
         getCountFromServer(query(entriesCollection, where('monthKey', '<', plan.cutoffMonthKey))),
       ]);
-      return { recentSnap, changedSnap, archivedCount: archivedCountSnap.data().count };
+      return {
+        recentEntries: safeParseList(recentSnap.docs, parseMonthEntryFromFirestore),
+        changedEntries: safeParseList(changedSnap.docs, parseMonthEntryFromFirestore),
+        archivedCount: archivedCountSnap.data().count,
+      };
     } catch {
       return null;
     }

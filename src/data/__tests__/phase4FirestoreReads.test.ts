@@ -426,6 +426,7 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
         'loadMonthWorkspace',
         'loadFullCloudAccount',
         'readArchivedHistoryProbe', // read only: two getDocs and one count (ADR 0028)
+        'readCloudAccountDocuments', // read only: the parallel reads of loadFullCloudAccount
         'closeMonth', // delegates to persistMonthCloseResult -> commitUserDataMutationBatch
       ]);
 

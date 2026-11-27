@@ -41,24 +41,6 @@ export function safeParseList<T>(
   return results;
 }
 
-/** Groups items by `monthKey`, keeping their order (OPT-04). */
-export function groupByMonthKey<T extends { monthKey: string }>(items: readonly T[]): Map<string, T[]> {
-  const byMonth = new Map<string, T[]>();
-  for (const item of items) {
-    const list = byMonth.get(item.monthKey);
-    if (list) {
-      list.push(item);
-    } else {
-      byMonth.set(item.monthKey, [item]);
-    }
-  }
-  return byMonth;
-}
-
-export function paymentEntryKey(entryId: string, monthKey: string): string {
-  return `${monthKey}|${entryId}`;
-}
-
 export function isOwnerCanonicalEmail(email?: string | null): boolean {
   if (!email) return false;
   return OWNER_SEED_EMAILS.has(email.trim().toLowerCase());

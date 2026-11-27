@@ -1,7 +1,8 @@
 /**
  * src/data/repositories/inMemoryBudgetRepository.ts
  *
- * In-memory `BudgetRepository` pre-populated with the October 2026 golden dataset.
+ * In-memory `BudgetRepository`, filled with the example budget of `sampleWorkspace.ts` unless
+ * it is created empty.
  */
 
 import {
@@ -23,11 +24,10 @@ import type {
   MonthSnapshot,
   SavingsBucket,
 } from '../../domain/models/types';
-import { buildOctober2026SeedPayload } from '../seed/october2026SeedData';
+import { buildSampleWorkspace, type SampleWorkspacePayload } from '../sample/sampleWorkspace';
 import {
   EMPTY_PROVISION_PLAN,
   ensureStandardSavingsBuckets,
-  isOwnerCanonicalEmail,
 } from './budgetRepositoryShared';
 import type {
   AddMonthEntryContext,
@@ -41,8 +41,8 @@ import type {
 } from './budgetRepositoryTypes';
 
 /**
- * In-memory implementation pre-populated with the October 2026 golden dataset.
- * Used in deterministic unit tests and offline fallback.
+ * In-memory implementation for deterministic tests. The maps hold one account; `uid` only keys
+ * the active month, the profile and the onboarding state.
  */
 export class InMemoryBudgetRepository implements BudgetRepository {
   private concepts = new Map<string, Concept>();
@@ -53,77 +53,50 @@ export class InMemoryBudgetRepository implements BudgetRepository {
   private provisionPlan: ProvisionPlan;
   private snapshots = new Map<string, MonthSnapshot>();
   private financialAccounts = new Map<string, FinancialAccount>();
-  private seededUsers = new Set<string>();
   private resetUsers = new Set<string>();
   private onboardedUsers = new Set<string>();
   private activeMonthByUser = new Map<string, string>();
   private profilesByUser = new Map<string, UserProfileFields>();
 
-  constructor(autoSeedDefaultUser = true) {
-    const seed = buildOctober2026SeedPayload();
-    this.provisionPlan = seed.provisionPlan;
-    if (autoSeedDefaultUser) {
-      this.applySeedPayload(seed);
-      this.seededUsers.add('local-owner');
-      this.onboardedUsers.add('local-owner');
-      this.activeMonthByUser.set('local-owner', '2026-10');
-    }
+  /** Month the account starts in: the sample's, or the new-user month when created empty. */
+  private readonly baseMonthKey: string;
+  private readonly startsWithData: boolean;
+
+  constructor(withSampleData = true) {
+    const sample = withSampleData ? buildSampleWorkspace() : null;
+    this.baseMonthKey = sample?.monthKey ?? `${toAppMonthKey().slice(0, 4)}-01`;
+    this.startsWithData = Boolean(sample);
+    this.provisionPlan = sample?.provisionPlan ?? { ...EMPTY_PROVISION_PLAN, items: [] };
+    if (sample) this.applySample(sample);
   }
 
-  private applySeedPayload(seed = buildOctober2026SeedPayload()): void {
-    for (const c of seed.concepts) {
+  private applySample(sample: SampleWorkspacePayload): void {
+    for (const c of sample.concepts) {
       this.concepts.set(c.id, c);
     }
-    for (const e of seed.entries) {
+    for (const e of sample.entries) {
       this.entries.set(e.id, e);
     }
     this.debtsByMonth.set(
-      '2026-10',
-      seed.debts.map((d) => ({ ...d }))
+      sample.monthKey,
+      sample.debts.map((d) => ({ ...d }))
     );
-    for (const dp of seed.debtPayments) {
+    for (const dp of sample.debtPayments) {
       this.debtPayments.set(dp.id, dp);
     }
     this.savingsBucketsByMonth.set(
-      '2026-10',
-      seed.savingsBuckets.map((sb) => ({ ...sb }))
+      sample.monthKey,
+      sample.savingsBuckets.map((sb) => ({ ...sb }))
     );
-    this.provisionPlan = seed.provisionPlan;
+    this.provisionPlan = sample.provisionPlan;
   }
 
-  async seedOctober2026IfEmpty(
-    uid: string,
-    userEmail?: string | null
-  ): Promise<{ seeded: boolean; monthKey: string }> {
-    const defaultNewUserMonth = `${toAppMonthKey().slice(0, 4)}-01`;
-    if (this.resetUsers.has(uid)) {
-      return {
-        seeded: false,
-        monthKey: this.activeMonthByUser.get(uid) ?? defaultNewUserMonth,
-      };
-    }
-    if (userEmail && !isOwnerCanonicalEmail(userEmail) && !this.seededUsers.has(uid)) {
-      const fallbackMonth = this.activeMonthByUser.get(uid) ?? defaultNewUserMonth;
-      this.activeMonthByUser.set(uid, fallbackMonth);
-      return { seeded: false, monthKey: fallbackMonth };
-    }
-    if (this.seededUsers.has(uid) && this.entries.size > 0) {
-      return { seeded: false, monthKey: this.activeMonthByUser.get(uid) ?? '2026-10' };
-    }
-    this.applySeedPayload();
-    this.seededUsers.add(uid);
-    this.onboardedUsers.add(uid);
-    this.activeMonthByUser.set(uid, '2026-10');
-    return { seeded: true, monthKey: '2026-10' };
-  }
-
-  async loadMonthWorkspace(uid: string, monthKey: string): Promise<MonthWorkspaceData> {
-    await this.seedOctober2026IfEmpty(uid);
+  async loadMonthWorkspace(_uid: string, monthKey: string): Promise<MonthWorkspaceData> {
     const concepts = Array.from(this.concepts.values()).sort((a, b) => a.order - b.order);
     const entries = Array.from(this.entries.values()).filter((e) => e.monthKey === monthKey);
     const debts = (
       this.debtsByMonth.get(monthKey) ??
-      this.debtsByMonth.get('2026-10') ??
+      this.debtsByMonth.get(this.baseMonthKey) ??
       []
     ).map((d) => ({ ...d }));
     const debtPayments = Array.from(this.debtPayments.values()).filter(
@@ -131,7 +104,7 @@ export class InMemoryBudgetRepository implements BudgetRepository {
     );
     const savingsBuckets = (
       this.savingsBucketsByMonth.get(monthKey) ??
-      this.savingsBucketsByMonth.get('2026-10') ??
+      this.savingsBucketsByMonth.get(this.baseMonthKey) ??
       ensureStandardSavingsBuckets([])
     ).map((sb) => ({ ...sb }));
     const closedSnapshot = this.snapshots.get(monthKey);
@@ -150,19 +123,15 @@ export class InMemoryBudgetRepository implements BudgetRepository {
 
   async loadFullCloudAccount(
     uid: string,
-    userEmail?: string | null,
+    _userEmail?: string | null,
     options?: LoadCloudAccountOptions
   ): Promise<FullCloudAccountData> {
-    const seedInfo = await this.seedOctober2026IfEmpty(uid, userEmail);
-    const savedActiveMonthKey = this.activeMonthByUser.get(uid) ?? seedInfo.monthKey;
+    const savedActiveMonthKey = this.activeMonthByUser.get(uid) ?? this.baseMonthKey;
     const concepts = Array.from(this.concepts.values()).sort((a, b) => a.order - b.order);
     const entries = Array.from(this.entries.values());
     const debtPayments = Array.from(this.debtPayments.values());
 
     const monthsSet = new Set<string>([savedActiveMonthKey]);
-    if (this.seededUsers.has(uid)) {
-      monthsSet.add('2026-10');
-    }
     for (const e of entries) monthsSet.add(e.monthKey);
     for (const mk of this.debtsByMonth.keys()) monthsSet.add(mk);
     for (const mk of this.savingsBucketsByMonth.keys()) monthsSet.add(mk);
@@ -191,13 +160,13 @@ export class InMemoryBudgetRepository implements BudgetRepository {
 
     const defaultDebts =
       this.debtsByMonth.get(activeMonthKey) ??
-      this.debtsByMonth.get(availableMonths[0] ?? '2026-10') ??
-      this.debtsByMonth.get('2026-10') ??
+      this.debtsByMonth.get(availableMonths[0] ?? this.baseMonthKey) ??
+      this.debtsByMonth.get(this.baseMonthKey) ??
       [];
     const defaultBuckets =
       this.savingsBucketsByMonth.get(activeMonthKey) ??
-      this.savingsBucketsByMonth.get(availableMonths[0] ?? '2026-10') ??
-      this.savingsBucketsByMonth.get('2026-10') ??
+      this.savingsBucketsByMonth.get(availableMonths[0] ?? this.baseMonthKey) ??
+      this.savingsBucketsByMonth.get(this.baseMonthKey) ??
       [];
     const debtsByMonth: Record<string, Debt[]> = {};
     const savingsBucketsByMonth: Record<string, SavingsBucket[]> = {};
@@ -219,7 +188,7 @@ export class InMemoryBudgetRepository implements BudgetRepository {
     let needsOnboarding: boolean;
     if (this.resetUsers.has(uid)) {
       needsOnboarding = true;
-    } else if (options?.isRegistration === true && !isOwnerCanonicalEmail(userEmail)) {
+    } else if (options?.isRegistration === true) {
       needsOnboarding = true;
       this.onboardedUsers.add(uid);
     } else if (options?.isRegistration === false) {
@@ -227,9 +196,7 @@ export class InMemoryBudgetRepository implements BudgetRepository {
       this.onboardedUsers.add(uid);
     } else {
       needsOnboarding =
-        !this.onboardedUsers.has(uid) &&
-        !this.seededUsers.has(uid) &&
-        concepts.length === 0;
+        !this.onboardedUsers.has(uid) && !this.startsWithData && concepts.length === 0;
       if (needsOnboarding) {
         this.onboardedUsers.add(uid);
       }
@@ -388,13 +355,13 @@ export class InMemoryBudgetRepository implements BudgetRepository {
     const concepts = Array.from(this.concepts.values());
     const entries = Array.from(this.entries.values()).filter((e) => e.monthKey === monthKey);
     const debts =
-      this.debtsByMonth.get(monthKey) ?? this.debtsByMonth.get('2026-10') ?? [];
+      this.debtsByMonth.get(monthKey) ?? this.debtsByMonth.get(this.baseMonthKey) ?? [];
     const debtPayments = Array.from(this.debtPayments.values()).filter(
       (dp) => dp.monthKey === monthKey
     );
     const savingsBuckets = ensureStandardSavingsBuckets(
       this.savingsBucketsByMonth.get(monthKey) ??
-        this.savingsBucketsByMonth.get('2026-10') ??
+        this.savingsBucketsByMonth.get(this.baseMonthKey) ??
         []
     );
 
@@ -549,7 +516,7 @@ export class InMemoryBudgetRepository implements BudgetRepository {
     _uid: string,
     bucketId: string,
     openingBalanceCop: number,
-    monthKey: string = '2026-10',
+    monthKey: string = this.baseMonthKey,
     bucketName?: string
   ): Promise<void> {
     const list = ensureStandardSavingsBuckets(
@@ -663,7 +630,6 @@ export class InMemoryBudgetRepository implements BudgetRepository {
     this.snapshots.clear();
     this.financialAccounts.clear();
     this.provisionPlan = { ...EMPTY_PROVISION_PLAN, items: [] };
-    this.seededUsers.delete(uid);
     this.onboardedUsers.delete(uid);
     this.resetUsers.add(uid);
     this.activeMonthByUser.set(uid, newStartMonthKey);

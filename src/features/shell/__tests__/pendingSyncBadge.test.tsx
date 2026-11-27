@@ -10,13 +10,13 @@ import { StyleSheet, type ViewStyle } from 'react-native';
 import PhaseOneHomeScreen from '../../../app/index';
 import { radiusBySkin, type PlatformSkinId } from '../../../design-system/tokens';
 import { BFlowThemeProvider } from '../../../design-system/theme/ThemeContext';
-import { DEMO_OWNER_USER } from '../../../platform/auth/authAdapter';
+import { DEMO_USER } from '../../../platform/auth/authAdapter';
 import { useBudgetStore } from '../../budget/store/useBudgetStore';
 
 beforeEach(() => {
   act(() => {
-    useBudgetStore.setState({ authUser: DEMO_OWNER_USER, needsOnboarding: false });
-    useBudgetStore.getState().resetToOctober2026GoldenState();
+    useBudgetStore.setState({ authUser: DEMO_USER, needsOnboarding: false });
+    useBudgetStore.getState().resetToSampleWorkspace();
   });
 });
 

@@ -66,7 +66,7 @@ const mockDebtSummary: DebtSummaryResult = {
 };
 
 const mockReserveSummary: ReserveBucketSummary = {
-  bucketId: 'moto',
+  bucketId: 'reserve',
   name: 'Fondo de Reserva',
   openingBalance: 1200000,
   paidContributionsThisMonth: 0,
@@ -105,7 +105,7 @@ const mockClosedSnapshot: MonthSnapshot = {
   closingDebts: [],
   totalClosingDebt: 7100000,
   closingSavings: {
-    motoClosingBalance: 1200000,
+    reserveClosingBalance: 1200000,
     savingsClosingBalance: 500000,
     totalClosingSavings: 1700000,
   },

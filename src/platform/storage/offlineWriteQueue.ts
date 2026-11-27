@@ -15,6 +15,7 @@
  * reported), and compaction works per target: see `compactQueue`.
  */
 
+import { migrateBucketId } from '../../data/migrations/legacyFieldMigration';
 import { z } from 'zod';
 import type {
   FirestoreBudgetRepository,
@@ -311,7 +312,7 @@ export function getOperationTargetKey(op: QueuedWriteRequest): string | null {
       return `account_${op.payload.accountId}`;
     case 'save_savings_bucket':
     case 'delete_savings_bucket':
-      return `bucket_${op.payload.bucketId}`;
+      return `bucket_${migrateBucketId(op.payload.bucketId)}`;
     case 'save_provision_plan':
       return 'provision_plan';
     case 'persist_month_close':
@@ -770,16 +771,17 @@ async function executeQueuedOperation(
       await repo.saveProvisionPlan(uid, op.payload.plan);
       return;
     case 'save_savings_bucket':
+      // A queue saved before ADR 0037 may still hold an old bucket id.
       await repo.saveSavingsBucket(
         uid,
-        op.payload.bucketId,
+        migrateBucketId(op.payload.bucketId),
         op.payload.openingBalanceCop,
         op.payload.monthKey,
         op.payload.name
       );
       return;
     case 'delete_savings_bucket':
-      await repo.deleteSavingsBucket(uid, op.payload.bucketId);
+      await repo.deleteSavingsBucket(uid, migrateBucketId(op.payload.bucketId));
       return;
     case 'persist_month_close':
       await repo.persistMonthCloseResult(uid, op.payload.monthKey, op.payload.result);

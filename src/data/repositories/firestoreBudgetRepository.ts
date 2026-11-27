@@ -4,7 +4,6 @@
  * Cloud Firestore `BudgetRepository` under `users/{uid}/...`. Spark free-tier guardrails:
  * - Queries `entries` and `debtPayments` scoped by `where('monthKey', '==', monthKey)`
  * - Atomic `writeBatch` for every mutation, stamping `users/{uid}.dataRevision` (ADR 0018)
- * - Idempotent October 2026 seeding (`seedOctober2026IfEmpty`) with deterministic IDs
  * - `loadFullCloudAccount` restores every month on another device (see accountHydration.ts)
  */
 
@@ -18,6 +17,7 @@ import {
   query,
   where,
   writeBatch,
+  type DocumentReference,
   type DocumentSnapshot,
   type Firestore,
   type WriteBatch,
@@ -60,14 +60,18 @@ import {
   serializeMonthSnapshotForFirestore,
   serializeSavingsBucketForFirestore,
 } from '../mappers/firestoreSchemas';
-import { buildOctober2026SeedPayload } from '../seed/october2026SeedData';
+import {
+  LEGACY_PROVISION_PLAN_DOC_ID,
+  PROVISION_PLAN_DOC_ID,
+  RESERVE_BUCKET_ID,
+  hasLegacyFields,
+} from '../migrations/legacyFieldMigration';
 import {
   canCheckRevisionFirst,
   chainMonthlyBalances,
   collectSavingsBuckets,
   dropUnusedLegacyDefaultBuckets,
   hasConfiguredAccountData,
-  markOwnerAccountSeeded,
   mergeArchivedHistoryEntries,
   parseClosedSnapshots,
   parseSavedActiveMonthKey,
@@ -78,9 +82,9 @@ import {
   resolveNeedsOnboarding,
   resolveProvisionPlan,
   reuseCachedAccountIfRevisionMatches,
-  shouldSeedOwnerAccount,
   withPlannedOpenMonths,
   type ArchivedHistoryProbe,
+  type CollectedSavingsBuckets,
   type UserDocumentData,
 } from './accountHydration';
 import {
@@ -93,7 +97,6 @@ import {
   EMPTY_PROVISION_PLAN,
   ensureStandardSavingsBuckets,
   generateDataRevision,
-  isOwnerCanonicalEmail,
   reconstructClosedMonthBalances,
   safeParseList,
 } from './budgetRepositoryShared';
@@ -169,129 +172,16 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     void this.commitUserDataMutationBatch(uid, buildBatch, extraUserFields).catch(() => {});
   }
 
-  async seedOctober2026IfEmpty(
-    uid: string,
-    userEmail?: string | null,
-    existingUserData?: Record<string, unknown>
-  ): Promise<{ seeded: boolean; monthKey: string }> {
-    const userDocRef = doc(this.db, 'users', uid);
-    let userData = existingUserData;
-    if (!userData) {
-      const userSnap = await getDoc(userDocRef);
-      userData = userSnap.exists() ? userSnap.data() : undefined;
-    }
-    const resolvedEmail =
-      userEmail ?? (typeof userData?.email === 'string' ? userData.email : null);
-
-    const existingActive =
-      typeof userData?.activeMonthKey === 'string'
-        ? (userData.activeMonthKey as string)
-        : isOwnerCanonicalEmail(resolvedEmail)
-          ? '2026-10'
-          : `${toAppMonthKey().slice(0, 4)}-01`;
-
-    if (userData?.accountResetByUser === true) {
-      return { seeded: false, monthKey: existingActive };
-    }
-
-    if (userData?.seededOctober2026 === true || userData?.onboardingCompleted === true) {
-      return { seeded: false, monthKey: existingActive };
-    }
-
-    // Only the owner seed account (EXPO_PUBLIC_OWNER_SEED_EMAIL) gets the October 2026 seed.
-    // All other users start clean and configure their account on first login.
-    if (!isOwnerCanonicalEmail(resolvedEmail)) {
-      return { seeded: false, monthKey: existingActive };
-    }
-
-    // Extra safety check: if concepts already exist in Firestore for the owner, never overwrite them.
-    const existingConceptsSnap = await getDocs(collection(this.db, 'users', uid, 'concepts'));
-    if (existingConceptsSnap.docs.length > 0) {
-      void this.commitUserDataMutationBatch(
-        uid,
-        () => {},
-        {
-          seededOctober2026: true,
-          onboardingCompleted: true,
-          activeMonthKey: existingActive,
-        }
-      ).catch(() => {});
-      return { seeded: false, monthKey: existingActive };
-    }
-
-    const payload = buildOctober2026SeedPayload();
-    await this.commitUserDataMutationBatch(
-      uid,
-      (batch, updatedAt) => {
-        for (const concept of payload.concepts) {
-          const ref = doc(this.db, 'users', uid, 'concepts', concept.id);
-          batch.set(ref, {
-            ...serializeConceptForFirestore(concept),
-            updatedAt,
-          });
-        }
-
-        for (const entry of payload.entries) {
-          const ref = doc(this.db, 'users', uid, 'entries', entry.id);
-          batch.set(ref, {
-            ...serializeMonthEntryForFirestore(entry),
-            updatedAt,
-          });
-        }
-
-        for (const debt of payload.debts) {
-          const ref = doc(this.db, 'users', uid, 'debts', debt.id);
-          batch.set(ref, {
-            ...serializeDebtForFirestore(debt),
-            updatedAt,
-          });
-        }
-
-        for (const payment of payload.debtPayments) {
-          const ref = doc(this.db, 'users', uid, 'debtPayments', payment.id);
-          batch.set(ref, {
-            ...serializeDebtPaymentForFirestore(payment),
-            updatedAt,
-          });
-        }
-
-        for (const bucket of payload.savingsBuckets) {
-          const ref = doc(this.db, 'users', uid, 'savingsBuckets', bucket.id);
-          batch.set(ref, {
-            ...serializeSavingsBucketForFirestore(bucket),
-            updatedAt,
-          });
-        }
-
-        const planRef = doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal');
-        batch.set(planRef, {
-          id: 'moto_ideal',
-          ...serializeProvisionPlanForFirestore(payload.provisionPlan),
-          updatedAt,
-        });
-      },
-      {
-        seededOctober2026: true,
-        onboardingCompleted: true,
-        activeMonthKey: '2026-10',
-      }
-    );
-
-    return { seeded: true, monthKey: '2026-10' };
-  }
-
   async loadMonthWorkspace(uid: string, monthKey: string): Promise<MonthWorkspaceData> {
     const [
-      userSnap,
       conceptsSnap,
       entriesSnap,
       debtsSnap,
       paymentsSnap,
       bucketsSnap,
-      planSnap,
+      planRead,
       snapshotSnap,
     ] = await Promise.all([
-      getDoc(doc(this.db, 'users', uid)),
       getDocs(collection(this.db, 'users', uid, 'concepts')),
       getDocs(
         query(collection(this.db, 'users', uid, 'entries'), where('monthKey', '==', monthKey))
@@ -304,22 +194,9 @@ export class FirestoreBudgetRepository implements BudgetRepository {
         )
       ),
       getDocs(collection(this.db, 'users', uid, 'savingsBuckets')),
-      getDoc(doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal')),
+      this.readProvisionPlanDocument(uid),
       getDoc(doc(this.db, 'users', uid, 'monthSnapshots', monthKey)),
     ]);
-
-    const userData = userSnap.exists() ? userSnap.data() : undefined;
-    const resolvedEmail = typeof userData?.email === 'string' ? userData.email : null;
-    const isUnseededOwner =
-      isOwnerCanonicalEmail(resolvedEmail) &&
-      userData?.accountResetByUser !== true &&
-      userData?.seededOctober2026 !== true &&
-      userData?.onboardingCompleted !== true &&
-      conceptsSnap.docs.length === 0;
-
-    if (isUnseededOwner) {
-      await this.seedOctober2026IfEmpty(uid, resolvedEmail, userData);
-    }
 
     const concepts = safeParseList(conceptsSnap.docs, parseConceptFromFirestore).sort(
       (a, b) => a.order - b.order
@@ -330,14 +207,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     const currentBuckets = ensureStandardSavingsBuckets(
       safeParseList(bucketsSnap.docs, parseSavingsBucketFromFirestore)
     );
-    let provisionPlan = EMPTY_PROVISION_PLAN;
-    if (planSnap.exists()) {
-      try {
-        provisionPlan = parseProvisionPlanFromFirestore(planSnap.data());
-      } catch {
-        provisionPlan = EMPTY_PROVISION_PLAN;
-      }
-    }
+    const provisionPlan = resolveProvisionPlan(planRead.data);
     let closedSnapshot: MonthSnapshot | undefined;
     if (snapshotSnap.exists()) {
       try {
@@ -398,33 +268,11 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       : planArchivedHistory(options?.cachedAccount);
     const [firstReads, financialAccountsSnap] = await Promise.all([
       this.readCloudAccountDocuments(uid, historyPlan, preloadedUserSnap),
-      // The October seed creates no accounts, so this read stays valid after seeding.
       getDocs(collection(this.db, 'users', uid, 'financialAccounts')),
     ]);
-    let reads = firstReads;
-    let userData = readUserDocumentData(reads.userSnap);
-    const identity = resolveAccountIdentity(userData, userEmail);
-    let fallbackActiveMonthKey = resolveFallbackActiveMonthKey(userData, identity.isOwner);
-
-    // R-11 & R-12: no pre-flight seedOctober2026IfEmpty round-trip nor a second users/{uid} read.
-    if (shouldSeedOwnerAccount(identity, userData)) {
-      if (reads.conceptsSnap.docs.length > 0) {
-        this.commitUserDataMutationBatchInBackground(uid, {
-          seededOctober2026: true,
-          onboardingCompleted: true,
-          activeMonthKey: fallbackActiveMonthKey,
-        });
-        userData = markOwnerAccountSeeded(userData, generateDataRevision());
-      } else {
-        const seedInfo = await this.seedOctober2026IfEmpty(uid, identity.resolvedEmail, userData);
-        fallbackActiveMonthKey = seedInfo.monthKey;
-        if (seedInfo.seeded) {
-          // Everything the seed just wrote, without the history window.
-          reads = await this.readCloudAccountDocuments(uid, null, null);
-          userData = readUserDocumentData(reads.userSnap);
-        }
-      }
-    }
+    const reads = firstReads;
+    const userData = readUserDocumentData(reads.userSnap);
+    const identity = resolveAccountIdentity(userData);
 
     const savedActiveMonthKey = parseSavedActiveMonthKey(userData);
     const concepts = safeParseList(reads.conceptsSnap.docs, parseConceptFromFirestore).sort(
@@ -446,24 +294,10 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     const currentDebts = safeParseList(reads.debtsSnap.docs, parseDebtFromFirestore);
     const debtPayments = safeParseList(reads.paymentsSnap.docs, parseDebtPaymentFromFirestore);
 
-    const collectedBuckets = collectSavingsBuckets(reads.bucketsSnap.docs, identity);
-    const { healedSavingsBucket, staleRefs } = collectedBuckets;
-    if (identity.isOwnerSeedAccount && (healedSavingsBucket || staleRefs.length > 0)) {
-      // Non-fatal if offline: the healed state is already in memory.
-      this.commitUserDataMutationBatchInBackground(uid, undefined, (batch, updatedAt) => {
-        for (const staleRef of staleRefs) {
-          batch.delete(staleRef);
-        }
-        if (healedSavingsBucket) {
-          batch.set(doc(this.db, 'users', uid, 'savingsBuckets', healedSavingsBucket.id), {
-            ...serializeSavingsBucketForFirestore(healedSavingsBucket),
-            updatedAt,
-          });
-        }
-      });
-    }
+    const collectedBuckets = collectSavingsBuckets(reads.bucketsSnap.docs);
+    this.rewriteLegacyDocumentsInBackground(uid, reads, collectedBuckets);
     const contents = { concepts, entries: storedEntries, debts: currentDebts };
-    const rawBuckets = dropUnusedLegacyDefaultBuckets(collectedBuckets.buckets, identity, contents);
+    const rawBuckets = dropUnusedLegacyDefaultBuckets(collectedBuckets.buckets, contents);
 
     const needsOnboarding = resolveNeedsOnboarding({
       identity,
@@ -472,12 +306,10 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     });
     const { availableMonths, activeMonthKey } = resolveAvailableMonths({
       ...contents,
-      identity,
-      userData,
       savedActiveMonthKey,
       buckets: rawBuckets,
       closedSnapshots,
-      fallbackActiveMonthKey,
+      fallbackActiveMonthKey: resolveFallbackActiveMonthKey(userData),
     });
 
     const userDocumentSync = planUserDocumentSync({
@@ -489,7 +321,12 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       activeMonthKey,
     });
     if (userDocumentSync.fieldsToWrite) {
-      this.commitUserDataMutationBatchInBackground(uid, userDocumentSync.fieldsToWrite);
+      this.commitUserDataMutationBatchInBackground(uid, {
+        ...userDocumentSync.fieldsToWrite,
+        ...Object.fromEntries(
+          userDocumentSync.legacyFieldsToRemove.map((field) => [field, deleteField()])
+        ),
+      });
     }
 
     const { entries, entriesByMonth } = withPlannedOpenMonths(
@@ -499,7 +336,6 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       concepts
     );
     const balances = chainMonthlyBalances({
-      identity,
       availableMonths,
       closedSnapshots,
       concepts,
@@ -518,10 +354,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       debtsByMonth: balances.debtsByMonth,
       debtPayments: balances.debtPayments,
       savingsBucketsByMonth: balances.savingsBucketsByMonth,
-      provisionPlan: resolveProvisionPlan(
-        reads.planSnap.exists() ? reads.planSnap.data() : undefined,
-        identity
-      ),
+      provisionPlan: resolveProvisionPlan(reads.planRead.data),
       closedSnapshots,
       financialAccounts: safeParseList(
         financialAccountsSnap.docs,
@@ -550,7 +383,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       debtsSnap,
       paymentsSnap,
       bucketsSnap,
-      planSnap,
+      planRead,
       snapshotsSnap,
       archivedHistoryProbe,
     ] = await Promise.all([
@@ -560,7 +393,7 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       getDocs(userCollection('debts')),
       getDocs(userCollection('debtPayments')),
       getDocs(userCollection('savingsBuckets')),
-      getDoc(doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal')),
+      this.readProvisionPlanDocument(uid),
       getDocs(userCollection('monthSnapshots')),
       historyPlan ? this.readArchivedHistoryProbe(uid, historyPlan) : Promise.resolve(null),
     ]);
@@ -571,10 +404,91 @@ export class FirestoreBudgetRepository implements BudgetRepository {
       debtsSnap,
       paymentsSnap,
       bucketsSnap,
-      planSnap,
+      planRead,
       snapshotsSnap,
       archivedHistoryProbe,
     };
+  }
+
+  /**
+   * The provision plan document. Accounts written before ADR 0037 keep it under its old id, so
+   * that one is read only when the current one does not exist.
+   */
+  private async readProvisionPlanDocument(
+    uid: string
+  ): Promise<{ data: unknown; fromLegacyId: boolean }> {
+    const current = await getDoc(
+      doc(this.db, 'users', uid, 'provisionPlans', PROVISION_PLAN_DOC_ID)
+    );
+    if (current.exists()) return { data: current.data(), fromLegacyId: false };
+    const legacy = await getDoc(
+      doc(this.db, 'users', uid, 'provisionPlans', LEGACY_PROVISION_PLAN_DOC_ID)
+    );
+    return legacy.exists()
+      ? { data: legacy.data(), fromLegacyId: true }
+      : { data: undefined, fromLegacyId: false };
+  }
+
+  /**
+   * ADR 0037: writes again, under the current names, the documents a load found with old ones
+   * (concepts, closed months, savings buckets and the provision plan). Fire-and-forget: memory
+   * already holds the translated data, and a failure is retried by the next load.
+   */
+  private rewriteLegacyDocumentsInBackground(
+    uid: string,
+    reads: Awaited<ReturnType<FirestoreBudgetRepository['readCloudAccountDocuments']>>,
+    collectedBuckets: CollectedSavingsBuckets<DocumentReference>
+  ): void {
+    const writes: CascadeWrite[] = [];
+    const rewrite = (ref: DocumentReference, build: () => Record<string, unknown>) => {
+      try {
+        const data = build();
+        writes.push((batch, updatedAt) => batch.set(ref, { ...data, updatedAt }));
+      } catch {
+        // A malformed document is skipped by the load too; leave it as it is.
+      }
+    };
+
+    for (const conceptDoc of reads.conceptsSnap.docs) {
+      const raw = conceptDoc.data();
+      if (hasLegacyFields('concept', raw)) {
+        rewrite(conceptDoc.ref, () =>
+          serializeConceptForFirestore(parseConceptFromFirestore(raw))
+        );
+      }
+    }
+    for (const snapshotDoc of reads.snapshotsSnap.docs) {
+      const raw = snapshotDoc.data();
+      if (hasLegacyFields('monthSnapshot', raw)) {
+        rewrite(snapshotDoc.ref, () =>
+          serializeMonthSnapshotForFirestore(parseMonthSnapshotFromFirestore(raw))
+        );
+      }
+    }
+    for (const bucket of collectedBuckets.migratedBuckets) {
+      rewrite(doc(this.db, 'users', uid, 'savingsBuckets', bucket.id), () =>
+        serializeSavingsBucketForFirestore(bucket)
+      );
+    }
+    for (const legacyRef of collectedBuckets.legacyRefs) {
+      writes.push((batch) => batch.delete(legacyRef));
+    }
+    if (reads.planRead.fromLegacyId) {
+      const legacyPlan = reads.planRead.data;
+      rewrite(doc(this.db, 'users', uid, 'provisionPlans', PROVISION_PLAN_DOC_ID), () => ({
+        id: PROVISION_PLAN_DOC_ID,
+        ...serializeProvisionPlanForFirestore(parseProvisionPlanFromFirestore(legacyPlan)),
+      }));
+      writes.push((batch) =>
+        batch.delete(doc(this.db, 'users', uid, 'provisionPlans', LEGACY_PROVISION_PLAN_DOC_ID))
+      );
+    }
+
+    for (const chunk of chunkCascadeWrites(writes)) {
+      this.commitUserDataMutationBatchInBackground(uid, undefined, (batch, updatedAt) => {
+        for (const write of chunk) write(batch, updatedAt);
+      });
+    }
   }
 
   /**
@@ -1198,13 +1112,13 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     uid: string,
     bucketId: string,
     openingBalanceCop: number,
-    monthKey: string = '2026-10',
+    monthKey: string = toAppMonthKey(),
     bucketName?: string
   ): Promise<void> {
     // Document ID must equal bucketId to satisfy firestore.rules (`data.id == bucketId`)
     const defaultName =
-      bucketId === 'moto'
-        ? 'Fondo Moto'
+      bucketId === RESERVE_BUCKET_ID
+        ? 'Fondo de reserva'
         : bucketId === 'savings'
           ? 'Fondo Ahorros'
           : bucketId;
@@ -1254,11 +1168,11 @@ export class FirestoreBudgetRepository implements BudgetRepository {
 
   async saveProvisionPlan(uid: string, plan: ProvisionPlan): Promise<void> {
     await this.commitUserDataMutationBatch(uid, (batch, updatedAt) => {
-      const planRef = doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal');
+      const planRef = doc(this.db, 'users', uid, 'provisionPlans', PROVISION_PLAN_DOC_ID);
       batch.set(
         planRef,
         {
-          id: 'moto_ideal',
+          id: PROVISION_PLAN_DOC_ID,
           ...serializeProvisionPlanForFirestore(plan),
           updatedAt,
         },
@@ -1308,8 +1222,8 @@ export class FirestoreBudgetRepository implements BudgetRepository {
 
         const buckets = ensureStandardSavingsBuckets(payload.savingsBuckets);
         const configuredBucketIds = new Set(buckets.map((b) => b.id));
-        if (!configuredBucketIds.has('moto')) {
-          batch.delete(doc(this.db, 'users', uid, 'savingsBuckets', 'moto'));
+        if (!configuredBucketIds.has(RESERVE_BUCKET_ID)) {
+          batch.delete(doc(this.db, 'users', uid, 'savingsBuckets', RESERVE_BUCKET_ID));
         }
         if (!configuredBucketIds.has('savings')) {
           batch.delete(doc(this.db, 'users', uid, 'savingsBuckets', 'savings'));
@@ -1325,9 +1239,9 @@ export class FirestoreBudgetRepository implements BudgetRepository {
           });
         }
 
-        const planRef = doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal');
+        const planRef = doc(this.db, 'users', uid, 'provisionPlans', PROVISION_PLAN_DOC_ID);
         batch.set(planRef, {
-          id: 'moto_ideal',
+          id: PROVISION_PLAN_DOC_ID,
           ...serializeProvisionPlanForFirestore(payload.provisionPlan),
           updatedAt,
         });
@@ -1395,16 +1309,15 @@ export class FirestoreBudgetRepository implements BudgetRepository {
     await this.commitUserDataMutationBatch(
       uid,
       (setupBatch, updatedAt) => {
-        const planRef = doc(this.db, 'users', uid, 'provisionPlans', 'moto_ideal');
+        const planRef = doc(this.db, 'users', uid, 'provisionPlans', PROVISION_PLAN_DOC_ID);
         setupBatch.set(planRef, {
-          id: 'moto_ideal',
+          id: PROVISION_PLAN_DOC_ID,
           ...serializeProvisionPlanForFirestore(EMPTY_PROVISION_PLAN),
           updatedAt,
         });
       },
       {
         activeMonthKey: newStartMonthKey,
-        seededOctober2026: false,
         onboardingCompleted: false,
         accountResetByUser: true,
       }

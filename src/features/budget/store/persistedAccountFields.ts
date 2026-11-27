@@ -44,7 +44,7 @@ export function havePersistedAccountFieldsChanged(
 }
 
 /** Sessions that never have a device cache: the local showcase and test owners. */
-const LOCAL_ONLY_UIDS: ReadonlySet<string> = new Set(['local-owner', 'local-demo']);
+const LOCAL_ONLY_UIDS: ReadonlySet<string> = new Set(['local-demo']);
 
 export function buildPersistedAccountData(state: PersistedAccountFields): FullCloudAccountData {
   return {

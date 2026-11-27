@@ -44,7 +44,7 @@ jest.mock('../../../../design-system/components/StatusBadge', () => {
 });
 
 const BASE_RESERVE_BUCKET = {
-  bucketId: 'moto',
+  bucketId: 'reserve',
   name: 'Fondo de Reserva',
   openingBalance: 1_000_000,
   paidContributionsThisMonth: 100_000,
@@ -229,8 +229,8 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) =>
     expect(motoCardIdx).toBeGreaterThan(deleteBtnIdx);
 
     // No per-fund edit or delete buttons are visible by default.
-    expect(screen.queryByTestId('edit-savings-bucket-moto')).toBeNull();
-    expect(screen.queryByTestId('delete-savings-bucket-moto')).toBeNull();
+    expect(screen.queryByTestId('edit-savings-bucket-reserve')).toBeNull();
+    expect(screen.queryByTestId('delete-savings-bucket-reserve')).toBeNull();
     expect(screen.queryByTestId('edit-savings-bucket-savings')).toBeNull();
     expect(screen.queryByTestId('delete-savings-bucket-savings')).toBeNull();
     expect(screen.queryByTestId('edit-savings-bucket-bucket_viaje')).toBeNull();
@@ -244,14 +244,14 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) =>
     expect(screen.getByText('Cancelar Edición')).toBeTruthy();
 
     // Only edit buttons appear on each fund card; delete buttons stay hidden.
-    expect(screen.getByTestId('edit-savings-bucket-moto')).toBeTruthy();
+    expect(screen.getByTestId('edit-savings-bucket-reserve')).toBeTruthy();
     expect(screen.getByTestId('edit-savings-bucket-savings')).toBeTruthy();
     expect(screen.getByTestId('edit-savings-bucket-bucket_viaje')).toBeTruthy();
-    expect(screen.queryByTestId('delete-savings-bucket-moto')).toBeNull();
+    expect(screen.queryByTestId('delete-savings-bucket-reserve')).toBeNull();
 
     // Select custom bucket to edit individually.
     fireEvent.press(screen.getByTestId('edit-savings-bucket-bucket_viaje'));
-    expect(screen.queryByTestId('edit-savings-bucket-moto')).toBeNull();
+    expect(screen.queryByTestId('edit-savings-bucket-reserve')).toBeNull();
     expect(screen.getByTestId('edit-savings-bucket-card')).toBeTruthy();
     expect(screen.getByTestId('edit-bucket-name-input').props.value).toBe('Fondo Viaje');
     expect(screen.getByTestId('edit-bucket-name-input').props.autoCapitalize).toBe('sentences');
@@ -265,13 +265,13 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) =>
 
     // Re-enter edit mode and update only the reserve fund.
     fireEvent.press(screen.getByTestId('bucket-action-edit-button'));
-    fireEvent.press(screen.getByTestId('edit-savings-bucket-moto'));
-    fireEvent.changeText(screen.getByTestId('edit-bucket-name-input'), 'Fondo Moto Personal');
+    fireEvent.press(screen.getByTestId('edit-savings-bucket-reserve'));
+    fireEvent.changeText(screen.getByTestId('edit-bucket-name-input'), 'Fondo de reserva personal');
     fireEvent.changeText(screen.getByTestId('edit-bucket-balance-input'), '1500000');
     fireEvent.press(screen.getByTestId('save-edit-bucket-button'));
 
     expect(onUpdateOpeningBalance).toHaveBeenCalledTimes(1);
-    expect(onUpdateOpeningBalance).toHaveBeenCalledWith('moto', 1_500_000, 'Fondo Moto Personal');
+    expect(onUpdateOpeningBalance).toHaveBeenCalledWith('reserve', 1_500_000, 'Fondo de reserva personal');
     expect(screen.queryByTestId('edit-savings-bucket-card')).toBeNull();
   });
 
@@ -281,10 +281,10 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) =>
     fireEvent.press(screen.getByTestId('bucket-action-delete-button'));
     expect(screen.getByText('Cancelar Eliminación')).toBeTruthy();
 
-    expect(screen.getByTestId('delete-savings-bucket-moto')).toBeTruthy();
+    expect(screen.getByTestId('delete-savings-bucket-reserve')).toBeTruthy();
     expect(screen.getByTestId('delete-savings-bucket-savings')).toBeTruthy();
     expect(screen.getByTestId('delete-savings-bucket-bucket_viaje')).toBeTruthy();
-    expect(screen.queryByTestId('edit-savings-bucket-moto')).toBeNull();
+    expect(screen.queryByTestId('edit-savings-bucket-reserve')).toBeNull();
 
     fireEvent.press(screen.getByTestId('delete-savings-bucket-bucket_viaje'));
     expect(onDeleteSavingsBucket).toHaveBeenCalledTimes(1);
@@ -292,7 +292,7 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) =>
 
     // Toggling off hides delete actions again.
     fireEvent.press(screen.getByTestId('bucket-action-delete-button'));
-    expect(screen.queryByTestId('delete-savings-bucket-moto')).toBeNull();
+    expect(screen.queryByTestId('delete-savings-bucket-reserve')).toBeNull();
   });
 
   it('switches cleanly between "+ Nuevo Fondo", edit mode, and delete mode for savings funds on desktop width', () => {
@@ -305,11 +305,11 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView on %s skin', (skin) =>
     // Entering edit mode closes the add form.
     fireEvent.press(screen.getByTestId('bucket-action-edit-button'));
     expect(screen.queryByTestId('add-savings-bucket-card')).toBeNull();
-    expect(screen.getByTestId('edit-savings-bucket-moto')).toBeTruthy();
+    expect(screen.getByTestId('edit-savings-bucket-reserve')).toBeTruthy();
 
     // Switching directly to delete mode replaces edit pills with delete pills.
     fireEvent.press(screen.getByTestId('bucket-action-delete-button'));
-    expect(screen.queryByTestId('edit-savings-bucket-moto')).toBeNull();
+    expect(screen.queryByTestId('edit-savings-bucket-reserve')).toBeNull();
     expect(screen.getByTestId('delete-savings-bucket-savings')).toBeTruthy();
 
     // Opening "+ Nuevo Fondo" clears delete mode and lets the user create a fund.
@@ -454,7 +454,7 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView form state on %s skin'
     fireEvent.press(screen.getByTestId('open-add-provision-button'));
     mockStatusBadgeRender.mockClear();
 
-    fireEvent.changeText(screen.getByTestId('provision-name-input'), 'SOAT');
+    fireEvent.changeText(screen.getByTestId('provision-name-input'), 'Seguro anual');
     fireEvent.changeText(screen.getByTestId('provision-amount-input'), '690.000');
     fireEvent.changeText(screen.getByTestId('provision-months-input'), '12');
     fireEvent.changeText(screen.getByTestId('provision-notes-input'), 'Vence en marzo');
@@ -463,7 +463,7 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView form state on %s skin'
 
     fireEvent.press(screen.getByTestId('submit-provision-button'));
     expect(onSaveProvisionItem).toHaveBeenCalledWith({
-      name: 'SOAT',
+      name: 'Seguro anual',
       amount: 690_000,
       periodMonths: 12,
       priority: '1. Alta',
@@ -646,7 +646,7 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsAndMotoIdealView form state on %s skin'
   });
 
   it('persists targetMonthKey and calculates monthly saving when adding a goal in the store', async () => {
-    useBudgetStore.getState().resetToOctober2026GoldenState();
+    useBudgetStore.getState().resetToSampleWorkspace();
 
     await act(async () => {
       await useBudgetStore.getState().saveProvisionItem({

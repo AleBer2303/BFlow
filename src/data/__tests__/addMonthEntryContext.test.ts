@@ -10,7 +10,7 @@ import {
   serializeMonthEntryForFirestore,
 } from '../mappers/firestoreSchemas';
 import { FirestoreBudgetRepository, InMemoryBudgetRepository } from '../repositories/budgetRepository';
-import { buildOctober2026SeedPayload } from '../seed/october2026SeedData';
+import { buildSampleWorkspace } from '../sample/sampleWorkspace';
 
 jest.mock('firebase/firestore', () => ({
   collection: jest.fn((_db, ...segments: string[]) => ({ path: segments.join('/') })),
@@ -36,11 +36,11 @@ jest.mock('../../platform/storage/accountCache', () => ({
 }));
 
 const uid = 'uid_add_entry';
-const seed = buildOctober2026SeedPayload();
+const seed = buildSampleWorkspace();
 const monthEntries = seed.entries.filter((e) => e.monthKey === '2026-10');
 const input = {
   monthKey: '2026-10',
-  conceptId: 'exp_otro',
+  conceptId: 'exp_other',
   actualAmount: 50_000,
   completedAt: '2026-10-28',
 };
@@ -87,10 +87,10 @@ describe('addMonthEntry con contexto del store (OPT-04)', () => {
 
   it('InMemoryBudgetRepository acepta el mismo contexto', async () => {
     const repo = new InMemoryBudgetRepository();
-    const created = await repo.addMonthEntry('local-owner', input, {
+    const created = await repo.addMonthEntry('local-demo', input, {
       monthEntries,
       concepts: seed.concepts,
     });
-    expect(created).toMatchObject({ conceptId: 'exp_otro', actualAmount: 50_000 });
+    expect(created).toMatchObject({ conceptId: 'exp_other', actualAmount: 50_000 });
   });
 });

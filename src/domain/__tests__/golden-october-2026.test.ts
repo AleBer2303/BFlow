@@ -15,12 +15,20 @@ import {
   SavingsBucket,
   uncompleteMovement,
 } from '../index';
+import {
+  migrateRawConcept,
+  migrateRawSavingsBucket,
+} from '../../data/migrations/legacyFieldMigration';
 
-const concepts = octoberFixture.concepts as unknown as Concept[];
+// The fixture keeps the names the spreadsheet used; they go through the same translation as the
+// documents older builds stored (ADR 0037), so the golden values also prove the migration.
+const concepts = octoberFixture.concepts.map(migrateRawConcept) as unknown as Concept[];
 const entries = octoberFixture.monthEntries as unknown as MonthEntry[];
 const debts = octoberFixture.debts as unknown as Debt[];
 const debtPayments = octoberFixture.debtPayments as unknown as DebtPayment[];
-const savingsBuckets = octoberFixture.savingsBuckets as unknown as SavingsBucket[];
+const savingsBuckets = octoberFixture.savingsBuckets.map(
+  migrateRawSavingsBucket
+) as unknown as SavingsBucket[];
 const idealMotoPlan = octoberFixture.idealMotoPlan as unknown as ProvisionPlan;
 
 describe('Golden Parity Suite — Octubre 2026 (Control_Ingresos_y_gastos_mensuales.xlsx)', () => {
@@ -156,7 +164,7 @@ describe('Golden Parity Suite — Octubre 2026 (Control_Ingresos_y_gastos_mensua
         expect.objectContaining({ id: 'debt_esp_ia', openingBalance: 3_600_000 }),
       ]);
       expect(closeResult.nextMonthSavingsBuckets).toEqual([
-        { id: 'moto', name: 'Moto', openingBalance: 2_300_000 },
+        { id: 'reserve', name: 'Moto', openingBalance: 2_300_000 },
         { id: 'savings', name: 'Ahorros', openingBalance: 2_080_000 },
       ]);
     });

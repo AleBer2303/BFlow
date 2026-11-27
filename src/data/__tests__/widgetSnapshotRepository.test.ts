@@ -1,4 +1,4 @@
-import { buildOctober2026SeedPayload } from '../seed/october2026SeedData';
+import { buildSampleWorkspace } from '../sample/sampleWorkspace';
 import { buildWidgetSnapshot, type WidgetSnapshotV2 } from '../../platform/widgets/widgetSnapshot';
 
 const mockSetDoc = jest.fn();
@@ -21,7 +21,7 @@ import {
 } from '../repositories/widgetSnapshotRepository';
 
 function snapshot(overrides: Partial<WidgetSnapshotV2> = {}): WidgetSnapshotV2 {
-  const seed = buildOctober2026SeedPayload();
+  const seed = buildSampleWorkspace();
   return {
     ...buildWidgetSnapshot({
       monthKeys: ['2026-10'],

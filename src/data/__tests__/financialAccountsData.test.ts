@@ -132,19 +132,19 @@ describe('data/accounts — repositories and offline queue', () => {
   it('saves, lists and deletes accounts in the in-memory repository and clears them on reset', async () => {
     const repo = new InMemoryBudgetRepository();
     await repo.saveFinancialAccount(uid, VISA);
-    let account = await repo.loadFullCloudAccount('local-owner');
+    let account = await repo.loadFullCloudAccount('local-demo');
     expect(account.financialAccounts).toEqual([VISA]);
 
     await repo.saveFinancialAccount(uid, { ...VISA, name: 'Visa Platino' });
-    account = await repo.loadFullCloudAccount('local-owner');
+    account = await repo.loadFullCloudAccount('local-demo');
     expect(account.financialAccounts?.[0]?.name).toBe('Visa Platino');
 
     await repo.deleteFinancialAccount(uid, VISA.id);
-    expect((await repo.loadFullCloudAccount('local-owner')).financialAccounts).toEqual([]);
+    expect((await repo.loadFullCloudAccount('local-demo')).financialAccounts).toEqual([]);
 
     await repo.saveFinancialAccount(uid, VISA);
-    await repo.resetFullAccountInCloud('local-owner', '2027-01');
-    expect((await repo.loadFullCloudAccount('local-owner')).financialAccounts).toEqual([]);
+    await repo.resetFullAccountInCloud('local-demo', '2027-01');
+    expect((await repo.loadFullCloudAccount('local-demo')).financialAccounts).toEqual([]);
   });
 
   it('replays queued account writes and merges repeated writes of the same account', async () => {

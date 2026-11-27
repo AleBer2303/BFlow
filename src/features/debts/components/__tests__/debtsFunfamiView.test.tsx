@@ -45,9 +45,9 @@ const BASE_DEBT_SUMMARY: DebtSummaryResult = {
   isInstallmentPaid: true,
   debts: [
     {
-      debtId: 'debt_cb300f_moto',
-      name: 'Moto CB300F',
-      lender: 'FUNFAMI',
+      debtId: 'debt_auto_loan',
+      name: 'Moto vehículo',
+      lender: 'Banco',
       openingBalance: 2_600_000,
       monthlyInterestRate: 0.9,
       annualInterestRate: 10.8,
@@ -59,7 +59,7 @@ const BASE_DEBT_SUMMARY: DebtSummaryResult = {
       reductionRatio: 0.19,
     },
     {
-      debtId: 'debt_esp_ia',
+      debtId: 'debt_education_loan',
       name: 'Especialización IA',
       lender: 'Banco',
       openingBalance: 3_600_000,
@@ -127,14 +127,14 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView on %s skin', (skin) => {
     expect(screen.getByTestId('debt-action-edit-button')).toBeTruthy();
     expect(screen.getByTestId('debt-action-delete-button')).toBeTruthy();
 
-    expect(screen.getByTestId('debt-card-debt_cb300f_moto')).toBeTruthy();
-    expect(screen.getByTestId('debt-card-debt_esp_ia')).toBeTruthy();
+    expect(screen.getByTestId('debt-card-debt_auto_loan')).toBeTruthy();
+    expect(screen.getByTestId('debt-card-debt_education_loan')).toBeTruthy();
 
     // Per-card edit/delete buttons are hidden by default.
-    expect(screen.queryByTestId('debt-edit-debt_cb300f_moto')).toBeNull();
-    expect(screen.queryByTestId('debt-delete-debt_cb300f_moto')).toBeNull();
-    expect(screen.queryByTestId('debt-edit-debt_esp_ia')).toBeNull();
-    expect(screen.queryByTestId('debt-delete-debt_esp_ia')).toBeNull();
+    expect(screen.queryByTestId('debt-edit-debt_auto_loan')).toBeNull();
+    expect(screen.queryByTestId('debt-delete-debt_auto_loan')).toBeNull();
+    expect(screen.queryByTestId('debt-edit-debt_education_loan')).toBeNull();
+    expect(screen.queryByTestId('debt-delete-debt_education_loan')).toBeNull();
   });
 
   it('activates inline Editar action on existing debt cards without duplicating them', () => {
@@ -142,17 +142,17 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView on %s skin', (skin) => {
 
     fireEvent.press(screen.getByTestId('debt-action-edit-button'));
 
-    expect(screen.getAllByTestId('debt-card-debt_cb300f_moto')).toHaveLength(1);
-    expect(screen.getAllByTestId('debt-card-debt_esp_ia')).toHaveLength(1);
-    expect(screen.getByTestId('debt-edit-debt_cb300f_moto')).toBeTruthy();
-    expect(screen.getByTestId('debt-edit-debt_esp_ia')).toBeTruthy();
-    expect(screen.queryByTestId('debt-delete-debt_cb300f_moto')).toBeNull();
+    expect(screen.getAllByTestId('debt-card-debt_auto_loan')).toHaveLength(1);
+    expect(screen.getAllByTestId('debt-card-debt_education_loan')).toHaveLength(1);
+    expect(screen.getByTestId('debt-edit-debt_auto_loan')).toBeTruthy();
+    expect(screen.getByTestId('debt-edit-debt_education_loan')).toBeTruthy();
+    expect(screen.queryByTestId('debt-delete-debt_auto_loan')).toBeNull();
 
     // Pressing edit on a card opens the pre-filled form and clears edit mode
-    fireEvent.press(screen.getByTestId('debt-edit-debt_cb300f_moto'));
-    expect(screen.queryByTestId('debt-edit-debt_cb300f_moto')).toBeNull();
+    fireEvent.press(screen.getByTestId('debt-edit-debt_auto_loan'));
+    expect(screen.queryByTestId('debt-edit-debt_auto_loan')).toBeNull();
     expect(screen.getByTestId('debt-form-modal')).toBeTruthy();
-    expect(screen.getByTestId('debt-form-name-input').props.value).toBe('Moto CB300F');
+    expect(screen.getByTestId('debt-form-name-input').props.value).toBe('Moto vehículo');
     expect(screen.getByTestId('debt-form-name-input').props.autoCapitalize).toBe('sentences');
     expect(screen.getByTestId('debt-form-amount-input').props.keyboardType).toBe('number-pad');
     expect(screen.getByTestId('debt-form-amount-input').props.value).toBe('2.600.000');
@@ -160,14 +160,14 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView on %s skin', (skin) => {
     expect(screen.getByTestId('debt-form-installment-input').props.value).toBe('500.000');
     expect(screen.getByTestId('debt-form-interest-rate-input').props.keyboardType).toBe('decimal-pad');
 
-    fireEvent.changeText(screen.getByTestId('debt-form-name-input'), 'Moto CB300F 2027');
+    fireEvent.changeText(screen.getByTestId('debt-form-name-input'), 'Moto vehículo 2027');
     fireEvent.press(screen.getByTestId('debt-form-submit-button'));
 
     expect(onUpdateDebt).toHaveBeenCalledWith(
-      'debt_cb300f_moto',
+      'debt_auto_loan',
       expect.objectContaining({
-        name: 'Moto CB300F 2027',
-        lender: 'FUNFAMI',
+        name: 'Moto vehículo 2027',
+        lender: 'Banco',
         openingBalance: 2_600_000,
       })
     );
@@ -183,18 +183,18 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView on %s skin', (skin) => {
 
     fireEvent.press(screen.getByTestId('debt-action-delete-button'));
 
-    expect(screen.getAllByTestId('debt-card-debt_cb300f_moto')).toHaveLength(1);
-    expect(screen.getByTestId('debt-delete-debt_cb300f_moto')).toBeTruthy();
-    expect(screen.getByTestId('debt-delete-debt_esp_ia')).toBeTruthy();
-    expect(screen.queryByTestId('debt-edit-debt_cb300f_moto')).toBeNull();
+    expect(screen.getAllByTestId('debt-card-debt_auto_loan')).toHaveLength(1);
+    expect(screen.getByTestId('debt-delete-debt_auto_loan')).toBeTruthy();
+    expect(screen.getByTestId('debt-delete-debt_education_loan')).toBeTruthy();
+    expect(screen.queryByTestId('debt-edit-debt_auto_loan')).toBeNull();
 
-    fireEvent.press(screen.getByTestId('debt-delete-debt_esp_ia'));
+    fireEvent.press(screen.getByTestId('debt-delete-debt_education_loan'));
     expect(alertSpy).toHaveBeenCalled();
-    expect(onDeleteDebt).toHaveBeenCalledWith('debt_esp_ia');
+    expect(onDeleteDebt).toHaveBeenCalledWith('debt_education_loan');
 
     // Toggling off hides delete actions again
     fireEvent.press(screen.getByTestId('debt-action-delete-button'));
-    expect(screen.queryByTestId('debt-delete-debt_esp_ia')).toBeNull();
+    expect(screen.queryByTestId('debt-delete-debt_education_loan')).toBeNull();
   });
 
   it('switches cleanly between + Nueva Deuda form, Editar mode, and Eliminar mode across phone and desktop widths', () => {
@@ -206,14 +206,14 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView on %s skin', (skin) => {
 
     fireEvent.press(screen.getByTestId('debt-action-edit-button'));
     expect(screen.queryByTestId('debt-form-modal')).toBeNull();
-    expect(screen.getByTestId('debt-edit-debt_cb300f_moto')).toBeTruthy();
+    expect(screen.getByTestId('debt-edit-debt_auto_loan')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('debt-action-delete-button'));
-    expect(screen.queryByTestId('debt-edit-debt_cb300f_moto')).toBeNull();
-    expect(screen.getByTestId('debt-delete-debt_cb300f_moto')).toBeTruthy();
+    expect(screen.queryByTestId('debt-edit-debt_auto_loan')).toBeNull();
+    expect(screen.getByTestId('debt-delete-debt_auto_loan')).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('debts-add-new-debt-button'));
-    expect(screen.queryByTestId('debt-delete-debt_cb300f_moto')).toBeNull();
+    expect(screen.queryByTestId('debt-delete-debt_auto_loan')).toBeNull();
     expect(screen.getByTestId('debt-form-modal')).toBeTruthy();
   });
 });
@@ -269,18 +269,18 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView form state on %s skin', (skin
     expect(screen.getByTestId('debt-form-name-input').props.value).toBe('');
 
     fireEvent.press(screen.getByTestId('debt-action-edit-button'));
-    fireEvent.press(screen.getByTestId('debt-edit-debt_cb300f_moto'));
-    expect(screen.getByTestId('debt-form-name-input').props.value).toBe('Moto CB300F');
+    fireEvent.press(screen.getByTestId('debt-edit-debt_auto_loan'));
+    expect(screen.getByTestId('debt-form-name-input').props.value).toBe('Moto vehículo');
     expect(screen.getByTestId('debt-form-amount-input').props.value).toBe('2.600.000');
 
     fireEvent.press(screen.getByTestId('debt-action-edit-button'));
-    fireEvent.press(screen.getByTestId('debt-edit-debt_esp_ia'));
+    fireEvent.press(screen.getByTestId('debt-edit-debt_education_loan'));
     expect(screen.getByTestId('debt-form-name-input').props.value).toBe('Especialización IA');
 
     fireEvent.changeText(screen.getByTestId('debt-form-name-input'), 'Posgrado');
     fireEvent.press(screen.getByTestId('debt-form-submit-button'));
     expect(onUpdateDebt).toHaveBeenCalledWith(
-      'debt_esp_ia',
+      'debt_education_loan',
       expect.objectContaining({ name: 'Posgrado', openingBalance: 3_600_000 })
     );
   });
@@ -359,7 +359,7 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView form state on %s skin', (skin
       </BFlowThemeProvider>
     );
     fireEvent.press(screen.getByTestId('debt-action-edit-button'));
-    expect(screen.getByTestId('debt-edit-debt_cb300f_moto')).toBeTruthy();
+    expect(screen.getByTestId('debt-edit-debt_auto_loan')).toBeTruthy();
 
     rerender(
       <BFlowThemeProvider skin={skin} initialMode="dark">
@@ -368,7 +368,7 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView form state on %s skin', (skin
         </TabVisibilityProvider>
       </BFlowThemeProvider>
     );
-    expect(screen.queryByTestId('debt-edit-debt_cb300f_moto')).toBeNull();
+    expect(screen.queryByTestId('debt-edit-debt_auto_loan')).toBeNull();
   });
 });
 
@@ -381,7 +381,7 @@ describe('DebtsFunfamiView paid-off banner (CC-05)', () => {
   });
 
   it('celebrates whichever debt reached 0 this month, not a fixed seed debt', () => {
-    renderView('ios', { debtSummary: paidOff('debt_esp_ia', 3_600_000) });
+    renderView('ios', { debtSummary: paidOff('debt_education_loan', 3_600_000) });
     expect(screen.getByTestId('moto-debt-completed-banner')).toBeTruthy();
     expect(screen.getByText('¡Deuda "Especialización IA" liquidada al 100%!')).toBeTruthy();
 
@@ -393,7 +393,7 @@ describe('DebtsFunfamiView paid-off banner (CC-05)', () => {
     renderView('ios');
     expect(screen.queryByTestId('moto-debt-completed-banner')).toBeNull();
 
-    renderView('android', { debtSummary: paidOff('debt_cb300f_moto', 0) });
+    renderView('android', { debtSummary: paidOff('debt_auto_loan', 0) });
     expect(screen.queryByTestId('moto-debt-completed-banner')).toBeNull();
   });
 });

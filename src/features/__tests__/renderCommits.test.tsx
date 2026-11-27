@@ -10,7 +10,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
 import PhaseOneHomeScreen from '../../app/index';
 import { BFlowThemeProvider } from '../../design-system/theme/ThemeContext';
-import { DEMO_OWNER_USER } from '../../platform/auth/authAdapter';
+import { DEMO_USER } from '../../platform/auth/authAdapter';
 import { triggerWidgetSync } from '../budget/store/slices/sliceTypes';
 import { useBudgetStore } from '../budget/store/useBudgetStore';
 
@@ -191,8 +191,8 @@ function takeCounts(): Counts {
 
 describe('Fase 5: renders por acción', () => {
   beforeEach(() => {
-    useBudgetStore.setState({ authUser: DEMO_OWNER_USER, needsOnboarding: false });
-    useBudgetStore.getState().resetToOctober2026GoldenState();
+    useBudgetStore.setState({ authUser: DEMO_USER, needsOnboarding: false });
+    useBudgetStore.getState().resetToSampleWorkspace();
     takeCounts();
   });
 

@@ -86,7 +86,7 @@ export function calculateMonthlySavingsSummary(
 ): MonthlySavingsSummary {
   assertValidMonthKey(monthKey);
 
-  const reserveBucket = buckets.find((b) => b.id === 'reserve' || b.id === 'moto');
+  const reserveBucket = buckets.find((b) => b.id === 'reserve');
   const savingsBucket = buckets.find((b) => b.id === 'savings');
   const hasReserveBucket = Boolean(reserveBucket);
   const hasSavingsBucket = Boolean(savingsBucket);
@@ -97,9 +97,7 @@ export function calculateMonthlySavingsSummary(
       .filter(
         (c) =>
           !c.archived &&
-          (c.savingsContribution?.bucketId === reserveBucketId ||
-            (reserveBucketId === 'moto' && c.savingsContribution?.bucketId === 'reserve') ||
-            (reserveBucketId === 'reserve' && c.savingsContribution?.bucketId === 'moto'))
+          c.savingsContribution?.bucketId === reserveBucketId
       )
       .map((c) => c.id)
   );
@@ -152,7 +150,7 @@ export function calculateMonthlySavingsSummary(
     : 0;
 
   const extraBuckets = buckets.filter(
-    (b) => b.id !== reserveBucketId && b.id !== 'moto' && b.id !== 'savings'
+    (b) => b.id !== reserveBucketId && b.id !== 'savings'
   );
   const customBuckets: CustomSavingsBucketSummary[] = extraBuckets.map((cb) => {
     const linkedConceptIds = new Set(

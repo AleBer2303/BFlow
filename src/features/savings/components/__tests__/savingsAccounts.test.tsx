@@ -21,7 +21,7 @@ const ORIGINAL_WINDOW = Dimensions.get('window');
 const ORIGINAL_SCREEN = Dimensions.get('screen');
 
 const EMPTY_BUCKET = {
-  bucketId: 'moto',
+  bucketId: 'reserve',
   name: 'Fondo de Reserva',
   openingBalance: 0,
   paidContributionsThisMonth: 0,

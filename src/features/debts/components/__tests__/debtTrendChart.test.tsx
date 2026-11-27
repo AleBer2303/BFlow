@@ -20,7 +20,7 @@ function point(monthKey: string, totalDebt: number): MonthlyHistoryPoint {
     pendingExpenses: 0,
     netCashFlow: 0,
     totalDebt,
-    reserveName: 'Moto',
+    reserveName: 'Fondo de reserva',
     reserveBalance: 0,
     savingsName: 'Ahorros',
     savingsBalance: 0,

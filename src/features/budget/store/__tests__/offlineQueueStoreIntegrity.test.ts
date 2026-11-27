@@ -17,7 +17,7 @@ import { useBudgetStore } from '../useBudgetStore';
 
 const testUser: BFlowAuthUser = {
   uid: 'uid_cloud_test_queue_integrity',
-  email: 'demo.owner@bflow.example',
+  email: 'demo@bflow.example',
   displayName: 'Demo',
   authProvider: 'password',
   provider: 'firebase',
@@ -37,8 +37,8 @@ function permissionError(): Error {
 
 beforeEach(() => {
   clearOfflineWriteQueue(testUser.uid);
-  useBudgetStore.getState().resetToOctober2026GoldenState();
-  useBudgetStore.getState().setAuthUser(testUser);
+  useBudgetStore.getState().resetToSampleWorkspace();
+  useBudgetStore.setState({ authUser: testUser });
 });
 
 afterEach(() => {
@@ -170,7 +170,7 @@ describe('BUG-03 · configuración inicial con la cola offline', () => {
 });
 
 describe('BUG-04 · limpieza en cascada (ADR 0035)', () => {
-  const DEBT_ID = 'debt_cb300f_moto';
+  const DEBT_ID = 'debt_auto_loan';
 
   it('al borrar una deuda quita defaultTargetDebtId de los conceptos y sus abonos', async () => {
     const before = useBudgetStore.getState();

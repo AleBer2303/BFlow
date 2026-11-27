@@ -158,8 +158,8 @@ describe('FirestoreBudgetRepository · borrados en cascada', () => {
   it('deleteSavingsBucket quita savingsContribution de los conceptos del fondo en el mismo lote', async () => {
     seedCollection('concepts', [
       {
-        id: 'c_moto',
-        data: { id: 'c_moto', savingsContribution: { bucketId: 'moto', onlyWhenCompleted: true } },
+        id: 'c_reserve',
+        data: { id: 'c_reserve', savingsContribution: { bucketId: 'reserve', onlyWhenCompleted: true } },
       },
       {
         id: 'c_ahorro',
@@ -170,7 +170,7 @@ describe('FirestoreBudgetRepository · borrados en cascada', () => {
       },
     ]);
 
-    await new FirestoreBudgetRepository().deleteSavingsBucket(uid, 'moto');
+    await new FirestoreBudgetRepository().deleteSavingsBucket(uid, 'reserve');
 
     expect(batches).toHaveLength(1);
     const ops = batches[0] ?? [];
@@ -178,17 +178,17 @@ describe('FirestoreBudgetRepository · borrados en cascada', () => {
       expect.arrayContaining([
         {
           kind: 'update',
-          path: `users/${uid}/concepts/c_moto`,
+          path: `users/${uid}/concepts/c_reserve`,
           data: { savingsContribution: DELETE_FIELD, updatedAt: expect.any(String) },
         },
-        { kind: 'delete', path: `users/${uid}/savingsBuckets/moto` },
+        { kind: 'delete', path: `users/${uid}/savingsBuckets/reserve` },
       ])
     );
     expect(ops.some((op) => op.path.endsWith('/c_ahorro'))).toBe(false);
   });
 
   it('saveInitialAccountSetup es idempotente: repetirlo escribe los mismos documentos', async () => {
-    const seed = await new InMemoryBudgetRepository().loadFullCloudAccount('local-owner');
+    const seed = await new InMemoryBudgetRepository().loadFullCloudAccount('local-demo');
     const payload: InitialAccountSetupPayload = {
       monthKey: '2026-11',
       concepts: seed.concepts,
@@ -214,7 +214,7 @@ describe('FirestoreBudgetRepository · borrados en cascada', () => {
 describe('InMemoryBudgetRepository · misma limpieza en cascada', () => {
   it('borra abonos y vínculos de una deuda y de un fondo', async () => {
     const repo = new InMemoryBudgetRepository();
-    const before = await repo.loadFullCloudAccount('local-owner');
+    const before = await repo.loadFullCloudAccount('local-demo');
     const debtConcept = before.concepts.find((c) => c.defaultTargetDebtId);
     const savingsConcept = before.concepts.find((c) => c.savingsContribution);
     const debtId = debtConcept?.defaultTargetDebtId;
@@ -235,7 +235,7 @@ describe('InMemoryBudgetRepository · misma limpieza en cascada', () => {
     await repo.deleteDebt(uid, debtId);
     await repo.deleteSavingsBucket(uid, bucketId);
 
-    const after = await repo.loadFullCloudAccount('local-owner');
+    const after = await repo.loadFullCloudAccount('local-demo');
     expect(after.concepts.some((c) => c.defaultTargetDebtId === debtId)).toBe(false);
     expect(after.concepts.some((c) => c.savingsContribution?.bucketId === bucketId)).toBe(false);
     expect(after.debtPayments.some((dp) => dp.debtId === debtId)).toBe(false);

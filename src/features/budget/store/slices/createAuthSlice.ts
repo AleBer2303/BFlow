@@ -7,7 +7,6 @@
 import {
   EMPTY_PROVISION_PLAN,
   ensureStandardSavingsBuckets,
-  isOwnerCanonicalEmail,
   type InitialAccountSetupPayload,
 } from '../../../../data/repositories/budgetRepository';
 import {
@@ -51,6 +50,7 @@ import {
   buildInitialState,
   getStoreInitialState,
   isRealAuthUser,
+  isSampleWorkspaceUser,
   recalculateProvisionPlan,
   triggerWidgetSync,
   type AuthSlice,
@@ -75,7 +75,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       (prevUser.email ?? '').trim().toLowerCase() !== (user.email ?? '').trim().toLowerCase();
 
     const cachedAccount =
-      user.uid && user.uid !== 'local-owner' && user.uid !== 'local-demo'
+      user.uid && user.uid !== 'local-demo'
         ? loadPersistedAccount(user.uid)
         : null;
 
@@ -84,7 +84,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
         set(buildHydratedWorkspaceState(user, cachedAccount));
       } else if (
         (process.env.NODE_ENV === 'test' || isDemoModeEnabled()) &&
-        isOwnerCanonicalEmail(user.email)
+        isSampleWorkspaceUser(user)
       ) {
         set(buildInitialState(user));
       } else {

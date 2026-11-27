@@ -28,7 +28,7 @@ import {
   getBudgetRepository,
   applyConceptLinkageUpdates,
   getStoreInitialState,
-  buildOctober2026SeedWorkspaceState,
+  buildSampleWorkspaceState,
   isRealAuthUser,
   resolveDefaultInitialAuthUser,
   triggerWidgetSync,
@@ -950,12 +950,12 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     }
   },
 
-  resetToOctober2026GoldenState: () => {
+  resetToSampleWorkspace: () => {
     const currentUser = get().authUser;
     if (currentUser?.uid) {
       clearPersistedAccount(currentUser.uid);
     }
-    set(buildOctober2026SeedWorkspaceState(currentUser ?? resolveDefaultInitialAuthUser()));
+    set(buildSampleWorkspaceState(currentUser ?? resolveDefaultInitialAuthUser()));
     triggerWidgetSync(get());
   },
 };

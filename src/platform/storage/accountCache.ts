@@ -14,7 +14,11 @@
 import type { FullCloudAccountData } from '../../data/repositories/budgetRepository';
 import { getStorageGeneration, persistentStorage } from './persistentStorageAdapter';
 
-export const ACCOUNT_CACHE_SCHEMA_VERSION = 2;
+/**
+ * 3: names of ADR 0037 (`reserve` bucket, `reserveClosingBalance`, `provisionCategoryKey`). A cache
+ * of an older version is dropped and the account is downloaded again through the mappers.
+ */
+export const ACCOUNT_CACHE_SCHEMA_VERSION = 3;
 export const ACCOUNT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 const LEGACY_ACCOUNT_CACHE_PREFIX_V1 = 'bflow.account.cache.v1.';

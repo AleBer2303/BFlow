@@ -3,7 +3,6 @@ import { toAppMonthKey } from '../../domain/date/monthKey';
 import { calculateDebtsSummary } from '../../domain/debts/debtCalculator';
 import type { Debt, MonthSnapshot, SavingsBucket } from '../../domain/models/types';
 import { closeMonthAndRollover } from '../../domain/month-close/monthClose';
-import { DEMO_OWNER_SEED_EMAIL } from '../../platform/mode/ownerSeedEmail';
 import {
   serializeMonthSnapshotForFirestore,
   serializeProvisionPlanForFirestore,
@@ -14,7 +13,6 @@ import {
   collectSavingsBuckets,
   dropUnusedLegacyDefaultBuckets,
   hasConfiguredAccountData,
-  markOwnerAccountSeeded,
   mergeArchivedHistoryEntries,
   parseClosedSnapshots,
   parseSavedActiveMonthKey,
@@ -25,17 +23,15 @@ import {
   resolveNeedsOnboarding,
   resolveProvisionPlan,
   reuseCachedAccountIfRevisionMatches,
-  shouldSeedOwnerAccount,
   withPlannedOpenMonths,
   type AccountIdentity,
 } from '../repositories/accountHydration';
 import { EMPTY_PROVISION_PLAN } from '../repositories/budgetRepositoryShared';
 import type { FullCloudAccountData } from '../repositories/budgetRepositoryTypes';
-import { buildOctober2026SeedPayload } from '../seed/october2026SeedData';
+import { buildSampleWorkspace } from '../sample/sampleWorkspace';
 
-const ownerSeed = resolveAccountIdentity(undefined, DEMO_OWNER_SEED_EMAIL);
-const regularUser = resolveAccountIdentity(undefined, 'persona@example.com');
-const resetOwner = resolveAccountIdentity({ accountResetByUser: true }, DEMO_OWNER_SEED_EMAIL);
+const activeAccount = resolveAccountIdentity({});
+const resetAccount = resolveAccountIdentity({ accountResetByUser: true });
 const newUserStartMonth = `${toAppMonthKey().slice(0, 4)}-01`;
 
 function cachedAccount(overrides: Partial<FullCloudAccountData> = {}): FullCloudAccountData {
@@ -53,21 +49,21 @@ function cachedAccount(overrides: Partial<FullCloudAccountData> = {}): FullCloud
   };
 }
 
-function closeSeedOctober() {
-  const seed = buildOctober2026SeedPayload();
+function closeSampleMonth() {
+  const sample = buildSampleWorkspace();
   const result = closeMonthAndRollover({
-    closingMonthKey: '2026-10',
+    closingMonthKey: sample.monthKey,
     closedAtIso: '2026-11-01T00:00:00.000Z',
-    concepts: seed.concepts,
-    entries: seed.entries,
-    debts: seed.debts,
-    debtPayments: seed.debtPayments,
-    savingsBuckets: seed.savingsBuckets,
+    concepts: sample.concepts,
+    entries: sample.entries,
+    debts: sample.debts,
+    debtPayments: sample.debtPayments,
+    savingsBuckets: sample.savingsBuckets,
   });
-  return { seed, result };
+  return { sample, result };
 }
 
-describe('accountHydration (Fase 4, CC-01)', () => {
+describe('accountHydration (Fase 4, CC-01; ADR 0037)', () => {
   describe('1. dataRevision negotiation', () => {
     const fresh = new Date().toISOString();
 
@@ -100,46 +96,25 @@ describe('accountHydration (Fase 4, CC-01)', () => {
     });
   });
 
-  describe('2. identity', () => {
-    it('tells the owner seed account apart from a reset owner and other users', () => {
-      expect(ownerSeed).toMatchObject({ isOwner: true, isResetByUser: false, isOwnerSeedAccount: true });
-      expect(resetOwner).toMatchObject({ isOwner: true, isResetByUser: true, isOwnerSeedAccount: false });
-      expect(regularUser).toMatchObject({ isOwner: false, isOwnerSeedAccount: false });
-    });
-
-    it('falls back to the stored email when the caller has none', () => {
-      const identity = resolveAccountIdentity({ email: DEMO_OWNER_SEED_EMAIL }, null);
-      expect(identity.resolvedEmail).toBe(DEMO_OWNER_SEED_EMAIL);
-      expect(identity.isOwner).toBe(true);
+  describe('2. account state', () => {
+    it('tells a reset account apart', () => {
+      expect(activeAccount).toEqual({ isResetByUser: false });
+      expect(resetAccount).toEqual({ isResetByUser: true });
+      expect(resolveAccountIdentity(undefined)).toEqual({ isResetByUser: false });
     });
 
     it('resolves the fallback active month and the stored one', () => {
-      expect(resolveFallbackActiveMonthKey({ activeMonthKey: '2027-03' }, false)).toBe('2027-03');
-      expect(resolveFallbackActiveMonthKey(undefined, true)).toBe('2026-10');
-      expect(resolveFallbackActiveMonthKey(undefined, false)).toBe(newUserStartMonth);
+      expect(resolveFallbackActiveMonthKey({ activeMonthKey: '2027-03' })).toBe('2027-03');
+      expect(resolveFallbackActiveMonthKey(undefined)).toBe(newUserStartMonth);
       expect(parseSavedActiveMonthKey({ activeMonthKey: '2026-11' })).toBe('2026-11');
       expect(parseSavedActiveMonthKey({ activeMonthKey: '2026-13' })).toBeUndefined();
       expect(parseSavedActiveMonthKey({ activeMonthKey: 202611 })).toBeUndefined();
-    });
-
-    it('seeds only an owner account that was never seeded nor onboarded', () => {
-      expect(shouldSeedOwnerAccount(ownerSeed, {})).toBe(true);
-      expect(shouldSeedOwnerAccount(ownerSeed, { seededOctober2026: true })).toBe(false);
-      expect(shouldSeedOwnerAccount(ownerSeed, { onboardingCompleted: true })).toBe(false);
-      expect(shouldSeedOwnerAccount(resetOwner, {})).toBe(false);
-      expect(shouldSeedOwnerAccount(regularUser, {})).toBe(false);
-      expect(markOwnerAccountSeeded({ email: 'a' }, 'rev_9')).toEqual({
-        email: 'a',
-        seededOctober2026: true,
-        onboardingCompleted: true,
-        dataRevision: 'rev_9',
-      });
     });
   });
 
   describe('3. closed months and the history window', () => {
     it('parses snapshots by month and skips malformed ones', () => {
-      const { result } = closeSeedOctober();
+      const { result } = closeSampleMonth();
       const parsed = parseClosedSnapshots([
         { data: () => serializeMonthSnapshotForFirestore(result.snapshot) },
         { data: () => ({ monthKey: 'broken' }) },
@@ -165,67 +140,71 @@ describe('accountHydration (Fase 4, CC-01)', () => {
       data: () => data,
     });
 
-    it('keeps one bucket per id, reports stale documents and heals the owner savings', () => {
-      const docs = [
-        bucketDoc('moto', { id: 'moto', name: 'Moto', openingBalance: 5 }),
-        bucketDoc('legacy_doc', { id: 'moto', name: 'Moto vieja', openingBalance: 7 }),
-        bucketDoc('savings', { id: 'savings', name: 'Ahorros', openingBalance: 16_880_000 }),
+    it('keeps one bucket per id and skips documents stored under another id', () => {
+      const collected = collectSavingsBuckets([
+        bucketDoc('reserve', { id: 'reserve', name: 'Reserva', openingBalance: 5 }),
+        bucketDoc('copy_doc', { id: 'reserve', name: 'Copia', openingBalance: 7 }),
         bucketDoc('broken', { nope: true }),
-      ];
-      const owner = collectSavingsBuckets(docs, ownerSeed);
-      expect(owner.staleRefs).toEqual(['ref:legacy_doc']);
-      expect(owner.healedSavingsBucket?.openingBalance).toBe(1_000_000);
-      expect(owner.buckets.map((b) => `${b.id}:${b.openingBalance}`)).toEqual([
-        'moto:5',
-        'savings:1000000',
       ]);
-
-      const other = collectSavingsBuckets(docs, regularUser);
-      expect(other.healedSavingsBucket).toBeNull();
-      expect(other.buckets.find((b) => b.id === 'savings')?.openingBalance).toBe(16_880_000);
+      expect(collected.buckets).toEqual([{ id: 'reserve', name: 'Reserva', openingBalance: 5 }]);
+      expect(collected.migratedBuckets).toEqual([]);
+      expect(collected.legacyRefs).toEqual([]);
     });
 
-    it('drops the empty legacy default buckets only on empty non-owner accounts', () => {
+    it('reads a bucket from its old document id and reports it to be written again (ADR 0037)', () => {
+      const legacy = collectSavingsBuckets([
+        bucketDoc('moto', { id: 'moto', name: 'Fondo', openingBalance: 9 }),
+        bucketDoc('savings', { id: 'savings', name: 'Ahorros', openingBalance: 3 }),
+      ]);
+      expect(legacy.buckets.map((b) => b.id)).toEqual(['savings', 'reserve']);
+      expect(legacy.migratedBuckets).toEqual([{ id: 'reserve', name: 'Fondo', openingBalance: 9 }]);
+      expect(legacy.legacyRefs).toEqual(['ref:moto']);
+
+      // The current document wins; the old one is only deleted.
+      const both = collectSavingsBuckets([
+        bucketDoc('moto', { id: 'moto', name: 'Viejo', openingBalance: 1 }),
+        bucketDoc('reserve', { id: 'reserve', name: 'Actual', openingBalance: 2 }),
+      ]);
+      expect(both.buckets).toEqual([{ id: 'reserve', name: 'Actual', openingBalance: 2 }]);
+      expect(both.migratedBuckets).toEqual([]);
+      expect(both.legacyRefs).toEqual(['ref:moto']);
+    });
+
+    it('drops the empty default buckets only on empty accounts', () => {
       const defaults: SavingsBucket[] = [
-        { id: 'moto', name: 'Moto', openingBalance: 0 },
+        { id: 'reserve', name: 'Reserva', openingBalance: 0 },
         { id: 'savings', name: 'Ahorros', openingBalance: 0 },
       ];
       const empty = { concepts: [], entries: [], debts: [] };
-      expect(dropUnusedLegacyDefaultBuckets(defaults, regularUser, empty)).toEqual([]);
-      expect(dropUnusedLegacyDefaultBuckets(defaults, resetOwner, empty)).toEqual([]);
-      expect(dropUnusedLegacyDefaultBuckets(defaults, ownerSeed, empty)).toBe(defaults);
+      expect(dropUnusedLegacyDefaultBuckets(defaults, empty)).toEqual([]);
       const funded = [{ ...defaults[0]!, openingBalance: 10 }];
-      expect(dropUnusedLegacyDefaultBuckets(funded, regularUser, empty)).toBe(funded);
-      const withConcepts = { ...empty, concepts: buildOctober2026SeedPayload().concepts };
-      expect(dropUnusedLegacyDefaultBuckets(defaults, regularUser, withConcepts)).toBe(defaults);
+      expect(dropUnusedLegacyDefaultBuckets(funded, empty)).toBe(funded);
+      const withConcepts = { ...empty, concepts: buildSampleWorkspace().concepts };
+      expect(dropUnusedLegacyDefaultBuckets(defaults, withConcepts)).toBe(defaults);
     });
 
-    it('uses the stored plan, else the seed plan for the owner and an empty one for others', () => {
-      const seedPlan = buildOctober2026SeedPayload().provisionPlan;
-      const stored = { id: 'moto_ideal', ...serializeProvisionPlanForFirestore(seedPlan) };
-      expect(resolveProvisionPlan(stored, regularUser).items).toHaveLength(seedPlan.items.length);
-      expect(resolveProvisionPlan(undefined, regularUser)).toBe(EMPTY_PROVISION_PLAN);
-      expect(resolveProvisionPlan(undefined, ownerSeed)).toEqual(seedPlan);
-      expect(resolveProvisionPlan({ items: 'broken' }, regularUser)).toBe(EMPTY_PROVISION_PLAN);
+    it('uses the stored plan, else an empty one', () => {
+      const samplePlan = buildSampleWorkspace().provisionPlan;
+      const stored = { id: 'default', ...serializeProvisionPlanForFirestore(samplePlan) };
+      expect(resolveProvisionPlan(stored).items).toHaveLength(samplePlan.items.length);
+      expect(resolveProvisionPlan(undefined)).toBe(EMPTY_PROVISION_PLAN);
+      expect(resolveProvisionPlan({ items: 'broken' })).toBe(EMPTY_PROVISION_PLAN);
     });
 
     it('decides the onboarding wizard', () => {
       const run = (identity: AccountIdentity, isRegistration?: boolean, hasConfiguredData = false) =>
         resolveNeedsOnboarding({ identity, isRegistration, hasConfiguredData });
-      expect(run(resetOwner, false, true)).toBe(true);
-      expect(run(regularUser, true, true)).toBe(true);
-      expect(run(ownerSeed, true)).toBe(false);
-      expect(run(regularUser, false)).toBe(false);
-      expect(run(regularUser)).toBe(true);
-      expect(run(regularUser, undefined, true)).toBe(false);
-      expect(run(ownerSeed)).toBe(false);
+      expect(run(resetAccount, false, true)).toBe(true);
+      expect(run(activeAccount, true, true)).toBe(true);
+      expect(run(activeAccount, false)).toBe(false);
+      expect(run(activeAccount)).toBe(true);
+      expect(run(activeAccount, undefined, true)).toBe(false);
     });
 
-    it('counts any stored data or account flag as configured', () => {
+    it('counts any stored data or the onboarding flag as configured', () => {
       const none = { concepts: [], entries: [], debts: [], buckets: [], userData: undefined };
       expect(hasConfiguredAccountData(none)).toBe(false);
       expect(hasConfiguredAccountData({ ...none, userData: { onboardingCompleted: true } })).toBe(true);
-      expect(hasConfiguredAccountData({ ...none, userData: { seededOctober2026: true } })).toBe(true);
       expect(
         hasConfiguredAccountData({ ...none, buckets: [{ id: 'x', name: 'x', openingBalance: 1 }] })
       ).toBe(true);
@@ -234,7 +213,6 @@ describe('accountHydration (Fase 4, CC-01)', () => {
 
   describe('5. available months', () => {
     const base = {
-      userData: undefined,
       savedActiveMonthKey: undefined,
       concepts: [],
       entries: [],
@@ -244,40 +222,35 @@ describe('accountHydration (Fase 4, CC-01)', () => {
       fallbackActiveMonthKey: 'fallback',
     };
 
-    it('starts a new account in January and the owner seed in October', () => {
-      expect(resolveAvailableMonths({ ...base, identity: regularUser })).toEqual({
+    it('starts a new account in January of the current year', () => {
+      expect(resolveAvailableMonths(base)).toEqual({
         availableMonths: [newUserStartMonth],
         activeMonthKey: newUserStartMonth,
       });
-      expect(resolveAvailableMonths({ ...base, identity: ownerSeed }).activeMonthKey).toBe('2026-10');
     });
 
     it('adds the month after each closed one and opens on the latest', () => {
       const closedSnapshots = { '2026-10': {} as MonthSnapshot };
-      expect(
-        resolveAvailableMonths({ ...base, identity: regularUser, closedSnapshots, savedActiveMonthKey: '2026-10' })
-      ).toEqual({ availableMonths: ['2026-10', '2026-11'], activeMonthKey: '2026-11' });
+      expect(resolveAvailableMonths({ ...base, closedSnapshots, savedActiveMonthKey: '2026-10' })).toEqual({
+        availableMonths: ['2026-10', '2026-11'],
+        activeMonthKey: '2026-11',
+      });
     });
 
-    it('ignores the old default October on other accounts without data in it', () => {
+    it('takes every month with debts, buckets or the saved active month', () => {
       const debts: Debt[] = [
         { id: 'd', groupKey: 'G', name: 'D', lender: 'L', openingBalance: 1, monthKey: '2027-02' },
       ];
-      const buckets: SavingsBucket[] = [{ id: 'b', name: 'B', openingBalance: 1, monthKey: '2026-10' }];
+      const buckets: SavingsBucket[] = [{ id: 'b', name: 'B', openingBalance: 1, monthKey: '2026-12' }];
       expect(
-        resolveAvailableMonths({ ...base, identity: regularUser, debts, buckets, savedActiveMonthKey: '2026-10' })
-          .availableMonths
-      ).toEqual(['2027-02']);
-      expect(
-        resolveAvailableMonths({ ...base, identity: ownerSeed, debts, buckets, savedActiveMonthKey: '2026-10' })
-          .availableMonths
-      ).toEqual(['2026-10', '2027-02']);
+        resolveAvailableMonths({ ...base, debts, buckets, savedActiveMonthKey: '2026-09' }).availableMonths
+      ).toEqual(['2026-09', '2026-12', '2027-02']);
     });
   });
 
   describe('6. users/{uid} write-back', () => {
     const base = {
-      identity: regularUser,
+      identity: activeAccount,
       needsOnboarding: false,
       savedActiveMonthKey: '2026-11',
       activeMonthKey: '2026-11',
@@ -286,7 +259,7 @@ describe('accountHydration (Fase 4, CC-01)', () => {
     it('writes nothing when the document is up to date', () => {
       expect(
         planUserDocumentSync({ ...base, userData: { dataRevision: 'rev_1', onboardingCompleted: true } })
-      ).toEqual({ existingDataRevision: 'rev_1', fieldsToWrite: null });
+      ).toEqual({ existingDataRevision: 'rev_1', fieldsToWrite: null, legacyFieldsToRemove: [] });
     });
 
     it('writes the active month, the onboarding mark or a missing revision', () => {
@@ -301,42 +274,52 @@ describe('accountHydration (Fase 4, CC-01)', () => {
       expect(planUserDocumentSync({ ...base, userData: { dataRevision: '' } })).toEqual({
         existingDataRevision: undefined,
         fieldsToWrite: { activeMonthKey: '2026-11' },
+        legacyFieldsToRemove: [],
       });
       expect(
         planUserDocumentSync({
           ...base,
-          identity: resetOwner,
+          identity: resetAccount,
           needsOnboarding: true,
           userData: { dataRevision: 'rev_1' },
         }).fieldsToWrite
       ).toBeNull();
     });
+
+    it('removes the fields no build reads any more (ADR 0037)', () => {
+      const plan = planUserDocumentSync({
+        ...base,
+        userData: { dataRevision: 'rev_1', onboardingCompleted: true, seededOctober2026: true },
+      });
+      expect(plan.fieldsToWrite).toEqual({ activeMonthKey: '2026-11' });
+      expect(plan.legacyFieldsToRemove).toEqual(['seededOctober2026']);
+    });
   });
 
   describe('7. open months and the balance chain', () => {
     it('plans the recurring entries of open months without entries only', () => {
-      const { seed } = closeSeedOctober();
+      const { sample } = closeSampleMonth();
       const closed = { '2026-09': {} as MonthSnapshot };
       const { entries, entriesByMonth } = withPlannedOpenMonths(
-        seed.entries,
+        sample.entries,
         ['2026-09', '2026-10', '2026-11'],
         closed,
-        seed.concepts
+        sample.concepts
       );
       expect(entriesByMonth.has('2026-09')).toBe(false);
-      expect(entriesByMonth.get('2026-10')).toHaveLength(seed.entries.length);
+      expect(entriesByMonth.get('2026-10')).toHaveLength(sample.entries.length);
       expect(entriesByMonth.get('2026-11')?.length).toBeGreaterThan(0);
-      expect(entries.length).toBe(seed.entries.length + (entriesByMonth.get('2026-11')?.length ?? 0));
-      expect(withPlannedOpenMonths(seed.entries, ['2026-11'], {}, []).entries).toHaveLength(
-        seed.entries.length
+      expect(entries.length).toBe(sample.entries.length + (entriesByMonth.get('2026-11')?.length ?? 0));
+      expect(withPlannedOpenMonths(sample.entries, ['2026-11'], {}, []).entries).toHaveLength(
+        sample.entries.length
       );
     });
 
     it('opens each month with what the previous one left and synthesizes missing payments', () => {
-      const { seed } = closeSeedOctober();
-      const planned = withPlannedOpenMonths(seed.entries, ['2026-10', '2026-11'], {}, seed.concepts);
+      const { sample } = closeSampleMonth();
+      const planned = withPlannedOpenMonths(sample.entries, ['2026-10', '2026-11'], {}, sample.concepts);
       const novInstallment = planned.entries.find(
-        (e) => e.monthKey === '2026-11' && e.conceptId === 'exp_cuota_funfami'
+        (e) => e.monthKey === '2026-11' && e.conceptId === 'exp_loan_installment'
       );
       expect(novInstallment).toBeDefined();
       const entries = toggleMovementStatus(planned.entries, novInstallment!.id, {
@@ -344,67 +327,65 @@ describe('accountHydration (Fase 4, CC-01)', () => {
         completedAt: '2026-11-05',
       });
       const chain = chainMonthlyBalances({
-        identity: ownerSeed,
         availableMonths: ['2026-10', '2026-11'],
         closedSnapshots: {},
-        concepts: seed.concepts,
+        concepts: sample.concepts,
         entries,
         entriesByMonth: withPlannedOpenMonths(entries, [], {}, []).entriesByMonth,
-        currentDebts: seed.debts,
-        rawBuckets: seed.savingsBuckets,
-        debtPayments: seed.debtPayments,
+        currentDebts: sample.debts,
+        rawBuckets: sample.savingsBuckets,
+        debtPayments: sample.debtPayments,
       });
 
-      const october = calculateDebtsSummary(seed.debts, entries, '2026-10', seed.debtPayments);
+      const october = calculateDebtsSummary(sample.debts, entries, '2026-10', sample.debtPayments);
       expect(chain.debtsByMonth['2026-11']?.map((d) => [d.id, d.openingBalance])).toEqual(
         october.debts.map((d) => [d.debtId, Math.max(0, d.remainingBalance)])
       );
       expect(chain.debtsByMonth['2026-11']?.every((d) => d.monthKey === '2026-11')).toBe(true);
       expect(chain.debtPayments.some((p) => p.entryId === novInstallment!.id && p.active)).toBe(true);
-      expect(chain.debtPayments.length).toBe(seed.debtPayments.length + 1);
+      expect(chain.debtPayments.length).toBe(sample.debtPayments.length + 1);
       expect(chain.savingsBucketsByMonth['2026-11']?.every((b) => b.monthKey === '2026-11')).toBe(true);
     });
 
-    it('honors a direct edit in the month, but not the old seed reset value', () => {
-      const { seed } = closeSeedOctober();
-      const run = (openingBalance: number) =>
-        chainMonthlyBalances({
-          identity: ownerSeed,
-          availableMonths: ['2026-10', '2026-11'],
-          closedSnapshots: {},
-          concepts: seed.concepts,
-          entries: seed.entries,
-          entriesByMonth: withPlannedOpenMonths(seed.entries, [], {}, []).entriesByMonth,
-          currentDebts: seed.debts.map((d) =>
-            d.id === 'debt_cb300f_moto' ? { ...d, monthKey: '2026-11', openingBalance } : d
-          ),
-          rawBuckets: seed.savingsBuckets,
-          debtPayments: seed.debtPayments,
-        }).debtsByMonth['2026-11']!.find((d) => d.id === 'debt_cb300f_moto')!.openingBalance;
+    it('honors a direct edit of the debt in the month', () => {
+      const { sample } = closeSampleMonth();
+      const novemberOpening = chainMonthlyBalances({
+        availableMonths: ['2026-10', '2026-11'],
+        closedSnapshots: {},
+        concepts: sample.concepts,
+        entries: sample.entries,
+        entriesByMonth: withPlannedOpenMonths(sample.entries, [], {}, []).entriesByMonth,
+        currentDebts: sample.debts.map((d) =>
+          d.id === 'debt_auto_loan' ? { ...d, monthKey: '2026-11', openingBalance: 1_234_000 } : d
+        ),
+        rawBuckets: sample.savingsBuckets,
+        debtPayments: sample.debtPayments,
+      }).debtsByMonth['2026-11']!.find((d) => d.id === 'debt_auto_loan')!.openingBalance;
 
-      expect(run(1_234_000)).toBe(1_234_000);
-      expect(run(4_400_000)).not.toBe(4_400_000);
+      expect(novemberOpening).toBe(1_234_000);
     });
 
     it('reconstructs a closed first month from its snapshot and chains the next one', () => {
-      const { seed, result } = closeSeedOctober();
+      const { sample, result } = closeSampleMonth();
       const chain = chainMonthlyBalances({
-        identity: regularUser,
         availableMonths: ['2026-10', '2026-11'],
         closedSnapshots: { '2026-10': result.snapshot },
-        concepts: seed.concepts,
-        entries: [...seed.entries, ...result.nextMonthEntries],
-        entriesByMonth: withPlannedOpenMonths([...seed.entries, ...result.nextMonthEntries], [], {}, [])
+        concepts: sample.concepts,
+        entries: [...sample.entries, ...result.nextMonthEntries],
+        entriesByMonth: withPlannedOpenMonths([...sample.entries, ...result.nextMonthEntries], [], {}, [])
           .entriesByMonth,
         currentDebts: result.nextMonthDebts,
         rawBuckets: result.nextMonthSavingsBuckets.map((b) => ({ ...b, monthKey: '2026-11' })),
-        debtPayments: seed.debtPayments,
+        debtPayments: sample.debtPayments,
       });
       expect(chain.debtsByMonth['2026-10']?.map((d) => d.openingBalance)).toEqual(
-        seed.debts.map((d) => d.openingBalance)
+        sample.debts.map((d) => d.openingBalance)
       );
       expect(chain.debtsByMonth['2026-11']?.map((d) => d.openingBalance)).toEqual(
         result.nextMonthDebts.map((d) => d.openingBalance)
+      );
+      expect(chain.savingsBucketsByMonth['2026-10']?.find((b) => b.id === 'reserve')?.openingBalance).toBe(
+        sample.savingsBuckets.find((b) => b.id === 'reserve')?.openingBalance
       );
     });
   });

@@ -1,4 +1,4 @@
-import octoberFixture from '../../../../fixtures/october-2026.json';
+import { buildSampleWorkspace } from '../../../data/sample/sampleWorkspace';
 import {
   calculateMonthlyBudgetSummary,
   calculateMonthlySavingsSummary,
@@ -9,9 +9,12 @@ import {
   SavingsBucket,
 } from '../../index';
 
-const concepts = octoberFixture.concepts as unknown as Concept[];
-const octoberEntries = octoberFixture.monthEntries as unknown as MonthEntry[];
-const savingsBuckets = octoberFixture.savingsBuckets as unknown as SavingsBucket[];
+/** The example budget of the showcase mode, in the month the tests pin. */
+const sample = buildSampleWorkspace();
+
+const concepts = sample.concepts as unknown as Concept[];
+const octoberEntries = sample.entries as unknown as MonthEntry[];
+const savingsBuckets = sample.savingsBuckets as unknown as SavingsBucket[];
 
 describe('domain/savings & domain/moto-ideal — Savings Buckets and Moto Ideal Calculators', () => {
   it('gracefully handles accounts with no default moto or savings buckets (e.g. new users or deleted funds)', () => {
@@ -36,7 +39,7 @@ describe('domain/savings & domain/moto-ideal — Savings Buckets and Moto Ideal 
   });
 
   it('computes Moto Ideal monthly gap (-172.667) and strict ceil total (872.668) vs Excel total (872.667)', () => {
-    const plan = octoberFixture.idealMotoPlan as unknown as ProvisionPlan;
+    const plan = sample.provisionPlan as unknown as ProvisionPlan;
     const summary = calculateProvisionPlanSummary(plan, octoberEntries, 700_000, '2026-10');
 
     expect(summary.recurringMonthlyTotalCop).toBe(872_667);
@@ -135,7 +138,6 @@ describe('domain/savings & domain/moto-ideal — Savings Buckets and Moto Ideal 
           cycleCostCop: 1_000_000,
           periodMonths: 6,
           targetAmountCop: 1_000_000,
-          includedInExcelTotalB43: false,
           kind: 'target_goal',
         },
       ],

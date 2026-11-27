@@ -7,6 +7,11 @@
  */
 
 import { z } from 'zod';
+import {
+  migrateRawConcept,
+  migrateRawMonthSnapshot,
+  migrateRawSavingsBucket,
+} from '../migrations/legacyFieldMigration';
 import type {
   ChecklistProgress,
   Concept,
@@ -77,7 +82,6 @@ export const conceptSchema: z.ZodType<Concept, unknown> = z.object({
   defaultTargetDebtId: z.string().min(1).optional(),
   savingsContribution: savingsContributionRuleSchema.optional(),
   provisionCategoryKey: z.string().min(1).optional(),
-  idealMotoCategoryKey: z.string().min(1).optional(),
   archived: z.boolean(),
   order: z.number().int(),
 });
@@ -162,7 +166,6 @@ export const savingsBucketSchema: z.ZodType<SavingsBucket> = z.object({
 
 export const provisionItemSpecSchema: z.ZodType<ProvisionItemSpec> = z.object({
   id: z.string().min(1),
-  excelRawName: z.string().min(1).optional(),
   displayName: z.string().min(1),
   monthlyAmountCop: nonNegativeIntSchema,
   monthlyAmount: nonNegativeIntSchema.optional(),
@@ -176,7 +179,6 @@ export const provisionItemSpecSchema: z.ZodType<ProvisionItemSpec> = z.object({
   targetAmount: nonNegativeIntSchema.optional(),
   targetMonthKey: monthKeyStringSchema.optional(),
   targetDateIso: z.string().min(1).optional(),
-  includedInExcelTotalB43: z.boolean().optional(),
   kind: z.enum(['recurring_provision', 'target_goal']),
   notes: z.string().optional(),
 });
@@ -248,8 +250,7 @@ export const monthSnapshotSchema: z.ZodType<MonthSnapshot> = z.object({
   ),
   totalClosingDebt: nonNegativeIntSchema,
   closingSavings: z.object({
-    reserveClosingBalance: signedIntSchema.optional(),
-    motoClosingBalance: signedIntSchema,
+    reserveClosingBalance: signedIntSchema,
     savingsClosingBalance: signedIntSchema,
     totalClosingSavings: signedIntSchema,
     buckets: z
@@ -279,12 +280,12 @@ export function stripUndefinedFields(obj: Record<string, unknown>): Record<strin
 }
 
 export function serializeConceptForFirestore(concept: Concept): Record<string, unknown> {
-  const validated = conceptSchema.parse(concept);
+  const validated = conceptSchema.parse(migrateRawConcept(concept));
   return stripUndefinedFields({ ...validated }) as Record<string, unknown>;
 }
 
 export function parseConceptFromFirestore(raw: unknown): Concept {
-  return conceptSchema.parse(raw);
+  return conceptSchema.parse(migrateRawConcept(raw));
 }
 
 export function serializeMonthEntryForFirestore(entry: MonthEntry): Record<string, unknown> {
@@ -326,12 +327,12 @@ export function parseDebtPaymentFromFirestore(raw: unknown): DebtPayment {
 }
 
 export function serializeSavingsBucketForFirestore(bucket: SavingsBucket): Record<string, unknown> {
-  const validated = savingsBucketSchema.parse(bucket);
+  const validated = savingsBucketSchema.parse(migrateRawSavingsBucket(bucket));
   return stripUndefinedFields({ ...validated }) as Record<string, unknown>;
 }
 
 export function parseSavingsBucketFromFirestore(raw: unknown): SavingsBucket {
-  return savingsBucketSchema.parse(raw);
+  return savingsBucketSchema.parse(migrateRawSavingsBucket(raw));
 }
 
 export function serializeProvisionPlanForFirestore(plan: ProvisionPlan): Record<string, unknown> {
@@ -345,10 +346,10 @@ export function parseProvisionPlanFromFirestore(raw: unknown): ProvisionPlan {
 
 
 export function serializeMonthSnapshotForFirestore(snapshot: MonthSnapshot): Record<string, unknown> {
-  const validated = monthSnapshotSchema.parse(snapshot);
+  const validated = monthSnapshotSchema.parse(migrateRawMonthSnapshot(snapshot));
   return stripUndefinedFields({ ...validated }) as Record<string, unknown>;
 }
 
 export function parseMonthSnapshotFromFirestore(raw: unknown): MonthSnapshot {
-  return monthSnapshotSchema.parse(raw);
+  return monthSnapshotSchema.parse(migrateRawMonthSnapshot(raw));
 }

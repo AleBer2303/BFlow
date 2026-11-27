@@ -14,7 +14,6 @@ export {
   EMPTY_PROVISION_PLAN,
   ensureStandardSavingsBuckets,
   generateDataRevision,
-  isOwnerCanonicalEmail,
 } from './budgetRepositoryShared';
 export { FirestoreBudgetRepository } from './firestoreBudgetRepository';
 export { InMemoryBudgetRepository } from './inMemoryBudgetRepository';

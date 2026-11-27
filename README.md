@@ -238,11 +238,12 @@ BFlow/
 ├── scripts/                      # Scripts de utilidad (linting, guardias CI, start-demo.mjs del modo vitrina)
 ├── src/
 │   ├── app/                      # Expo Router (punto de entrada _layout.tsx, index.tsx)
-│   ├── data/                     # Repositorios Firestore, esquemas Zod, seeds
+│   ├── data/                     # Repositorios Firestore, esquemas Zod, datos de ejemplo
 │   │   ├── firebase/             # Configuración Firebase SDK, persistencia Auth por plataforma y emulador
 │   │   ├── mappers/              # Esquemas de validación Zod
 │   │   ├── repositories/         # budgetRepository.ts (fachada), firestoreBudgetRepository.ts, accountHydration.ts (pasos de la carga completa), legacySeedHealing.ts (ADR 0036) y historyWindow.ts (historial archivado, ADR 0028)
-│   │   └── seed/                 # Carga de datos iniciales de octubre 2026
+│   │   ├── migrations/           # legacyFieldMigration.ts: nombres guardados por versiones anteriores (ADR 0037)
+│   │   └── sample/               # Presupuesto de ejemplo del modo vitrina y los tests
 │   ├── design-system/            # Tokens por piel (iOS / Android / Web), tema, componentes base y movimiento (motion/)
 │   │   ├── components/           # AppPressable, AppText, CurrencyText, ResponsiveColumns…
 │   │   │   ├── charts/           # Gráficos animados SVG: barras, línea y dona (ADR 0020)
@@ -325,7 +326,6 @@ BFlow/
    | :--- | :--- | :--- |
    | `EXPO_PUBLIC_FIREBASE_API_KEY`, `EXPO_PUBLIC_FIREBASE_PROJECT_ID`, `EXPO_PUBLIC_FIREBASE_APP_ID` | Sí | Sin ellas la app no se conecta a Firebase y lo indica al iniciar sesión |
    | `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN`, `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET`, `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | No | Resto de la configuración del cliente (`AUTH_DOMAIN` hace falta para entrar con Google en Web) |
-   | `EXPO_PUBLIC_OWNER_SEED_EMAIL` | No | Correo de la cuenta que recibe la semilla de octubre de 2026; vacío, todas las cuentas arrancan sin datos |
    | `EXPO_PUBLIC_LOCAL_CIPHER_PEPPER` | No | Palabra secreta del cifrado local (ADR 0016) |
 
    Los tests y `npm run web:demo` no necesitan ninguna: usan un proyecto ficticio sin conexión. Los workflows de build leen las mismas variables de GitHub (Settings → Secrets and variables → Actions → Variables) y fallan si faltan las obligatorias.

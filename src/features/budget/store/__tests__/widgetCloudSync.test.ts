@@ -25,8 +25,8 @@ describe('Snapshot del widget en la nube', () => {
 
   beforeEach(async () => {
     mockScheduleCloudWidgetSnapshotWrite.mockReset();
-    useBudgetStore.getState().resetToOctober2026GoldenState();
-    useBudgetStore.getState().setAuthUser(cloudUser);
+    useBudgetStore.getState().resetToSampleWorkspace();
+    useBudgetStore.setState({ authUser: cloudUser });
     // El refresco del widget se agrupa al final del tick: se deja correr el de la preparación.
     await Promise.resolve();
     mockScheduleCloudWidgetSnapshotWrite.mockReset();

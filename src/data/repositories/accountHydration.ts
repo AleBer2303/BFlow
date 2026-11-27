@@ -3,11 +3,12 @@
  *
  * Pure steps of `FirestoreBudgetRepository.loadFullCloudAccount`: what the repository read from
  * `users/{uid}/...` goes in, the account the store hydrates comes out. Firestore calls stay in the
- * repository; the owner seed account's old fixes stay in `legacySeedHealing.ts`.
+ * repository. Old stored names are translated by the mappers (`legacyFieldMigration.ts`); the
+ * documents that still hold them are reported here so the repository writes them again.
  *
  * In load order:
  * 1. `dataRevision` negotiation (R-13): reuse the cache when the cloud did not change.
- * 2. Who the account belongs to (`resolveAccountIdentity`).
+ * 2. Whether the user reset the account (`resolveAccountIdentity`).
  * 3. History window (ADR 0028): `mergeArchivedHistoryEntries`.
  * 4. Savings buckets, provision plan and `needsOnboarding`.
  * 5. Available months and the active one.
@@ -38,22 +39,19 @@ import {
   parseProvisionPlanFromFirestore,
   parseSavingsBucketFromFirestore,
 } from '../mappers/firestoreSchemas';
-import { buildOctober2026SeedPayload } from '../seed/october2026SeedData';
 import {
+  LEGACY_USER_FIELDS,
+  RESERVE_BUCKET_ID,
+  isLegacyBucketDocId,
+} from '../migrations/legacyFieldMigration';
+import {
+  DEFAULT_DEBT_GROUP_KEY,
   EMPTY_PROVISION_PLAN,
   ensureStandardSavingsBuckets,
-  isOwnerCanonicalEmail,
   reconstructClosedMonthBalances,
 } from './budgetRepositoryShared';
 import type { FullCloudAccountData, LoadCloudAccountOptions } from './budgetRepositoryTypes';
 import { resolveArchivedEntries, type ArchivedHistoryPlan } from './historyWindow';
-import {
-  OWNER_SEED_MONTH_KEY,
-  healCorruptedOwnerSavingsBucket,
-  isLegacySeedResetOpening,
-  restoreOwnerSeedFirstMonthBucket,
-  restoreOwnerSeedFirstMonthDebt,
-} from './legacySeedHealing';
 
 /** Fields of `users/{uid}`, or undefined when the document does not exist. */
 export type UserDocumentData = Record<string, unknown> | undefined;
@@ -103,60 +101,19 @@ export function reuseCachedAccountIfRevisionMatches(
 // ---------------------------------------------------------------------------
 
 export interface AccountIdentity {
-  resolvedEmail: string | null;
-  /** The account of `EXPO_PUBLIC_OWNER_SEED_EMAIL`. */
-  isOwner: boolean;
   /** The user reset the account from Cuenta; it starts from the wizard again. */
   isResetByUser: boolean;
-  /** Owner account not reset by the user: the only one that holds the October 2026 seed. */
-  isOwnerSeedAccount: boolean;
 }
 
-export function resolveAccountIdentity(
-  userData: UserDocumentData,
-  userEmail?: string | null
-): AccountIdentity {
-  const resolvedEmail =
-    userEmail ?? (typeof userData?.email === 'string' ? userData.email : null);
-  const isOwner = isOwnerCanonicalEmail(resolvedEmail);
-  const isResetByUser = userData?.accountResetByUser === true;
-  return {
-    resolvedEmail,
-    isOwner,
-    isResetByUser,
-    isOwnerSeedAccount: isOwner && !isResetByUser,
-  };
+export function resolveAccountIdentity(userData: UserDocumentData): AccountIdentity {
+  return { isResetByUser: userData?.accountResetByUser === true };
 }
 
-/** Active month when nothing better is known: the stored one, else the seed or new-user month. */
-export function resolveFallbackActiveMonthKey(userData: UserDocumentData, isOwner: boolean): string {
-  if (typeof userData?.activeMonthKey === 'string') return userData.activeMonthKey;
-  return isOwner ? OWNER_SEED_MONTH_KEY : newUserStartMonthKey();
-}
-
-/** R-11 & R-12: only the owner account that was never seeded nor onboarded gets the seed. */
-export function shouldSeedOwnerAccount(
-  identity: AccountIdentity,
-  userData: UserDocumentData
-): boolean {
-  return (
-    identity.isOwnerSeedAccount &&
-    userData?.seededOctober2026 !== true &&
-    userData?.onboardingCompleted !== true
-  );
-}
-
-/** `users/{uid}` as it reads after marking an owner account that already had concepts. */
-export function markOwnerAccountSeeded(
-  userData: UserDocumentData,
-  dataRevision: string
-): Record<string, unknown> {
-  return {
-    ...(userData ?? {}),
-    seededOctober2026: true,
-    onboardingCompleted: true,
-    dataRevision,
-  };
+/** Active month when nothing better is known: the stored one, else the new-user month. */
+export function resolveFallbackActiveMonthKey(userData: UserDocumentData): string {
+  return typeof userData?.activeMonthKey === 'string'
+    ? userData.activeMonthKey
+    : newUserStartMonthKey();
 }
 
 /** The stored active month, only when it is a valid `YYYY-MM`. */
@@ -233,20 +190,22 @@ export interface SavingsBucketDocumentLike<TRef> extends DocumentDataLike {
 
 export interface CollectedSavingsBuckets<TRef> {
   buckets: SavingsBucket[];
-  /** Documents whose id is not their `bucket.id`; the owner account deletes them. */
-  staleRefs: TRef[];
-  /** The owner's `savings` bucket after `healCorruptedOwnerSavingsBucket`, to write back. */
-  healedSavingsBucket: SavingsBucket | null;
+  /** Buckets read from an old document id (ADR 0037): write them under their id. */
+  migratedBuckets: SavingsBucket[];
+  /** Old documents to delete: the migrated ones and those whose current twin already exists. */
+  legacyRefs: TRef[];
 }
 
-/** One bucket per `bucket.id`, keeping only documents whose id matches it. */
+/**
+ * One bucket per `bucket.id`. Documents whose id is not their bucket's are skipped, except the
+ * old ids of `legacyFieldMigration.ts`: those buckets are kept (unless the current document
+ * exists too) and reported to be written again.
+ */
 export function collectSavingsBuckets<TRef>(
-  docs: ReadonlyArray<SavingsBucketDocumentLike<TRef>>,
-  identity: AccountIdentity
+  docs: ReadonlyArray<SavingsBucketDocumentLike<TRef>>
 ): CollectedSavingsBuckets<TRef> {
   const bucketMap = new Map<string, SavingsBucket>();
-  const staleRefs: TRef[] = [];
-  let healedSavingsBucket: SavingsBucket | null = null;
+  const legacyDocs: Array<{ bucket: SavingsBucket; ref: TRef }> = [];
 
   for (const bucketDoc of docs) {
     let parsed: SavingsBucket;
@@ -255,18 +214,25 @@ export function collectSavingsBuckets<TRef>(
     } catch {
       continue;
     }
-    if (bucketDoc.id !== parsed.id) {
-      staleRefs.push(bucketDoc.ref);
-      continue;
+    if (bucketDoc.id === parsed.id) {
+      bucketMap.set(parsed.id, parsed);
+    } else if (isLegacyBucketDocId(bucketDoc.id, parsed.id)) {
+      legacyDocs.push({ bucket: parsed, ref: bucketDoc.ref });
     }
-    const healed = healCorruptedOwnerSavingsBucket(parsed, identity.isOwnerSeedAccount);
-    if (healed) {
-      healedSavingsBucket = healed;
-    }
-    bucketMap.set(parsed.id, healed ?? parsed);
   }
 
-  return { buckets: Array.from(bucketMap.values()), staleRefs, healedSavingsBucket };
+  const migratedBuckets: SavingsBucket[] = [];
+  for (const { bucket } of legacyDocs) {
+    if (bucketMap.has(bucket.id)) continue;
+    bucketMap.set(bucket.id, bucket);
+    migratedBuckets.push(bucket);
+  }
+
+  return {
+    buckets: Array.from(bucketMap.values()),
+    migratedBuckets,
+    legacyRefs: legacyDocs.map(({ ref }) => ref),
+  };
 }
 
 interface AccountContents {
@@ -276,37 +242,28 @@ interface AccountContents {
 }
 
 /**
- * An empty account (other than the owner seed one) that only holds the 0-balance `moto` and
- * `savings` buckets of the old initialization shows no buckets: new users only see the funds
- * they create.
+ * An empty account that only holds the 0-balance `reserve` and `savings` buckets of the old
+ * initialization shows no buckets: new users only see the funds they create.
  */
 export function dropUnusedLegacyDefaultBuckets(
   buckets: SavingsBucket[],
-  identity: AccountIdentity,
   contents: AccountContents
 ): SavingsBucket[] {
-  if (identity.isOwnerSeedAccount) return buckets;
   const isEmptyAccount =
     contents.concepts.length === 0 && contents.entries.length === 0 && contents.debts.length === 0;
   const onlyEmptyDefaults = buckets.every(
-    (b) => (b.id === 'moto' || b.id === 'savings') && b.openingBalance === 0
+    (b) => (b.id === RESERVE_BUCKET_ID || b.id === 'savings') && b.openingBalance === 0
   );
   return isEmptyAccount && onlyEmptyDefaults ? [] : buckets;
 }
 
-/** The stored plan; without one (or if malformed), the seed plan for the owner, else empty. */
-export function resolveProvisionPlan(
-  planData: unknown,
-  identity: AccountIdentity
-): ProvisionPlan {
-  const fallback = identity.isOwnerSeedAccount
-    ? buildOctober2026SeedPayload().provisionPlan
-    : EMPTY_PROVISION_PLAN;
-  if (planData === undefined) return fallback;
+/** The stored plan; without one, or if it is malformed, an empty plan. */
+export function resolveProvisionPlan(planData: unknown): ProvisionPlan {
+  if (planData === undefined) return EMPTY_PROVISION_PLAN;
   try {
     return parseProvisionPlanFromFirestore(planData);
   } catch {
-    return fallback;
+    return EMPTY_PROVISION_PLAN;
   }
 }
 
@@ -318,8 +275,7 @@ export function hasConfiguredAccountData(
     contents.entries.length > 0 ||
     contents.debts.length > 0 ||
     contents.buckets.length > 0 ||
-    contents.userData?.onboardingCompleted === true ||
-    contents.userData?.seededOctober2026 === true
+    contents.userData?.onboardingCompleted === true
   );
 }
 
@@ -330,11 +286,11 @@ export function resolveNeedsOnboarding(input: {
 }): boolean {
   const { identity, isRegistration, hasConfiguredData } = input;
   if (identity.isResetByUser) return true;
-  if (isRegistration === true && !identity.isOwner) return true;
+  if (isRegistration === true) return true;
   // Signing in to an existing account never shows the wizard again, even if registration left
   // everything blank.
   if (isRegistration === false) return false;
-  return !hasConfiguredData && !identity.isOwner;
+  return !hasConfiguredData;
 }
 
 // ---------------------------------------------------------------------------
@@ -342,8 +298,6 @@ export function resolveNeedsOnboarding(input: {
 // ---------------------------------------------------------------------------
 
 export interface AvailableMonthsInput extends AccountContents {
-  identity: AccountIdentity;
-  userData: UserDocumentData;
   savedActiveMonthKey: string | undefined;
   buckets: readonly SavingsBucket[];
   closedSnapshots: Readonly<Record<string, MonthSnapshot>>;
@@ -359,52 +313,20 @@ export function resolveAvailableMonths(input: AvailableMonthsInput): {
   availableMonths: string[];
   activeMonthKey: string;
 } {
-  const { identity, userData, savedActiveMonthKey, concepts, entries, debts, buckets } = input;
-  const { closedSnapshots } = input;
-  const notOwnerSeedAccount = !identity.isOwnerSeedAccount;
+  const { savedActiveMonthKey, entries, debts, buckets, closedSnapshots } = input;
 
-  const hasSeedMonthData =
-    entries.some((e) => e.monthKey === OWNER_SEED_MONTH_KEY) ||
-    debts.some((d) => d.monthKey === OWNER_SEED_MONTH_KEY) ||
-    Boolean(closedSnapshots[OWNER_SEED_MONTH_KEY]);
-
-  const dataMonths = new Set<string>();
-  for (const e of entries) dataMonths.add(e.monthKey);
-  for (const d of debts) dataMonths.add(d.monthKey);
+  const months = new Set<string>();
+  for (const e of entries) months.add(e.monthKey);
+  for (const d of debts) months.add(d.monthKey);
   for (const mk of Object.keys(closedSnapshots)) {
-    dataMonths.add(mk);
-    dataMonths.add(addMonthsToMonthKey(mk, 1));
+    months.add(mk);
+    months.add(addMonthsToMonthKey(mk, 1));
   }
   for (const b of buckets) {
-    if (!b.monthKey) continue;
-    // Old buckets defaulted to '2026-10'; ignore that month on other accounts without data there.
-    if (b.monthKey === OWNER_SEED_MONTH_KEY && notOwnerSeedAccount && !hasSeedMonthData) continue;
-    dataMonths.add(b.monthKey);
+    if (b.monthKey) months.add(b.monthKey);
   }
-
-  const months = new Set<string>(dataMonths);
-  if (
-    identity.isOwnerSeedAccount &&
-    (userData?.seededOctober2026 === true || concepts.length > 0)
-  ) {
-    months.add(OWNER_SEED_MONTH_KEY);
-  }
-
-  if (savedActiveMonthKey) {
-    const isStaleDefaultSeedMonth =
-      savedActiveMonthKey === OWNER_SEED_MONTH_KEY &&
-      notOwnerSeedAccount &&
-      !hasSeedMonthData &&
-      (Array.from(dataMonths).some((m) => m !== OWNER_SEED_MONTH_KEY) ||
-        userData?.onboardingCompleted !== true);
-    if (!isStaleDefaultSeedMonth) {
-      months.add(savedActiveMonthKey);
-    }
-  }
-
-  if (months.size === 0) {
-    months.add(identity.isOwnerSeedAccount ? OWNER_SEED_MONTH_KEY : newUserStartMonthKey());
-  }
+  if (savedActiveMonthKey) months.add(savedActiveMonthKey);
+  if (months.size === 0) months.add(newUserStartMonthKey());
 
   const availableMonths = Array.from(months).sort();
   return {
@@ -422,12 +344,14 @@ export interface UserDocumentSyncPlan {
   existingDataRevision: string | undefined;
   /** Fields to write to `users/{uid}`, or null when it is up to date. */
   fieldsToWrite: Record<string, unknown> | null;
+  /** Old fields still in `users/{uid}` (ADR 0037), to delete in the same write. */
+  legacyFieldsToRemove: string[];
 }
 
 /**
  * Keeps `users/{uid}` in step with what was loaded: the active month, `onboardingCompleted` once
- * the wizard was served or an existing user signs in (so it never prompts again), and a revision
- * when there is none.
+ * the wizard was served or an existing user signs in (so it never prompts again), a revision
+ * when there is none, and the removal of the fields no build reads any more.
  */
 export function planUserDocumentSync(input: {
   identity: AccountIdentity;
@@ -446,10 +370,12 @@ export function planUserDocumentSync(input: {
     typeof userData?.dataRevision === 'string' && userData.dataRevision.length > 0
       ? userData.dataRevision
       : undefined;
+  const legacyFieldsToRemove = LEGACY_USER_FIELDS.filter((field) => userData?.[field] !== undefined);
   const needsWrite =
     input.savedActiveMonthKey !== input.activeMonthKey ||
     shouldMarkOnboardingDone ||
-    !existingDataRevision;
+    !existingDataRevision ||
+    legacyFieldsToRemove.length > 0;
 
   return {
     existingDataRevision,
@@ -461,6 +387,7 @@ export function planUserDocumentSync(input: {
             : {}),
         }
       : null,
+    legacyFieldsToRemove,
   };
 }
 
@@ -562,7 +489,6 @@ function synthesizeMissingDebtPayments(
 }
 
 export interface MonthlyBalanceChainInput {
-  identity: AccountIdentity;
   availableMonths: readonly string[];
   closedSnapshots: Readonly<Record<string, MonthSnapshot>>;
   concepts: readonly Concept[];
@@ -603,22 +529,16 @@ function buildFirstMonthBalances(
       savingsBuckets: ensureStandardSavingsBuckets(reconstructed.savingsBuckets),
     };
   }
-  const { isOwnerSeedAccount } = input.identity;
   return {
-    debts: input.currentDebts.map(
-      (d) =>
-        restoreOwnerSeedFirstMonthDebt(d, monthKey, isOwnerSeedAccount) ?? { ...d, monthKey }
-    ),
-    savingsBuckets: baseBuckets.map(
-      (b) => restoreOwnerSeedFirstMonthBucket(b, monthKey, isOwnerSeedAccount) ?? { ...b }
-    ),
+    debts: input.currentDebts.map((d) => ({ ...d, monthKey })),
+    savingsBuckets: baseBuckets.map((b) => ({ ...b })),
   };
 }
 
 /**
  * Each debt opens `monthKey` with what remained at the end of `prevMonthKey`, keeping the rate and
- * installment of the stored document. A direct edit of the debt in `monthKey` wins, unless it is
- * the old seed reset value. Debts created in `monthKey` or later join here.
+ * installment of the stored document. A direct edit of the debt in `monthKey` wins. Debts created
+ * in `monthKey` or later join here.
  */
 function rollDebtsIntoMonth(input: {
   monthKey: string;
@@ -641,9 +561,7 @@ function rollDebtsIntoMonth(input: {
     const meta = currentDebtById.get(item.debtId);
     const prevDebt = prevDebts.find((d) => d.id === item.debtId);
     const rolledOpening = Math.max(0, item.remainingBalance);
-    const honorsDirectEdit =
-      meta?.monthKey === monthKey &&
-      !isLegacySeedResetOpening(item.debtId, meta.openingBalance, rolledOpening);
+    const honorsDirectEdit = meta?.monthKey === monthKey;
 
     const monthlyRate =
       meta?.monthlyInterestRate ?? prevDebt?.monthlyInterestRate ?? item.monthlyInterestRate;
@@ -655,7 +573,7 @@ function rollDebtsIntoMonth(input: {
 
     return {
       id: item.debtId,
-      groupKey: meta?.groupKey ?? prevDebt?.groupKey ?? 'FUNFAMI',
+      groupKey: meta?.groupKey ?? prevDebt?.groupKey ?? DEFAULT_DEBT_GROUP_KEY,
       name: meta?.name ?? item.name,
       lender: meta?.lender ?? prevDebt?.lender ?? item.lender,
       openingBalance: honorsDirectEdit && meta ? meta.openingBalance : rolledOpening,
@@ -719,7 +637,7 @@ function rollSavingsIntoMonth(input: {
       return { ...directBucket };
     }
     const closingBalance =
-      b.id === 'moto'
+      b.id === RESERVE_BUCKET_ID
         ? prevSavings.reserve.currentBalance
         : b.id === 'savings'
           ? prevSavings.savings.currentBalance

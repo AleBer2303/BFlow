@@ -1,4 +1,4 @@
-import seedFixture from '../../../../fixtures/seed-october-2026.json';
+import { buildSampleWorkspace } from '../../../data/sample/sampleWorkspace';
 import { calculateMonthlyBudgetSummary } from '../../budget/budgetCalculator';
 import { calculateDebtsSummary } from '../../debts/debtCalculator';
 import type {
@@ -11,11 +11,14 @@ import type {
 import { calculateMonthlySavingsSummary } from '../../savings/savingsCalculator';
 import { buildMonthlyCurve, MONTHLY_CURVE_METRIC_IDS } from '../monthlyCurve';
 
-const SEED_CONCEPTS = seedFixture.concepts as unknown as Concept[];
-const SEED_ENTRIES = seedFixture.entries as unknown as MonthEntry[];
-const SEED_PAYMENTS = seedFixture.debtPayments as unknown as DebtPayment[];
-const SEED_DEBTS = seedFixture.debts as unknown as Debt[];
-const SEED_BUCKETS = seedFixture.savingsBuckets as unknown as SavingsBucket[];
+/** The example budget of the showcase mode, in the month the tests pin. */
+const sample = buildSampleWorkspace();
+
+const SEED_CONCEPTS = sample.concepts as unknown as Concept[];
+const SEED_ENTRIES = sample.entries as unknown as MonthEntry[];
+const SEED_PAYMENTS = sample.debtPayments as unknown as DebtPayment[];
+const SEED_DEBTS = sample.debts as unknown as Debt[];
+const SEED_BUCKETS = sample.savingsBuckets as unknown as SavingsBucket[];
 
 interface Scenario {
   monthKey?: string;
@@ -128,7 +131,7 @@ describe('buildMonthlyCurve', () => {
 
   it('projects a pending installment without moving the debt before it is paid', () => {
     const entries = SEED_ENTRIES.map((candidate) =>
-      candidate.conceptId === 'exp_cuota_funfami'
+      candidate.conceptId === 'exp_loan_installment'
         ? { ...candidate, status: 'pending' as const, completedAt: undefined }
         : candidate
     );
@@ -140,7 +143,7 @@ describe('buildMonthlyCurve', () => {
 
   it('never projects a debt below zero', () => {
     const entries = SEED_ENTRIES.map((candidate) =>
-      candidate.conceptId === 'exp_cuota_funfami'
+      candidate.conceptId === 'exp_loan_installment'
         ? { ...candidate, status: 'pending' as const, completedAt: undefined }
         : candidate
     );

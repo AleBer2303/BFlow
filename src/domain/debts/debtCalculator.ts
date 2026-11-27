@@ -204,13 +204,20 @@ export function calculateDebtsSummary(
     monthEntries.filter((e) => e.status === 'completed').map((e) => e.id)
   );
 
-  const installmentEntry = monthEntries.find(
-    (e) =>
-      e.type === 'expense' &&
-      (e.conceptId.includes('cuota') ||
-        e.conceptId.includes('prestamo') ||
-        e.conceptId.includes('deuda'))
+  // The installment is the expense the month's payments come from; without payments, an expense
+  // whose id names an installment (ids come from the concept name, see toSlugId).
+  const paidEntryIds = new Set(
+    (explicitPayments ?? []).filter((p) => p.monthKey === currentMonthKey).map((p) => p.entryId)
   );
+  const installmentEntry =
+    monthEntries.find((e) => e.type === 'expense' && paidEntryIds.has(e.id)) ??
+    monthEntries.find(
+      (e) =>
+        e.type === 'expense' &&
+        (e.conceptId.includes('cuota') ||
+          e.conceptId.includes('prestamo') ||
+          e.conceptId.includes('deuda'))
+    );
 
   const activePayments: readonly DebtPayment[] = explicitPayments
     ? explicitPayments.filter(

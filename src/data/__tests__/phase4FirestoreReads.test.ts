@@ -18,7 +18,7 @@ import {
   serializeSavingsBucketForFirestore,
 } from '../mappers/firestoreSchemas';
 import { FirestoreBudgetRepository } from '../repositories/budgetRepository';
-import { buildOctober2026SeedPayload } from '../seed/october2026SeedData';
+import { buildSampleWorkspace } from '../sample/sampleWorkspace';
 import {
   __resetProfileSyncInFlightForTests,
   loadPersistedSession,
@@ -54,6 +54,7 @@ jest.mock('firebase/firestore', () => ({
   setDoc: jest.fn(async () => undefined),
   deleteDoc: jest.fn(async () => undefined),
   writeBatch: jest.fn(),
+  deleteField: jest.fn(() => ({ __op: 'deleteField' })),
 }));
 
 jest.mock('firebase/auth', () => ({
@@ -179,14 +180,13 @@ function createMockFirestoreEnvironment(): MockFirestoreState {
   return state;
 }
 
-function populateSeededOwnerFirestore(state: MockFirestoreState, uid: string, nowIso: string): void {
-  const seed = buildOctober2026SeedPayload();
+function populateConfiguredAccountFirestore(state: MockFirestoreState, uid: string, nowIso: string): void {
+  const sample = buildSampleWorkspace();
 
   state.docsByPath.set(`users/${uid}`, {
     uid,
-    email: 'demo.owner@bflow.example',
-    displayName: 'Alejandro Bernal',
-    seededOctober2026: true,
+    email: 'demo@bflow.example',
+    displayName: 'Usuario de ejemplo',
     onboardingCompleted: true,
     activeMonthKey: '2026-10',
     lastLoginAt: nowIso,
@@ -194,27 +194,27 @@ function populateSeededOwnerFirestore(state: MockFirestoreState, uid: string, no
 
   state.collectionDocsByPath.set(
     `users/${uid}/concepts`,
-    seed.concepts.map((c) => ({ id: c.id, data: serializeConceptForFirestore(c) }))
+    sample.concepts.map((c) => ({ id: c.id, data: serializeConceptForFirestore(c) }))
   );
   state.collectionDocsByPath.set(
     `users/${uid}/entries`,
-    seed.entries.map((e) => ({ id: e.id, data: serializeMonthEntryForFirestore(e) }))
+    sample.entries.map((e) => ({ id: e.id, data: serializeMonthEntryForFirestore(e) }))
   );
   state.collectionDocsByPath.set(
     `users/${uid}/debts`,
-    seed.debts.map((d) => ({ id: d.id, data: serializeDebtForFirestore(d) }))
+    sample.debts.map((d) => ({ id: d.id, data: serializeDebtForFirestore(d) }))
   );
   state.collectionDocsByPath.set(
     `users/${uid}/debtPayments`,
-    seed.debtPayments.map((dp) => ({ id: dp.id, data: serializeDebtPaymentForFirestore(dp) }))
+    sample.debtPayments.map((dp) => ({ id: dp.id, data: serializeDebtPaymentForFirestore(dp) }))
   );
   state.collectionDocsByPath.set(
     `users/${uid}/savingsBuckets`,
-    seed.savingsBuckets.map((sb) => ({ id: sb.id, data: serializeSavingsBucketForFirestore(sb) }))
+    sample.savingsBuckets.map((sb) => ({ id: sb.id, data: serializeSavingsBucketForFirestore(sb) }))
   );
-  state.docsByPath.set(`users/${uid}/provisionPlans/moto_ideal`, {
-    id: 'moto_ideal',
-    ...serializeProvisionPlanForFirestore(seed.provisionPlan),
+  state.docsByPath.set(`users/${uid}/provisionPlans/default`, {
+    id: 'default',
+    ...serializeProvisionPlanForFirestore(sample.provisionPlan),
   });
   state.collectionDocsByPath.set(`users/${uid}/monthSnapshots`, []);
 }
@@ -229,17 +229,17 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
     (getFirebaseAuth as jest.Mock).mockReturnValue({});
   });
 
-  it('Scenario 1 (Cold Boot / Arranque): reads users/{uid} only ONCE, performs 0 pre-flight seed round-trips, and skips lastLoginAt write when < 24h', async () => {
+  it('Scenario 1 (Cold Boot / Arranque): reads users/{uid} only ONCE and skips lastLoginAt write when < 24h', async () => {
     const nowIso = new Date().toISOString();
-    const uid = 'uid_owner_boot';
+    const uid = 'uid_account_boot';
     const state = createMockFirestoreEnvironment();
-    populateSeededOwnerFirestore(state, uid, nowIso);
+    populateConfiguredAccountFirestore(state, uid, nowIso);
 
     // Persisted session from < 24h ago
     const persistedUser: BFlowAuthUser = {
       uid,
-      email: 'demo.owner@bflow.example',
-      displayName: 'Alejandro Bernal',
+      email: 'demo@bflow.example',
+      displayName: 'Usuario de ejemplo',
       authProvider: 'password',
       lastLoginAt: nowIso,
       activeMonthKey: '2026-10',
@@ -259,18 +259,18 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
     subscribeToAuthUser(() => {});
     authCallback!({
       uid,
-      email: 'demo.owner@bflow.example',
-      displayName: 'Alejandro Bernal',
+      email: 'demo@bflow.example',
+      displayName: 'Usuario de ejemplo',
       providerData: [{ providerId: 'password' }],
     });
 
-    const fullAccount = await repo.loadFullCloudAccount(uid, 'demo.owner@bflow.example');
+    const fullAccount = await repo.loadFullCloudAccount(uid, 'demo@bflow.example');
     expect(fullAccount.activeMonthKey).toBe('2026-10');
     expect(fullAccount.concepts).toHaveLength(14);
     expect(fullAccount.entries).toHaveLength(12);
 
     // Exact getDoc & getDocs count verification:
-    // - getDoc: users/{uid} (1) + provisionPlans/moto_ideal (1) = 2 getDoc calls total (previously 4)
+    // - getDoc: users/{uid} (1) + provisionPlans/default (1) = 2 getDoc calls total (previously 4)
     // - getDocs: concepts, entries, debts, debtPayments, savingsBuckets, monthSnapshots,
     //   financialAccounts (ADR 0034) = 7 getDocs calls
     const userDocReads = state.getDocCalls.filter((p) => p === `users/${uid}`);
@@ -281,17 +281,17 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
     // Zero redundant writes to users/{uid} on boot when lastLoginAt < 24h and activeMonthKey matches
     expect(state.setDocCalls).toHaveLength(0);
 
-    // Total documents read for 1-month seeded account:
+    // Total documents read for a configured 1-month account:
     // 1 (user) + 14 (concepts) + 12 (entries) + 2 (debts) + 1 (debtPayments) + 2 (savingsBuckets) + 1 (plan)
     // + 1 (empty monthSnapshots query min) + 1 (empty financialAccounts query min, ADR 0034) = 35 docs
     expect(state.docsReadCount).toBe(35);
   });
 
   it('Scenario 2 (Login): deduplicates concurrent syncUserProfileDocument between signInWithEmail and onAuthStateChanged, reading users/{uid} only once in auth and writing lastLoginAt at most once per 24h', async () => {
-    const uid = 'uid_owner_login';
+    const uid = 'uid_account_login';
     const staleLoginIso = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(); // 48h ago
     const state = createMockFirestoreEnvironment();
-    populateSeededOwnerFirestore(state, uid, staleLoginIso);
+    populateConfiguredAccountFirestore(state, uid, staleLoginIso);
 
     let authCallback: ((u: unknown) => void) | null = null;
     (onAuthStateChanged as jest.Mock).mockImplementation((_auth, cb) => {
@@ -301,8 +301,8 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
 
     const firebaseUser = {
       uid,
-      email: 'demo.owner@bflow.example',
-      displayName: 'Alejandro Bernal',
+      email: 'demo@bflow.example',
+      displayName: 'Usuario de ejemplo',
       providerData: [{ providerId: 'password' }],
     };
 
@@ -314,7 +314,7 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
 
     subscribeToAuthUser(() => {});
 
-    const signedInUser = await signInWithEmail('demo.owner@bflow.example', 'secret123');
+    const signedInUser = await signInWithEmail('demo@bflow.example', 'secret123');
     expect(signedInUser.uid).toBe(uid);
 
     const repo = new FirestoreBudgetRepository({} as unknown as Firestore);
@@ -324,7 +324,7 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
     // and loadFullCloudAccount read users/{uid} ONCE -> 2 reads total instead of 4
     const userDocReads = state.getDocCalls.filter((p) => p === `users/${uid}`);
     expect(userDocReads).toHaveLength(2);
-    expect(state.getDocCalls).toHaveLength(3); // 2 users/{uid} + 1 provisionPlans/moto_ideal
+    expect(state.getDocCalls).toHaveLength(3); // 2 users/{uid} + 1 provisionPlans/default
     expect(state.getDocsCalls).toHaveLength(7);
 
     // Only 1 setDoc write for lastLoginAt (since previous was 48h ago), NOT 2 duplicate writes
@@ -333,12 +333,12 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
 
     // If user signs in again within 24 hours, 0 new lastLoginAt writes occur
     state.setDocCalls.length = 0;
-    await signInWithEmail('demo.owner@bflow.example', 'secret123');
+    await signInWithEmail('demo@bflow.example', 'secret123');
     expect(state.setDocCalls.filter((w) => w.path === `users/${uid}`)).toHaveLength(0);
     expect(loadPersistedSession()?.uid).toBe(uid);
   });
 
-  it('Scenario 3 (New User / Usuario Nuevo): performs 1 parallel wave without extra seed queries for non-owner and flags needsOnboarding', async () => {
+  it('Scenario 3 (New User / Usuario Nuevo): performs 1 parallel wave and flags needsOnboarding', async () => {
     const uid = 'uid_brand_new_user';
     const state = createMockFirestoreEnvironment();
 
@@ -351,9 +351,10 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
     expect(result.concepts).toHaveLength(0);
     expect(result.entries).toHaveLength(0);
 
-    // Only 1 read of users/{uid} and 1 read of provisionPlans/moto_ideal
+    // 1 read of users/{uid}; with no plan yet, its id and the pre-ADR 0037 one
     expect(state.getDocCalls).toEqual([
       `users/${uid}`,
+      `users/${uid}/provisionPlans/default`,
       `users/${uid}/provisionPlans/moto_ideal`,
     ]);
     expect(state.getDocsCalls).toHaveLength(7);
@@ -363,11 +364,11 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
   });
 
   it('R-14: deleteOrResetEntry performs 0 getDoc calls when entry and concept are passed from the store', async () => {
-    const uid = 'uid_owner_reset';
+    const uid = 'uid_account_reset';
     const state = createMockFirestoreEnvironment();
-    const seed = buildOctober2026SeedPayload();
-    const sampleEntry = seed.entries.find((e) => e.id === '2026-10_exp_cuota_funfami')!;
-    const sampleConcept = seed.concepts.find((c) => c.id === sampleEntry.conceptId)!;
+    const sample = buildSampleWorkspace();
+    const sampleEntry = sample.entries.find((e) => e.id === '2026-10_exp_loan_installment')!;
+    const sampleConcept = sample.concepts.find((c) => c.id === sampleEntry.conceptId)!;
 
     const repo = new FirestoreBudgetRepository({} as unknown as Firestore);
     await repo.deleteOrResetEntry(uid, sampleEntry.id, {
@@ -427,11 +428,11 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
         'loadFullCloudAccount',
         'readArchivedHistoryProbe', // read only: two getDocs and one count (ADR 0028)
         'readCloudAccountDocuments', // read only: the parallel reads of loadFullCloudAccount
+        'readProvisionPlanDocument', // read only: the plan, or its pre-ADR 0037 id
         'closeMonth', // delegates to persistMonthCloseResult -> commitUserDataMutationBatch
       ]);
 
       const expectedWriteMethods = [
-        'seedOctober2026IfEmpty',
         'toggleEntryCompletion',
         'addMonthEntry',
         'deleteOrResetEntry',
@@ -464,10 +465,14 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
           !name.startsWith('commitUserDataMutationBatch')
       );
 
+      // Fire-and-forget writes of a load: they go through commitUserDataMutationBatchInBackground.
+      const backgroundWriteMethods = ['rewriteLegacyDocumentsInBackground'];
+
       for (const methodName of protoMethods) {
         const isKnownRead = readOrPureMethods.has(methodName);
-        const isKnownWrite = expectedWriteMethods.includes(methodName);
-        expect(isKnownRead || isKnownWrite).toBe(true);
+        const isKnownWrite =
+          expectedWriteMethods.includes(methodName) || backgroundWriteMethods.includes(methodName);
+        expect({ methodName, known: isKnownRead || isKnownWrite }).toEqual({ methodName, known: true });
       }
 
       // 3. Extract the FirestoreBudgetRepository class body and verify every write method calls commitUserDataMutationBatch
@@ -485,20 +490,26 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
         expect(block).toBeDefined();
         expect(block).toContain('this.commitUserDataMutationBatch(');
       }
+      for (const methodName of backgroundWriteMethods) {
+        const start = classBody.indexOf(`private ${methodName}(`);
+        expect(start).toBeGreaterThan(0);
+        const body = classBody.slice(start, classBody.indexOf('\n  }\n', start));
+        expect(body).toContain('this.commitUserDataMutationBatchInBackground(');
+      }
     });
 
     it('updates users/{uid}.dataRevision and local cache envelope dataRevision on every write operation', async () => {
       const uid = 'uid_revision_writer';
       const nowIso = new Date().toISOString();
       const state = createMockFirestoreEnvironment();
-      populateSeededOwnerFirestore(state, uid, nowIso);
+      populateConfiguredAccountFirestore(state, uid, nowIso);
 
       const repo = new FirestoreBudgetRepository({} as unknown as Firestore);
-      const initialAccount = await repo.loadFullCloudAccount(uid, 'demo.owner@bflow.example');
+      const initialAccount = await repo.loadFullCloudAccount(uid, 'demo@bflow.example');
       savePersistedAccount(uid, initialAccount, nowIso, 'rev_initial_0');
 
-      const seed = buildOctober2026SeedPayload();
-      const sampleConcept = seed.concepts[0]!;
+      const sample = buildSampleWorkspace();
+      const sampleConcept = sample.concepts[0]!;
       await repo.saveConcept(uid, { ...sampleConcept, name: 'Salario Actualizado' });
 
       const userDoc = state.docsByPath.get(`users/${uid}`);
@@ -522,7 +533,7 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
       const uid = 'uid_cached_boot';
       const nowIso = new Date().toISOString();
       const state = createMockFirestoreEnvironment();
-      populateSeededOwnerFirestore(state, uid, nowIso);
+      populateConfiguredAccountFirestore(state, uid, nowIso);
       state.docsByPath.set(`users/${uid}`, {
         ...state.docsByPath.get(`users/${uid}`),
         dataRevision: 'rev_match_12345',
@@ -530,7 +541,7 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
 
       const repo = new FirestoreBudgetRepository({} as unknown as Firestore);
       // Perform initial load to build cached payload
-      const cachedAccount = await repo.loadFullCloudAccount(uid, 'demo.owner@bflow.example');
+      const cachedAccount = await repo.loadFullCloudAccount(uid, 'demo@bflow.example');
       expect(cachedAccount.dataRevision).toBe('rev_match_12345');
 
       // Reset counters to measure warm-cache startup
@@ -538,7 +549,7 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
       state.getDocsCalls.length = 0;
       state.docsReadCount = 0;
 
-      const bootResult = await repo.loadFullCloudAccount(uid, 'demo.owner@bflow.example', {
+      const bootResult = await repo.loadFullCloudAccount(uid, 'demo@bflow.example', {
         cachedAccount,
         cachedDataRevision: 'rev_match_12345',
         cachedSavedAt: nowIso,
@@ -556,21 +567,21 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
       const uid = 'uid_full_sync_cases';
       const nowIso = new Date().toISOString();
       const state = createMockFirestoreEnvironment();
-      populateSeededOwnerFirestore(state, uid, nowIso);
+      populateConfiguredAccountFirestore(state, uid, nowIso);
       state.docsByPath.set(`users/${uid}`, {
         ...state.docsByPath.get(`users/${uid}`),
         dataRevision: 'rev_cloud_v2',
       });
 
       const repo = new FirestoreBudgetRepository({} as unknown as Firestore);
-      const cachedAccount = await repo.loadFullCloudAccount(uid, 'demo.owner@bflow.example');
+      const cachedAccount = await repo.loadFullCloudAccount(uid, 'demo@bflow.example');
 
       // Case A: Revision mismatch ('rev_local_v1' !== 'rev_cloud_v2') -> full load, but reuses the single users/{uid} read!
       state.getDocCalls.length = 0;
       state.getDocsCalls.length = 0;
       state.docsReadCount = 0;
 
-      await repo.loadFullCloudAccount(uid, 'demo.owner@bflow.example', {
+      await repo.loadFullCloudAccount(uid, 'demo@bflow.example', {
         cachedAccount,
         cachedDataRevision: 'rev_local_v1',
         cachedSavedAt: nowIso,
@@ -585,7 +596,7 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
       state.docsReadCount = 0;
       const staleSavedAt = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
 
-      await repo.loadFullCloudAccount(uid, 'demo.owner@bflow.example', {
+      await repo.loadFullCloudAccount(uid, 'demo@bflow.example', {
         cachedAccount,
         cachedDataRevision: 'rev_cloud_v2',
         cachedSavedAt: staleSavedAt,
@@ -598,7 +609,7 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
       state.getDocsCalls.length = 0;
       state.docsReadCount = 0;
 
-      await repo.loadFullCloudAccount(uid, 'demo.owner@bflow.example', {
+      await repo.loadFullCloudAccount(uid, 'demo@bflow.example', {
         forceFullSync: true,
         cachedAccount,
         cachedDataRevision: 'rev_cloud_v2',

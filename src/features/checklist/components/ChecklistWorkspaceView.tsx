@@ -292,7 +292,7 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
               <StatusBadge label={`→ ${linkedBucket.name}`} status="reserve" />
             ) : concept?.savingsContribution?.bucketId ? (
               <StatusBadge
-                label={`→ ${concept.savingsContribution.bucketId === 'moto' ? 'Fondo de Reserva' : concept.savingsContribution.bucketId}`}
+                label={`→ ${concept.savingsContribution.bucketId === 'reserve' ? 'Fondo de Reserva' : concept.savingsContribution.bucketId}`}
                 status="reserve"
               />
             ) : null}

@@ -20,13 +20,13 @@ const OCTOBER: MonthlyHistoryPoint = {
   pendingExpenses: 450_000,
   netCashFlow: 1_080_000,
   totalDebt: 6_200_000,
-  reserveName: 'Moto',
+  reserveName: 'Fondo de reserva',
   reserveBalance: 2_300_000,
   savingsName: 'Ahorros',
   savingsBalance: 2_080_000,
   otherSavingsBalance: 0,
   savingsBuckets: [
-    { id: 'moto', name: 'Moto', balance: 2_300_000 },
+    { id: 'reserve', name: 'Fondo de reserva', balance: 2_300_000 },
     { id: 'savings', name: 'Ahorros', balance: 2_080_000 },
   ],
   totalSavings: 4_380_000,
@@ -61,7 +61,7 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsTrendCharts on the %s skin', (skin) => 
     expect(screen.getByRole('header')).toHaveTextContent('Evolución de ahorros');
     const balances = screen.getByTestId('savings-trend-chart-readout');
     expect(balances).toHaveTextContent(/Octubre 2026/);
-    expect(balances).toHaveTextContent(/Moto\s*\$ 2\.300\.000/);
+    expect(balances).toHaveTextContent(/Fondo de reserva\s*\$ 2\.300\.000/);
     expect(balances).toHaveTextContent(/Ahorros\s*\$ 2\.080\.000/);
   });
 
@@ -93,7 +93,7 @@ describe('SavingsTrendCharts', () => {
       monthKey: '2026-11',
       otherSavingsBalance: 300_000,
       savingsBuckets: [
-        { id: 'moto', name: 'Moto', balance: 2_300_000 },
+        { id: 'reserve', name: 'Fondo de reserva', balance: 2_300_000 },
         { id: 'savings', name: 'Ahorros', balance: 2_080_000 },
         { id: 'trip', name: 'Viaje', balance: 300_000 },
       ],
@@ -119,7 +119,7 @@ describe('SavingsTrendCharts', () => {
         monthKey: '2026-11',
         reserveBalance: 2_500_000,
         savingsBuckets: [
-          { id: 'moto', name: 'Moto', balance: 2_500_000 },
+          { id: 'reserve', name: 'Fondo de reserva', balance: 2_500_000 },
           { id: 'savings', name: 'Ahorros', balance: 2_080_000 },
         ],
       },

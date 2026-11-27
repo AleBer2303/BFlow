@@ -63,7 +63,7 @@ export function closeMonthAndRollover(input: CloseMonthInput): CloseMonthResult 
     input.closingMonthKey
   );
 
-  const reserveBucket = input.savingsBuckets.find((b) => b.id === 'reserve' || b.id === 'moto');
+  const reserveBucket = input.savingsBuckets.find((b) => b.id === 'reserve');
   const closingSavingsBuckets = [
     ...(savingsSummary.hasReserveBucket
       ? [
@@ -128,7 +128,6 @@ export function closeMonthAndRollover(input: CloseMonthInput): CloseMonthResult 
     totalClosingDebt: debtSummary.totalRemainingDebt,
     closingSavings: {
       reserveClosingBalance: savingsSummary.reserve.currentBalance,
-      motoClosingBalance: savingsSummary.reserve.currentBalance,
       savingsClosingBalance: savingsSummary.savings.currentBalance,
       totalClosingSavings: savingsSummary.totalCurrentSavings,
       buckets: closingSavingsBuckets,

@@ -5,7 +5,7 @@
 
 import { FirestoreBudgetRepository } from '../../../../data/repositories/budgetRepository';
 import { calculateFinancialAccountsSummary } from '../../../../domain';
-import { DEMO_OWNER_USER, type BFlowAuthUser } from '../../../../platform/auth/authAdapter';
+import { DEMO_USER, type BFlowAuthUser } from '../../../../platform/auth/authAdapter';
 import {
   cancelPendingPersistedAccountSave,
   clearPersistedAccount,
@@ -20,7 +20,7 @@ import { useBudgetStore } from '../useBudgetStore';
 
 const CLOUD_USER: BFlowAuthUser = {
   uid: 'uid_cloud_test_accounts',
-  email: 'demo.owner@bflow.example',
+  email: 'demo@bflow.example',
   displayName: 'Demo',
   authProvider: 'password',
   provider: 'firebase',
@@ -71,8 +71,8 @@ describe('store/accounts — credit cards and debit accounts (ADR 0034)', () => 
 
   beforeEach(() => {
     clearCloudUserStorage();
-    useBudgetStore.setState({ authUser: DEMO_OWNER_USER, needsOnboarding: false });
-    useBudgetStore.getState().resetToOctober2026GoldenState();
+    useBudgetStore.setState({ authUser: DEMO_USER, needsOnboarding: false });
+    useBudgetStore.getState().resetToSampleWorkspace();
   });
 
   afterEach(() => {
@@ -337,7 +337,7 @@ describe('store/accounts — credit cards and debit accounts (ADR 0034)', () => 
     const visa = await createVisa();
     flushPendingPersistedAccount();
 
-    useBudgetStore.setState({ authUser: DEMO_OWNER_USER, financialAccounts: [] });
+    useBudgetStore.setState({ authUser: DEMO_USER, financialAccounts: [] });
     useBudgetStore.getState().setAuthUser(CLOUD_USER);
 
     expect(useBudgetStore.getState().financialAccounts).toEqual([visa]);

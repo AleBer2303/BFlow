@@ -13,7 +13,7 @@ import {
   serializeSavingsBucketForFirestore,
 } from '../mappers/firestoreSchemas';
 import { FirestoreBudgetRepository } from '../repositories/budgetRepository';
-import { buildOctober2026SeedPayload } from '../seed/october2026SeedData';
+import { buildSampleWorkspace } from '../sample/sampleWorkspace';
 
 jest.mock('firebase/firestore', () => ({
   collection: jest.fn((_db, ...segments: string[]) => ({ path: segments.join('/') })),
@@ -71,7 +71,7 @@ function installFirestore(options: { failReads?: boolean } = {}): void {
 }
 
 function seedClosedOctober(): void {
-  const seed = buildOctober2026SeedPayload();
+  const seed = buildSampleWorkspace();
   const closed = closeMonthAndRollover({
     closingMonthKey: '2026-10',
     closedAtIso: '2026-11-01T00:00:00.000Z',
@@ -111,7 +111,7 @@ describe('reopen / delete month restore writes (CC-06)', () => {
     const debtWrites = ops.filter((op) => op.path.startsWith(`users/${uid}/debts/`));
     const bucketWrites = ops.filter((op) => op.path.startsWith(`users/${uid}/savingsBuckets/`));
 
-    const seedDebts = buildOctober2026SeedPayload().debts;
+    const seedDebts = buildSampleWorkspace().debts;
     expect(debtWrites.map((op) => [op.path.split('/').pop(), op.data?.openingBalance])).toEqual(
       seedDebts.map((d) => [d.id, d.openingBalance])
     );

@@ -174,7 +174,7 @@ const SavingsBucketsList = React.memo(function SavingsBucketsList({
                     {savingsSummary.reserve.name || 'Fondo de Reserva'}
                   </AppText>
                   {renderBucketRowAction(
-                    'moto',
+                    savingsSummary.reserve.bucketId,
                     savingsSummary.reserve.name || 'Fondo de Reserva',
                     savingsSummary.reserve.openingBalance
                   )}

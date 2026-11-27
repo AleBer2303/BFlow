@@ -16,7 +16,7 @@ import {
   FirestoreBudgetRepository,
   type FullCloudAccountData,
 } from '../repositories/budgetRepository';
-import { buildOctober2026SeedPayload } from '../seed/october2026SeedData';
+import { buildSampleWorkspace } from '../sample/sampleWorkspace';
 
 interface MockConstraint {
   field: string;
@@ -69,7 +69,7 @@ const CLOSED_MONTHS = MONTHS.slice(0, -1);
 /** Con 19 cerrados y una ventana de 12, los 7 primeros son el historial archivado. */
 const CUTOFF_MONTH = '2025-08';
 
-const seed = buildOctober2026SeedPayload();
+const seed = buildSampleWorkspace();
 const ENTRIES_PER_MONTH = seed.entries.length;
 
 function matches(data: Record<string, unknown>, constraint: MockConstraint): boolean {

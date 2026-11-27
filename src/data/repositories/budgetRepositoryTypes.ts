@@ -81,10 +81,6 @@ export interface LoadCloudAccountOptions {
 }
 
 export interface BudgetRepository {
-  seedOctober2026IfEmpty(
-    uid: string,
-    userEmail?: string | null
-  ): Promise<{ seeded: boolean; monthKey: string }>;
   loadMonthWorkspace(uid: string, monthKey: string): Promise<MonthWorkspaceData>;
   loadFullCloudAccount(
     uid: string,

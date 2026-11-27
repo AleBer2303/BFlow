@@ -42,7 +42,6 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
 
     const nextItem: ProvisionItemSpec = {
       id: itemId,
-      excelRawName: trimmedName,
       displayName: trimmedName,
       monthlyAmountCop: monthlyContribution,
       cycleCostCop: safeAmount,
@@ -51,7 +50,6 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
       ...(input.kind === 'target_goal'
         ? { targetAmountCop: safeAmount, targetMonthKey }
         : {}),
-      includedInExcelTotalB43: input.kind === 'recurring',
       kind: input.kind === 'target_goal' ? 'target_goal' : 'recurring_provision',
       ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
     };

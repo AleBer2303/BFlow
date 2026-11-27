@@ -26,7 +26,7 @@ import { useBudgetStore } from '../useBudgetStore';
 
 const realUser: BFlowAuthUser = {
   uid: 'uid_cloud_test_autosave',
-  email: 'demo.owner@bflow.example',
+  email: 'demo@bflow.example',
   displayName: 'Demo',
   authProvider: 'password',
   provider: 'firebase',
@@ -77,7 +77,7 @@ describe('OPT-02 · un solo punto de guardado de la caché', () => {
     __setStorageBackendForTests(createDiskBackend());
     __resetMemoryCacheForTests();
     clearOfflineWriteQueue(realUser.uid);
-    useBudgetStore.getState().resetToOctober2026GoldenState();
+    useBudgetStore.getState().resetToSampleWorkspace();
     useBudgetStore.setState({ authUser: realUser, isAccountHydrated: true, needsOnboarding: false });
     accountCache.flushPendingPersistedAccount();
     jest.spyOn(FirestoreBudgetRepository.prototype, 'saveOrUpdateEntry').mockResolvedValue();

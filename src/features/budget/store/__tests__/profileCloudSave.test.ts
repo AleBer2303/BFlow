@@ -9,7 +9,7 @@
 import { FirestoreBudgetRepository } from '../../../../data/repositories/budgetRepository';
 import * as authAdapter from '../../../../platform/auth/authAdapter';
 import {
-  DEMO_OWNER_USER,
+  DEMO_USER,
   loadPersistedSession,
   type BFlowAuthUser,
 } from '../../../../platform/auth/authAdapter';
@@ -23,8 +23,8 @@ import { useBudgetStore } from '../useBudgetStore';
 describe('updateAuthUserProfile: el perfil se guarda en Firestore', () => {
   const cloudUser: BFlowAuthUser = {
     uid: 'uid_cloud_test_profile',
-    email: 'demo.owner@bflow.example',
-    displayName: 'Alejandro Bernal',
+    email: 'demo@bflow.example',
+    displayName: 'Usuario de ejemplo',
     financialGoal: 'Meta anterior',
     authProvider: 'password',
     emailVerified: true,
@@ -35,16 +35,16 @@ describe('updateAuthUserProfile: el perfil se guarda en Firestore', () => {
 
   beforeEach(() => {
     clearOfflineWriteQueue(cloudUser.uid);
-    useBudgetStore.getState().resetToOctober2026GoldenState();
-    useBudgetStore.getState().setAuthUser(cloudUser);
+    useBudgetStore.getState().resetToSampleWorkspace();
+    useBudgetStore.setState({ authUser: cloudUser });
     syncNameSpy = jest.spyOn(authAdapter, 'syncAuthDisplayName').mockResolvedValue(undefined);
   });
 
   afterEach(() => {
     clearOfflineWriteQueue(cloudUser.uid);
     jest.restoreAllMocks();
-    useBudgetStore.setState({ authUser: DEMO_OWNER_USER, needsOnboarding: false });
-    useBudgetStore.getState().resetToOctober2026GoldenState();
+    useBudgetStore.setState({ authUser: DEMO_USER, needsOnboarding: false });
+    useBudgetStore.getState().resetToSampleWorkspace();
   });
 
   it('writes the name and the goal to users/{uid} and keeps them in the session', async () => {
@@ -53,26 +53,26 @@ describe('updateAuthUserProfile: el perfil se guarda en Firestore', () => {
       .mockResolvedValue(undefined);
 
     const status = await useBudgetStore.getState().updateAuthUserProfile({
-      displayName: '  Alejandro Bernal G.  ',
+      displayName: '  Usuario de ejemplo G.  ',
       financialGoal: '  Viaje a Japón  ',
     });
 
     expect(status).toBe('synced');
     expect(saveSpy).toHaveBeenCalledWith(cloudUser.uid, {
-      displayName: 'Alejandro Bernal G.',
+      displayName: 'Usuario de ejemplo G.',
       financialGoal: 'Viaje a Japón',
     });
     expect(useBudgetStore.getState().authUser).toMatchObject({
-      displayName: 'Alejandro Bernal G.',
+      displayName: 'Usuario de ejemplo G.',
       financialGoal: 'Viaje a Japón',
-      email: 'demo.owner@bflow.example',
+      email: 'demo@bflow.example',
       emailVerified: true,
     });
     expect(loadPersistedSession()).toMatchObject({
-      displayName: 'Alejandro Bernal G.',
+      displayName: 'Usuario de ejemplo G.',
       financialGoal: 'Viaje a Japón',
     });
-    expect(syncNameSpy).toHaveBeenCalledWith('Alejandro Bernal G.');
+    expect(syncNameSpy).toHaveBeenCalledWith('Usuario de ejemplo G.');
     expect(loadOfflineWriteQueue(cloudUser.uid)).toHaveLength(0);
   });
 
@@ -84,7 +84,7 @@ describe('updateAuthUserProfile: el perfil se guarda en Firestore', () => {
     await useBudgetStore.getState().updateAuthUserProfile({ displayName: '   ', financialGoal: '' });
 
     expect(saveSpy).toHaveBeenCalledWith(cloudUser.uid, {
-      displayName: 'Alejandro Bernal',
+      displayName: 'Usuario de ejemplo',
       financialGoal: '',
     });
     expect(useBudgetStore.getState().authUser?.financialGoal).toBe('');
@@ -95,10 +95,10 @@ describe('updateAuthUserProfile: el perfil se guarda en Firestore', () => {
       .spyOn(FirestoreBudgetRepository.prototype, 'saveUserProfile')
       .mockResolvedValue(undefined);
 
-    await useBudgetStore.getState().updateAuthUserProfile({ displayName: 'Alejo' });
+    await useBudgetStore.getState().updateAuthUserProfile({ displayName: 'Ana María' });
 
     expect(saveSpy).toHaveBeenCalledWith(cloudUser.uid, {
-      displayName: 'Alejo',
+      displayName: 'Ana María',
       financialGoal: 'Meta anterior',
     });
   });
@@ -133,11 +133,11 @@ describe('updateAuthUserProfile: el perfil se guarda en Firestore', () => {
 
     expect(status).toBe('rejected');
     expect(useBudgetStore.getState().authUser).toMatchObject({
-      displayName: 'Alejandro Bernal',
+      displayName: 'Usuario de ejemplo',
       financialGoal: 'Meta anterior',
     });
     expect(loadPersistedSession()).toMatchObject({
-      displayName: 'Alejandro Bernal',
+      displayName: 'Usuario de ejemplo',
       financialGoal: 'Meta anterior',
     });
     expect(useBudgetStore.getState().syncMessage).toBe('No se pudo guardar tu perfil en la nube.');
@@ -200,17 +200,17 @@ describe('updateAuthUserProfile: el perfil se guarda en Firestore', () => {
     );
 
     const pending = useBudgetStore.getState().updateAuthUserProfile({ displayName: 'Nombre Tardío' });
-    useBudgetStore.getState().setAuthUser(DEMO_OWNER_USER);
+    useBudgetStore.getState().setAuthUser(DEMO_USER);
     rejectWrite(Object.assign(new Error('denied'), { code: 'permission-denied' }));
 
     await expect(pending).resolves.toBe('rejected');
-    expect(useBudgetStore.getState().authUser?.uid).toBe(DEMO_OWNER_USER.uid);
-    expect(useBudgetStore.getState().authUser?.displayName).toBe(DEMO_OWNER_USER.displayName);
+    expect(useBudgetStore.getState().authUser?.uid).toBe(DEMO_USER.uid);
+    expect(useBudgetStore.getState().authUser?.displayName).toBe(DEMO_USER.displayName);
   });
 
   it('updates a local session without touching Firestore', async () => {
     const saveSpy = jest.spyOn(FirestoreBudgetRepository.prototype, 'saveUserProfile');
-    useBudgetStore.getState().setAuthUser(DEMO_OWNER_USER);
+    useBudgetStore.getState().setAuthUser(DEMO_USER);
 
     const status = await useBudgetStore.getState().updateAuthUserProfile({
       displayName: 'Nombre Local',
@@ -236,7 +236,7 @@ describe('updateAuthUserProfile: el perfil se guarda en Firestore', () => {
     });
     expect(savedStatus).toBe('synced');
     expect(saveSpy).toHaveBeenCalledWith(cloudUser.uid, {
-      displayName: 'Alejandro Bernal',
+      displayName: 'Usuario de ejemplo',
       financialGoal: 'Meta anterior',
       photoUrl: samplePhoto,
     });
@@ -258,7 +258,7 @@ describe('updateAuthUserProfile: el perfil se guarda en Firestore', () => {
     });
     expect(clearedStatus).toBe('synced');
     expect(saveSpy).toHaveBeenCalledWith(cloudUser.uid, {
-      displayName: 'Alejandro Bernal',
+      displayName: 'Usuario de ejemplo',
       financialGoal: 'Meta anterior',
       photoUrl: '',
     });
@@ -275,7 +275,7 @@ describe('updateAuthUserProfile: el perfil se guarda en Firestore', () => {
       saveUserProfile: replaySave,
     } as unknown as FirestoreBudgetRepository);
     expect(replaySave).toHaveBeenCalledWith(cloudUser.uid, {
-      displayName: 'Alejandro Bernal',
+      displayName: 'Usuario de ejemplo',
       financialGoal: 'Meta anterior',
       photoUrl: samplePhoto,
     });

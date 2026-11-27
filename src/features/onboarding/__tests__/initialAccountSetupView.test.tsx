@@ -127,10 +127,10 @@ describe('InitialAccountSetupView (Onboarding / Account Reset Wizard)', () => {
     fireEvent.press(screen.getByTestId('onboarding-toggle-add-movement'));
     fireEvent.press(screen.getByTestId('modal-type-income'));
     fireEvent.changeText(screen.getByTestId('movement-amount-input'), '3500000');
-    fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Salario Principal');
+    fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Salario');
     fireEvent.press(screen.getByTestId('custom-group-fixed'));
     fireEvent.press(screen.getByTestId('submit-movement-button'));
-    expect(screen.getByText('Salario Principal')).toBeTruthy();
+    expect(screen.getByText('Salario')).toBeTruthy();
     expect(screen.queryByTestId('add-movement-modal-card')).toBeNull();
 
     // 4. Add expense linked to debt via ChecklistAddMovementForm ("Más opciones" -> AdaptiveSelectField)
@@ -180,7 +180,7 @@ describe('InitialAccountSetupView (Onboarding / Account Reset Wizard)', () => {
     expect(config?.debts[0]?.monthlyInstallmentCop).toBe(200000);
 
     expect(config?.incomes).toHaveLength(1);
-    expect(config?.incomes[0]?.name).toBe('Salario Principal');
+    expect(config?.incomes[0]?.name).toBe('Salario');
     expect(config?.incomes[0]?.amountCop).toBe(3500000);
     expect(config?.incomes[0]?.group).toBe('fixed');
 

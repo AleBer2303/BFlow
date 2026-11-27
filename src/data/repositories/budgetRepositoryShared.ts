@@ -14,7 +14,7 @@ import type {
   MonthSnapshot,
   SavingsBucket,
 } from '../../domain/models/types';
-import { resolveOwnerSeedEmails } from '../../platform/mode/ownerSeedEmail';
+import { RESERVE_BUCKET_ID } from '../migrations/legacyFieldMigration';
 
 export function generateDataRevision(): string {
   const randomPart =
@@ -23,8 +23,6 @@ export function generateDataRevision(): string {
       : `${Math.random().toString(36).slice(2, 12)}${Math.random().toString(36).slice(2, 12)}`;
   return `rev_${Date.now().toString(36)}_${randomPart}`;
 }
-
-const OWNER_SEED_EMAILS = resolveOwnerSeedEmails();
 
 export function safeParseList<T>(
   rawDocs: ReadonlyArray<{ data: () => unknown }>,
@@ -41,10 +39,8 @@ export function safeParseList<T>(
   return results;
 }
 
-export function isOwnerCanonicalEmail(email?: string | null): boolean {
-  if (!email) return false;
-  return OWNER_SEED_EMAILS.has(email.trim().toLowerCase());
-}
+/** Group of a debt that does not say one. */
+export const DEFAULT_DEBT_GROUP_KEY = 'General';
 
 export const EMPTY_PROVISION_PLAN: ProvisionPlan = {
   items: [],
@@ -52,7 +48,7 @@ export const EMPTY_PROVISION_PLAN: ProvisionPlan = {
   totalWithTargetGoalCop: 0,
 };
 
-/** Copy of the user's buckets (the standard Moto / Ahorros buckets are no longer forced in). */
+/** Copy of the user's buckets (no standard bucket is forced in). */
 export function ensureStandardSavingsBuckets(buckets: readonly SavingsBucket[]): SavingsBucket[] {
   return buckets.map((b) => ({ ...b }));
 }
@@ -78,9 +74,9 @@ export function reconstructClosedMonthBalances(
 
     return {
       id: cd.debtId,
-      groupKey: meta?.groupKey ?? cd.groupKey ?? 'FUNFAMI',
+      groupKey: meta?.groupKey ?? cd.groupKey ?? DEFAULT_DEBT_GROUP_KEY,
       name: meta?.name ?? cd.name,
-      lender: meta?.lender ?? cd.lender ?? 'FUNFAMI',
+      lender: meta?.lender ?? cd.lender ?? '',
       openingBalance: cd.openingBalance,
       monthKey: snapshot.monthKey,
       ...(monthlyRate !== undefined ? { monthlyInterestRate: monthlyRate } : {}),
@@ -90,38 +86,38 @@ export function reconstructClosedMonthBalances(
     };
   });
 
-  const motoConceptIds = new Set(
+  const reserveConceptIds = new Set(
     concepts
-      .filter((c) => !c.archived && c.savingsContribution?.bucketId === 'moto')
+      .filter((c) => !c.archived && c.savingsContribution?.bucketId === RESERVE_BUCKET_ID)
       .map((c) => c.id)
   );
-  const paidMotoContributions = sumMoneyIntegers(
+  const paidReserveContributions = sumMoneyIntegers(
     entries
       .filter(
         (e) =>
           e.monthKey === snapshot.monthKey &&
           e.status === 'completed' &&
-          motoConceptIds.has(e.conceptId)
+          reserveConceptIds.has(e.conceptId)
       )
       .map((e) => e.actualAmount)
   );
 
   const extraBuckets = currentBuckets
-    .filter((b) => b.id !== 'moto' && b.id !== 'savings')
+    .filter((b) => b.id !== RESERVE_BUCKET_ID && b.id !== 'savings')
     .map((b) => ({ ...b }));
 
-  const hasMoto = currentBuckets.some((b) => b.id === 'moto');
+  const hasReserve = currentBuckets.some((b) => b.id === RESERVE_BUCKET_ID);
   const hasSavings = currentBuckets.some((b) => b.id === 'savings');
 
   const savingsBuckets: SavingsBucket[] = [
-    ...(hasMoto
+    ...(hasReserve
       ? [
           {
-            id: 'moto',
-            name: currentBuckets.find((b) => b.id === 'moto')?.name ?? 'Fondo Moto',
+            id: RESERVE_BUCKET_ID,
+            name: currentBuckets.find((b) => b.id === RESERVE_BUCKET_ID)?.name ?? 'Fondo de reserva',
             openingBalance: Math.max(
               0,
-              snapshot.closingSavings.motoClosingBalance - paidMotoContributions
+              snapshot.closingSavings.reserveClosingBalance - paidReserveContributions
             ),
           },
         ]

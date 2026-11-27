@@ -17,16 +17,16 @@ import { useBudgetStore } from '../useBudgetStore';
 describe('Optimistic UI Rollback & Offline Queue (Phase 3: R-07, R-08, R-09)', () => {
   const testUser: BFlowAuthUser = {
     uid: 'uid_cloud_test_optimistic',
-    email: 'demo.owner@bflow.example',
-    displayName: 'Alejandro Bernal',
+    email: 'demo@bflow.example',
+    displayName: 'Usuario de ejemplo',
     authProvider: 'password',
     provider: 'firebase',
   };
 
   beforeEach(() => {
     clearOfflineWriteQueue(testUser.uid);
-    useBudgetStore.getState().resetToOctober2026GoldenState();
-    useBudgetStore.getState().setAuthUser(testUser);
+    useBudgetStore.getState().resetToSampleWorkspace();
+    useBudgetStore.setState({ authUser: testUser });
   });
 
   afterEach(() => {

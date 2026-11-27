@@ -144,15 +144,15 @@ describe('persistentStorageAdapter (Encrypted Persistence ADR 0015 & ADR 0016)',
 
     const sessionPayload = {
       uid: 'uid-native-1',
-      email: 'demo.owner@bflow.example',
-      displayName: 'Alejandro Bernal',
+      email: 'demo@bflow.example',
+      displayName: 'Usuario de ejemplo',
     };
     persistentStorage.setItem('bflow.auth.session.v1', sessionPayload);
 
     const rawOnDisk = disk.get('bflow.auth.session.v1');
     expect(rawOnDisk).toBeDefined();
     expect(isEncryptedStoragePayload(rawOnDisk!)).toBe(true);
-    expect(rawOnDisk).not.toContain('demo.owner@bflow.example');
+    expect(rawOnDisk).not.toContain('demo@bflow.example');
     expect(decryptRawStringFromStorage(rawOnDisk!)).toBe(JSON.stringify(sessionPayload));
 
     // Simulate closing the app / cold restart: wipe the in-memory Map
@@ -305,7 +305,7 @@ describe('storageBackend.native (expo-secure-store + expo-sqlite/kv-store)', () 
       // 1. Session key goes directly to expo-secure-store (Keychain/Keystore), NOT SQLite
       persistentStorage.setItem('bflow.auth.session.v1', {
         uid: 'uid_secure_1',
-        email: 'demo.owner@bflow.example',
+        email: 'demo@bflow.example',
       });
       expect(mockSecureSetItem).toHaveBeenCalled();
       expect(secureKeychain.has('bflow.auth.session.v1')).toBe(true);
@@ -330,7 +330,7 @@ describe('storageBackend.native (expo-secure-store + expo-sqlite/kv-store)', () 
       );
       expect(loadedSession).toEqual({
         uid: 'uid_secure_1',
-        email: 'demo.owner@bflow.example',
+        email: 'demo@bflow.example',
       });
 
       const loadedBudget = persistentStorage.getItem<{ balanceCop: number }>(

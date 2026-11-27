@@ -417,7 +417,6 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
         const trimmedName = p.name.trim();
         return {
           id: `prov_${idx + 1}_${Date.now().toString(36)}`,
-          excelRawName: trimmedName,
           displayName: trimmedName,
           monthlyAmountCop: monthlyContribution,
           cycleCostCop: safeAmount,
@@ -429,7 +428,6 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
                 targetMonthKey: addMonthsToMonthKey(monthKey, safeMonths),
               }
             : {}),
-          includedInExcelTotalB43: p.kind === 'recurring',
           kind: p.kind === 'target_goal' ? 'target_goal' : 'recurring_provision',
           ...(p.notes?.trim() ? { notes: p.notes.trim() } : {}),
         };
@@ -455,7 +453,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       debtsByMonth: state.debtsByMonth,
       debtPayments: state.debtPayments,
       savingsBucketsByMonth: state.savingsBucketsByMonth,
-      idealMotoPlan: state.idealMotoPlan,
+      provisionPlan: state.provisionPlan,
       closedSnapshots: state.closedSnapshots,
       financialAccounts: state.financialAccounts,
       needsOnboarding: state.needsOnboarding,
@@ -478,7 +476,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       savingsBucketsByMonth: {
         [monthKey]: savingsBuckets,
       },
-      idealMotoPlan: provisionPlan,
+      provisionPlan: provisionPlan,
       closedSnapshots: {},
       financialAccounts: [],
       isAccountHydrated: true,
@@ -521,7 +519,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       debtsByMonth: state.debtsByMonth,
       debtPayments: state.debtPayments,
       savingsBucketsByMonth: state.savingsBucketsByMonth,
-      idealMotoPlan: state.idealMotoPlan,
+      provisionPlan: state.provisionPlan,
       closedSnapshots: state.closedSnapshots,
       financialAccounts: state.financialAccounts,
       needsOnboarding: state.needsOnboarding,
@@ -554,7 +552,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       savingsBucketsByMonth: {
         [startMonth]: emptyBuckets,
       },
-      idealMotoPlan: { ...EMPTY_PROVISION_PLAN, items: [] },
+      provisionPlan: { ...EMPTY_PROVISION_PLAN, items: [] },
       closedSnapshots: {},
       financialAccounts: [],
       isAccountHydrated: true,

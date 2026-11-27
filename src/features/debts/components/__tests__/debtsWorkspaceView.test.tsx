@@ -1,5 +1,5 @@
 /**
- * Tests for DebtsFunfamiView (separate global Editar and Eliminar buttons under
+ * Tests for DebtsWorkspaceView (separate global Editar and Eliminar buttons under
  * "+ Nueva Deuda", acting directly on the existing obligations list) across all three skins.
  */
 
@@ -18,7 +18,7 @@ import {
   type PlatformSkinId,
 } from '../../../../design-system/tokens';
 import type { DebtSummaryResult } from '../../../../domain';
-import { DebtsFunfamiView } from '../DebtsFunfamiView';
+import { DebtsWorkspaceView } from '../DebtsWorkspaceView';
 
 const ORIGINAL_WINDOW = Dimensions.get('window');
 const ORIGINAL_SCREEN = Dimensions.get('screen');
@@ -46,7 +46,7 @@ const BASE_DEBT_SUMMARY: DebtSummaryResult = {
   debts: [
     {
       debtId: 'debt_auto_loan',
-      name: 'Moto vehículo',
+      name: 'Carro vehículo',
       lender: 'Banco',
       openingBalance: 2_600_000,
       monthlyInterestRate: 0.9,
@@ -88,14 +88,14 @@ function setWindowSize(width: number, height: number): void {
 
 function renderView(
   skin: PlatformSkinId,
-  overrides?: Partial<React.ComponentProps<typeof DebtsFunfamiView>>
+  overrides?: Partial<React.ComponentProps<typeof DebtsWorkspaceView>>
 ) {
   const onCreateDebt = jest.fn();
   const onUpdateDebt = jest.fn();
   const onDeleteDebt = jest.fn();
   const utils = render(
     <BFlowThemeProvider skin={skin} initialMode="dark">
-      <DebtsFunfamiView
+      <DebtsWorkspaceView
         debtSummary={BASE_DEBT_SUMMARY}
         onCreateDebt={onCreateDebt}
         onUpdateDebt={onUpdateDebt}
@@ -118,7 +118,7 @@ afterAll(() => {
   });
 });
 
-describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView on %s skin', (skin) => {
+describe.each(PLATFORM_SKIN_IDS)('DebtsWorkspaceView on %s skin', (skin) => {
   it('renders separate Editar and Eliminar buttons under + Nueva Deuda without Obligaciones Activas heading and hides per-card actions by default', () => {
     renderView(skin);
 
@@ -152,7 +152,7 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView on %s skin', (skin) => {
     fireEvent.press(screen.getByTestId('debt-edit-debt_auto_loan'));
     expect(screen.queryByTestId('debt-edit-debt_auto_loan')).toBeNull();
     expect(screen.getByTestId('debt-form-modal')).toBeTruthy();
-    expect(screen.getByTestId('debt-form-name-input').props.value).toBe('Moto vehículo');
+    expect(screen.getByTestId('debt-form-name-input').props.value).toBe('Carro vehículo');
     expect(screen.getByTestId('debt-form-name-input').props.autoCapitalize).toBe('sentences');
     expect(screen.getByTestId('debt-form-amount-input').props.keyboardType).toBe('number-pad');
     expect(screen.getByTestId('debt-form-amount-input').props.value).toBe('2.600.000');
@@ -160,13 +160,13 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView on %s skin', (skin) => {
     expect(screen.getByTestId('debt-form-installment-input').props.value).toBe('500.000');
     expect(screen.getByTestId('debt-form-interest-rate-input').props.keyboardType).toBe('decimal-pad');
 
-    fireEvent.changeText(screen.getByTestId('debt-form-name-input'), 'Moto vehículo 2027');
+    fireEvent.changeText(screen.getByTestId('debt-form-name-input'), 'Carro vehículo 2027');
     fireEvent.press(screen.getByTestId('debt-form-submit-button'));
 
     expect(onUpdateDebt).toHaveBeenCalledWith(
       'debt_auto_loan',
       expect.objectContaining({
-        name: 'Moto vehículo 2027',
+        name: 'Carro vehículo 2027',
         lender: 'Banco',
         openingBalance: 2_600_000,
       })
@@ -218,7 +218,7 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView on %s skin', (skin) => {
   });
 });
 
-describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView form state on %s skin', (skin) => {
+describe.each(PLATFORM_SKIN_IDS)('DebtsWorkspaceView form state on %s skin', (skin) => {
   it('typing in the debt form does not re-render the debt cards', () => {
     const { onCreateDebt } = renderView(skin);
     fireEvent.press(screen.getByTestId('debts-add-new-debt-button'));
@@ -270,7 +270,7 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView form state on %s skin', (skin
 
     fireEvent.press(screen.getByTestId('debt-action-edit-button'));
     fireEvent.press(screen.getByTestId('debt-edit-debt_auto_loan'));
-    expect(screen.getByTestId('debt-form-name-input').props.value).toBe('Moto vehículo');
+    expect(screen.getByTestId('debt-form-name-input').props.value).toBe('Carro vehículo');
     expect(screen.getByTestId('debt-form-amount-input').props.value).toBe('2.600.000');
 
     fireEvent.press(screen.getByTestId('debt-action-edit-button'));
@@ -316,7 +316,7 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView form state on %s skin', (skin
     render(
       <BFlowThemeProvider skin={skin} initialMode="dark">
         <AmountPrivacyProvider initialHidden>
-          <DebtsFunfamiView debtSummary={BASE_DEBT_SUMMARY} />
+          <DebtsWorkspaceView debtSummary={BASE_DEBT_SUMMARY} />
         </AmountPrivacyProvider>
       </BFlowThemeProvider>
     );
@@ -334,7 +334,7 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView form state on %s skin', (skin
     const { rerender } = render(
       <BFlowThemeProvider skin={skin} initialMode="dark">
         <TabVisibilityProvider isActive>
-          <DebtsFunfamiView debtSummary={BASE_DEBT_SUMMARY} />
+          <DebtsWorkspaceView debtSummary={BASE_DEBT_SUMMARY} />
         </TabVisibilityProvider>
       </BFlowThemeProvider>
     );
@@ -345,7 +345,7 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView form state on %s skin', (skin
     rerender(
       <BFlowThemeProvider skin={skin} initialMode="dark">
         <TabVisibilityProvider isActive={false}>
-          <DebtsFunfamiView debtSummary={BASE_DEBT_SUMMARY} />
+          <DebtsWorkspaceView debtSummary={BASE_DEBT_SUMMARY} />
         </TabVisibilityProvider>
       </BFlowThemeProvider>
     );
@@ -354,7 +354,7 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView form state on %s skin', (skin
     rerender(
       <BFlowThemeProvider skin={skin} initialMode="dark">
         <TabVisibilityProvider isActive>
-          <DebtsFunfamiView debtSummary={BASE_DEBT_SUMMARY} />
+          <DebtsWorkspaceView debtSummary={BASE_DEBT_SUMMARY} />
         </TabVisibilityProvider>
       </BFlowThemeProvider>
     );
@@ -364,7 +364,7 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView form state on %s skin', (skin
     rerender(
       <BFlowThemeProvider skin={skin} initialMode="dark">
         <TabVisibilityProvider isActive>
-          <DebtsFunfamiView debtSummary={{ ...BASE_DEBT_SUMMARY, monthKey: '2026-11' }} />
+          <DebtsWorkspaceView debtSummary={{ ...BASE_DEBT_SUMMARY, monthKey: '2026-11' }} />
         </TabVisibilityProvider>
       </BFlowThemeProvider>
     );
@@ -372,7 +372,7 @@ describe.each(PLATFORM_SKIN_IDS)('DebtsFunfamiView form state on %s skin', (skin
   });
 });
 
-describe('DebtsFunfamiView paid-off banner (CC-05)', () => {
+describe('DebtsWorkspaceView paid-off banner (CC-05)', () => {
   const paidOff = (debtId: string, openingBalance: number) => ({
     ...BASE_DEBT_SUMMARY,
     debts: BASE_DEBT_SUMMARY.debts.map((d) =>
@@ -380,20 +380,20 @@ describe('DebtsFunfamiView paid-off banner (CC-05)', () => {
     ),
   });
 
-  it('celebrates whichever debt reached 0 this month, not a fixed seed debt', () => {
+  it('celebrates whichever debt reached 0 this month, not a fixed sample debt', () => {
     renderView('ios', { debtSummary: paidOff('debt_education_loan', 3_600_000) });
-    expect(screen.getByTestId('moto-debt-completed-banner')).toBeTruthy();
+    expect(screen.getByTestId('debt-paid-off-banner')).toBeTruthy();
     expect(screen.getByText('¡Deuda "Especialización IA" liquidada al 100%!')).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId('moto-debt-banner-dismiss-button'));
-    expect(screen.queryByTestId('moto-debt-completed-banner')).toBeNull();
+    fireEvent.press(screen.getByTestId('debt-paid-off-banner-dismiss-button'));
+    expect(screen.queryByTestId('debt-paid-off-banner')).toBeNull();
   });
 
   it('shows no banner when no debt was paid off this month', () => {
     renderView('ios');
-    expect(screen.queryByTestId('moto-debt-completed-banner')).toBeNull();
+    expect(screen.queryByTestId('debt-paid-off-banner')).toBeNull();
 
     renderView('android', { debtSummary: paidOff('debt_auto_loan', 0) });
-    expect(screen.queryByTestId('moto-debt-completed-banner')).toBeNull();
+    expect(screen.queryByTestId('debt-paid-off-banner')).toBeNull();
   });
 });

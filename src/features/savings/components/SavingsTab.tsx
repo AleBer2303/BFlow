@@ -33,7 +33,7 @@ export const SavingsTab = React.memo(function SavingsTab(): React.JSX.Element {
   const budget = useBudgetSummary();
   const savingsSummary = useSavingsSummary(budget);
   const provisionSummary = useProvisionPlanSummary(savingsSummary);
-  const provisionPlan = useTabStore((state) => state.idealMotoPlan);
+  const provisionPlan = useTabStore((state) => state.provisionPlan);
   const history = useChartHistory();
   const savingsAccounts = useFinancialAccounts('savings');
   const savingsAccountsSummary = useFinancialAccountsSummary('savings');
@@ -113,7 +113,7 @@ export const SavingsTab = React.memo(function SavingsTab(): React.JSX.Element {
     <View style={{ gap: spacing.md }}>
       <SavingsAndProvisionsView
         savingsSummary={savingsSummary}
-        motoIdealSummary={provisionSummary}
+        provisionPlanSummary={provisionSummary}
         provisionPlan={provisionPlan}
         onUpdateOpeningBalance={handleUpdateOpeningBalance}
         onCreateSavingsBucket={handleCreateSavingsBucket}

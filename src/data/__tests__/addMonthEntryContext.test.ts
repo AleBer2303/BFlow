@@ -36,8 +36,8 @@ jest.mock('../../platform/storage/accountCache', () => ({
 }));
 
 const uid = 'uid_add_entry';
-const seed = buildSampleWorkspace();
-const monthEntries = seed.entries.filter((e) => e.monthKey === '2026-10');
+const sample = buildSampleWorkspace();
+const monthEntries = sample.entries.filter((e) => e.monthKey === '2026-10');
 const input = {
   monthKey: '2026-10',
   conceptId: 'exp_other',
@@ -49,7 +49,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   (getDocs as jest.Mock).mockImplementation(async (ref: { path: string }) => {
     const docs = ref.path.endsWith('/concepts')
-      ? seed.concepts.map((c) => ({ id: c.id, data: serializeConceptForFirestore(c) }))
+      ? sample.concepts.map((c) => ({ id: c.id, data: serializeConceptForFirestore(c) }))
       : monthEntries.map((e) => ({ id: e.id, data: serializeMonthEntryForFirestore(e) }));
     return { docs: docs.map((d) => ({ id: d.id, data: () => d.data })) };
   });
@@ -73,7 +73,7 @@ describe('addMonthEntry con contexto del store (OPT-04)', () => {
 
     const fromContext = await repo.addMonthEntry(uid, input, {
       monthEntries,
-      concepts: seed.concepts,
+      concepts: sample.concepts,
     });
 
     expect(getDocs).not.toHaveBeenCalled();
@@ -81,7 +81,7 @@ describe('addMonthEntry con contexto del store (OPT-04)', () => {
   });
 
   it('con contexto parcial solo lee lo que falta', async () => {
-    await new FirestoreBudgetRepository().addMonthEntry(uid, input, { concepts: seed.concepts });
+    await new FirestoreBudgetRepository().addMonthEntry(uid, input, { concepts: sample.concepts });
     expect(getDocs).toHaveBeenCalledTimes(1);
   });
 
@@ -89,7 +89,7 @@ describe('addMonthEntry con contexto del store (OPT-04)', () => {
     const repo = new InMemoryBudgetRepository();
     const created = await repo.addMonthEntry('local-demo', input, {
       monthEntries,
-      concepts: seed.concepts,
+      concepts: sample.concepts,
     });
     expect(created).toMatchObject({ conceptId: 'exp_other', actualAmount: 50_000 });
   });

@@ -18,7 +18,7 @@ import {
 const sample = buildSampleWorkspace();
 
 const concepts = sample.concepts as unknown as Concept[];
-const octoberEntries = sample.entries as unknown as MonthEntry[];
+const sampleEntries = sample.entries as unknown as MonthEntry[];
 
 describe('domain/checklist — Monthly Checklist Core Rules', () => {
   it('validates deterministic entry IDs and rejects empty conceptId', () => {
@@ -28,9 +28,9 @@ describe('domain/checklist — Monthly Checklist Core Rules', () => {
     expect(() => getDeterministicEntryId('2026-10', '   ')).toThrow(TypeError);
   });
 
-  it('hides completed single-occurrence concepts in October 2026 (Salario, Parqueadero, etc.)', () => {
-    const availableIncomes = getAvailableConcepts(concepts, octoberEntries, '2026-10', 'income');
-    const availableExpenses = getAvailableConcepts(concepts, octoberEntries, '2026-10', 'expense');
+  it('hides completed single-occurrence concepts in the sample month (Salario, Parqueadero, etc.)', () => {
+    const availableIncomes = getAvailableConcepts(concepts, sampleEntries, '2026-10', 'income');
+    const availableExpenses = getAvailableConcepts(concepts, sampleEntries, '2026-10', 'expense');
 
     // Salario is completed in Oct 2026 -> hidden; Prima is pending & Otros ingresos is repeatable -> shown
     expect(availableIncomes.map((c) => c.id)).toEqual([
@@ -50,7 +50,7 @@ describe('domain/checklist — Monthly Checklist Core Rules', () => {
   });
 
   it('makes a completed concept reappear in the following month (2026-11) and across year rollover (2026-12 -> 2027-01)', () => {
-    const novEntries = ensureMonthPlan('2026-11', concepts, octoberEntries);
+    const novEntries = ensureMonthPlan('2026-11', concepts, sampleEntries);
     const availableNovIncomes = getAvailableConcepts(concepts, novEntries, '2026-11', 'income');
     const availableNovExpenses = getAvailableConcepts(concepts, novEntries, '2026-11', 'expense');
 
@@ -64,7 +64,7 @@ describe('domain/checklist — Monthly Checklist Core Rules', () => {
 
   it('makes a completed concept reappear immediately when unchecked or deleted in the same month', () => {
     const afterUncheck = uncompleteMovement(
-      octoberEntries,
+      sampleEntries,
       '2026-10_exp_parking'
     );
     const availableAfterUncheck = getAvailableConcepts(
@@ -76,7 +76,7 @@ describe('domain/checklist — Monthly Checklist Core Rules', () => {
     expect(availableAfterUncheck.map((c) => c.id)).toContain('exp_parking');
 
     const afterDelete = deleteMovement(
-      octoberEntries,
+      sampleEntries,
       concepts,
       '2026-10_inc_salary'
     );
@@ -90,7 +90,7 @@ describe('domain/checklist — Monthly Checklist Core Rules', () => {
   });
 
   it('keeps allowMultiplePerMonth concepts ("Otro" and "Otros ingresos") ALWAYS available even after multiple completions', () => {
-    let currentEntries = [...octoberEntries];
+    let currentEntries = [...sampleEntries];
 
     currentEntries = registerMovement(currentEntries, concepts, {
       monthKey: '2026-10',
@@ -149,7 +149,7 @@ describe('domain/checklist — Monthly Checklist Core Rules', () => {
   });
 
   it('reaches "Mes completo" (12/12, 100%) when all pending non-repeatable concepts are completed', () => {
-    let entries = [...octoberEntries];
+    let entries = [...sampleEntries];
     const pendingIds = [
       'inc_bonus',
       'exp_phone_plan',
@@ -188,7 +188,7 @@ describe('domain/checklist — Monthly Checklist Core Rules', () => {
     expect(isConceptActiveInMonth(archivedConcept, '2026-10')).toBe(false);
 
     expect(() =>
-      registerMovement(octoberEntries, concepts, {
+      registerMovement(sampleEntries, concepts, {
         monthKey: '2026-10',
         conceptId: 'non_existent',
         completedAt: '2026-10-28',
@@ -196,7 +196,7 @@ describe('domain/checklist — Monthly Checklist Core Rules', () => {
     ).toThrow(/not found/);
 
     expect(() =>
-      registerMovement(octoberEntries, concepts, {
+      registerMovement(sampleEntries, concepts, {
         monthKey: '2026-10',
         conceptId: 'inc_salary',
         completedAt: '2026-10-28',
@@ -224,7 +224,7 @@ describe('domain/checklist — Monthly Checklist Core Rules', () => {
 
   it('toggleMovementStatus toggles movements back and forth in-place without duplicating entries', () => {
     // 1. Register a new repeatable movement (e.g. exp_other)
-    const registered = registerMovement(octoberEntries, concepts, {
+    const registered = registerMovement(sampleEntries, concepts, {
       monthKey: '2026-10',
       conceptId: 'exp_other',
       actualAmount: 75_000,

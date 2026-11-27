@@ -10,7 +10,7 @@ import { PLATFORM_SKIN_IDS, type PlatformSkinId } from '../../../../design-syste
 import type { MonthlyHistoryPoint } from '../../../../domain';
 import { SavingsTrendCharts } from '../SavingsTrendCharts';
 
-const OCTOBER: MonthlyHistoryPoint = {
+const SAMPLE_MONTH: MonthlyHistoryPoint = {
   monthKey: '2026-10',
   isClosed: false,
   plannedIncome: 6_000_000,
@@ -32,8 +32,8 @@ const OCTOBER: MonthlyHistoryPoint = {
   totalSavings: 4_380_000,
 };
 
-const CUSTOM_USER_OCTOBER: MonthlyHistoryPoint = {
-  ...OCTOBER,
+const CUSTOM_USER_SAMPLE_MONTH: MonthlyHistoryPoint = {
+  ...SAMPLE_MONTH,
   reserveName: 'Fondo de Reserva',
   reserveBalance: 0,
   savingsName: 'Ahorros',
@@ -46,7 +46,7 @@ const CUSTOM_USER_OCTOBER: MonthlyHistoryPoint = {
   totalSavings: 800_000,
 };
 
-function renderChart(history: MonthlyHistoryPoint[] = [OCTOBER], skin: PlatformSkinId = 'ios') {
+function renderChart(history: MonthlyHistoryPoint[] = [SAMPLE_MONTH], skin: PlatformSkinId = 'ios') {
   return render(
     <BFlowThemeProvider skin={skin}>
       <SavingsTrendCharts history={history} />
@@ -56,7 +56,7 @@ function renderChart(history: MonthlyHistoryPoint[] = [OCTOBER], skin: PlatformS
 
 describe.each(PLATFORM_SKIN_IDS)('SavingsTrendCharts on the %s skin', (skin) => {
   it('reproduces K4 and K5 in the readout of the active month', () => {
-    renderChart([OCTOBER], skin);
+    renderChart([SAMPLE_MONTH], skin);
 
     expect(screen.getByRole('header')).toHaveTextContent('Evolución de ahorros');
     const balances = screen.getByTestId('savings-trend-chart-readout');
@@ -66,7 +66,7 @@ describe.each(PLATFORM_SKIN_IDS)('SavingsTrendCharts on the %s skin', (skin) => 
   });
 
   it('shows only the custom funds owned by a new user without preset buckets', () => {
-    renderChart([CUSTOM_USER_OCTOBER], skin);
+    renderChart([CUSTOM_USER_SAMPLE_MONTH], skin);
 
     const balances = screen.getByTestId('savings-trend-chart-readout');
     expect(balances).toHaveTextContent(/Emergencias\s*\$ 500\.000/);
@@ -83,13 +83,13 @@ describe('SavingsTrendCharts', () => {
     expect(screen.getByTestId('savings-trend-chart-readout')).not.toHaveTextContent(/Otros fondos/);
     expect(screen.queryByTestId('savings-trend-chart-legend')).toBeNull();
     expect(screen.getByTestId('savings-chart-trend')).not.toHaveTextContent(/Total/);
-    // The ideal provision chart was removed from the Savings tab.
+    // The provision chart was removed from the Savings tab.
     expect(screen.queryByTestId('savings-chart-provision')).toBeNull();
   });
 
   it('shows each custom bucket under its own name instead of grouping into Otros fondos', () => {
     const november: MonthlyHistoryPoint = {
-      ...OCTOBER,
+      ...SAMPLE_MONTH,
       monthKey: '2026-11',
       otherSavingsBalance: 300_000,
       savingsBuckets: [
@@ -99,23 +99,23 @@ describe('SavingsTrendCharts', () => {
       ],
       totalSavings: 4_680_000,
     };
-    renderChart([OCTOBER, november]);
+    renderChart([SAMPLE_MONTH, november]);
     const readout = screen.getByTestId('savings-trend-chart-readout');
     expect(readout).toHaveTextContent(/Viaje\s*\$ 300\.000/);
     expect(readout).not.toHaveTextContent(/Otros fondos/);
   });
 
   it('renders an empty state when the user has no savings funds', () => {
-    renderChart([{ ...CUSTOM_USER_OCTOBER, savingsBuckets: [], totalSavings: 0 }]);
+    renderChart([{ ...CUSTOM_USER_SAMPLE_MONTH, savingsBuckets: [], totalSavings: 0 }]);
     expect(screen.getByTestId('savings-trend-chart-empty')).toBeTruthy();
     expect(screen.queryByTestId('savings-trend-chart')).toBeNull();
   });
 
   it('reads any month of the history when touched', () => {
     renderChart([
-      OCTOBER,
+      SAMPLE_MONTH,
       {
-        ...OCTOBER,
+        ...SAMPLE_MONTH,
         monthKey: '2026-11',
         reserveBalance: 2_500_000,
         savingsBuckets: [

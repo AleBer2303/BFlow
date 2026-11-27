@@ -70,21 +70,21 @@ function installFirestore(options: { failReads?: boolean } = {}): void {
   });
 }
 
-function seedClosedOctober(): void {
-  const seed = buildSampleWorkspace();
+function closeSampleMonthFixture(): void {
+  const sample = buildSampleWorkspace();
   const closed = closeMonthAndRollover({
     closingMonthKey: '2026-10',
     closedAtIso: '2026-11-01T00:00:00.000Z',
-    concepts: seed.concepts,
-    entries: seed.entries,
-    debts: seed.debts,
-    debtPayments: seed.debtPayments,
-    savingsBuckets: seed.savingsBuckets,
+    concepts: sample.concepts,
+    entries: sample.entries,
+    debts: sample.debts,
+    debtPayments: sample.debtPayments,
+    savingsBuckets: sample.savingsBuckets,
   });
   const base = `users/${uid}`;
   collections = new Map([
-    [`${base}/concepts`, seed.concepts.map(serializeConceptForFirestore)],
-    [`${base}/entries`, seed.entries.map(serializeMonthEntryForFirestore)],
+    [`${base}/concepts`, sample.concepts.map(serializeConceptForFirestore)],
+    [`${base}/entries`, sample.entries.map(serializeMonthEntryForFirestore)],
     [`${base}/debts`, closed.nextMonthDebts.map(serializeDebtForFirestore)],
     [
       `${base}/savingsBuckets`,
@@ -99,7 +99,7 @@ function seedClosedOctober(): void {
 }
 
 describe('reopen / delete month restore writes (CC-06)', () => {
-  beforeEach(() => seedClosedOctober());
+  beforeEach(() => closeSampleMonthFixture());
 
   it('reopens a month restoring its October balances in the same batch as the snapshot delete', async () => {
     installFirestore();
@@ -111,9 +111,9 @@ describe('reopen / delete month restore writes (CC-06)', () => {
     const debtWrites = ops.filter((op) => op.path.startsWith(`users/${uid}/debts/`));
     const bucketWrites = ops.filter((op) => op.path.startsWith(`users/${uid}/savingsBuckets/`));
 
-    const seedDebts = buildSampleWorkspace().debts;
+    const sampleDebts = buildSampleWorkspace().debts;
     expect(debtWrites.map((op) => [op.path.split('/').pop(), op.data?.openingBalance])).toEqual(
-      seedDebts.map((d) => [d.id, d.openingBalance])
+      sampleDebts.map((d) => [d.id, d.openingBalance])
     );
     expect(bucketWrites.length).toBeGreaterThan(0);
     for (const op of [...debtWrites, ...bucketWrites]) {

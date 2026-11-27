@@ -116,11 +116,11 @@ describe('InitialAccountSetupView (Onboarding / Account Reset Wizard)', () => {
     expect(screen.getByTestId('debt-form-amount-input').props.keyboardType).toBe('number-pad');
     fireEvent.changeText(screen.getByTestId('debt-form-amount-input'), '2000000');
     expect(screen.getByTestId('debt-form-amount-input').props.value).toBe('2.000.000');
-    fireEvent.changeText(screen.getByTestId('debt-form-name-input'), 'Crédito Moto');
+    fireEvent.changeText(screen.getByTestId('debt-form-name-input'), 'Crédito Carro');
     fireEvent.changeText(screen.getByTestId('debt-form-lender-input'), 'Bancolombia');
     fireEvent.changeText(screen.getByTestId('debt-form-installment-input'), '200000');
     fireEvent.press(screen.getByTestId('debt-form-submit-button'));
-    expect(screen.getByText('Crédito Moto (Bancolombia)')).toBeTruthy();
+    expect(screen.getByText('Crédito Carro (Bancolombia)')).toBeTruthy();
     expect(screen.queryByTestId('debt-form-modal')).toBeNull();
 
     // 3. Add income via ChecklistAddMovementForm
@@ -136,15 +136,15 @@ describe('InitialAccountSetupView (Onboarding / Account Reset Wizard)', () => {
     // 4. Add expense linked to debt via ChecklistAddMovementForm ("Más opciones" -> AdaptiveSelectField)
     fireEvent.press(screen.getByTestId('onboarding-toggle-add-movement'));
     fireEvent.changeText(screen.getByTestId('movement-amount-input'), '200000');
-    fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Cuota Préstamo Moto');
+    fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Cuota Préstamo Carro');
     fireEvent.press(screen.getByTestId('custom-group-fixed'));
     fireEvent.press(screen.getByTestId('add-movement-more-options-toggle'));
     fireEvent.press(screen.getByTestId('add-movement-debt-select'));
-    fireEvent.press(screen.getByText('Crédito Moto'));
+    fireEvent.press(screen.getByText('Crédito Carro'));
     fireEvent.press(screen.getByTestId('add-movement-debt-picker-confirm'));
     fireEvent.press(screen.getByTestId('submit-movement-button'));
-    expect(screen.getByText('Cuota Préstamo Moto')).toBeTruthy();
-    expect(screen.getByText(/Abona a: Crédito Moto/)).toBeTruthy();
+    expect(screen.getByText('Cuota Préstamo Carro')).toBeTruthy();
+    expect(screen.getByText(/Abona a: Crédito Carro/)).toBeTruthy();
     expect(screen.queryByTestId('add-movement-modal-card')).toBeNull();
 
     // 5. Add provision via ProvisionItemForm
@@ -175,7 +175,7 @@ describe('InitialAccountSetupView (Onboarding / Account Reset Wizard)', () => {
     expect(config?.savingsBuckets[0]?.openingBalanceCop).toBe(500000);
 
     expect(config?.debts).toHaveLength(1);
-    expect(config?.debts[0]?.name).toBe('Crédito Moto');
+    expect(config?.debts[0]?.name).toBe('Crédito Carro');
     expect(config?.debts[0]?.openingBalanceCop).toBe(2000000);
     expect(config?.debts[0]?.monthlyInstallmentCop).toBe(200000);
 
@@ -185,7 +185,7 @@ describe('InitialAccountSetupView (Onboarding / Account Reset Wizard)', () => {
     expect(config?.incomes[0]?.group).toBe('fixed');
 
     expect(config?.expenses).toHaveLength(1);
-    expect(config?.expenses[0]?.name).toBe('Cuota Préstamo Moto');
+    expect(config?.expenses[0]?.name).toBe('Cuota Préstamo Carro');
     expect(config?.expenses[0]?.amountCop).toBe(200000);
     expect(config?.expenses[0]?.targetDebtKey).toContain('debt_');
 

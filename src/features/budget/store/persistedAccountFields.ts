@@ -21,7 +21,7 @@ export const PERSISTED_ACCOUNT_FIELDS = [
   'debtsByMonth',
   'debtPayments',
   'savingsBucketsByMonth',
-  'idealMotoPlan',
+  'provisionPlan',
   'closedSnapshots',
   'financialAccounts',
   'needsOnboarding',
@@ -43,7 +43,7 @@ export function havePersistedAccountFieldsChanged(
   return PERSISTED_ACCOUNT_FIELDS.some((field) => previous[field] !== next[field]);
 }
 
-/** Sessions that never have a device cache: the local showcase and test owners. */
+/** Sessions that never have a device cache: the local showcase user. */
 const LOCAL_ONLY_UIDS: ReadonlySet<string> = new Set(['local-demo']);
 
 export function buildPersistedAccountData(state: PersistedAccountFields): FullCloudAccountData {
@@ -55,7 +55,7 @@ export function buildPersistedAccountData(state: PersistedAccountFields): FullCl
     debtsByMonth: state.debtsByMonth,
     debtPayments: state.debtPayments,
     savingsBucketsByMonth: state.savingsBucketsByMonth,
-    provisionPlan: state.idealMotoPlan,
+    provisionPlan: state.provisionPlan,
     closedSnapshots: state.closedSnapshots,
     financialAccounts: state.financialAccounts,
     needsOnboarding: state.needsOnboarding,

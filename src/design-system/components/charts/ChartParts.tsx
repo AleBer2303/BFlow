@@ -291,7 +291,7 @@ export function ChartTouchColumns({
   );
 }
 
-/** "Octubre 2026: Recibido $ 4.000.000, Pagado $ 2.920.000". */
+/** "Marzo 2027: Recibido $ 4.000.000, Pagado $ 2.920.000". */
 export function describeChartPoint(
   title: string,
   series: readonly { label: string; value: number }[],

@@ -5,6 +5,7 @@
  * No Firestore calls here.
  */
 
+import { DEFAULT_DEBT_GROUP_KEY } from '../../domain/debts/debtCalculator';
 import { sumMoneyIntegers } from '../../domain/money/money';
 import type {
   Concept,
@@ -38,9 +39,6 @@ export function safeParseList<T>(
   }
   return results;
 }
-
-/** Group of a debt that does not say one. */
-export const DEFAULT_DEBT_GROUP_KEY = 'General';
 
 export const EMPTY_PROVISION_PLAN: ProvisionPlan = {
   items: [],

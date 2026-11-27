@@ -29,8 +29,8 @@ const SAMPLE_CONCEPTS: readonly Concept[] = [
     order: 1,
   },
   {
-    id: 'exp_cuota_moto',
-    name: 'Cuota Moto vehículo',
+    id: 'exp_vehicle_payment',
+    name: 'Cuota Carro vehículo',
     type: 'expense',
     group: 'fixed',
     defaultAmount: 550_000,
@@ -66,10 +66,10 @@ const SAMPLE_ENTRIES: readonly MonthEntry[] = [
     status: 'pending',
   },
   {
-    id: '2026-10_exp_cuota_moto',
+    id: '2026-10_exp_vehicle_payment',
     monthKey: '2026-10',
-    conceptId: 'exp_cuota_moto',
-    conceptName: 'Cuota Moto vehículo',
+    conceptId: 'exp_vehicle_payment',
+    conceptName: 'Cuota Carro vehículo',
     type: 'expense',
     group: 'fixed',
     plannedAmount: 550_000,
@@ -92,9 +92,9 @@ const SAMPLE_ENTRIES: readonly MonthEntry[] = [
 const SAMPLE_DEBTS: readonly Debt[] = [
   {
     id: 'debt_auto_loan',
-    name: 'Moto vehículo',
+    name: 'Carro vehículo',
     lender: 'Banco',
-    groupKey: 'MOTO',
+    groupKey: 'CARRO',
     openingBalance: 2_600_000,
     monthKey: '2026-10',
     monthlyInterestRate: 0,
@@ -201,16 +201,16 @@ describe('ChecklistAddMovementForm & HeroAmountField', () => {
     const { onAddOrCompleteMovement, onSubmitted } = renderAddForm();
 
     // Empty name must not render catalog/pending suggestion chips.
-    expect(screen.queryByTestId('add-movement-suggestion-2026-10_exp_cuota_moto')).toBeNull();
+    expect(screen.queryByTestId('add-movement-suggestion-2026-10_exp_vehicle_payment')).toBeNull();
     expect(screen.queryByTestId('add-movement-pending-match-hint')).toBeNull();
 
     // Typing >= 2 matching characters offers inline suggestion for pending entry.
     fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Cuota');
-    const suggestion = screen.getByTestId('add-movement-suggestion-2026-10_exp_cuota_moto');
+    const suggestion = screen.getByTestId('add-movement-suggestion-2026-10_exp_vehicle_payment');
     expect(suggestion).toBeTruthy();
 
     fireEvent.press(suggestion);
-    expect(screen.getByTestId('custom-concept-name-input').props.value).toBe('Cuota Moto vehículo');
+    expect(screen.getByTestId('custom-concept-name-input').props.value).toBe('Cuota Carro vehículo');
     expect(screen.getByTestId('movement-amount-input').props.value).toBe('550.000');
     expect(screen.getByTestId('add-movement-pending-match-hint')).toBeTruthy();
 
@@ -219,7 +219,7 @@ describe('ChecklistAddMovementForm & HeroAmountField', () => {
     const payload = onAddOrCompleteMovement.mock.calls[0][0];
     expect(payload).toMatchObject({
       monthKey: '2026-10',
-      conceptId: 'exp_cuota_moto',
+      conceptId: 'exp_vehicle_payment',
       actualAmount: 550_000,
     });
     // Preserves existing concept debt linkage instead of overwriting with null.
@@ -253,7 +253,7 @@ describe('ChecklistAddMovementForm & HeroAmountField', () => {
       if (skin !== 'web') {
         fireEvent.press(screen.getByTestId('add-movement-debt-picker-confirm'));
       }
-      expect(screen.getByTestId('add-movement-debt-value')).toHaveTextContent('Moto vehículo');
+      expect(screen.getByTestId('add-movement-debt-value')).toHaveTextContent('Carro vehículo');
 
       // Select savings bucket via AdaptiveSelectField
       fireEvent.press(screen.getByTestId('add-movement-bucket-select'));
@@ -268,7 +268,7 @@ describe('ChecklistAddMovementForm & HeroAmountField', () => {
       // Collapsing again keeps a concise summary on the toggle row.
       fireEvent.press(screen.getByTestId('add-movement-more-options-toggle'));
       expect(screen.queryByTestId('add-movement-more-options-panel')).toBeNull();
-      expect(screen.getByText('Nota · Moto vehículo · Fondo Emergencia')).toBeTruthy();
+      expect(screen.getByText('Nota · Carro vehículo · Fondo Emergencia')).toBeTruthy();
 
       fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Abono Extra');
       fireEvent.changeText(screen.getByTestId('movement-amount-input'), '200000');
@@ -366,7 +366,7 @@ describe('ChecklistAddMovementForm & HeroAmountField', () => {
       }
 
       fireEvent.press(screen.getByTestId('edit-entry-more-options-toggle'));
-      expect(screen.getByText('Nota · Moto vehículo · Fondo Emergencia')).toBeTruthy();
+      expect(screen.getByText('Nota · Carro vehículo · Fondo Emergencia')).toBeTruthy();
 
       fireEvent.press(screen.getByTestId('edit-entry-persist-once'));
       fireEvent.press(screen.getByTestId('save-edit-entry-button'));

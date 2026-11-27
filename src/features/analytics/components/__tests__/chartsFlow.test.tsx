@@ -1,6 +1,6 @@
 /**
  * Phase 6 charts inside the real app, on the three skins: they appear in the Cierre, Deudas
- * and Ahorros tabs with the golden October 2026 figures and follow the store when a
+ * and Ahorros tabs with the sample month figures and follow the store when a
  * movement is completed or the month is closed. The demo user is not a real account, so
  * nothing here writes to Firestore.
  */
@@ -57,12 +57,12 @@ describe.each(PLATFORM_SKIN_IDS)('charts in the app on the %s skin', (skin) => {
     expect(screen.getByTestId('balance-chart-readout')).toHaveTextContent(/\$ 1\.080\.000/);
 
     fireEvent.press(screen.getByTestId('workspace-tab-debts'));
-    expect(screen.getByTestId('debts-funfami-view')).toBeTruthy();
+    expect(screen.getByTestId('debts-workspace-view')).toBeTruthy();
     expect(screen.getByTestId('debts-chart-trend')).toHaveTextContent(/Cierre estimado: Febrero 2027/);
     expect(screen.getByTestId('debt-trend-chart-readout')).toHaveTextContent(/\$ 6\.200\.000/);
 
     fireEvent.press(screen.getByTestId('workspace-tab-savings'));
-    expect(screen.getByTestId('savings-and-moto-ideal-view')).toBeTruthy();
+    expect(screen.getByTestId('savings-and-provisions-view')).toBeTruthy();
     expect(screen.getByTestId('savings-trend-chart-readout')).toHaveTextContent(/Fondo de reserva\s*\$ 2\.300\.000/);
     expect(screen.queryByTestId('savings-chart-provision')).toBeNull();
   });

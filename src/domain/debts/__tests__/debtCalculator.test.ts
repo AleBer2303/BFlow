@@ -13,17 +13,17 @@ import {
 const sample = buildSampleWorkspace();
 
 const debts = sample.debts as unknown as Debt[];
-const octoberEntries = sample.entries as unknown as MonthEntry[];
+const sampleEntries = sample.entries as unknown as MonthEntry[];
 
-describe('domain/debts — FUNFAMI Debt Calculator & Payoff Projections', () => {
+describe('domain/debts — Debt Calculator & Payoff Projections', () => {
   it('applies custom allocations when their sum matches the installment amount', () => {
-    const installmentEntry = octoberEntries.find((e) => e.conceptId === 'exp_loan_installment')!;
+    const installmentEntry = sampleEntries.find((e) => e.conceptId === 'exp_loan_installment')!;
     const payments = buildDebtPaymentsForInstallment(installmentEntry, debts, [
       { debtId: 'debt_auto_loan', principalAmount: 1_000_000 },
       { debtId: 'debt_education_loan', principalAmount: 800_000 },
     ]);
 
-    const summary = calculateDebtsSummary(debts, octoberEntries, '2026-10', payments);
+    const summary = calculateDebtsSummary(debts, sampleEntries, '2026-10', payments);
     expect(summary.totalRemainingDebt).toBe(6_200_000);
     expect(summary.debts.find((d) => d.debtId === 'debt_auto_loan')?.remainingBalance).toBe(
       3_400_000
@@ -34,7 +34,7 @@ describe('domain/debts — FUNFAMI Debt Calculator & Payoff Projections', () => 
   });
 
   it('rejects custom allocations that do not sum to the installment or exceed debt opening balance', () => {
-    const installmentEntry = octoberEntries.find((e) => e.conceptId === 'exp_loan_installment')!;
+    const installmentEntry = sampleEntries.find((e) => e.conceptId === 'exp_loan_installment')!;
 
     expect(() =>
       buildDebtPaymentsForInstallment(installmentEntry, debts, [
@@ -76,9 +76,9 @@ describe('domain/debts — FUNFAMI Debt Calculator & Payoff Projections', () => 
       },
     ];
 
-    const installment = octoberEntries.find((e) => e.conceptId === 'exp_loan_installment')!;
+    const installment = sampleEntries.find((e) => e.conceptId === 'exp_loan_installment')!;
     const payments = buildDebtPaymentsForInstallment(installment, smallFirstDebts);
-    const summary = calculateDebtsSummary(smallFirstDebts, octoberEntries, '2026-10', payments);
+    const summary = calculateDebtsSummary(smallFirstDebts, sampleEntries, '2026-10', payments);
     expect(summary.debts.find((d) => d.debtId === 'debt_auto_loan')?.remainingBalance).toBe(0);
     expect(summary.debts.find((d) => d.debtId === 'debt_education_loan')?.remainingBalance).toBe(
       2_600_000
@@ -105,7 +105,7 @@ describe('domain/debts — FUNFAMI Debt Calculator & Payoff Projections', () => 
     });
 
     // Unchecked installment entry produces inactive payments
-    const uncheckedEntries = uncompleteMovement(octoberEntries, '2026-10_exp_loan_installment');
+    const uncheckedEntries = uncompleteMovement(sampleEntries, '2026-10_exp_loan_installment');
     const summaryWithoutEntry = calculateDebtsSummary(debts, [], '2026-10');
     expect(summaryWithoutEntry.totalRemainingDebt).toBe(8_000_000);
     expect(
@@ -168,7 +168,7 @@ describe('domain/debts — cascade order (CC-05, ADR 0036)', () => {
     expect(list.map((d) => d.id)).toEqual(['debt_zeta', 'debt_auto_loan', 'debt_alfa']);
   });
 
-  it('no longer gives the seed debt priority without an explicit target', () => {
+  it('no longer gives the sample debt priority without an explicit target', () => {
     const payments = buildDebtPaymentsForInstallment(installment, [
       debt('debt_auto_loan', 1_000_000),
       debt('debt_auto', 300_000),

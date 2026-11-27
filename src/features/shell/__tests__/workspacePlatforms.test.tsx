@@ -51,15 +51,15 @@ function styleOf(testID: string): ViewStyle {
 
 const WORKSPACE_VIEWS = [
   ['checklist', 'checklist-workspace-view'],
-  ['debts', 'debts-funfami-view'],
-  ['savings', 'savings-and-moto-ideal-view'],
+  ['debts', 'debts-workspace-view'],
+  ['savings', 'savings-and-provisions-view'],
   ['analytics', 'analytics-and-history-view'],
   ['account', 'account-profile-workspace-view'],
   ['summary', 'net-flow-hero-card'],
 ] as const;
 
 beforeEach(() => {
-  // Each test starts signed in as the demo owner with the golden month, on a phone.
+  // Each test starts signed in as the demo user with the sample month, on a phone.
   act(() => {
     useBudgetStore.setState({ authUser: DEMO_USER, needsOnboarding: false });
     useBudgetStore.getState().resetToSampleWorkspace();
@@ -74,7 +74,7 @@ afterAll(() => {
 });
 
 describe.each(PLATFORM_SKIN_IDS)('core flows on the %s skin', (skin) => {
-  it('shows the golden October 2026 figures', () => {
+  it('shows the sample month figures', () => {
     renderApp(skin);
 
     expect(screen.getByTestId('golden-net-flow')).toHaveTextContent('$ 1.080.000');
@@ -109,7 +109,7 @@ describe.each(PLATFORM_SKIN_IDS)('core flows on the %s skin', (skin) => {
 
     expect(screen.getByTestId('analytics-and-history-view')).toBeTruthy();
     expect(screen.queryByTestId('checklist-workspace-view')).toBeNull();
-    expect(screen.queryByTestId('debts-funfami-view')).toBeNull();
+    expect(screen.queryByTestId('debts-workspace-view')).toBeNull();
     expect(screen.queryByTestId('net-flow-hero-card')).toBeNull();
 
     for (const hiddenTab of ['summary', 'checklist', 'debts'] as const) {

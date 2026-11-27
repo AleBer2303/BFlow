@@ -234,7 +234,7 @@ describe('Fase 5: renders por acción', () => {
         debtsByMonth: { ...state.debtsByMonth },
         debtPayments: [...state.debtPayments],
         savingsBucketsByMonth: { ...state.savingsBucketsByMonth },
-        provisionPlan: state.idealMotoPlan,
+        provisionPlan: state.provisionPlan,
         closedSnapshots: state.closedSnapshots,
         needsOnboarding: false,
       });
@@ -244,7 +244,7 @@ describe('Fase 5: renders por acción', () => {
     const entry = store
       .getState()
       .entries.find((e) => e.monthKey === store.getState().activeMonthKey);
-    if (!entry) throw new Error('El seed de octubre debe tener movimientos');
+    if (!entry) throw new Error('El sample de octubre debe tener movimientos');
     const visibleRows = store
       .getState()
       .entries.filter((e) => e.monthKey === store.getState().activeMonthKey).length;
@@ -397,7 +397,7 @@ describe('Fase 5: renders por acción', () => {
 
       const monthKey = store.getState().activeMonthKey;
       const entry = store.getState().entries.find((e) => e.monthKey === monthKey);
-      if (!entry) throw new Error('El seed de octubre debe tener movimientos');
+      if (!entry) throw new Error('El sample de octubre debe tener movimientos');
       await act(async () => {
         fireEvent.press(screen.getByTestId(`checklist-workspace-item-${entry.id}`));
       });

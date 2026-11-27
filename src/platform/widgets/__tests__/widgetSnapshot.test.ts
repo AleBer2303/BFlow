@@ -16,15 +16,15 @@ import {
 } from '../widgetSnapshot';
 
 function goldenInput(overrides: Partial<BuildWidgetSnapshotInput> = {}): BuildWidgetSnapshotInput {
-  const seed = buildSampleWorkspace();
+  const sample = buildSampleWorkspace();
   return {
     monthKeys: ['2026-10'],
     monthKey: '2026-10',
-    concepts: seed.concepts,
-    entries: seed.entries,
-    debtPayments: seed.debtPayments,
-    debtsByMonth: { '2026-10': seed.debts },
-    savingsBucketsByMonth: { '2026-10': seed.savingsBuckets },
+    concepts: sample.concepts,
+    entries: sample.entries,
+    debtPayments: sample.debtPayments,
+    debtsByMonth: { '2026-10': sample.debts },
+    savingsBucketsByMonth: { '2026-10': sample.savingsBuckets },
     closedSnapshots: {},
     updatedAtIso: '2026-10-28T12:00:00.000Z',
     ...overrides,
@@ -117,9 +117,9 @@ describe('platform/widgets — contrato WidgetSnapshotV2', () => {
   });
 
   it('recorta nombres largos para que el payload no supere el tope', () => {
-    const seed = buildSampleWorkspace();
+    const sample = buildSampleWorkspace();
     const longName = 'x'.repeat(500);
-    const entries = seed.entries.map((entry) =>
+    const entries = sample.entries.map((entry) =>
       entry.status === 'pending' ? { ...entry, conceptName: longName } : entry
     );
     const snapshot = buildWidgetSnapshot(goldenInput({ entries }));

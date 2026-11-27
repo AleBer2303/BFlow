@@ -13,34 +13,34 @@ import {
 const sample = buildSampleWorkspace();
 
 const concepts = sample.concepts as unknown as Concept[];
-const octoberEntries = sample.entries as unknown as MonthEntry[];
+const sampleEntries = sample.entries as unknown as MonthEntry[];
 const savingsBuckets = sample.savingsBuckets as unknown as SavingsBucket[];
 
-describe('domain/savings & domain/moto-ideal — Savings Buckets and Moto Ideal Calculators', () => {
-  it('gracefully handles accounts with no default moto or savings buckets (e.g. new users or deleted funds)', () => {
-    const budget = calculateMonthlyBudgetSummary(octoberEntries, '2026-10');
-    const emptySummary = calculateMonthlySavingsSummary([], concepts, octoberEntries, budget, '2026-10');
+describe('domain/savings & domain/provisions — Savings Buckets and Provision Plan Calculators', () => {
+  it('gracefully handles accounts with no default reserve or savings buckets (e.g. new users or deleted funds)', () => {
+    const budget = calculateMonthlyBudgetSummary(sampleEntries, '2026-10');
+    const emptySummary = calculateMonthlySavingsSummary([], concepts, sampleEntries, budget, '2026-10');
     expect(emptySummary.hasReserveBucket).toBe(false);
     expect(emptySummary.hasSavingsBucket).toBe(false);
     expect(emptySummary.totalCurrentSavings).toBe(0);
 
-    const onlyMotoSummary = calculateMonthlySavingsSummary(
+    const onlyReserveSummary = calculateMonthlySavingsSummary(
       [savingsBuckets[0]!],
       concepts,
-      octoberEntries,
+      sampleEntries,
       budget,
       '2026-10'
     );
-    expect(onlyMotoSummary.hasReserveBucket).toBe(true);
-    expect(onlyMotoSummary.hasSavingsBucket).toBe(false);
-    expect(onlyMotoSummary.reserve.currentBalance).toBe(2_300_000);
-    expect(onlyMotoSummary.savings.currentBalance).toBe(0);
-    expect(onlyMotoSummary.totalCurrentSavings).toBe(2_300_000);
+    expect(onlyReserveSummary.hasReserveBucket).toBe(true);
+    expect(onlyReserveSummary.hasSavingsBucket).toBe(false);
+    expect(onlyReserveSummary.reserve.currentBalance).toBe(2_300_000);
+    expect(onlyReserveSummary.savings.currentBalance).toBe(0);
+    expect(onlyReserveSummary.totalCurrentSavings).toBe(2_300_000);
   });
 
-  it('computes Moto Ideal monthly gap (-172.667) and strict ceil total (872.668) vs Excel total (872.667)', () => {
+  it('computes the provision plan monthly gap (-172.667) and strict ceil total (872.668) vs the stated total (872.667)', () => {
     const plan = sample.provisionPlan as unknown as ProvisionPlan;
-    const summary = calculateProvisionPlanSummary(plan, octoberEntries, 700_000, '2026-10');
+    const summary = calculateProvisionPlanSummary(plan, sampleEntries, 700_000, '2026-10');
 
     expect(summary.recurringMonthlyTotalCop).toBe(872_667);
     expect(summary.strictCeilRecurringMonthlyTotalCop).toBe(872_668);
@@ -77,7 +77,7 @@ describe('domain/savings & domain/moto-ideal — Savings Buckets and Moto Ideal 
       },
     ];
     const customEntries: MonthEntry[] = [
-      ...octoberEntries,
+      ...sampleEntries,
       {
         id: '2026-10_exp_ahorro_viaje',
         monthKey: '2026-10',
@@ -143,7 +143,7 @@ describe('domain/savings & domain/moto-ideal — Savings Buckets and Moto Ideal 
       ],
     };
 
-    const summary = calculateProvisionPlanSummary(plan, octoberEntries, 0, '2026-10');
+    const summary = calculateProvisionPlanSummary(plan, sampleEntries, 0, '2026-10');
     expect(summary.targetGoals[0]).toMatchObject({
       id: 'goal_laptop',
       targetAmountCop: 1_000_000,

@@ -198,7 +198,7 @@ describe('store/accounts — credit cards and debit accounts (ADR 0034)', () => 
     );
     const concept = state.concepts.find((c) => c.id === pendingIncome?.conceptId);
     if (!pendingIncome || !concept || concept.allowMultiplePerMonth) {
-      throw new Error('Expected a pending single income in the October seed');
+      throw new Error('Expected a pending single income in the October sample');
     }
 
     await useBudgetStore.getState().addOrCompleteMovement({

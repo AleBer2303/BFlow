@@ -383,7 +383,7 @@ export function buildExpenseDistribution(
   return { monthKey, total, slices };
 }
 
-/** Paid against still-pending expenses of the month (Excel B4 and B5). */
+/** Paid against still-pending expenses of the month. */
 export function buildPaidVsPendingSplit(
   budget: Pick<MonthlyBudgetSummary, 'paidExpenses' | 'pendingExpenses'>
 ): PaidVsPendingSplit {

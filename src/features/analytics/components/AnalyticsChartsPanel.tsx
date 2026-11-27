@@ -13,7 +13,7 @@
  * - Previsto vs real: planned against actual, for expenses or incomes.
  * - Pagado vs pendiente: this month's expenses already paid and still pending.
  * - Distribución de gastos: this month's expenses by concept.
- * - "Noviembre 2026 vs Octubre 2026": received, paid and net flow of the last two months.
+ * - "Abril 2027 vs Marzo 2027": received, paid and net flow of the last two months.
  */
 
 import React, { useMemo, useState } from 'react';

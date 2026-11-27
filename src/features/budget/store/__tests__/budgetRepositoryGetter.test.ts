@@ -41,7 +41,7 @@ describe('getBudgetRepository (OPT-06)', () => {
     jest.spyOn(FirestoreBudgetRepository.prototype, 'saveDebt').mockResolvedValue();
 
     const [first, second] = useBudgetStore.getState().entries;
-    if (!first || !second) throw new Error('Expected seeded entries');
+    if (!first || !second) throw new Error('Expected sample entries');
     await useBudgetStore.getState().toggleEntryStatus(first.id);
     await useBudgetStore.getState().toggleEntryStatus(second.id);
     await useBudgetStore.getState().createDebt('2026-10', {

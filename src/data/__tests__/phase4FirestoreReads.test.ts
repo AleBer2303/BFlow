@@ -358,7 +358,7 @@ describe('Phase 4 Part A: Firestore Read Counts & Sequential Cascade Elimination
       `users/${uid}/provisionPlans/moto_ideal`,
     ]);
     expect(state.getDocsCalls).toHaveLength(7);
-    // 1 batch commit to persist initial activeMonthKey + dataRevision on users/{uid} (0 seed collection writes)
+    // 1 batch commit to persist initial activeMonthKey + dataRevision on users/{uid} (0 sample collection writes)
     expect(state.batchCommitCount).toBe(1);
     expect(state.docsByPath.get(`users/${uid}`)?.dataRevision).toBeDefined();
   });

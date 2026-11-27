@@ -14,6 +14,9 @@ import { addMonthsToMonthKey, assertValidMonthKey } from '../date/monthKey';
 import { Debt, DebtPayment, MonthEntry } from '../models/types';
 import { assertSafeMoneyInteger, sumMoneyIntegers } from '../money/money';
 
+/** Group of a debt that does not name one (debts of the same group share installments). */
+export const DEFAULT_DEBT_GROUP_KEY = 'General';
+
 export interface DebtAllocationInput {
   debtId: string;
   principalAmount: number;

@@ -18,7 +18,7 @@ import {
 import { InMemoryBudgetRepository } from '../repositories/budgetRepository';
 import { buildSampleWorkspace } from '../sample/sampleWorkspace';
 
-describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & Security Rules', () => {
+describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Sample, Repository & Security Rules', () => {
   it('resolves an offline placeholder project under tests and rejects placeholder values', () => {
     const defaultEnv = resolveFirebaseEnvironment({});
     expect(defaultEnv.isConfigured).toBe(false);
@@ -33,28 +33,28 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
     expect(placeholderEnv.isConfigured).toBe(false);
   });
 
-  it('builds and validates the complete October 2026 seed payload against Zod schemas', () => {
-    const seed = buildSampleWorkspace();
+  it('builds and validates the complete the sample month sample payload against Zod schemas', () => {
+    const sample = buildSampleWorkspace();
 
-    expect(seed.monthKey).toBe('2026-10');
-    expect(seed.concepts).toHaveLength(14);
-    expect(seed.entries).toHaveLength(12);
-    expect(seed.debts).toHaveLength(2);
-    expect(seed.debtPayments).toHaveLength(1);
-    expect(seed.savingsBuckets).toHaveLength(2);
-    expect(seed.provisionPlan.items).toHaveLength(9);
+    expect(sample.monthKey).toBe('2026-10');
+    expect(sample.concepts).toHaveLength(14);
+    expect(sample.entries).toHaveLength(12);
+    expect(sample.debts).toHaveLength(2);
+    expect(sample.debtPayments).toHaveLength(1);
+    expect(sample.savingsBuckets).toHaveLength(2);
+    expect(sample.provisionPlan.items).toHaveLength(9);
 
-    const budget = calculateMonthlyBudgetSummary(seed.entries, '2026-10');
+    const budget = calculateMonthlyBudgetSummary(sample.entries, '2026-10');
     expect(budget.receivedIncome).toBe(4_000_000);
     expect(budget.paidExpenses).toBe(2_920_000);
     expect(budget.pendingExpenses).toBe(450_000);
     expect(budget.netCashFlow).toBe(1_080_000);
 
     const debtsSummary = calculateDebtsSummary(
-      seed.debts,
-      seed.entries,
+      sample.debts,
+      sample.entries,
       '2026-10',
-      seed.debtPayments
+      sample.debtPayments
     );
     expect(debtsSummary.totalRemainingDebt).toBe(6_200_000);
   });
@@ -121,17 +121,17 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
     ).toThrow(/totalApplied must equal principalAmount \+ interestAmount/);
 
     // Roundtrip valid serialization
-    const seed = buildSampleWorkspace();
-    const serializedConcept = serializeConceptForFirestore(seed.concepts[0]!);
-    expect(parseConceptFromFirestore(serializedConcept).id).toBe(seed.concepts[0]!.id);
+    const sample = buildSampleWorkspace();
+    const serializedConcept = serializeConceptForFirestore(sample.concepts[0]!);
+    expect(parseConceptFromFirestore(serializedConcept).id).toBe(sample.concepts[0]!.id);
 
-    const serializedEntry = serializeMonthEntryForFirestore(seed.entries[0]!);
-    expect(parseMonthEntryFromFirestore(serializedEntry).id).toBe(seed.entries[0]!.id);
+    const serializedEntry = serializeMonthEntryForFirestore(sample.entries[0]!);
+    expect(parseMonthEntryFromFirestore(serializedEntry).id).toBe(sample.entries[0]!.id);
 
-    const serializedPayment = serializeDebtPaymentForFirestore(seed.debtPayments[0]!);
+    const serializedPayment = serializeDebtPaymentForFirestore(sample.debtPayments[0]!);
     expect(parseDebtPaymentFromFirestore(serializedPayment).totalApplied).toBe(1_800_000);
 
-    expect(parseSavingsBucketFromFirestore(seed.savingsBuckets[0]!).openingBalance).toBe(
+    expect(parseSavingsBucketFromFirestore(sample.savingsBuckets[0]!).openingBalance).toBe(
       1_600_000
     );
   });
@@ -192,17 +192,17 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
       conceptId: 'exp_other',
       actualAmount: 50_000,
       completedAt: '2026-10-28',
-      note: 'Lavado moto',
+      note: 'Lavado carro',
     });
     expect(addedVariable.conceptId).toBe('exp_other');
     expect(addedVariable.actualAmount).toBe(50_000);
 
-    // Close October 2026 and rollover to November 2026
+    // Close the sample month and rollover to November 2026
     const closeResult = await repo.closeMonth('user_123', '2026-10');
     expect(closeResult.nextMonthKey).toBe('2026-11');
     expect(closeResult.snapshot.totalClosingDebt).toBe(6_200_000);
 
-    // Historical October 2026 workspace must preserve its original opening balances (no double-subtraction)
+    // Historical the sample month workspace must preserve its original opening balances (no double-subtraction)
     const octClosedWorkspace = await repo.loadMonthWorkspace('user_123', '2026-10');
     const octClosedDebtSummary = calculateDebtsSummary(
       octClosedWorkspace.debts,
@@ -272,9 +272,9 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
     expect(afterDeleteConcept.concepts.find((c) => c.id === 'custom_freelance')).toBeUndefined();
 
     // Save savings bucket opening balance
-    await repo.saveSavingsBucket('user_123', 'moto', 1_700_000, '2026-10');
+    await repo.saveSavingsBucket('user_123', 'reserve', 1_700_000, '2026-10');
     const afterBucketSave = await repo.loadMonthWorkspace('user_123', '2026-10');
-    expect(afterBucketSave.savingsBuckets.find((b) => b.id === 'moto')?.openingBalance).toBe(
+    expect(afterBucketSave.savingsBuckets.find((b) => b.id === 'reserve')?.openingBalance).toBe(
       1_700_000
     );
 
@@ -289,7 +289,7 @@ describe('Phase 3: Firebase Config, Zod Mappers, Idempotent Seed, Repository & S
     expect(afterReopen.closedSnapshot).toBeUndefined();
   });
 
-  it('validates that firestore.rules enforces strict owner isolation, COP integers, and all 7 subcollections', () => {
+  it('validates that firestore.rules enforces strict per-user isolation, COP integers, and all 7 subcollections', () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fs = require('fs') as { readFileSync: (p: string, enc: string) => string };
     const rulesContent = fs.readFileSync('firestore.rules', 'utf8');

@@ -32,7 +32,7 @@ const PAYMENTS = sample.debtPayments as unknown as DebtPayment[];
 const DEBTS = sample.debts as unknown as Debt[];
 const BUCKETS = sample.savingsBuckets as unknown as SavingsBucket[];
 
-function octoberInput(overrides: Partial<MonthlyHistoryInput> = {}): MonthlyHistoryInput {
+function sampleMonthInput(overrides: Partial<MonthlyHistoryInput> = {}): MonthlyHistoryInput {
   return {
     monthKeys: ['2026-10'],
     activeMonthKey: '2026-10',
@@ -47,7 +47,7 @@ function octoberInput(overrides: Partial<MonthlyHistoryInput> = {}): MonthlyHist
 }
 
 /** October closed with the real rollover, November open and untouched. */
-function closedOctoberInput(): MonthlyHistoryInput {
+function closedSampleMonthInput(): MonthlyHistoryInput {
   const result = closeMonthAndRollover({
     closingMonthKey: '2026-10',
     closedAtIso: '2026-10-31T23:00:00.000Z',
@@ -57,7 +57,7 @@ function closedOctoberInput(): MonthlyHistoryInput {
     debtPayments: PAYMENTS,
     savingsBuckets: BUCKETS,
   });
-  return octoberInput({
+  return sampleMonthInput({
     monthKeys: ['2026-11', '2026-10'],
     activeMonthKey: '2026-11',
     entries: [...ENTRIES, ...result.nextMonthEntries],
@@ -130,8 +130,8 @@ describe('resolveHistoryWindow', () => {
 });
 
 describe('buildMonthlyHistory', () => {
-  it('reproduces the October 2026 golden values for an open month', () => {
-    const [october] = buildMonthlyHistory(octoberInput());
+  it('reproduces the sample month figures for an open month', () => {
+    const [october] = buildMonthlyHistory(sampleMonthInput());
 
     expect(october).toEqual({
       monthKey: '2026-10',
@@ -157,7 +157,7 @@ describe('buildMonthlyHistory', () => {
   });
 
   it('reads a closed month from its snapshot and the next month from the rollover', () => {
-    const history = buildMonthlyHistory(closedOctoberInput());
+    const history = buildMonthlyHistory(closedSampleMonthInput());
 
     expect(history.map((point) => point.monthKey)).toEqual(['2026-10', '2026-11']);
     const [october, november] = history as [MonthlyHistoryPoint, MonthlyHistoryPoint];
@@ -185,7 +185,7 @@ describe('buildMonthlyHistory', () => {
   });
 
   it('prefers the frozen snapshot over the live entries of a closed month', () => {
-    const input = closedOctoberInput();
+    const input = closedSampleMonthInput();
     const snapshot = input.closedSnapshots['2026-10'] as MonthSnapshot;
     const frozen: MonthSnapshot = {
       ...snapshot,
@@ -210,7 +210,7 @@ describe('buildMonthlyHistory', () => {
   });
 
   it('computes the active month live even when it is closed, so it agrees with the cards', () => {
-    const input = closedOctoberInput();
+    const input = closedSampleMonthInput();
     // Back to October from the history, then a pending expense is paid after the close.
     const edited = input.entries.map((entry) =>
       entry.id === '2026-10_exp_gym'
@@ -233,7 +233,7 @@ describe('buildMonthlyHistory', () => {
   });
 
   it('uses the default bucket names when the stored ones are blank', () => {
-    const input = closedOctoberInput();
+    const input = closedSampleMonthInput();
     const snapshot = input.closedSnapshots['2026-10'] as MonthSnapshot;
     const legacy: MonthSnapshot = {
       ...snapshot,
@@ -259,7 +259,7 @@ describe('buildMonthlyHistory', () => {
 
   it('adds user buckets individually and omits preset funds the user does not own', () => {
     const [october] = buildMonthlyHistory(
-      octoberInput({
+      sampleMonthInput({
         savingsBucketsByMonth: {
           '2026-10': [...BUCKETS, { id: 'trip', name: 'Viaje', openingBalance: 300_000 }],
         },
@@ -281,7 +281,7 @@ describe('buildMonthlyHistory', () => {
       { id: 'custom_trip', name: 'Viaje', openingBalance: 300_000 },
     ];
     const [customUser] = buildMonthlyHistory(
-      octoberInput({
+      sampleMonthInput({
         entries: [],
         debtsByMonth: {},
         savingsBucketsByMonth: { '2026-10': customOnlyBuckets },
@@ -325,7 +325,7 @@ describe('buildMonthlyHistory', () => {
     ]);
 
     const [empty] = buildMonthlyHistory(
-      octoberInput({
+      sampleMonthInput({
         entries: [],
         debtsByMonth: {},
         savingsBucketsByMonth: {},
@@ -451,7 +451,7 @@ describe('buildExpenseDistribution', () => {
 });
 
 describe('buildPaidVsPendingSplit', () => {
-  it('matches Excel B4 and B5 for October 2026', () => {
+  it('splits paid and pending expenses of the sample month', () => {
     const split = buildPaidVsPendingSplit(calculateMonthlyBudgetSummary(ENTRIES, '2026-10'));
     expect(split).toEqual({
       paid: 2_920_000,
@@ -492,8 +492,8 @@ describe('buildMonthComparison', () => {
 });
 
 describe('buildDebtTrajectory', () => {
-  it('projects the October 2026 debt to zero in the payoff month of the Debts tab', () => {
-    const history = buildMonthlyHistory(octoberInput());
+  it('projects the sample month debt to zero in the payoff month of the Debts tab', () => {
+    const history = buildMonthlyHistory(sampleMonthInput());
     const summary = calculateDebtsSummary(DEBTS, ENTRIES, '2026-10', PAYMENTS);
     const trajectory = buildDebtTrajectory(history, summary.projection);
 

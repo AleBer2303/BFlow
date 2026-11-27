@@ -1,16 +1,14 @@
 /**
  * src/features/budget/store/slices/createDebtsSlice.ts
  *
- * Debts, interest rate conversions and debt installment cascading slice.
+ * Debts and interest rate conversions slice.
  */
 
 import {
   annualToMonthlyRate,
-  buildDebtPaymentsForInstallment,
   monthlyToAnnualRate,
   type Debt,
   type DebtInterestRateType,
-  type MonthEntry,
 } from '../../../../domain';
 import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
@@ -263,82 +261,6 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
           });
         },
         friendlyErrorMessage: 'No se pudo eliminar la deuda en la nube.',
-        setStoreState: set,
-        onWidgetSync: () => triggerWidgetSync(get()),
-      });
-    }
-  },
-
-  updateInstallmentAmount: async (monthKey, newAmount) => {
-    return get().updateFunfamiInstallmentAmount(monthKey, newAmount);
-  },
-
-  updateFunfamiInstallmentAmount: async (monthKey, newAmountCop) => {
-    const state = get();
-    const previousEntries = state.entries;
-    const previousDebtPayments = state.debtPayments;
-
-    const safeAmount = Math.max(0, Math.round(newAmountCop));
-    if (safeAmount <= 0) return;
-
-    const installmentEntry = state.entries.find(
-      (e) =>
-        e.monthKey === monthKey &&
-        (e.conceptId === 'exp_cuota_funfami' ||
-          e.conceptName.toLowerCase().includes('cuota') ||
-          e.conceptId.includes('cuota'))
-    );
-    if (!installmentEntry) return;
-
-    const updatedEntry: MonthEntry = {
-      ...installmentEntry,
-      plannedAmount: safeAmount,
-      actualAmount: safeAmount,
-    };
-
-    const nextEntries = state.entries.map((e) => (e.id === installmentEntry.id ? updatedEntry : e));
-    const monthDebts = state.debtsByMonth[monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
-    const cascadedPayments = buildDebtPaymentsForInstallment(updatedEntry, monthDebts);
-
-    const nextDebtPayments = [
-      ...state.debtPayments.filter((dp) => dp.entryId !== installmentEntry.id),
-      ...cascadedPayments,
-    ];
-
-    set({
-      entries: nextEntries,
-      debtPayments: nextDebtPayments,
-    });
-    triggerWidgetSync(get());
-
-    const authUser = state.authUser;
-    if (isRealAuthUser(authUser)) {
-      const uid = authUser.uid;
-      await executeOptimisticCloudWrite({
-        uid,
-        operation: {
-          type: 'save_or_update_entry',
-          payload: {
-            entry: updatedEntry,
-            debtPayments: cascadedPayments,
-          },
-        },
-        performCloudWrite: async () => {
-          const repo = getBudgetRepository();
-          await repo.saveOrUpdateEntry(
-            uid,
-            updatedEntry,
-            undefined,
-            cascadedPayments
-          );
-        },
-        rollback: () => {
-          set({
-            entries: previousEntries,
-            debtPayments: previousDebtPayments,
-          });
-        },
-        friendlyErrorMessage: 'No se pudo actualizar la cuota en la nube.',
         setStoreState: set,
         onWidgetSync: () => triggerWidgetSync(get()),
       });

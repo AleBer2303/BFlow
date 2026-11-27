@@ -104,9 +104,9 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     );
 
     fireEvent.press(screen.getByTestId('workspace-tab-debts'));
-    expect(screen.getByTestId('debts-funfami-view')).toBeTruthy();
+    expect(screen.getByTestId('debts-workspace-view')).toBeTruthy();
     expect(screen.getByText('Total Deudas')).toBeTruthy();
-    expect(screen.getByTestId('funfami-hero-remaining')).toHaveTextContent('$ 6.200.000');
+    expect(screen.getByTestId('debts-hero-remaining')).toHaveTextContent('$ 6.200.000');
     expect(screen.getByTestId('debt-remaining-debt_auto_loan')).toHaveTextContent(
       '$ 2.600.000'
     );
@@ -130,7 +130,7 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     expect(screen.getByText('Tarjeta de crédito')).toBeTruthy();
   });
 
-  it('renders Ahorros & Moto IDEAL screens without Excel cell references', () => {
+  it('renders Ahorros & Provisiones screens without spreadsheet cell references', () => {
     render(
       <BFlowThemeProvider initialMode="dark">
         <PhaseOneHomeScreen />
@@ -138,16 +138,16 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     );
 
     fireEvent.press(screen.getByTestId('workspace-tab-savings'));
-    expect(screen.getByTestId('savings-and-moto-ideal-view')).toBeTruthy();
+    expect(screen.getByTestId('savings-and-provisions-view')).toBeTruthy();
 
     expect(screen.getByTestId('savings-hero-total')).toHaveTextContent('$ 4.380.000');
-    expect(screen.getByTestId('bucket-moto-current')).toHaveTextContent('$ 2.300.000');
+    expect(screen.getByTestId('bucket-reserve-current')).toHaveTextContent('$ 2.300.000');
     expect(screen.getByTestId('bucket-savings-current')).toHaveTextContent('$ 2.080.000');
     expect(screen.getByText('Tras pendientes: $ 1.630.000')).toBeTruthy();
 
-    expect(screen.getByText('Cuota ideal: $ 872.667/mes')).toBeTruthy();
+    expect(screen.getByText('Cuota mensual: $ 872.667/mes')).toBeTruthy();
     expect(
-      screen.getByTestId('moto-target-goal-goal_planned_purchase')
+      screen.getByTestId('provision-target-goal-goal_planned_purchase')
     ).toBeTruthy();
     expect(screen.getByText('Meta: 2027-08')).toBeTruthy();
 

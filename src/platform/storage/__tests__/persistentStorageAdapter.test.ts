@@ -58,7 +58,7 @@ describe('storageCipher (NIST SHA-256 & AES-256-CTR + HMAC-SHA256)', () => {
     const token = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90';
     const pepper = 'palabra-secreta-bflow-2026';
     const secretJson = JSON.stringify({
-      uid: 'uid_owner',
+      uid: 'uid_demo',
       netCashFlow: 1_080_000,
       refreshToken: 'eyJhbGciOiJSUzI1NiIsImtpZCI6IjEifQ',
     });

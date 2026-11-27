@@ -15,6 +15,7 @@ import {
   getMonthNumberFromMonthKey,
   registerMovement,
   toAppIsoDate,
+  toAppMonthKey,
   toggleMovementStatus,
   toSlugId,
   type Concept,
@@ -61,7 +62,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     let nextDebtPayments = state.debtPayments;
     if ((concept?.linkedDebtGroup || concept?.defaultTargetDebtId) && updatedEntry) {
       const monthDebts =
-        state.debtsByMonth[updatedEntry.monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
+        state.debtsByMonth[updatedEntry.monthKey] ?? [];
       const cascadedPayments = buildDebtPaymentsForInstallment(
         updatedEntry,
         monthDebts,
@@ -121,7 +122,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     const previousDebtPayments = state.debtPayments;
 
     const monthDebts =
-      state.debtsByMonth[input.monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
+      state.debtsByMonth[input.monthKey] ?? [];
     let concept = state.concepts.find((c) => c.id === input.conceptId);
     let nextConcepts = state.concepts;
 
@@ -226,7 +227,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     if (!trimmedName || safeAmount <= 0) return;
 
     const monthDebts =
-      state.debtsByMonth[input.monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
+      state.debtsByMonth[input.monthKey] ?? [];
     const slug = toSlugId(trimmedName);
     const customConceptId = `${input.type === 'income' ? 'inc' : 'exp'}_custom_${slug}_${Date.now().toString(36)}`;
     const baseConcept: Concept = {
@@ -341,7 +342,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     if (!target) return;
 
     const monthDebts =
-      state.debtsByMonth[state.activeMonthKey] ?? state.debtsByMonth['2026-10'] ?? [];
+      state.debtsByMonth[state.activeMonthKey] ?? [];
     const baseUpdated: Concept = {
       ...target,
       ...(updates.name?.trim() ? { name: updates.name.trim() } : {}),
@@ -522,7 +523,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     );
 
     const monthDebts =
-      state.debtsByMonth[updatedEntry.monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
+      state.debtsByMonth[updatedEntry.monthKey] ?? [];
     const existingConcept = state.concepts.find((c) => c.id === target.conceptId);
     const updatedConcept = existingConcept
       ? applyConceptLinkageUpdates(
@@ -904,7 +905,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     const remainingMonths = sortedMonths.filter((m) => m !== monthKey);
     const targetIndex = sortedMonths.indexOf(monthKey);
     const fallbackMonth =
-      remainingMonths[Math.max(0, targetIndex - 1)] ?? remainingMonths[0] ?? '2026-10';
+      remainingMonths[Math.max(0, targetIndex - 1)] ?? remainingMonths[0] ?? toAppMonthKey();
 
     const nextDebtsByMonth = { ...state.debtsByMonth };
     delete nextDebtsByMonth[monthKey];

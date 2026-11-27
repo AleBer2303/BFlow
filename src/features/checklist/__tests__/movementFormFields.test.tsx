@@ -15,7 +15,7 @@ import {
 } from '../components/MovementFormFields';
 
 const DEBTS = [
-  { id: 'debt_moto', groupKey: 'MOTO', name: 'Crédito Moto', lender: 'Banco', openingBalance: 1, monthKey: '2026-10' },
+  { id: 'debt_vehicle', groupKey: 'CARRO', name: 'Crédito Carro', lender: 'Banco', openingBalance: 1, monthKey: '2026-10' },
 ] as Debt[];
 const BUCKETS = [{ id: 'savings', name: 'Fondo Ahorros', openingBalance: 0 }] as SavingsBucket[];
 

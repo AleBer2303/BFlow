@@ -18,7 +18,7 @@ import { useTabStore } from './useTabStore';
 export interface MonthAxis {
   /** "Oct", under the plot. */
   categories: readonly string[];
-  /** "Octubre 2026", in the readout and for screen readers. */
+  /** "Marzo 2027", in the readout and for screen readers. */
   titles: readonly string[];
 }
 

@@ -277,7 +277,7 @@ export default function PhaseOneHomeScreen(): React.JSX.Element {
   }, []);
 
   // Automatic session restoration listener in live runtime.
-  // The local showcase (demo) mode never talks to Firebase, so it keeps its seeded session.
+  // The local showcase (demo) mode never talks to Firebase, so it keeps its local session.
   useEffect(() => {
     if (process.env.NODE_ENV === 'test' || isDemoModeEnabled()) {
       return;

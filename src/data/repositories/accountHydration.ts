@@ -20,6 +20,7 @@ import { calculateMonthlyBudgetSummary } from '../../domain/budget/budgetCalcula
 import { ensureMonthPlan } from '../../domain/checklist/checklist';
 import { addMonthsToMonthKey, toAppMonthKey } from '../../domain/date/monthKey';
 import {
+  DEFAULT_DEBT_GROUP_KEY,
   buildDebtPaymentsForInstallment,
   calculateDebtsSummary,
 } from '../../domain/debts/debtCalculator';
@@ -45,7 +46,6 @@ import {
   isLegacyBucketDocId,
 } from '../migrations/legacyFieldMigration';
 import {
-  DEFAULT_DEBT_GROUP_KEY,
   EMPTY_PROVISION_PLAN,
   ensureStandardSavingsBuckets,
   reconstructClosedMonthBalances,

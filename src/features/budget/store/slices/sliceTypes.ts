@@ -277,8 +277,6 @@ export interface DebtsSlice {
     }
   ) => Promise<void>;
   deleteDebt: (monthKey: string, debtId: string) => Promise<void>;
-  updateInstallmentAmount: (monthKey: string, newAmount: number) => Promise<void>;
-  updateFunfamiInstallmentAmount: (monthKey: string, newAmountCop: number) => Promise<void>;
 }
 
 export interface SavingsSlice {
@@ -311,7 +309,7 @@ export interface AccountsSlice {
 }
 
 export interface ProvisionsSlice {
-  idealMotoPlan: ProvisionPlan;
+  provisionPlan: ProvisionPlan;
 
   saveProvisionItem: (input: SaveProvisionItemInput) => Promise<void>;
   deleteProvisionItem: (itemId: string) => Promise<void>;
@@ -503,7 +501,7 @@ export function buildCleanEmptyWorkspaceState(authUser: BFlowAuthUser | null) {
     savingsBucketsByMonth: (authUser
       ? { [defaultMonth]: ensureStandardSavingsBuckets([]) }
       : {}) as Record<string, SavingsBucket[]>,
-    idealMotoPlan: { ...EMPTY_PROVISION_PLAN, items: [] },
+    provisionPlan: { ...EMPTY_PROVISION_PLAN, items: [] },
     closedSnapshots: {} as Record<string, MonthSnapshot>,
     financialAccounts: [] as FinancialAccount[],
     authUser,
@@ -536,7 +534,7 @@ export function buildHydratedWorkspaceState(
     debtsByMonth: account.debtsByMonth,
     debtPayments: account.debtPayments,
     savingsBucketsByMonth: account.savingsBucketsByMonth,
-    idealMotoPlan: account.provisionPlan,
+    provisionPlan: account.provisionPlan,
     closedSnapshots: account.closedSnapshots,
     financialAccounts: account.financialAccounts ?? [],
     authUser: hydratedUser,
@@ -570,7 +568,7 @@ export function buildSampleWorkspaceState(authUser: BFlowAuthUser | null) {
     savingsBucketsByMonth: {
       [sample.monthKey]: sample.savingsBuckets,
     },
-    idealMotoPlan: sample.provisionPlan,
+    provisionPlan: sample.provisionPlan,
     closedSnapshots: {} as Record<string, MonthSnapshot>,
     financialAccounts: [] as FinancialAccount[],
     authUser,

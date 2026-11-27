@@ -138,7 +138,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
   });
 
   it('guarantees 100% account isolation when switching between a newly created user and demo@bflow.example', async () => {
-    const ownerUser: BFlowAuthUser = {
+    const demoUser: BFlowAuthUser = {
       uid: 'uid_demo_account',
       email: 'demo@bflow.example',
       displayName: 'Usuario de ejemplo',
@@ -155,8 +155,8 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       provider: 'firebase',
     };
 
-    // 1. Start in owner account (demo@bflow.example) and verify canonical savings ($ 4.380.000)
-    useBudgetStore.getState().setAuthUser(ownerUser);
+    // 1. Start in the example account (demo@bflow.example) and verify canonical savings ($ 4.380.000)
+    useBudgetStore.getState().setAuthUser(demoUser);
     render(
       <BFlowThemeProvider initialMode="dark">
         <PhaseOneHomeScreen />
@@ -164,10 +164,10 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     );
     fireEvent.press(screen.getByTestId('workspace-tab-savings'));
     expect(screen.getByTestId('savings-hero-total')).toHaveTextContent('$ 4.380.000');
-    expect(screen.getByTestId('bucket-moto-current')).toHaveTextContent('$ 2.300.000');
+    expect(screen.getByTestId('bucket-reserve-current')).toHaveTextContent('$ 2.300.000');
     expect(screen.getByTestId('bucket-savings-current')).toHaveTextContent('$ 2.080.000');
 
-    // 2. Switch to a brand-new user account: workspace must immediately wipe owner data
+    // 2. Switch to a brand-new user account: workspace must immediately wipe the example data
     act(() => {
       useBudgetStore.getState().setAuthUser(secondUser);
     });
@@ -186,7 +186,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
         debts: [],
         savingsBuckets: [
           { id: 'savings', name: 'Fondo Ahorros', openingBalanceCop: 12_500_000 },
-          { id: 'reserve', name: 'Fondo Moto', openingBalanceCop: 0 },
+          { id: 'reserve', name: 'Fondo de reserva', openingBalanceCop: 0 },
         ],
       });
     });
@@ -204,29 +204,29 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     expect(useBudgetStore.getState().savingsBucketsByMonth['2026-11']).toBeUndefined();
 
     act(() => {
-      useBudgetStore.getState().setAuthUser(ownerUser);
+      useBudgetStore.getState().setAuthUser(demoUser);
     });
     fireEvent.press(screen.getByTestId('workspace-tab-savings'));
     expect(screen.getByTestId('savings-hero-total')).toHaveTextContent('$ 4.380.000');
-    expect(screen.getByTestId('bucket-moto-current')).toHaveTextContent('$ 2.300.000');
+    expect(screen.getByTestId('bucket-reserve-current')).toHaveTextContent('$ 2.300.000');
     expect(screen.getByTestId('bucket-savings-current')).toHaveTextContent('$ 2.080.000');
   });
 
   it('persists updated debt interest rates across sign-out and sign-in', async () => {
     const repo = new InMemoryBudgetRepository();
     const initialCloud = await repo.loadFullCloudAccount(
-      'uid-owner-123',
+      'uid-demo-123',
       'demo@bflow.example'
     );
 
-    const motoDebt = initialCloud.debtsByMonth['2026-10']?.find(
+    const loanDebt = initialCloud.debtsByMonth['2026-10']?.find(
       (d) => d.id === 'debt_auto_loan'
     );
-    expect(motoDebt).toBeDefined();
+    expect(loanDebt).toBeDefined();
 
     // Update interest rate to 18% annual (1.5% monthly) and save to repository
-    await repo.saveDebt('uid-owner-123', {
-      ...motoDebt!,
+    await repo.saveDebt('uid-demo-123', {
+      ...loanDebt!,
       interestRateType: 'annual',
       annualInterestRate: 18,
       monthlyInterestRate: 1.5,
@@ -251,20 +251,20 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       useBudgetStore.getState().clearWorkspaceSession();
     });
     const reloadedCloud = await repo.loadFullCloudAccount(
-      'uid-owner-123',
+      'uid-demo-123',
       'demo@bflow.example'
     );
     act(() => {
       useBudgetStore.getState().applyFullCloudAccount(reloadedCloud);
     });
 
-    const persistedMotoDebt = useBudgetStore
+    const persistedLoanDebt = useBudgetStore
       .getState()
       .debtsByMonth['2026-10']?.find((d) => d.id === 'debt_auto_loan');
-    expect(persistedMotoDebt?.interestRateType).toBe('annual');
-    expect(persistedMotoDebt?.annualInterestRate).toBe(18);
-    expect(persistedMotoDebt?.monthlyInterestRate).toBe(1.5);
-    expect(persistedMotoDebt?.monthlyInstallment).toBe(900_000);
+    expect(persistedLoanDebt?.interestRateType).toBe('annual');
+    expect(persistedLoanDebt?.annualInterestRate).toBe(18);
+    expect(persistedLoanDebt?.monthlyInterestRate).toBe(1.5);
+    expect(persistedLoanDebt?.monthlyInstallment).toBe(900_000);
   });
 
   it('always opens in the latest month of the account after signing out and back in, even with 0 movements', async () => {
@@ -278,7 +278,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       debts: [],
       debtPayments: [],
       savingsBuckets: [
-        { id: 'reserve', name: 'Fondo Moto', openingBalance: 0, monthKey: '2026-12' },
+        { id: 'reserve', name: 'Fondo de reserva', openingBalance: 0, monthKey: '2026-12' },
         { id: 'savings', name: 'Fondo Ahorros', openingBalance: 500_000, monthKey: '2026-12' },
       ],
       provisionPlan: {
@@ -320,7 +320,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     expect(useBudgetStore.getState().availableMonths).toEqual(['2026-12', '2027-01']);
   });
 
-  it('defaults onboarding to the current month with 0 default funds, never re-prompts after blank setup, and allows editing/deleting any fund including Moto & Ahorros', async () => {
+  it('defaults onboarding to the current month with 0 default funds, never re-prompts after blank setup, and allows editing/deleting any fund including the reserve and savings funds', async () => {
     const repo = new InMemoryBudgetRepository(false);
     const newUser: BFlowAuthUser = {
       uid: 'uid-blank-new-user',
@@ -351,9 +351,9 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     expect(screen.getByTestId('initial-account-setup-view')).toBeTruthy();
 
     // 2. Default month must match the user's current month (not hardcoded Enero or Octubre 2026),
-    // and Section 2 must have 0 pre-populated savings funds (no Fondo Moto, no Fondo Ahorros)
+    // and Section 2 must have 0 pre-populated savings funds (no Fondo de reserva, no Fondo Ahorros)
     expect(screen.queryByTestId('onboarding-bucket-balance-savings')).toBeNull();
-    expect(screen.queryByTestId('onboarding-bucket-balance-moto')).toBeNull();
+    expect(screen.queryByTestId('onboarding-bucket-balance-reserve')).toBeNull();
     expect(screen.getByTestId('complete-initial-setup-button')).toHaveTextContent(
       `Guardar e Iniciar ${formatMonthKeyLabelEs(toAppMonthKey())}`
     );
@@ -381,10 +381,10 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     });
 
     fireEvent.press(screen.getByTestId('workspace-tab-savings'));
-    expect(screen.getByTestId('bucket-moto-card')).toBeTruthy();
+    expect(screen.getByTestId('bucket-reserve-card')).toBeTruthy();
     expect(screen.getByTestId('bucket-savings-card')).toBeTruthy();
 
-    // Edit Fondo Moto name and balance individually via Editar Fondo mode
+    // Edit Fondo de reserva name and balance individually via Editar Fondo mode
     fireEvent.press(screen.getByTestId('bucket-action-edit-button'));
     fireEvent.press(screen.getByTestId('edit-savings-bucket-reserve'));
     fireEvent.changeText(screen.getByTestId('edit-bucket-name-input'), 'Fondo de reserva personal');
@@ -393,14 +393,14 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       fireEvent.press(screen.getByTestId('save-edit-bucket-button'));
     });
     // The savings chart legend repeats the bucket name, so read it from the bucket card.
-    expect(within(screen.getByTestId('bucket-moto-card')).getByText('Fondo de reserva personal')).toBeTruthy();
+    expect(within(screen.getByTestId('bucket-reserve-card')).getByText('Fondo de reserva personal')).toBeTruthy();
 
-    // Delete Fondo Moto and Fondo Ahorros individually via global Eliminar Fondo mode
+    // Delete Fondo de reserva and Fondo Ahorros individually via global Eliminar Fondo mode
     fireEvent.press(screen.getByTestId('bucket-action-delete-button'));
     await act(async () => {
       fireEvent.press(screen.getByTestId('delete-savings-bucket-reserve'));
     });
-    expect(screen.queryByTestId('bucket-moto-card')).toBeNull();
+    expect(screen.queryByTestId('bucket-reserve-card')).toBeNull();
 
     await act(async () => {
       fireEvent.press(screen.getByTestId('delete-savings-bucket-savings'));
@@ -722,7 +722,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       expect(changeSpy).toHaveBeenCalledWith('otro.correo@correo.com', 'claveActual1');
       view.unmount();
 
-      // A local session (showcase mode, demo owner) has no Firebase account to email.
+      // A local session (showcase mode, demo user) has no Firebase account to email.
       // The wait between reset emails belongs to the device: it is over by now.
       __resetAuthRateLimiterForTests();
       resetSpy.mockClear();
@@ -886,7 +886,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     }
   });
 
-  it('hydrates user account data synchronously on cold boot and never flashes the October 2026 template or $ 0 values', async () => {
+  it('hydrates user account data synchronously on cold boot and never flashes the sample month template or $ 0 values', async () => {
     const disk = new Map<string, string>();
     const diskBackend: RawStorageBackend = {
       getItem: (key) => disk.get(key) ?? null,
@@ -904,8 +904,8 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
     persistentStorage.clear();
 
     try {
-      const ownerUser: BFlowAuthUser = {
-        uid: 'uid_real_owner_iphone',
+      const demoUser: BFlowAuthUser = {
+        uid: 'uid_real_iphone',
         email: 'demo@bflow.example',
         displayName: 'Usuario de ejemplo',
         authProvider: 'password',
@@ -913,9 +913,9 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
         provider: 'firebase',
       };
 
-      savePersistedSession(ownerUser);
+      savePersistedSession(demoUser);
       act(() => {
-        useBudgetStore.getState().setAuthUser(ownerUser);
+        useBudgetStore.getState().setAuthUser(demoUser);
       });
 
       // Configure custom real user data in November 2026 ($ 7.500.000 income, $ 1.200.000 expense -> $ 6.300.000 Net Flow)
@@ -943,7 +943,7 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
           debts: [],
           savingsBuckets: [
             { id: 'savings', name: 'Fondo Ahorros', openingBalanceCop: 3_000_000 },
-            { id: 'reserve', name: 'Fondo Moto', openingBalanceCop: 500_000 },
+            { id: 'reserve', name: 'Fondo de reserva', openingBalanceCop: 500_000 },
           ],
         });
       });
@@ -951,8 +951,8 @@ describe('Authentication Gate, Personal Registration & Multi-Device Session Pers
       // Simulate killing the app on iPhone (wiping in-memory cache while SQLite kv-store disk survives)
       __resetMemoryCacheForTests();
 
-      // Cold-start initial state for the owner must immediately contain their real November 2026 data,
-      // NOT the October 2026 template ($ 1.080.000) and NOT empty $ 0 arrays
+      // Cold-start initial state for the user must immediately contain their real November 2026 data,
+      // NOT the sample month template ($ 1.080.000) and NOT empty $ 0 arrays
       const coldBootState = buildInitialState(loadPersistedSession());
       expect(coldBootState.activeMonthKey).toBe('2026-11');
       expect(coldBootState.isAccountHydrated).toBe(true);

@@ -15,7 +15,7 @@ import {
   type MonthlySavingsSummary,
   type ProvisionPlanComparisonSummary,
 } from '../../../../domain';
-import { SavingsAndMotoIdealView } from '../SavingsAndMotoIdealView';
+import { SavingsAndProvisionsView } from '../SavingsAndProvisionsView';
 
 const ORIGINAL_WINDOW = Dimensions.get('window');
 const ORIGINAL_SCREEN = Dimensions.get('screen');
@@ -109,7 +109,7 @@ const EMPTY_ACCOUNTS_SUMMARY = calculateFinancialAccountsSummary([], [], '2026-1
 
 function renderView(
   skin: PlatformSkinId,
-  overrides?: Partial<React.ComponentProps<typeof SavingsAndMotoIdealView>>
+  overrides?: Partial<React.ComponentProps<typeof SavingsAndProvisionsView>>
 ) {
   const handlers = {
     onCreateSavingsBucket: jest.fn(),
@@ -121,9 +121,9 @@ function renderView(
   };
   const utils = render(
     <BFlowThemeProvider skin={skin} initialMode="dark">
-      <SavingsAndMotoIdealView
+      <SavingsAndProvisionsView
         savingsSummary={NO_FUNDS_SUMMARY}
-        motoIdealSummary={NO_PROVISIONS}
+        provisionPlanSummary={NO_PROVISIONS}
         savingsAccounts={[BOLSILLO]}
         savingsAccountsSummary={ACCOUNTS_SUMMARY}
         {...handlers}

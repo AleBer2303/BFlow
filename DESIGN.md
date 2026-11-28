@@ -1,6 +1,6 @@
 # Sistema de Diseño Visual de BFlow (`DESIGN.md`)
 
-> **Fuente de Verdad Visual:** Ningún componente en `src/features/` ni `src/app/` puede usar colores hexadecimales, tamaños de fuente, radios o espaciados hardcodeados. Todo valor visual proviene estrictamente de [`src/design-system/tokens.ts`](file:///C:/Users/D0604763/Documents/BFlow/BFlow/src/design-system/tokens.ts).
+> **Fuente de Verdad Visual:** Ningún componente en `src/features/` ni `src/app/` puede usar colores hexadecimales, tamaños de fuente, radios o espaciados hardcodeados. Todo valor visual proviene estrictamente de [`src/design-system/tokens.ts`](src/design-system/tokens.ts).
 
 > **Tres pieles, un producto:** BFlow tiene una identidad visual por plataforma. Las secciones 1 a 9 describen la piel **iOS** (Liquid Glass), que es la de referencia. La sección 10 define las pieles **Android** (Material 3, sin vidrio) y **Web** (sistema plano), y la sección 11 el contrato responsive común. Los tokens se leen siempre de `useBFlowTheme()`, que entrega los de la piel activa.
 

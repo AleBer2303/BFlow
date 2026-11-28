@@ -3,7 +3,8 @@
  *
  * Ultra-low latency, zero-delay Apple Taptic Engine feedback service.
  * Follows Apple HIG standards:
- * 1. Immediate non-blocking execution (fired synchronously on touch-down/onPressIn).
+ * 1. Immediate non-blocking execution, one call per action, fired from `onPress` when the
+ *    action is confirmed, never on touch-down (`onPressIn`) (DESIGN.md §6.3).
  * 2. Hardware cooldown / anti-buffering throttle (~40ms for selection, ~60ms for impact)
  *    to prevent linear resonant actuator (LRA) queue congestion and delayed vibration bursts.
  * 3. Graceful degradation on Web and unsupported platforms (zero exceptions, zero performance tax).
@@ -52,7 +53,8 @@ export class AppleHapticService {
 
   /**
    * Subtle, crisp impact feedback.
-   * Perfect for immediate button touch-down (onPressIn), tab switches, chips.
+   * Perfect for light confirmations in `onPress`: unchecking a checklist item, the theme
+   * toggle, leaving delete mode, tab switches and chips.
    */
   light(): void {
     if (Platform.OS === 'web') return;

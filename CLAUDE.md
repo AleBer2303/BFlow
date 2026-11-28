@@ -22,7 +22,8 @@ npm run test:changed           # solo los tests afectados por los cambios sin co
 npx jest src/domain/debts                       # un directorio/archivo
 npx jest path/to/file.test.ts -t "nombre del test"   # un solo test
 npm run test:phase0            # paridad del fixture dorado (node --test scripts/verify-phase0-fixture.test.mjs)
-npm run test:scripts           # tests de scripts/release.mjs, guardias de los workflows y de worklets (también corren en CI)
+npm run test:scripts           # tests de scripts/release.mjs, guardias de los workflows y de worklets, y compresión de iconos (CI corre este mismo script)
+npm run compress:icons         # comprime casi sin pérdida assets/icon.png y adaptive-icon.png (--dry-run, --compare <carpeta>); no recomprime lo ya comprimido
 npm run release -- patch --dry-run   # plan del release sin escribir nada (ADR 0023); el release real es el workflow release.yml
 node scripts/check-src-tests-guard.mjs origin/main   # guardia: cambios en src/ exigen tests en el mismo rango
 ```
@@ -117,8 +118,16 @@ src/app/index.tsx  ──(hooks/props)──>  features/*/components
   - `resolveFirebaseEnvironment()` devuelve `source`: `environment`, `offline-mock` (tests sin variables y modo vitrina siempre, proyecto `demo-bflow`) o `missing` (build real sin variables: `getFirebaseApp()` lanza). Leer `process.env.EXPO_PUBLIC_*` siempre con acceso estático: Metro no sustituye `env[clave]`.
   - Ya no hay cuenta semilla ni `EXPO_PUBLIC_OWNER_SEED_EMAIL` (ADR 0037). El usuario local de la vitrina y los tests es `DEMO_USER` (`demo@bflow.example`); un test falla si aparece un buzón personal en `src/` fuera de `__tests__`.
   - `build-android.yml` y `build-ios.yml` toman `EXPO_PUBLIC_FIREBASE_*` de las variables del repositorio y `scripts/check-build-env.mjs` corta el build si faltan.
-  - `package.json` lleva `overrides` para `@grpc/grpc-js` y, dentro de `@bacons/xcode`, `@xmldom/xmldom` y `uuid`. `zod` es la versión 4.
+  - `package.json` lleva `overrides` para `@grpc/grpc-js`; dentro de `@bacons/xcode`, `@xmldom/xmldom` y `uuid`; `minimatch` 11 en `@expo/fingerprint` y `glob` 14 en `@bacons/apple-targets` (ADR 0027 §2.5: `npm audit --omit=dev` en 0). No los hagas globales: Jest usa `glob` 7 y 10. `npm ls` marca *invalid* esos `glob` de Jest; es un falso positivo de `overrides`. `zod` es la versión 4.
+  - El *pepper* del cifrado local (`DEFAULT_APPLICATION_PEPPER` en `storageCipher.ts`) es público y no se cambia nunca: todo lo guardado en los dispositivos está cifrado con él. Si un build define `EXPO_PUBLIC_LOCAL_CIPHER_PEPPER`, `decryptStorageValue` cae al de por defecto para leer lo anterior (ADR 0027 §2.6).
   - Sin verificar en dispositivo ni en un build: `expo-crypto`, el fallo real de SecureStore y el prebuild de iOS con los `overrides`.
+
+- **App Check (ADR 0038, `src/platform/appCheck/`):** `getFirebaseApp()` llama a `installAppCheck` justo después de `initializeApp`.
+  - Web (`installAppCheck.web.ts`): reCAPTCHA Enterprise si hay `EXPO_PUBLIC_FIREBASE_APPCHECK_RECAPTCHA_SITE_KEY`.
+  - Nativo (`installAppCheck.ts`): con `EXPO_PUBLIC_FIREBASE_APPCHECK_NATIVE=1` conecta un `CustomProvider` a la fuente que registre un módulo nativo (`registerNativeAppCheckTokenSource`). Ese módulo no existe: el estado queda `unavailable`.
+  - Apagado siempre en tests, modo vitrina y sin proyecto (`resolveAppCheckPlan`). Nunca lanza; `getAppCheckStatus()` da el estado.
+  - **No se exige en la consola**: iOS, Android y la lectura REST de los widgets no envían token. Web verificado contra el proyecto real el 2026-11-27 (`X-Firebase-AppCheck` en Identity Toolkit, ADR 0038 §7). El token se guarda en IndexedDB (`firebase-app-check-database`): una recarga no repite `exchangeRecaptchaEnterpriseToken`.
+  - El [ADR 0039](docs/decisions/0039-firestore-rules-require-verified-email.md) (exigir `email_verified` en las reglas) está **propuesto, no aplicado**.
 
 - **Carga de la cuenta e historial archivado (ADR 0028):**
   - Con más de 12 meses cerrados en la caché, `loadFullCloudAccount` no vuelve a descargar los `entries` de los meses anteriores (`data/repositories/historyWindow.ts`): lee los meses recientes, los cambios por `updatedAt` y un `count()`. Si el snapshot de un mes archivado cambió o el conteo no cuadra, descarga todo. También aplica a `forceFullSync`.

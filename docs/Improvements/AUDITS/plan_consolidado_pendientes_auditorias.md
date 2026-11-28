@@ -2,7 +2,7 @@
 
 > **Tipo Diátaxis:** *Reference* (estado verificado) + *How-To* (fases con prompts).
 > **Fecha de verificación:** 2026-11-26 · **Rama:** `audit` (desde `develop` en `25e2b91`).
-> **Avance:** Fase 1 (`e272b42`, ADR 0035), Fase 2 (`90a96c2`, `PERF_BASELINE.md` §20) y Fase 3 (`efa88ab`) integradas en `audit` el 2026-11-26 (`9de58f0`, `6a23fee` y `da2bdd5`). Las líneas citadas en el prompt de la Fase 4 se actualizaron sobre ese `audit`; las de las Fases 5 y 6 siguen siendo las del 2026-11-26 y hay que volver a comprobarlas antes de empezarlas. La Fase 4 (`refactor/split-repository-and-onboarding`, ADR 0036) se integró en `audit` el 2026-11-27 (`b1a0039`). En la misma rama, el ADR 0037 elimina la cuenta semilla y los nombres del Excel del código y de Firestore (con migración), lo que amplía el cierre de CC-05. La Fase 5 está en `chore/store-readiness` (2026-11-27; ADR 0038, enmienda del ADR 0027 y ADR 0039 propuesto), pendiente de integrar en `audit`.
+> **Avance:** Fase 1 (`e272b42`, ADR 0035), Fase 2 (`90a96c2`, `PERF_BASELINE.md` §20) y Fase 3 (`efa88ab`) integradas en `audit` el 2026-11-26 (`9de58f0`, `6a23fee` y `da2bdd5`). Las líneas citadas en el prompt de la Fase 4 se actualizaron sobre ese `audit`; las de las Fases 5 y 6 siguen siendo las del 2026-11-26 y hay que volver a comprobarlas antes de empezarlas. La Fase 4 (`refactor/split-repository-and-onboarding`, ADR 0036) se integró en `audit` el 2026-11-27 (`b1a0039`). En la misma rama, el ADR 0037 elimina la cuenta semilla y los nombres del Excel del código y de Firestore (con migración), lo que amplía el cierre de CC-05. La Fase 5 (`chore/store-readiness`; ADR 0038, enmienda del ADR 0027 y ADR 0039 propuesto) se integró en `audit` el 2026-11-27 (`58e6b5c`); quedan sus pasos de consola (§5).
 > **Fuentes:** [`auditoria_produccion_bflow.md`](auditoria_produccion_bflow.md) (hallazgos `AUD-01` a `AUD-09`) y [`auditoria_documentacion_clean_code_y_optimizacion.md`](auditoria_documentacion_clean_code_y_optimizacion.md) (hallazgos `DOC-*`, `BUG-*`, `CC-*`, `OPT-*`).
 
 > [!IMPORTANT]
@@ -106,7 +106,7 @@ Las fases van **de mayor a menor riesgo para los datos del usuario**. La documen
 | **2** ✅ | Rendimiento de runtime y caché cifrada (integrada en `audit`) | OPT-01, OPT-02, OPT-04, OPT-05, OPT-06, AUD-07 (cifrado) | Medio | No (registrar en `PERF_BASELINE.md`) |
 | **3** ✅ | DRY, código muerto y reglas de diseño (integrada en `audit`) | CC-02, CC-03, CC-04 | Bajo/Medio | No |
 | **4** ✅ | Refactor estructural del repositorio y del onboarding (integrada en `audit`; ADR 0037 amplía CC-05) | CC-01, CC-05, CC-06 | Medio | Sí: ADR 0036 (orden de la cascada) y ADR 0037 (sin cuenta semilla) |
-| **5** 🟡 | Seguridad residual y preparación para tiendas (en `chore/store-readiness`; consola pendiente) | AUD-01 (App Check), AUD-04 (pepper), AUD-05, AUD-07 (iconos), AUD-03 (opcional) | Medio | Sí para App Check |
+| **5** ✅ | Seguridad residual y preparación para tiendas (integrada en `audit`; consola pendiente, §5) | AUD-01 (App Check), AUD-04 (pepper), AUD-05, AUD-07 (iconos), AUD-03 (opcional) | Medio | Sí para App Check |
 | **6** | Documentación y Docs-as-Code | DOC-01 a DOC-07 | Nulo | No |
 
 ---

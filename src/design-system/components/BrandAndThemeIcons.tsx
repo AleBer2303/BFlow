@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, View } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { hapticService } from '../../platform/haptics/hapticService';
@@ -41,8 +41,10 @@ export function AccountHeaderAvatarButton({
       accessibilityRole="tab"
       accessibilityLabel="Cuenta"
       accessibilityState={{ selected: isSelected }}
-      onPressIn={() => hapticService.selection()}
-      onPress={onPress}
+      onPress={() => {
+        hapticService.selection();
+        onPress?.();
+      }}
       style={{
         width: minTouchTarget,
         height: minTouchTarget,
@@ -90,21 +92,27 @@ export function ThemeToggleIconButton({
   const strokeColor = colors.text.primary;
   // Icon swap: the new icon turns a quarter and grows into the slot the old one left.
   const swap = useReplayOnChange(mode, motionDuration.fast);
-  const swapStyle = {
-    opacity: swap,
-    transform: [
-      { rotate: swap.interpolate({ inputRange: [0, 1], outputRange: ['-90deg', '0deg'] }) },
-      { scale: swap.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) },
-    ],
-  };
+  // Memoized: `swap` is a stable Animated.Value, so re-renders reuse the interpolations (OPT-06).
+  const swapStyle = useMemo(
+    () => ({
+      opacity: swap,
+      transform: [
+        { rotate: swap.interpolate({ inputRange: [0, 1], outputRange: ['-90deg', '0deg'] }) },
+        { scale: swap.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) },
+      ],
+    }),
+    [swap]
+  );
 
   return (
     <AppPressable
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-      onPressIn={() => hapticService.light()}
-      onPress={toggleTheme}
+      onPress={() => {
+        hapticService.light();
+        toggleTheme();
+      }}
       style={{
         width: minTouchTarget,
         height: minTouchTarget,
@@ -213,8 +221,10 @@ export function AmountVisibilityIconButton({
       accessibilityRole="button"
       accessibilityLabel={amountsHidden ? 'Mostrar montos' : 'Ocultar montos'}
       accessibilityState={{ selected: amountsHidden }}
-      onPressIn={() => hapticService.light()}
-      onPress={toggleAmountsHidden}
+      onPress={() => {
+        hapticService.light();
+        toggleAmountsHidden();
+      }}
       style={{
         width: minTouchTarget,
         height: minTouchTarget,
@@ -390,6 +400,32 @@ export function TrashBinIcon({
         />
         <Line x1={10} y1={11} x2={10} y2={17} stroke={strokeColor} strokeWidth={1.8} strokeLinecap="round" />
         <Line x1={14} y1={11} x2={14} y2={17} stroke={strokeColor} strokeWidth={1.8} strokeLinecap="round" />
+      </Svg>
+    </View>
+  );
+}
+
+/**
+ * Cloud icon for the pending offline changes badge (replaces the ☁️ emoji, DESIGN.md).
+ */
+export function CloudSyncIcon({
+  size = 14,
+  color,
+  testID = 'icon-cloud-sync',
+}: VectorIconProps): React.JSX.Element {
+  const { colors } = useBFlowTheme();
+  const strokeColor = color ?? colors.semantic.pending;
+
+  return (
+    <View testID={testID} style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
+      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+        <Path
+          d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"
+          stroke={strokeColor}
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </Svg>
     </View>
   );

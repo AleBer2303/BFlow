@@ -1,7 +1,7 @@
 # Paso compartido: abre la app con el estado limpio y espera el espacio de trabajo.
 #
 # Solo pasa con un binario compilado en modo vitrina (EXPO_PUBLIC_BFLOW_DEMO=1): sesión demo
-# con el seed de octubre 2026 y sin Firebase. Un binario normal se queda en la pantalla de
+# con el presupuesto de ejemplo del mes actual y sin Firebase. Un binario normal se queda en la pantalla de
 # inicio de sesión (`auth-gate-screen`) y este paso falla por tiempo de espera.
 appId: com.bflow.app
 ---

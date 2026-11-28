@@ -6,16 +6,18 @@
 
 import {
   ensureStandardSavingsBuckets,
-  FirestoreBudgetRepository,
 } from '../../../../data/repositories/budgetRepository';
 import {
+  applyEntryAccountLink,
   buildDebtPaymentsForInstallment,
   closeMonthAndRollover,
   deleteMovement,
   getMonthNumberFromMonthKey,
   registerMovement,
   toAppIsoDate,
+  toAppMonthKey,
   toggleMovementStatus,
+  toSlugId,
   type Concept,
   type DebtPayment,
   type MonthEntry,
@@ -24,9 +26,10 @@ import { savePersistedSession } from '../../../../platform/auth/authAdapter';
 import { clearPersistedAccount } from '../../../../platform/storage/accountCache';
 import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
+  getBudgetRepository,
   applyConceptLinkageUpdates,
   getStoreInitialState,
-  buildOctober2026SeedWorkspaceState,
+  buildSampleWorkspaceState,
   isRealAuthUser,
   resolveDefaultInitialAuthUser,
   triggerWidgetSync,
@@ -59,7 +62,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     let nextDebtPayments = state.debtPayments;
     if ((concept?.linkedDebtGroup || concept?.defaultTargetDebtId) && updatedEntry) {
       const monthDebts =
-        state.debtsByMonth[updatedEntry.monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
+        state.debtsByMonth[updatedEntry.monthKey] ?? [];
       const cascadedPayments = buildDebtPaymentsForInstallment(
         updatedEntry,
         monthDebts,
@@ -91,7 +94,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveOrUpdateEntry(
             authUser.uid,
             updatedEntry,
@@ -119,7 +122,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     const previousDebtPayments = state.debtPayments;
 
     const monthDebts =
-      state.debtsByMonth[input.monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
+      state.debtsByMonth[input.monthKey] ?? [];
     let concept = state.concepts.find((c) => c.id === input.conceptId);
     let nextConcepts = state.concepts;
 
@@ -134,14 +137,26 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
       nextConcepts = state.concepts.map((c) => (c.id === concept!.id ? concept! : c));
     }
 
-    const nextEntries = registerMovement(state.entries, nextConcepts, input);
-    const updatedEntry = nextEntries.find(
+    const registeredEntries = registerMovement(state.entries, nextConcepts, input);
+    const registeredEntry = registeredEntries.find(
       (e) =>
         e.monthKey === input.monthKey &&
         e.conceptId === input.conceptId &&
         (!state.entries.some((prev) => prev.id === e.id && prev.status === 'completed') ||
           !concept?.allowMultiplePerMonth)
     );
+    // ADR 0034: the card or account the movement went through.
+    const updatedEntry = registeredEntry
+      ? applyEntryAccountLink(
+          registeredEntry,
+          { accountId: input.accountId, accountRole: input.accountRole },
+          state.financialAccounts
+        )
+      : undefined;
+    const nextEntries =
+      updatedEntry && updatedEntry !== registeredEntry
+        ? registeredEntries.map((e) => (e === registeredEntry ? updatedEntry : e))
+        : registeredEntries;
 
     let nextDebtPayments = state.debtPayments;
     if ((concept?.linkedDebtGroup || concept?.defaultTargetDebtId) && updatedEntry) {
@@ -178,7 +193,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveOrUpdateEntry(
             authUser.uid,
             updatedEntry,
@@ -212,11 +227,8 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     if (!trimmedName || safeAmount <= 0) return;
 
     const monthDebts =
-      state.debtsByMonth[input.monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
-    const slug = trimmedName
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_|_$/g, '');
+      state.debtsByMonth[input.monthKey] ?? [];
+    const slug = toSlugId(trimmedName);
     const customConceptId = `${input.type === 'income' ? 'inc' : 'exp'}_custom_${slug}_${Date.now().toString(36)}`;
     const baseConcept: Concept = {
       id: customConceptId,
@@ -245,19 +257,23 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     );
 
     const isCompleted = input.markCompleted !== false;
-    const newEntry: MonthEntry = {
-      id: `${input.monthKey}_${customConceptId}`,
-      monthKey: input.monthKey,
-      conceptId: customConceptId,
-      conceptName: trimmedName,
-      type: input.type,
-      group: input.group,
-      plannedAmount: safeAmount,
-      actualAmount: safeAmount,
-      status: isCompleted ? 'completed' : 'pending',
-      ...(isCompleted ? { completedAt: toAppIsoDate() } : {}),
-      ...(input.note?.trim() ? { note: input.note.trim() } : {}),
-    };
+    const newEntry: MonthEntry = applyEntryAccountLink(
+      {
+        id: `${input.monthKey}_${customConceptId}`,
+        monthKey: input.monthKey,
+        conceptId: customConceptId,
+        conceptName: trimmedName,
+        type: input.type,
+        group: input.group,
+        plannedAmount: safeAmount,
+        actualAmount: safeAmount,
+        status: isCompleted ? 'completed' : 'pending',
+        ...(isCompleted ? { completedAt: toAppIsoDate() } : {}),
+        ...(input.note?.trim() ? { note: input.note.trim() } : {}),
+      },
+      { accountId: input.accountId, accountRole: input.accountRole },
+      state.financialAccounts
+    );
 
     let createdPayments: DebtPayment[] = [];
     let nextDebtPayments = state.debtPayments;
@@ -294,7 +310,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveCustomConceptAndEntry(
             authUser.uid,
             newConcept,
@@ -326,7 +342,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     if (!target) return;
 
     const monthDebts =
-      state.debtsByMonth[state.activeMonthKey] ?? state.debtsByMonth['2026-10'] ?? [];
+      state.debtsByMonth[state.activeMonthKey] ?? [];
     const baseUpdated: Concept = {
       ...target,
       ...(updates.name?.trim() ? { name: updates.name.trim() } : {}),
@@ -395,18 +411,18 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     if (isRealAuthUser(updateAuthUser)) {
       await executeOptimisticCloudWrite({
         uid: updateAuthUser.uid,
-        operation: {
-          type: activeEntry ? 'save_or_update_entry' : 'save_concept',
-          payload: activeEntry
-            ? {
+        operation: activeEntry
+          ? {
+              type: 'save_or_update_entry',
+              payload: {
                 entry: activeEntry,
                 concept: updatedConcept,
                 debtPayments: nextDebtPayments.filter((dp) => dp.entryId === activeEntry.id),
-              }
-            : { concept: updatedConcept },
-        },
+              },
+            }
+          : { type: 'save_concept', payload: { concept: updatedConcept } },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           if (activeEntry) {
             await repo.saveOrUpdateEntry(
               updateAuthUser.uid,
@@ -457,7 +473,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           payload: { conceptId },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.deleteConcept(deleteAuthUser.uid, conceptId);
         },
         rollback: () => {
@@ -490,19 +506,24 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     const nextName = updates.conceptName.trim() || target.conceptName;
     const trimmedNote = updates.note?.trim();
 
-    const updatedEntry: MonthEntry = {
+    const editedEntry: MonthEntry = {
       ...target,
       conceptName: nextName,
       actualAmount: safeActual,
       plannedAmount: safePlanned,
       ...(trimmedNote ? { note: trimmedNote } : {}),
     };
-    if (!trimmedNote && 'note' in updatedEntry) {
-      delete (updatedEntry as { note?: string }).note;
+    if (!trimmedNote && 'note' in editedEntry) {
+      delete (editedEntry as { note?: string }).note;
     }
+    const updatedEntry = applyEntryAccountLink(
+      editedEntry,
+      { accountId: updates.accountId, accountRole: updates.accountRole },
+      state.financialAccounts
+    );
 
     const monthDebts =
-      state.debtsByMonth[updatedEntry.monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
+      state.debtsByMonth[updatedEntry.monthKey] ?? [];
     const existingConcept = state.concepts.find((c) => c.id === target.conceptId);
     const updatedConcept = existingConcept
       ? applyConceptLinkageUpdates(
@@ -569,7 +590,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveOrUpdateEntry(
             uid,
             updatedEntry,
@@ -614,7 +635,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
       await executeOptimisticCloudWrite({
         uid,
         operation: {
-          type: 'delete_or_reset_entry',
+          type: 'delete_entry_completely',
           payload: {
             entryId,
             conceptId: target.conceptId,
@@ -622,7 +643,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.deleteEntryCompletely(uid, entryId);
         },
         rollback: () => {
@@ -641,14 +662,15 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
   removeOrResetEntry: async (entryId) => {
     const state = get();
     const target = state.entries.find((e) => e.id === entryId);
+    if (!target) return;
     const previousEntries = state.entries;
     const previousDebtPayments = state.debtPayments;
 
     const nextEntries = deleteMovement(state.entries, state.concepts, entryId);
-    const concept = target ? state.concepts.find((c) => c.id === target.conceptId) : undefined;
+    const concept = state.concepts.find((c) => c.id === target.conceptId);
 
     let nextDebtPayments = state.debtPayments;
-    if (target && (concept?.linkedDebtGroup || concept?.defaultTargetDebtId)) {
+    if (concept?.linkedDebtGroup || concept?.defaultTargetDebtId) {
       nextDebtPayments = state.debtPayments.map((dp) => {
         if (dp.entryId !== entryId) return dp;
         const { completedAt: _removed, ...restPayment } = dp;
@@ -676,14 +698,14 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           type: 'delete_or_reset_entry',
           payload: {
             entryId,
-            conceptId: target?.conceptId ?? '',
-            monthKey: target?.monthKey ?? '',
+            conceptId: target.conceptId,
+            monthKey: target.monthKey,
             entry: target,
-            concept,
+            ...(concept ? { concept } : {}),
           },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.deleteOrResetEntry(uid, entryId, {
             entry: target,
             concept,
@@ -771,7 +793,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           payload: { monthKey: currentMonthKey, result },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.persistMonthCloseResult(uid, currentMonthKey, result);
         },
         rollback: () => {
@@ -818,7 +840,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           payload: { monthKey },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.reopenMonthInCloud(uid, monthKey);
         },
         rollback: () => {
@@ -866,7 +888,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
             payload: { monthKey },
           },
           performCloudWrite: async () => {
-            const repo = new FirestoreBudgetRepository();
+            const repo = getBudgetRepository();
             await repo.reopenMonthInCloud(uid, monthKey);
           },
           rollback: () => {
@@ -883,7 +905,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     const remainingMonths = sortedMonths.filter((m) => m !== monthKey);
     const targetIndex = sortedMonths.indexOf(monthKey);
     const fallbackMonth =
-      remainingMonths[Math.max(0, targetIndex - 1)] ?? remainingMonths[0] ?? '2026-10';
+      remainingMonths[Math.max(0, targetIndex - 1)] ?? remainingMonths[0] ?? toAppMonthKey();
 
     const nextDebtsByMonth = { ...state.debtsByMonth };
     delete nextDebtsByMonth[monthKey];
@@ -916,7 +938,7 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
           payload: { monthKey, fallbackMonth },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.deleteMonthInCloud(uid, monthKey, fallbackMonth);
         },
         rollback: () => {
@@ -929,12 +951,12 @@ export const createBudgetSlice: SliceCreator<BudgetSlice> = (set, get) => {
     }
   },
 
-  resetToOctober2026GoldenState: () => {
+  resetToSampleWorkspace: () => {
     const currentUser = get().authUser;
     if (currentUser?.uid) {
       clearPersistedAccount(currentUser.uid);
     }
-    set(buildOctober2026SeedWorkspaceState(currentUser ?? resolveDefaultInitialAuthUser()));
+    set(buildSampleWorkspaceState(currentUser ?? resolveDefaultInitialAuthUser()));
     triggerWidgetSync(get());
   },
 };

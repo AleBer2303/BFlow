@@ -1,4 +1,4 @@
-import seedFixture from '../../../../fixtures/seed-october-2026.json';
+import { buildSampleWorkspace } from '../../../data/sample/sampleWorkspace';
 import { calculateMonthlyBudgetSummary } from '../../budget/budgetCalculator';
 import { formatMonthKeyShortLabelEs } from '../../date/monthKey';
 import { calculateDebtsSummary } from '../../debts/debtCalculator';
@@ -23,13 +23,16 @@ import {
   type MonthlyHistoryPoint,
 } from '../chartSeries';
 
-const CONCEPTS = seedFixture.concepts as unknown as Concept[];
-const ENTRIES = seedFixture.entries as unknown as MonthEntry[];
-const PAYMENTS = seedFixture.debtPayments as unknown as DebtPayment[];
-const DEBTS = seedFixture.debts as unknown as Debt[];
-const BUCKETS = seedFixture.savingsBuckets as unknown as SavingsBucket[];
+/** The example budget of the showcase mode, in the month the tests pin. */
+const sample = buildSampleWorkspace();
 
-function octoberInput(overrides: Partial<MonthlyHistoryInput> = {}): MonthlyHistoryInput {
+const CONCEPTS = sample.concepts as unknown as Concept[];
+const ENTRIES = sample.entries as unknown as MonthEntry[];
+const PAYMENTS = sample.debtPayments as unknown as DebtPayment[];
+const DEBTS = sample.debts as unknown as Debt[];
+const BUCKETS = sample.savingsBuckets as unknown as SavingsBucket[];
+
+function sampleMonthInput(overrides: Partial<MonthlyHistoryInput> = {}): MonthlyHistoryInput {
   return {
     monthKeys: ['2026-10'],
     activeMonthKey: '2026-10',
@@ -44,7 +47,7 @@ function octoberInput(overrides: Partial<MonthlyHistoryInput> = {}): MonthlyHist
 }
 
 /** October closed with the real rollover, November open and untouched. */
-function closedOctoberInput(): MonthlyHistoryInput {
+function closedSampleMonthInput(): MonthlyHistoryInput {
   const result = closeMonthAndRollover({
     closingMonthKey: '2026-10',
     closedAtIso: '2026-10-31T23:00:00.000Z',
@@ -54,7 +57,7 @@ function closedOctoberInput(): MonthlyHistoryInput {
     debtPayments: PAYMENTS,
     savingsBuckets: BUCKETS,
   });
-  return octoberInput({
+  return sampleMonthInput({
     monthKeys: ['2026-11', '2026-10'],
     activeMonthKey: '2026-11',
     entries: [...ENTRIES, ...result.nextMonthEntries],
@@ -78,7 +81,7 @@ function pointFor(monthKey: string, overrides: Partial<MonthlyHistoryPoint> = {}
     pendingExpenses: 0,
     netCashFlow: 0,
     totalDebt: 0,
-    reserveName: 'Moto',
+    reserveName: 'Fondo de reserva',
     reserveBalance: 0,
     savingsName: 'Ahorros',
     savingsBalance: 0,
@@ -127,8 +130,8 @@ describe('resolveHistoryWindow', () => {
 });
 
 describe('buildMonthlyHistory', () => {
-  it('reproduces the October 2026 golden values for an open month', () => {
-    const [october] = buildMonthlyHistory(octoberInput());
+  it('reproduces the sample month figures for an open month', () => {
+    const [october] = buildMonthlyHistory(sampleMonthInput());
 
     expect(october).toEqual({
       monthKey: '2026-10',
@@ -140,13 +143,13 @@ describe('buildMonthlyHistory', () => {
       pendingExpenses: 450_000,
       netCashFlow: 1_080_000,
       totalDebt: 6_200_000,
-      reserveName: 'Moto',
+      reserveName: 'Fondo de reserva',
       reserveBalance: 2_300_000,
       savingsName: 'Ahorros',
       savingsBalance: 2_080_000,
       otherSavingsBalance: 0,
       savingsBuckets: [
-        { id: 'moto', name: 'Moto', balance: 2_300_000 },
+        { id: 'reserve', name: 'Fondo de reserva', balance: 2_300_000 },
         { id: 'savings', name: 'Ahorros', balance: 2_080_000 },
       ],
       totalSavings: 4_380_000,
@@ -154,7 +157,7 @@ describe('buildMonthlyHistory', () => {
   });
 
   it('reads a closed month from its snapshot and the next month from the rollover', () => {
-    const history = buildMonthlyHistory(closedOctoberInput());
+    const history = buildMonthlyHistory(closedSampleMonthInput());
 
     expect(history.map((point) => point.monthKey)).toEqual(['2026-10', '2026-11']);
     const [october, november] = history as [MonthlyHistoryPoint, MonthlyHistoryPoint];
@@ -182,7 +185,7 @@ describe('buildMonthlyHistory', () => {
   });
 
   it('prefers the frozen snapshot over the live entries of a closed month', () => {
-    const input = closedOctoberInput();
+    const input = closedSampleMonthInput();
     const snapshot = input.closedSnapshots['2026-10'] as MonthSnapshot;
     const frozen: MonthSnapshot = {
       ...snapshot,
@@ -190,7 +193,6 @@ describe('buildMonthlyHistory', () => {
       totalClosingDebt: 5_000_000,
       closingSavings: {
         reserveClosingBalance: 2_000_000,
-        motoClosingBalance: 1_000_000,
         savingsClosingBalance: 1_500_000,
         totalClosingSavings: 4_000_000,
       },
@@ -208,10 +210,10 @@ describe('buildMonthlyHistory', () => {
   });
 
   it('computes the active month live even when it is closed, so it agrees with the cards', () => {
-    const input = closedOctoberInput();
+    const input = closedSampleMonthInput();
     // Back to October from the history, then a pending expense is paid after the close.
     const edited = input.entries.map((entry) =>
-      entry.id === '2026-10_exp_smart_fit'
+      entry.id === '2026-10_exp_gym'
         ? { ...entry, status: 'completed' as const, actualAmount: entry.plannedAmount }
         : entry
     );
@@ -230,13 +232,13 @@ describe('buildMonthlyHistory', () => {
     expect(input.closedSnapshots['2026-10']?.budget.paidExpenses).toBe(2_920_000);
   });
 
-  it('falls back to the legacy moto balance and default bucket names', () => {
-    const input = closedOctoberInput();
+  it('uses the default bucket names when the stored ones are blank', () => {
+    const input = closedSampleMonthInput();
     const snapshot = input.closedSnapshots['2026-10'] as MonthSnapshot;
     const legacy: MonthSnapshot = {
       ...snapshot,
       closingSavings: {
-        motoClosingBalance: 2_300_000,
+        reserveClosingBalance: 2_300_000,
         savingsClosingBalance: 2_080_000,
         totalClosingSavings: 4_380_000,
       },
@@ -244,7 +246,7 @@ describe('buildMonthlyHistory', () => {
     const [october] = buildMonthlyHistory({
       ...input,
       closedSnapshots: { '2026-10': legacy },
-      savingsBucketsByMonth: { '2026-10': [{ id: 'moto', name: '  ', openingBalance: 0 }] },
+      savingsBucketsByMonth: { '2026-10': [{ id: 'reserve', name: '  ', openingBalance: 0 }] },
     });
 
     expect(october).toMatchObject({
@@ -257,7 +259,7 @@ describe('buildMonthlyHistory', () => {
 
   it('adds user buckets individually and omits preset funds the user does not own', () => {
     const [october] = buildMonthlyHistory(
-      octoberInput({
+      sampleMonthInput({
         savingsBucketsByMonth: {
           '2026-10': [...BUCKETS, { id: 'trip', name: 'Viaje', openingBalance: 300_000 }],
         },
@@ -267,7 +269,7 @@ describe('buildMonthlyHistory', () => {
       otherSavingsBalance: 300_000,
       totalSavings: 4_680_000,
       savingsBuckets: [
-        { id: 'moto', name: 'Moto', balance: 2_300_000 },
+        { id: 'reserve', name: 'Fondo de reserva', balance: 2_300_000 },
         { id: 'savings', name: 'Ahorros', balance: 2_080_000 },
         { id: 'trip', name: 'Viaje', balance: 300_000 },
       ],
@@ -279,7 +281,7 @@ describe('buildMonthlyHistory', () => {
       { id: 'custom_trip', name: 'Viaje', openingBalance: 300_000 },
     ];
     const [customUser] = buildMonthlyHistory(
-      octoberInput({
+      sampleMonthInput({
         entries: [],
         debtsByMonth: {},
         savingsBucketsByMonth: { '2026-10': customOnlyBuckets },
@@ -323,7 +325,7 @@ describe('buildMonthlyHistory', () => {
     ]);
 
     const [empty] = buildMonthlyHistory(
-      octoberInput({
+      sampleMonthInput({
         entries: [],
         debtsByMonth: {},
         savingsBucketsByMonth: {},
@@ -352,13 +354,13 @@ describe('buildExpenseDistribution', () => {
     );
     expect(distribution.slices.reduce((sum, slice) => sum + slice.share, 0)).toBeCloseTo(1, 10);
     expect(distribution.slices).toHaveLength(6);
-    expect(distribution.slices[0]).toMatchObject({ label: 'Cuota FUNFAMI', amount: 1_800_000 });
-    expect(distribution.slices[1]).toMatchObject({ label: 'CB300F', amount: 500_000 });
+    expect(distribution.slices[0]).toMatchObject({ label: 'Cuota de préstamo', amount: 1_800_000 });
+    expect(distribution.slices[1]).toMatchObject({ label: 'Aporte a reserva', amount: 500_000 });
 
     const other = distribution.slices[5];
     expect(other?.id).toBe(OTHER_SLICE_ID);
     expect(other?.label).toBe('Otros');
-    // Parqueadero 120k + Plan 100k + ETB 100k + Smart Fit 100k + Gemini 20k.
+    // Parqueadero 120k + Plan 100k + Internet 100k + Gimnasio 100k + Suscripciones 20k.
     expect(other?.amount).toBe(440_000);
   });
 
@@ -449,7 +451,7 @@ describe('buildExpenseDistribution', () => {
 });
 
 describe('buildPaidVsPendingSplit', () => {
-  it('matches Excel B4 and B5 for October 2026', () => {
+  it('splits paid and pending expenses of the sample month', () => {
     const split = buildPaidVsPendingSplit(calculateMonthlyBudgetSummary(ENTRIES, '2026-10'));
     expect(split).toEqual({
       paid: 2_920_000,
@@ -490,8 +492,8 @@ describe('buildMonthComparison', () => {
 });
 
 describe('buildDebtTrajectory', () => {
-  it('projects the October 2026 debt to zero in the payoff month of the Debts tab', () => {
-    const history = buildMonthlyHistory(octoberInput());
+  it('projects the sample month debt to zero in the payoff month of the Debts tab', () => {
+    const history = buildMonthlyHistory(sampleMonthInput());
     const summary = calculateDebtsSummary(DEBTS, ENTRIES, '2026-10', PAYMENTS);
     const trajectory = buildDebtTrajectory(history, summary.projection);
 

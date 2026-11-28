@@ -113,11 +113,11 @@ describe.each(PLATFORM_SKIN_IDS)('AccountProfileWorkspaceView form state on %s s
 
 describe('AccountProfileWorkspaceView', () => {
   const mockUser: BFlowAuthUser = {
-    uid: 'usr_test_abernal_123',
-    email: 'abernal@bflow.app',
-    displayName: 'Alejandro Bernal',
+    uid: 'usr_test_ana_123',
+    email: 'ana@bflow.app',
+    displayName: 'Usuario de ejemplo',
     phone: '+57 300 123 4567',
-    financialGoal: 'Comprar CB300F y fondo de paz',
+    financialGoal: 'Comprar vehículo y fondo de paz',
     authProvider: 'password',
     activeMonthKey: '2026-10',
     provider: 'local-demo',
@@ -142,10 +142,10 @@ describe('AccountProfileWorkspaceView', () => {
     );
 
     expect(screen.getByTestId('authenticated-user-profile-card')).toBeTruthy();
-    expect(screen.getByTestId('authenticated-user-name')).toHaveTextContent('Hola, Alejandro Bernal');
-    expect(screen.getByText('AB')).toBeTruthy(); // Initials monogram
-    expect(screen.getByText('abernal@bflow.app')).toBeTruthy();
-    expect(screen.getByText('Meta: Comprar CB300F y fondo de paz')).toBeTruthy();
+    expect(screen.getByTestId('authenticated-user-name')).toHaveTextContent('Hola, Usuario de ejemplo');
+    expect(screen.getByText('UD')).toBeTruthy(); // Initials monogram
+    expect(screen.getByText('ana@bflow.app')).toBeTruthy();
+    expect(screen.getByText('Meta: Comprar vehículo y fondo de paz')).toBeTruthy();
     expect(screen.getByText('Sincronizado')).toBeTruthy();
   });
 
@@ -187,16 +187,16 @@ describe('AccountProfileWorkspaceView', () => {
     expect(screen.queryByTestId('profile-input-email')).toBeNull();
 
     // Update fields inside the dedicated window
-    fireEvent.changeText(screen.getByTestId('profile-input-name'), 'Alejandro Bernal G.');
-    fireEvent.changeText(goalInput, 'Viaje a Japón y CB300F');
+    fireEvent.changeText(screen.getByTestId('profile-input-name'), 'Usuario de ejemplo G.');
+    fireEvent.changeText(goalInput, 'Viaje a Japón y vehículo');
 
     await act(async () => {
       fireEvent.press(screen.getByTestId('save-profile-settings-button'));
     });
 
     expect(onUpdateProfile).toHaveBeenCalledWith({
-      displayName: 'Alejandro Bernal G.',
-      financialGoal: 'Viaje a Japón y CB300F',
+      displayName: 'Usuario de ejemplo G.',
+      financialGoal: 'Viaje a Japón y vehículo',
     });
 
     // Close button returns user to main account menu
@@ -230,7 +230,7 @@ describe('AccountProfileWorkspaceView', () => {
       const onUpdateProfile = jest.fn().mockResolvedValue('saved');
       renderProfileForm(onUpdateProfile);
 
-      fireEvent.changeText(screen.getByTestId('profile-input-name'), 'Alejandro Bernal G.');
+      fireEvent.changeText(screen.getByTestId('profile-input-name'), 'Usuario de ejemplo G.');
       await save();
 
       expect(screen.getByTestId('profile-success-banner')).toHaveTextContent(
@@ -265,9 +265,9 @@ describe('AccountProfileWorkspaceView', () => {
         'No se pudo guardar tu perfil en la nube. Inténtalo de nuevo.'
       );
       expect(screen.queryByTestId('profile-success-banner')).toBeNull();
-      expect(screen.getByTestId('profile-input-name').props.value).toBe('Alejandro Bernal');
+      expect(screen.getByTestId('profile-input-name').props.value).toBe('Usuario de ejemplo');
       expect(screen.getByTestId('profile-input-goal').props.value).toBe(
-        'Comprar CB300F y fondo de paz'
+        'Comprar vehículo y fondo de paz'
       );
     });
 
@@ -323,7 +323,7 @@ describe('AccountProfileWorkspaceView', () => {
 
       expect(onSendPasswordReset).toHaveBeenCalledTimes(1);
       expect(screen.getByTestId('security-success-banner')).toHaveTextContent(
-        /Enviamos a abernal@bflow.app un enlace para definir una nueva contraseña/i
+        /Enviamos a ana@bflow.app un enlace para definir una nueva contraseña/i
       );
     });
 
@@ -347,7 +347,7 @@ describe('AccountProfileWorkspaceView', () => {
       const onRequestEmailChange = jest.fn();
       renderProfileWindow({ onRequestEmailChange });
 
-      expect(screen.getByTestId('account-email-current')).toHaveTextContent('abernal@bflow.app');
+      expect(screen.getByTestId('account-email-current')).toHaveTextContent('ana@bflow.app');
 
       const submit = async () => {
         await act(async () => {
@@ -360,13 +360,13 @@ describe('AccountProfileWorkspaceView', () => {
         'Escribe el nuevo correo electrónico.'
       );
 
-      fireEvent.changeText(screen.getByTestId('change-email-input'), ' ABERNAL@bflow.app ');
+      fireEvent.changeText(screen.getByTestId('change-email-input'), ' ANA@bflow.app ');
       await submit();
       expect(screen.getByTestId('email-error-banner')).toHaveTextContent(
         'Ese ya es el correo de tu cuenta.'
       );
 
-      fireEvent.changeText(screen.getByTestId('change-email-input'), 'abernal.nuevo@bflow.app');
+      fireEvent.changeText(screen.getByTestId('change-email-input'), 'ana.nuevo@bflow.app');
       await submit();
       expect(screen.getByTestId('email-error-banner')).toHaveTextContent(
         'Escribe tu contraseña actual para confirmar el cambio.'
@@ -378,7 +378,7 @@ describe('AccountProfileWorkspaceView', () => {
       const onRequestEmailChange = jest.fn();
       renderProfileWindow({ onRequestEmailChange });
 
-      fireEvent.changeText(screen.getByTestId('change-email-input'), ' Abernal.Nuevo@bflow.app ');
+      fireEvent.changeText(screen.getByTestId('change-email-input'), ' Ana.Nuevo@bflow.app ');
       fireEvent.changeText(screen.getByTestId('change-email-password-input'), 'claveActual123');
 
       // The current password can be revealed while typing
@@ -390,12 +390,12 @@ describe('AccountProfileWorkspaceView', () => {
         fireEvent.press(screen.getByTestId('request-email-change-button'));
       });
 
-      expect(onRequestEmailChange).toHaveBeenCalledWith('abernal.nuevo@bflow.app', 'claveActual123');
+      expect(onRequestEmailChange).toHaveBeenCalledWith('ana.nuevo@bflow.app', 'claveActual123');
       expect(screen.getByTestId('email-success-banner')).toHaveTextContent(
-        /Enviamos un enlace de confirmación a abernal.nuevo@bflow.app/i
+        /Enviamos un enlace de confirmación a ana.nuevo@bflow.app/i
       );
       // The account email on screen does not change until the link is opened
-      expect(screen.getByTestId('account-email-current')).toHaveTextContent('abernal@bflow.app');
+      expect(screen.getByTestId('account-email-current')).toHaveTextContent('ana@bflow.app');
       expect(screen.getByTestId('change-email-password-input').props.value).toBe('');
     });
 
@@ -405,7 +405,7 @@ describe('AccountProfileWorkspaceView', () => {
         .mockRejectedValue(new Error('La contraseña actual no es correcta.'));
       renderProfileWindow({ onRequestEmailChange });
 
-      fireEvent.changeText(screen.getByTestId('change-email-input'), 'abernal.nuevo@bflow.app');
+      fireEvent.changeText(screen.getByTestId('change-email-input'), 'ana.nuevo@bflow.app');
       fireEvent.changeText(screen.getByTestId('change-email-password-input'), 'claveMala');
       await act(async () => {
         fireEvent.press(screen.getByTestId('request-email-change-button'));
@@ -414,7 +414,7 @@ describe('AccountProfileWorkspaceView', () => {
       expect(screen.getByTestId('email-error-banner')).toHaveTextContent(
         'La contraseña actual no es correcta.'
       );
-      expect(screen.getByTestId('change-email-input').props.value).toBe('abernal.nuevo@bflow.app');
+      expect(screen.getByTestId('change-email-input').props.value).toBe('ana.nuevo@bflow.app');
     });
 
     it('shows the verification state and lets an unverified account ask for the verification email', async () => {
@@ -432,7 +432,7 @@ describe('AccountProfileWorkspaceView', () => {
 
       expect(onSendEmailVerification).toHaveBeenCalledTimes(1);
       expect(screen.getByTestId('email-success-banner')).toHaveTextContent(
-        /Enviamos un enlace de verificación a abernal@bflow.app/i
+        /Enviamos un enlace de verificación a ana@bflow.app/i
       );
     });
 
@@ -707,7 +707,7 @@ describe('AccountProfileWorkspaceView', () => {
       </BFlowThemeProvider>
     );
 
-    expect(screen.getByText('BFlow v1.0.0 (Liquid Glass)')).toBeTruthy();
+    expect(screen.getByText('BFlow (Liquid Glass)')).toBeTruthy();
     // Verify technical UID / timezone details are no longer shown
     expect(screen.queryByText('Identificador (UID)')).toBeNull();
     expect(screen.queryByText('Zona Horaria')).toBeNull();

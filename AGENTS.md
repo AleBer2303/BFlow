@@ -18,7 +18,7 @@
 ```text
 src/
 ├── domain/          # Funciones 100% puras (TS estricto, CERO imports de React/RN/Firebase/Expo)
-├── data/            # Repositorios Firestore JS SDK, mappers Zod y seeds idempotentes
+├── data/            # Repositorios Firestore JS SDK, mappers Zod, migraciones y datos de ejemplo
 ├── platform/        # Adaptadores Modo A (Expo Go / Web) vs Modo B (Build nativo .ipa iOS 26), insets, sistema, modo vitrina
 ├── design-system/   # Tokens por piel (iOS / Android / Web), tema, layout responsive, componentes base (DESIGN.md)
 ├── features/        # Módulos por dominio funcional (budget, checklist, debts, savings, analytics, onboarding, auth, summary, shell)
@@ -67,7 +67,7 @@ La documentación en BFlow es tratada con el mismo nivel de exigencia, revisión
 Todo documento técnico generado o modificado debe encajar en una de las cuatro tipologías del marco Diátaxis:
 - **Tutorial (Aprendizaje):** Guías paso a paso para que un desarrollador nuevo pase de cero a un entorno funcional en Windows 11 / Expo Go / iloader.
 - **How-To Guide (Tareas):** Instrucciones orientadas a objetivos concretos (ej. "Cómo firmar un Release con iloader", "Cómo agregar un nuevo concepto con persistencia en Firestore").
-- **Reference (Información Estructurada):** Esquemas de datos Firestore, tokens de `DESIGN.md`, contratos `WidgetSnapshotV2`, tablas de variables de entorno y catálogo semilla.
+- **Reference (Información Estructurada):** Esquemas de datos Firestore, tokens de `DESIGN.md`, contratos `WidgetSnapshotV2`, tablas de variables de entorno y datos de ejemplo.
 - **Explanation (Comprensión y Razonamiento):** Registros de Decisión de Arquitectura (`docs/decisions/` ADRs) y justificaciones de diseño contable.
 
 ### 5.2. Criterios Obligatorios para Redactar un Nuevo ADR (`docs/decisions/`)
@@ -84,6 +84,7 @@ Es mandatorio crear un archivo ADR numerado (`docs/decisions/NNNN-<slug>.md`) an
 - Si se alteran breakpoints, márgenes o columnas: Actualizar el contrato responsive de `DESIGN.md` §11.
 - Si se agregan rutas o vistas en `src/app/` o `src/features/`: Actualizar el mapa arquitectónico de `README.md`.
 - Si se optimizan consultas o estado: Registrar la evidencia antes/después en `PERF_BASELINE.md`.
+- Los enlaces de los `.md` son rutas relativas al archivo, nunca `file:///`. `npm run lint` falla si un enlace apunta a un archivo que no está en el repositorio o a un ancla que no existe (`scripts/docs-link-guard.mjs`).
 
 ### 5.4. Prohibición de Suposiciones y Regla de Evidencia
 - Prohibido asentar métricas de rendimiento, compatibilidad de Expo SDK o tiempos de compilación sin haberlos medido o validado con el entorno real o documentación oficial vigente.
@@ -118,7 +119,7 @@ BFlow se entrega en tres plataformas con **una piel cada una**: iOS (Liquid Glas
 
 ### 7.3. Interacción
 
-1. Todo elemento interactivo de `src/features/` y `src/app/` es un `AppPressable` (o `TactilePressable`). `npm run lint` rechaza el `Pressable` de React Native en esas carpetas.
+1. Todo elemento interactivo de `src/features/` y `src/app/` es un `AppPressable`. `npm run lint` rechaza el `Pressable` de React Native en esas carpetas.
 2. Objetivo táctil mínimo: 44 pt en iOS y Web, 48 dp en Android. Un control que declare menos lo compensa `AppPressable` (hit slop en nativo, crecimiento en Web); no se desactiva ni se sobrescribe.
 3. Una vista tiene **una** acción principal, con `usePrimaryActionLook()`.
 

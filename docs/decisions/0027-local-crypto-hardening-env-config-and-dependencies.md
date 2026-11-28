@@ -1,6 +1,6 @@
 # 0027. CSPRNG estricto, token del dispositivo aislado, configuración por entorno y dependencias
 
-- **Estado:** Aceptado
+- **Estado:** Aceptado. Enmendado el 2026-11-27 (Fase 5 del plan consolidado): §2.5 (`glob` y `minimatch`) y §2.6 (pepper del cifrado local).
 - **Fecha:** Noviembre 2026
 - **Contexto:** Fase 2 de la auditoría de producción (`docs/Improvements/AUDITS/auditoria_produccion_bflow.md`, AUD-04 y AUD-05). Continúa los ADR [0015](0015-native-persistence-sqlite-kv-store.md) y [0016](0016-local-storage-encryption-and-secure-store.md). Aplica `AGENTS.md` §5.2, puntos 1 (librería nueva y actualización mayor) y 5 (workflows de build).
 - **Autores:** Architect, Security Auditor, QA Engineer, Reviewer y Documentation Expert
@@ -82,12 +82,37 @@ Resultado medido: **18 → 9 vulnerabilidades (0 altas; 8 moderadas, 1 baja)**.
 
 Quedan sin corregir `deepmerge` (sin versión corregida), `glob` y `minimatch` (la corrección está en otra versión mayor). Llegan por `expo`, `@expo/fingerprint` y `@bacons/apple-targets`: son herramientas de compilación que procesan archivos del propio repositorio y no entran en el bundle de la app. Forzar otra versión mayor dentro del CLI de Expo podía romper el prebuild, que este equipo no puede ejecutar.
 
+**Enmienda del 2026-11-27 (Fase 5, `AUD-05`).** Las 8 moderadas que quedaban eran `glob` 9–14.0.1 (GHSA-3g3m-2fjr-6pw4) y `minimatch` 7–11.0.0 (GHSA-g3hv-75wg-m249). `npm audit fix --force` seguía proponiendo bajar a `expo@52`. Se corrigen con `overrides` acotados a quien las trae, sin tocar los `glob` 7 y 10 de Jest, cuya API es otra:
+
+| `overrides` | Antes | Después | Comprobación de API |
+| :--- | :--- | :--- | :--- |
+| `@expo/fingerprint` → `minimatch: ^11.0.5` | 10.2.6 | 11.0.9 | Usa `new Minimatch(...)`, que sigue igual. `createFingerprintAsync` del proyecto se ejecutó bien |
+| `@bacons/apple-targets` → `glob: ^14.0.6` | 10.5.0 y 13.0.6 | 14.0.6 (con `minimatch` 11.0.9) | Usa `globSync` y `sync`, que siguen igual. `npx expo config --type introspect` encuentra el target `com.bflow.app.widgets` con ese `globSync` |
+
+`npm ls` marca como *invalid* los `glob` anidados de Jest (7.2.3 y 10.5.0) porque el `glob` 14 quedó en la raíz de `node_modules`. Es un falso positivo conocido de `npm ls` con `overrides`: cada uno de esos paquetes resuelve su propia copia anidada, y `npm ci` y Jest funcionan.
+
+Resultado medido: `npm audit --omit=dev` → **0 vulnerabilidades**. Con las de desarrollo quedan 9 moderadas, todas en `glob` 10 y `minimatch` 9/10 de la cobertura de Jest (`jest-expo`, `@jest/globals`), que no van en ningún build. Validado en Windows con `npm ci`, `npm run typecheck`, `npm test`, `npm run test:scripts` y `npx expo prebuild --platform android --no-install`. El prebuild de iOS no corre en Windows («Skipping generating the iOS native project files»): se comprobó con la introspección anterior y queda `needs_validation` en el primer `build-ios.yml`.
+
+### 2.6. El pepper del cifrado local no es un secreto (enmienda del 2026-11-27, `AUD-04`)
+
+La llave de `storageCipher.ts` se deriva de dos valores (ADR 0016): un *pepper* de aplicación y el token del dispositivo de 256 bits (§2.2). El pepper es `EXPO_PUBLIC_LOCAL_CIPHER_PEPPER` o, si no se define, `DEFAULT_APPLICATION_PEPPER`.
+
+**Decisión: no se exige la variable en los builds. Se documenta que el pepper es público y que la protección real es el token del dispositivo.**
+
+- Babel incrusta en el bundle el valor de toda `process.env.EXPO_PUBLIC_*` (`babel-preset-expo/build/plugins/inline-env-vars.js`). Un pepper definido en el build se lee igual de fácil en el `.apk`, el `.ipa` o el JavaScript de Web que el valor por defecto en este repositorio. Exigirlo en `scripts/check-build-env.mjs` no añadiría ningún secreto.
+- Lo que no se puede leer desde el binario es el token: va al Keychain o al Keystore en nativo y a `sessionStorage` en Web, nunca junto al cifrado (§2.2). Sin el token, el pepper no sirve para descifrar.
+- Ningún build ni workflow ha definido la variable: todo lo guardado en los dispositivos está cifrado con `DEFAULT_APPLICATION_PEPPER`. Cambiarlo obligaría a migrar los datos de todos los usuarios sin ganar seguridad.
+
+**Salvaguarda de migración.** `DEFAULT_APPLICATION_PEPPER` queda exportado, documentado como público y fijado por un test. Si un build futuro define otro pepper, `decryptStorageValue` prueba primero el activo y, si el sobre no se autentica, el de por defecto; la siguiente escritura vuelve a cifrar con el activo. Un `customPepper` explícito nunca cae al de por defecto. La caché de llaves derivadas guarda las dos (activa y de por defecto) para no recalcularlas al alternar. Tests: `src/platform/storage/__tests__/storagePepperMigration.test.ts`, con un sobre cifrado con el pepper por defecto que también descifra el `storageCipher.ts` anterior al cambio.
+
 ## 3. Alternativas descartadas
 
 - **Solo lanzar el error, sin `expo-crypto`.** En iOS y Android no habría ninguna fuente y no se guardaría nada: ni sesión ni caché.
 - **Cerrar también las claves de sesión cuando falla SecureStore.** Ver 2.2.
 - **Compartir el token entre pestañas** (`BroadcastChannel`). Más superficie y complejidad para una caché que se reconstruye sola.
 - **`npm audit fix --force`.** Bajaba `firebase` a 9.14 y `expo` a 52.
+- **Exigir `EXPO_PUBLIC_LOCAL_CIPHER_PEPPER` en los builds (§2.6).** El valor acabaría igualmente en el bundle y forzaría una migración de todos los datos locales.
+- **`overrides` globales de `glob` y `minimatch` (§2.5).** Habrían llevado `glob` 14 a Jest, que usa la API de `glob` 7 (con *callbacks*).
 
 ## 4. Verificación
 

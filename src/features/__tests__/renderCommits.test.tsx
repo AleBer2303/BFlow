@@ -10,7 +10,8 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
 import PhaseOneHomeScreen from '../../app/index';
 import { BFlowThemeProvider } from '../../design-system/theme/ThemeContext';
-import { DEMO_OWNER_USER } from '../../platform/auth/authAdapter';
+import { DEMO_USER } from '../../platform/auth/authAdapter';
+import { triggerWidgetSync } from '../budget/store/slices/sliceTypes';
 import { useBudgetStore } from '../budget/store/useBudgetStore';
 
 type Counts = Record<string, number>;
@@ -107,6 +108,49 @@ jest.mock('../auth/components/AccountProfileWorkspaceView', () =>
     'AccountProfileWorkspaceView'
   )
 );
+/** Domain calculators the tab containers call; counted to prove hidden tabs stay frozen (OPT-01). */
+const COUNTED_CALCULATORS = [
+  'calculateMonthlyBudgetSummary',
+  'calculateChecklistProgress',
+  'calculateDebtsSummary',
+  'calculateMonthlySavingsSummary',
+  'calculateProvisionPlanSummary',
+  'calculateFinancialAccountsSummary',
+  'buildMonthlyCurve',
+  'buildMonthlyHistory',
+] as const;
+
+jest.mock('../../domain', () => {
+  const actual = jest.requireActual<Record<string, unknown>>('../../domain');
+  const wrapped: Record<string, unknown> = { ...actual };
+  for (const name of [
+    'calculateMonthlyBudgetSummary',
+    'calculateChecklistProgress',
+    'calculateDebtsSummary',
+    'calculateMonthlySavingsSummary',
+    'calculateProvisionPlanSummary',
+    'calculateFinancialAccountsSummary',
+    'buildMonthlyCurve',
+    'buildMonthlyHistory',
+  ]) {
+    const original = actual[name] as (...args: unknown[]) => unknown;
+    wrapped[name] = (...args: unknown[]) => {
+      const holder = globalThis as unknown as { __bflowCalculatorCalls?: Record<string, number> };
+      holder.__bflowCalculatorCalls ??= {};
+      holder.__bflowCalculatorCalls[name] = (holder.__bflowCalculatorCalls[name] ?? 0) + 1;
+      return original(...args);
+    };
+  }
+  return wrapped;
+});
+
+function takeCalculatorCalls(): Record<string, number> {
+  const holder = globalThis as unknown as { __bflowCalculatorCalls?: Record<string, number> };
+  const snapshot = { ...(holder.__bflowCalculatorCalls ?? {}) };
+  holder.__bflowCalculatorCalls = {};
+  return snapshot;
+}
+
 jest.mock('../../design-system', () => {
   const ReactLib = jest.requireActual<typeof import('react')>('react');
   const actual = jest.requireActual<Record<string, unknown>>('../../design-system');
@@ -147,8 +191,8 @@ function takeCounts(): Counts {
 
 describe('Fase 5: renders por acción', () => {
   beforeEach(() => {
-    useBudgetStore.setState({ authUser: DEMO_OWNER_USER, needsOnboarding: false });
-    useBudgetStore.getState().resetToOctober2026GoldenState();
+    useBudgetStore.setState({ authUser: DEMO_USER, needsOnboarding: false });
+    useBudgetStore.getState().resetToSampleWorkspace();
     takeCounts();
   });
 
@@ -190,7 +234,7 @@ describe('Fase 5: renders por acción', () => {
         debtsByMonth: { ...state.debtsByMonth },
         debtPayments: [...state.debtPayments],
         savingsBucketsByMonth: { ...state.savingsBucketsByMonth },
-        provisionPlan: state.idealMotoPlan,
+        provisionPlan: state.provisionPlan,
         closedSnapshots: state.closedSnapshots,
         needsOnboarding: false,
       });
@@ -200,7 +244,7 @@ describe('Fase 5: renders por acción', () => {
     const entry = store
       .getState()
       .entries.find((e) => e.monthKey === store.getState().activeMonthKey);
-    if (!entry) throw new Error('El seed de octubre debe tener movimientos');
+    if (!entry) throw new Error('El sample de octubre debe tener movimientos');
     const visibleRows = store
       .getState()
       .entries.filter((e) => e.monthKey === store.getState().activeMonthKey).length;
@@ -327,6 +371,76 @@ describe('Fase 5: renders por acción', () => {
       expect(screen.getByTestId('workspace-tab-checklist')).toHaveProp(
         'accessibilityState',
         expect.objectContaining({ selected: true })
+      );
+    }
+  );
+  it.each(SKINS)(
+    'OPT-01: con todas las pestañas visitadas, marcar una fila solo vuelve a pintar Checklist (piel %s)',
+    async (skin) => {
+      render(
+        <BFlowThemeProvider initialMode="dark" skin={skin}>
+          <PhaseOneHomeScreen />
+        </BFlowThemeProvider>
+      );
+      await act(async () => {});
+      const store = useBudgetStore;
+      for (const tab of ['summary', 'debts', 'savings', 'analytics', 'account', 'checklist'] as const) {
+        await act(async () => store.getState().setActiveTab(tab));
+      }
+      // The widget snapshot (store, not a tab) also calls the calculators on every change.
+      takeCalculatorCalls();
+      await act(async () => {
+        await triggerWidgetSync(store.getState());
+      });
+      const widgetCalculators = takeCalculatorCalls();
+      takeCounts();
+
+      const monthKey = store.getState().activeMonthKey;
+      const entry = store.getState().entries.find((e) => e.monthKey === monthKey);
+      if (!entry) throw new Error('El sample de octubre debe tener movimientos');
+      await act(async () => {
+        fireEvent.press(screen.getByTestId(`checklist-workspace-item-${entry.id}`));
+      });
+      const toggleRenders = takeCounts();
+      const toggleCalculators = takeCalculatorCalls();
+
+      // Al volver a Resumen se recalcula una vez con los datos actuales.
+      await act(async () => store.getState().setActiveTab('summary'));
+      const returnRenders = takeCounts();
+      const returnCalculators = takeCalculatorCalls();
+
+      if (process.env.BFLOW_RENDER_REPORT === '1') {
+        process.stdout.write(
+          `
+HIDDEN_TABS_REPORT_${skin}=${JSON.stringify({
+            toggleRenders,
+            widgetCalculators,
+            toggleCalculators,
+            returnRenders,
+            returnCalculators,
+          })}
+`
+        );
+      }
+
+      expect(toggleRenders.checklist ?? 0).toBeGreaterThan(0);
+      for (const hidden of ['summary', 'debts', 'savings', 'analytics', 'account']) {
+        expect(toggleRenders[hidden] ?? 0).toBe(0);
+      }
+      // Besides the widget snapshot, only Checklist calculates: the month summary of its header.
+      expect(toggleCalculators).toEqual({
+        ...widgetCalculators,
+        calculateMonthlyBudgetSummary: (widgetCalculators.calculateMonthlyBudgetSummary ?? 0) + 1,
+      });
+
+      expect(returnRenders.summary ?? 0).toBeGreaterThan(0);
+      expect(returnRenders.checklist ?? 0).toBe(0);
+      expect(returnCalculators.buildMonthlyCurve).toBe(1);
+      const budget = jest
+        .requireActual<typeof import('../../domain')>('../../domain')
+        .calculateMonthlyBudgetSummary(store.getState().entries, monthKey);
+      expect(screen.getByTestId('golden-net-flow')).toHaveTextContent(
+        jest.requireActual<typeof import('../../domain')>('../../domain').formatCurrency(budget.netCashFlow)
       );
     }
   );

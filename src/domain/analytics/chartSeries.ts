@@ -123,7 +123,7 @@ export interface DebtTrajectory {
   estimatedPayoffMonthKey: string | null;
 }
 
-const RESERVE_BUCKET_IDS = new Set(['reserve', 'moto']);
+const RESERVE_BUCKET_IDS = new Set(['reserve']);
 /** Same defaults as the savings calculator, so a snapshot and a live month read alike. */
 const DEFAULT_RESERVE_NAME = 'Fondo de Reserva';
 const DEFAULT_SAVINGS_NAME = 'Ahorros';
@@ -219,7 +219,7 @@ function buildPointFromSnapshot(
   buckets: readonly SavingsBucket[]
 ): MonthlyHistoryPoint {
   const { budget, closingSavings } = snapshot;
-  const reserveBalance = closingSavings.reserveClosingBalance ?? closingSavings.motoClosingBalance;
+  const reserveBalance = closingSavings.reserveClosingBalance;
   const savingsBalance = closingSavings.savingsClosingBalance;
   const otherSavingsBalance = Math.max(
     0,
@@ -383,7 +383,7 @@ export function buildExpenseDistribution(
   return { monthKey, total, slices };
 }
 
-/** Paid against still-pending expenses of the month (Excel B4 and B5). */
+/** Paid against still-pending expenses of the month. */
 export function buildPaidVsPendingSplit(
   budget: Pick<MonthlyBudgetSummary, 'paidExpenses' | 'pendingExpenses'>
 ): PaidVsPendingSplit {

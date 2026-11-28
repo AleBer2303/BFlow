@@ -25,7 +25,7 @@ describe('saveUserProfile: perfil del usuario en users/{uid}', () => {
     const repo = new FirestoreBudgetRepository(db);
 
     await repo.saveUserProfile('uid_profile_01', {
-      displayName: 'Alejandro Bernal G.',
+      displayName: 'Usuario de ejemplo G.',
       financialGoal: 'Viaje a Japón',
     });
 
@@ -45,7 +45,7 @@ describe('saveUserProfile: perfil del usuario en users/{uid}', () => {
     ]);
     expect(payload).toMatchObject({
       uid: 'uid_profile_01',
-      displayName: 'Alejandro Bernal G.',
+      displayName: 'Usuario de ejemplo G.',
       financialGoal: 'Viaje a Japón',
     });
     expect(batchCommit).toHaveBeenCalledTimes(1);
@@ -54,7 +54,7 @@ describe('saveUserProfile: perfil del usuario en users/{uid}', () => {
   it('writes an empty goal so a cleared goal reaches the cloud', async () => {
     const repo = new FirestoreBudgetRepository({} as Firestore);
 
-    await repo.saveUserProfile('uid_profile_01', { displayName: 'Alejandro', financialGoal: '' });
+    await repo.saveUserProfile('uid_profile_01', { displayName: 'Ana', financialGoal: '' });
 
     expect(batchSet.mock.calls[0][1].financialGoal).toBe('');
   });
@@ -66,7 +66,7 @@ describe('saveUserProfile: perfil del usuario en users/{uid}', () => {
     const repo = new FirestoreBudgetRepository({} as Firestore);
 
     await expect(
-      repo.saveUserProfile('uid_profile_01', { displayName: 'Alejandro', financialGoal: '' })
+      repo.saveUserProfile('uid_profile_01', { displayName: 'Ana', financialGoal: '' })
     ).rejects.toMatchObject({ code: 'permission-denied' });
   });
 
@@ -75,14 +75,14 @@ describe('saveUserProfile: perfil del usuario en users/{uid}', () => {
     const samplePhoto = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
 
     await repo.saveUserProfile('uid_profile_01', {
-      displayName: 'Alejandro',
+      displayName: 'Ana',
       financialGoal: 'Viaje',
       photoUrl: samplePhoto,
     });
     expect(batchSet.mock.calls[0][1].photoUrl).toBe(samplePhoto);
 
     await repo.saveUserProfile('uid_profile_01', {
-      displayName: 'Alejandro',
+      displayName: 'Ana',
       financialGoal: 'Viaje',
       photoUrl: '',
     });

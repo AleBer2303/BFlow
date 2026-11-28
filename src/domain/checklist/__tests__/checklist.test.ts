@@ -1,4 +1,4 @@
-import octoberFixture from '../../../../fixtures/october-2026.json';
+import { buildSampleWorkspace } from '../../../data/sample/sampleWorkspace';
 import {
   calculateChecklistProgress,
   completeExistingMovement,
@@ -14,55 +14,58 @@ import {
   uncompleteMovement,
 } from '../../index';
 
-const concepts = octoberFixture.concepts as unknown as Concept[];
-const octoberEntries = octoberFixture.monthEntries as unknown as MonthEntry[];
+/** The example budget of the showcase mode, in the month the tests pin. */
+const sample = buildSampleWorkspace();
+
+const concepts = sample.concepts as unknown as Concept[];
+const sampleEntries = sample.entries as unknown as MonthEntry[];
 
 describe('domain/checklist — Monthly Checklist Core Rules', () => {
   it('validates deterministic entry IDs and rejects empty conceptId', () => {
-    expect(getDeterministicEntryId('2026-10', 'inc_salario_principal')).toBe(
-      '2026-10_inc_salario_principal'
+    expect(getDeterministicEntryId('2026-10', 'inc_salary')).toBe(
+      '2026-10_inc_salary'
     );
     expect(() => getDeterministicEntryId('2026-10', '   ')).toThrow(TypeError);
   });
 
-  it('hides completed single-occurrence concepts in October 2026 (Salario Principal, Parqueadero CEM, etc.)', () => {
-    const availableIncomes = getAvailableConcepts(concepts, octoberEntries, '2026-10', 'income');
-    const availableExpenses = getAvailableConcepts(concepts, octoberEntries, '2026-10', 'expense');
+  it('hides completed single-occurrence concepts in the sample month (Salario, Parqueadero, etc.)', () => {
+    const availableIncomes = getAvailableConcepts(concepts, sampleEntries, '2026-10', 'income');
+    const availableExpenses = getAvailableConcepts(concepts, sampleEntries, '2026-10', 'expense');
 
-    // Salario Principal is completed in Oct 2026 -> hidden; Prima is pending & Otros Ingresos Variables is repeatable -> shown
+    // Salario is completed in Oct 2026 -> hidden; Prima is pending & Otros ingresos is repeatable -> shown
     expect(availableIncomes.map((c) => c.id)).toEqual([
-      'inc_prima',
-      'inc_otros_ingresos_variables',
+      'inc_bonus',
+      'inc_other',
     ]);
 
-    // Completed expenses (CB300F, Cuota FUNFAMI, Parqueadero CEM, Gasolina, Tarjeta Nu) are hidden
+    // Completed expenses (vehículo, Cuota de préstamo, Parqueadero, Gasolina, Tarjeta de crédito) are hidden
     expect(availableExpenses.map((c) => c.id)).toEqual([
-      'exp_plan_de_datos_y_bano_kabir',
-      'exp_seguro_tr_sura',
-      'exp_etb_o_alexandra',
-      'exp_gemini_pro',
-      'exp_smart_fit',
-      'exp_otro',
+      'exp_phone_plan',
+      'exp_insurance',
+      'exp_internet',
+      'exp_subscriptions',
+      'exp_gym',
+      'exp_other',
     ]);
   });
 
   it('makes a completed concept reappear in the following month (2026-11) and across year rollover (2026-12 -> 2027-01)', () => {
-    const novEntries = ensureMonthPlan('2026-11', concepts, octoberEntries);
+    const novEntries = ensureMonthPlan('2026-11', concepts, sampleEntries);
     const availableNovIncomes = getAvailableConcepts(concepts, novEntries, '2026-11', 'income');
     const availableNovExpenses = getAvailableConcepts(concepts, novEntries, '2026-11', 'expense');
 
-    expect(availableNovIncomes.map((c) => c.id)).toContain('inc_salario_principal');
-    expect(availableNovExpenses.map((c) => c.id)).toContain('exp_parqueadero_cem');
+    expect(availableNovIncomes.map((c) => c.id)).toContain('inc_salary');
+    expect(availableNovExpenses.map((c) => c.id)).toContain('exp_parking');
 
     const jan2027Entries = ensureMonthPlan('2027-01', concepts, novEntries);
     const availableJanIncomes = getAvailableConcepts(concepts, jan2027Entries, '2027-01', 'income');
-    expect(availableJanIncomes.map((c) => c.id)).toContain('inc_salario_principal');
+    expect(availableJanIncomes.map((c) => c.id)).toContain('inc_salary');
   });
 
   it('makes a completed concept reappear immediately when unchecked or deleted in the same month', () => {
     const afterUncheck = uncompleteMovement(
-      octoberEntries,
-      '2026-10_exp_parqueadero_cem'
+      sampleEntries,
+      '2026-10_exp_parking'
     );
     const availableAfterUncheck = getAvailableConcepts(
       concepts,
@@ -70,12 +73,12 @@ describe('domain/checklist — Monthly Checklist Core Rules', () => {
       '2026-10',
       'expense'
     );
-    expect(availableAfterUncheck.map((c) => c.id)).toContain('exp_parqueadero_cem');
+    expect(availableAfterUncheck.map((c) => c.id)).toContain('exp_parking');
 
     const afterDelete = deleteMovement(
-      octoberEntries,
+      sampleEntries,
       concepts,
-      '2026-10_inc_salario_principal'
+      '2026-10_inc_salary'
     );
     const availableIncomesAfterDelete = getAvailableConcepts(
       concepts,
@@ -83,37 +86,37 @@ describe('domain/checklist — Monthly Checklist Core Rules', () => {
       '2026-10',
       'income'
     );
-    expect(availableIncomesAfterDelete.map((c) => c.id)).toContain('inc_salario_principal');
+    expect(availableIncomesAfterDelete.map((c) => c.id)).toContain('inc_salary');
   });
 
-  it('keeps allowMultiplePerMonth concepts ("Otro" and "Otros Ingresos Variables") ALWAYS available even after multiple completions', () => {
-    let currentEntries = [...octoberEntries];
+  it('keeps allowMultiplePerMonth concepts ("Otro" and "Otros ingresos") ALWAYS available even after multiple completions', () => {
+    let currentEntries = [...sampleEntries];
 
     currentEntries = registerMovement(currentEntries, concepts, {
       monthKey: '2026-10',
-      conceptId: 'exp_otro',
+      conceptId: 'exp_other',
       actualAmount: 45_000,
       completedAt: '2026-10-28',
       note: 'Almuerzo especial',
-      customEntryId: '2026-10_exp_otro_1',
+      customEntryId: '2026-10_exp_other_1',
     });
 
     currentEntries = registerMovement(currentEntries, concepts, {
       monthKey: '2026-10',
-      conceptId: 'exp_otro',
+      conceptId: 'exp_other',
       actualAmount: 30_000,
       completedAt: '2026-10-29',
       note: 'Taxi',
-      customEntryId: '2026-10_exp_otro_2',
+      customEntryId: '2026-10_exp_other_2',
     });
 
     const availableExpenses = getAvailableConcepts(concepts, currentEntries, '2026-10', 'expense');
-    expect(availableExpenses.map((c) => c.id)).toContain('exp_otro');
+    expect(availableExpenses.map((c) => c.id)).toContain('exp_other');
 
     // Deleting a repeatable movement removes that specific row
-    const afterDeletingOne = deleteMovement(currentEntries, concepts, '2026-10_exp_otro_1');
-    expect(afterDeletingOne.some((e) => e.id === '2026-10_exp_otro_1')).toBe(false);
-    expect(afterDeletingOne.some((e) => e.id === '2026-10_exp_otro_2')).toBe(true);
+    const afterDeletingOne = deleteMovement(currentEntries, concepts, '2026-10_exp_other_1');
+    expect(afterDeletingOne.some((e) => e.id === '2026-10_exp_other_1')).toBe(false);
+    expect(afterDeletingOne.some((e) => e.id === '2026-10_exp_other_2')).toBe(true);
   });
 
   it('enforces idempotency and offline duplicate resolution in ensureMonthPlan', () => {
@@ -123,10 +126,10 @@ describe('domain/checklist — Monthly Checklist Core Rules', () => {
 
     // Simulate offline concurrent creation where one replica is pending and another is completed
     const pendingReplica: MonthEntry = {
-      id: '2026-12_inc_salario_principal',
+      id: '2026-12_inc_salary',
       monthKey: '2026-12',
-      conceptId: 'inc_salario_principal',
-      conceptName: 'Salario Principal',
+      conceptId: 'inc_salary',
+      conceptName: 'Salario',
       type: 'income',
       group: 'fixed',
       plannedAmount: 4_000_000,
@@ -140,20 +143,20 @@ describe('domain/checklist — Monthly Checklist Core Rules', () => {
     };
 
     const deduplicated = ensureMonthPlan('2026-12', concepts, [pendingReplica, completedReplica]);
-    const salarioEntries = deduplicated.filter((e) => e.id === '2026-12_inc_salario_principal');
+    const salarioEntries = deduplicated.filter((e) => e.id === '2026-12_inc_salary');
     expect(salarioEntries).toHaveLength(1);
     expect(salarioEntries[0]?.status).toBe('completed');
   });
 
   it('reaches "Mes completo" (12/12, 100%) when all pending non-repeatable concepts are completed', () => {
-    let entries = [...octoberEntries];
+    let entries = [...sampleEntries];
     const pendingIds = [
-      'inc_prima',
-      'exp_plan_de_datos_y_bano_kabir',
-      'exp_seguro_tr_sura',
-      'exp_etb_o_alexandra',
-      'exp_gemini_pro',
-      'exp_smart_fit',
+      'inc_bonus',
+      'exp_phone_plan',
+      'exp_insurance',
+      'exp_internet',
+      'exp_subscriptions',
+      'exp_gym',
     ];
 
     for (const conceptId of pendingIds) {
@@ -185,7 +188,7 @@ describe('domain/checklist — Monthly Checklist Core Rules', () => {
     expect(isConceptActiveInMonth(archivedConcept, '2026-10')).toBe(false);
 
     expect(() =>
-      registerMovement(octoberEntries, concepts, {
+      registerMovement(sampleEntries, concepts, {
         monthKey: '2026-10',
         conceptId: 'non_existent',
         completedAt: '2026-10-28',
@@ -193,9 +196,9 @@ describe('domain/checklist — Monthly Checklist Core Rules', () => {
     ).toThrow(/not found/);
 
     expect(() =>
-      registerMovement(octoberEntries, concepts, {
+      registerMovement(sampleEntries, concepts, {
         monthKey: '2026-10',
-        conceptId: 'inc_salario_principal',
+        conceptId: 'inc_salary',
         completedAt: '2026-10-28',
       })
     ).toThrow(/already completed/);
@@ -203,7 +206,7 @@ describe('domain/checklist — Monthly Checklist Core Rules', () => {
     // Registering a movement for a month that didn't call ensureMonthPlan yet creates the entry directly
     const directEntries = registerMovement([], concepts, {
       monthKey: '2026-11',
-      conceptId: 'inc_salario_principal',
+      conceptId: 'inc_salary',
       completedAt: '2026-11-20',
       note: 'Pago directo',
     });
@@ -220,37 +223,37 @@ describe('domain/checklist — Monthly Checklist Core Rules', () => {
   });
 
   it('toggleMovementStatus toggles movements back and forth in-place without duplicating entries', () => {
-    // 1. Register a new repeatable movement (e.g. exp_otro)
-    const registered = registerMovement(octoberEntries, concepts, {
+    // 1. Register a new repeatable movement (e.g. exp_other)
+    const registered = registerMovement(sampleEntries, concepts, {
       monthKey: '2026-10',
-      conceptId: 'exp_otro',
+      conceptId: 'exp_other',
       actualAmount: 75_000,
       completedAt: '2026-10-29',
-      customEntryId: '2026-10_exp_otro_test',
+      customEntryId: '2026-10_exp_other_test',
     });
     const initialCount = registered.length;
-    const initialItem = registered.find((e) => e.id === '2026-10_exp_otro_test')!;
+    const initialItem = registered.find((e) => e.id === '2026-10_exp_other_test')!;
     expect(initialItem.status).toBe('completed');
     expect(initialItem.actualAmount).toBe(75_000);
 
     // 2. Uncheck it -> becomes pending, preserves amount
-    const unchecked = toggleMovementStatus(registered, '2026-10_exp_otro_test');
+    const unchecked = toggleMovementStatus(registered, '2026-10_exp_other_test');
     expect(unchecked).toHaveLength(initialCount);
-    const pendingItem = unchecked.find((e) => e.id === '2026-10_exp_otro_test')!;
+    const pendingItem = unchecked.find((e) => e.id === '2026-10_exp_other_test')!;
     expect(pendingItem.status).toBe('pending');
     expect(pendingItem.actualAmount).toBe(75_000);
 
     // 3. Check it again -> becomes completed, NEVER duplicates
-    const rechecked = toggleMovementStatus(unchecked, '2026-10_exp_otro_test');
+    const rechecked = toggleMovementStatus(unchecked, '2026-10_exp_other_test');
     expect(rechecked).toHaveLength(initialCount);
-    const completedAgain = rechecked.find((e) => e.id === '2026-10_exp_otro_test')!;
+    const completedAgain = rechecked.find((e) => e.id === '2026-10_exp_other_test')!;
     expect(completedAgain.status).toBe('completed');
     expect(completedAgain.actualAmount).toBe(75_000);
 
     // 4. Repeated toggles NEVER increase length
     let current = rechecked;
     for (let i = 0; i < 6; i++) {
-      current = toggleMovementStatus(current, '2026-10_exp_otro_test');
+      current = toggleMovementStatus(current, '2026-10_exp_other_test');
       expect(current).toHaveLength(initialCount);
     }
   });

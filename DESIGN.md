@@ -1,6 +1,6 @@
 # Sistema de Diseño Visual de BFlow (`DESIGN.md`)
 
-> **Fuente de Verdad Visual:** Ningún componente en `src/features/` ni `src/app/` puede usar colores hexadecimales, tamaños de fuente, radios o espaciados hardcodeados. Todo valor visual proviene estrictamente de [`src/design-system/tokens.ts`](file:///C:/Users/D0604763/Documents/BFlow/BFlow/src/design-system/tokens.ts).
+> **Fuente de Verdad Visual:** Ningún componente en `src/features/` ni `src/app/` puede usar colores hexadecimales, tamaños de fuente, radios o espaciados hardcodeados. Todo valor visual proviene estrictamente de [`src/design-system/tokens.ts`](src/design-system/tokens.ts).
 
 > **Tres pieles, un producto:** BFlow tiene una identidad visual por plataforma. Las secciones 1 a 9 describen la piel **iOS** (Liquid Glass), que es la de referencia. La sección 10 define las pieles **Android** (Material 3, sin vidrio) y **Web** (sistema plano), y la sección 11 el contrato responsive común. Los tokens se leen siempre de `useBFlowTheme()`, que entrega los de la piel activa.
 
@@ -61,7 +61,7 @@ Tonalidades minerales calibradas para erradicar cualquier sensación de interfaz
 | `semantic.completed` | `#2EBD85` (Salvia Esmeralda Noble) | `#127551` (Bosque Salvia Profundo) | `rgba(46, 189, 133, 0.08)` | `rgba(18, 117, 81, 0.10)` | Ítems completados en el Checklist. |
 | `semantic.pending` | `#E5A84B` (Ámbar Dorado Miel) | `#8F5206` (Ocre Miel Dorado) | `rgba(229, 168, 75, 0.10)` | `rgba(143, 82, 6, 0.10)` | Ítems pendientes por pagar o recibir. |
 | `semantic.debt` | `#D9824C` (Canela Siena Tostada) | `#92440F` (Cuero Canela Profundo) | `rgba(217, 130, 76, 0.10)` | `rgba(146, 68, 15, 0.10)` | Obligaciones financieras y amortizaciones. |
-| `semantic.moto` | `#4F8FEA` (Zafiro Clásico Suave) | `#245F9F` (Zafiro Clásico Azul) | `rgba(79, 143, 234, 0.10)` | `rgba(36, 95, 159, 0.10)` | Fondo Moto Ideal y provisiones recurrentes. |
+| `semantic.reserve` | `#4F8FEA` (Zafiro Clásico Suave) | `#245F9F` (Zafiro Clásico Azul) | `rgba(79, 143, 234, 0.10)` | `rgba(36, 95, 159, 0.10)` | Fondo de reserva y provisiones recurrentes. |
 | `semantic.savings` | `#9D7FE6` (Lavanda Amatista Noble) | `#5F3DA6` (Amatista Terciopelo) | `rgba(157, 127, 230, 0.10)` | `rgba(95, 61, 166, 0.10)` | Fondos de ahorro general y reserva líquida. |
 
 ---
@@ -345,6 +345,14 @@ Fallback arquitectural idéntico visualmente mediante `expo-blur`:
      - **Cierre** (sección «Gráficos»): Flujo de Dinero, balance mensual, previsto vs real, pagado vs pendiente, distribución de gastos y la comparación de los dos últimos meses («Noviembre 2026 vs Octubre 2026»).
      - **Deudas:** evolución de la deuda con la proyección de cierre.
      - **Ahorros:** evolución de ahorros apilada.
+7. **Tarjetas de crédito y cuentas débito** ([ADR 0034](docs/decisions/0034-credit-cards-and-debit-accounts.md)):
+   - **Registro:** en **+ Nueva Deuda** (`debt-form-modal`), un selector segmentado **Deuda · Crédito · Débito** con el mismo estilo que `Gasto` / `Ingreso` de Nuevo Movimiento. Cada opción tiñe su opción activa, la insignia del título y el `HeroAmountField`: deuda `semantic.debt`, crédito `semantic.savings` y débito `semantic.provisions`. Al editar no aparece el selector: el tipo no cambia.
+   - **Débito en Deudas es solo cuenta corriente** («Registrar Cuenta Corriente», insignia «Débito · Corriente»). Las cuentas de ahorros se registran en Ahorros.
+   - **+ Nuevo Ahorro** (Ahorros, antes «+ Nuevo Fondo»): selector **Fondo · Cuenta de ahorros** con el mismo estilo. El fondo se tiñe de `semantic.savings` y la cuenta de `semantic.provisions`. Los modos de la sección son **Editar Ahorro** / **Eliminar Ahorro**. Las cuentas se listan en «Cuentas de ahorro» debajo de los fondos, y la tarjeta principal añade «En cuentas de ahorro» en `semantic.provisions`.
+   - **Campos:** crédito, valor pendiente de pago (monto héroe), nombre, banco, últimos 4 dígitos, cupo total (obligatorio, con vista previa del cupo disponible y del uso), día de corte, día límite de pago y tasa mensual opcional. Débito (corriente o de ahorros), saldo actual (monto héroe), nombre, banco y últimos 4 dígitos: el tipo lo fija la pestaña.
+   - **Tarjetas** (`FinancialAccountCard`, sección «Tarjetas y cuentas» bajo las obligaciones de Deudas y «Cuentas de ahorro» en Ahorros): una `GlassSurface` por cuenta, con el monto en `title1`. El crédito lleva una barra de uso del cupo (`ProgressFill` en `semantic.savings`) y las fechas de corte y de pago en `caption`. Un saldo débito negativo se pinta en `semantic.expense` («Saldo en sobregiro»). Editar y Eliminar reutilizan los modos globales de la pestaña.
+   - **Movimientos:** en «Más opciones», `AdaptiveSelectField` para elegir la tarjeta o cuenta. En un gasto con tarjeta de crédito aparece además el par **Compra con la tarjeta / Pago a la tarjeta**. La fila del checklist muestra la cuenta como `StatusBadge` (`savings` o `provisions`).
+   - **Cierre** (`AccountsMonthPanel`): baldosas como las del cierre de mes (gastado `expense`, pagado `income`, pendiente `debt`, saldo `provisions`), una frase sobre si la deuda en tarjetas subió o bajó, y una fila por cuenta con dos barras finas: gastado (`semantic.expense`) y pagado (`semantic.income`), con leyenda para que el dato no dependa del color.
 
 ---
 

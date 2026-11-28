@@ -66,7 +66,7 @@ const mockDebtSummary: DebtSummaryResult = {
 };
 
 const mockReserveSummary: ReserveBucketSummary = {
-  bucketId: 'moto',
+  bucketId: 'reserve',
   name: 'Fondo de Reserva',
   openingBalance: 1200000,
   paidContributionsThisMonth: 0,
@@ -89,9 +89,7 @@ const mockGeneralSavings: GeneralSavingsBucketSummary = {
 const mockSavingsSummary: MonthlySavingsSummary = {
   monthKey: '2026-10',
   hasReserveBucket: true,
-  hasMotoBucket: true,
   reserve: mockReserveSummary,
-  moto: mockReserveSummary,
   hasSavingsBucket: true,
   savings: mockGeneralSavings,
   customBuckets: [],
@@ -107,7 +105,7 @@ const mockClosedSnapshot: MonthSnapshot = {
   closingDebts: [],
   totalClosingDebt: 7100000,
   closingSavings: {
-    motoClosingBalance: 1200000,
+    reserveClosingBalance: 1200000,
     savingsClosingBalance: 500000,
     totalClosingSavings: 1700000,
   },
@@ -123,7 +121,6 @@ describe('AnalyticsAndHistoryView (Cierre de Mes e Historial)', () => {
         <AnalyticsAndHistoryView
           activeMonthKey="2026-10"
           availableMonths={['2026-10']}
-          entries={[]}
           budget={mockBudget}
           checklist={mockChecklistPending}
           debtSummary={mockDebtSummary}
@@ -162,7 +159,6 @@ describe('AnalyticsAndHistoryView (Cierre de Mes e Historial)', () => {
         <AnalyticsAndHistoryView
           activeMonthKey="2026-10"
           availableMonths={['2026-10']}
-          entries={[]}
           budget={mockBudget}
           checklist={mockChecklistCompleted}
           debtSummary={mockDebtSummary}
@@ -175,7 +171,7 @@ describe('AnalyticsAndHistoryView (Cierre de Mes e Historial)', () => {
     );
 
     expect(
-      screen.getByText('✨ Todos los movimientos del checklist están completados y al día.')
+      screen.getByText('Todos los movimientos del checklist están completados y al día.')
     ).toBeTruthy();
   });
 
@@ -185,7 +181,6 @@ describe('AnalyticsAndHistoryView (Cierre de Mes e Historial)', () => {
         <AnalyticsAndHistoryView
           activeMonthKey="2026-10"
           availableMonths={['2026-10']}
-          entries={[]}
           budget={mockBudget}
           checklist={mockChecklistCompleted}
           debtSummary={mockDebtSummary}
@@ -206,7 +201,6 @@ describe('AnalyticsAndHistoryView (Cierre de Mes e Historial)', () => {
         <AnalyticsAndHistoryView
           activeMonthKey="2026-11"
           availableMonths={['2026-10', '2026-11']}
-          entries={[]}
           budget={mockBudget}
           checklist={mockChecklistPending}
           debtSummary={mockDebtSummary}
@@ -247,7 +241,6 @@ describe('AnalyticsAndHistoryView (Cierre de Mes e Historial)', () => {
         <AnalyticsAndHistoryView
           activeMonthKey="2026-11"
           availableMonths={['2026-10', '2026-11']}
-          entries={[]}
           budget={mockBudget}
           checklist={mockChecklistPending}
           debtSummary={mockDebtSummary}
@@ -284,7 +277,6 @@ describe('AnalyticsAndHistoryView (Cierre de Mes e Historial)', () => {
         <AnalyticsAndHistoryView
           activeMonthKey="2026-11"
           availableMonths={['2026-10', '2026-11']}
-          entries={[]}
           budget={mockBudget}
           checklist={mockChecklistPending}
           debtSummary={mockDebtSummary}
@@ -321,7 +313,6 @@ describe('AnalyticsAndHistoryView (Cierre de Mes e Historial)', () => {
         <AnalyticsAndHistoryView
           activeMonthKey="2026-11"
           availableMonths={['2026-10', '2026-11']}
-          entries={[]}
           budget={mockBudget}
           checklist={mockChecklistPending}
           debtSummary={mockDebtSummary}

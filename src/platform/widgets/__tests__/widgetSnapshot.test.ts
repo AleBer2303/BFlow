@@ -1,4 +1,4 @@
-import { buildOctober2026SeedPayload } from '../../../data/seed/october2026SeedData';
+import { buildSampleWorkspace } from '../../../data/sample/sampleWorkspace';
 import { useBudgetStore } from '../../../features/budget/store/useBudgetStore';
 import { getLatestWidgetSnapshotPreview, syncWidgetSnapshot } from '../widgetAdapter';
 import {
@@ -16,15 +16,15 @@ import {
 } from '../widgetSnapshot';
 
 function goldenInput(overrides: Partial<BuildWidgetSnapshotInput> = {}): BuildWidgetSnapshotInput {
-  const seed = buildOctober2026SeedPayload();
+  const sample = buildSampleWorkspace();
   return {
     monthKeys: ['2026-10'],
     monthKey: '2026-10',
-    concepts: seed.concepts,
-    entries: seed.entries,
-    debtPayments: seed.debtPayments,
-    debtsByMonth: { '2026-10': seed.debts },
-    savingsBucketsByMonth: { '2026-10': seed.savingsBuckets },
+    concepts: sample.concepts,
+    entries: sample.entries,
+    debtPayments: sample.debtPayments,
+    debtsByMonth: { '2026-10': sample.debts },
+    savingsBucketsByMonth: { '2026-10': sample.savingsBuckets },
     closedSnapshots: {},
     updatedAtIso: '2026-10-28T12:00:00.000Z',
     ...overrides,
@@ -69,8 +69,8 @@ describe('platform/widgets — contrato WidgetSnapshotV2', () => {
     expect(snapshot.pendingItems.length).toBeGreaterThan(0);
     expect(snapshot.pendingItems.length).toBeLessThanOrEqual(8);
     expect(snapshot.pendingItems[0]).toEqual({
-      id: '2026-10_inc_prima',
-      name: 'Prima',
+      id: '2026-10_inc_bonus',
+      name: 'Bonificación',
       amount: 2_000_000,
       type: 'income',
     });
@@ -117,9 +117,9 @@ describe('platform/widgets — contrato WidgetSnapshotV2', () => {
   });
 
   it('recorta nombres largos para que el payload no supere el tope', () => {
-    const seed = buildOctober2026SeedPayload();
+    const sample = buildSampleWorkspace();
     const longName = 'x'.repeat(500);
-    const entries = seed.entries.map((entry) =>
+    const entries = sample.entries.map((entry) =>
       entry.status === 'pending' ? { ...entry, conceptName: longName } : entry
     );
     const snapshot = buildWidgetSnapshot(goldenInput({ entries }));
@@ -190,7 +190,7 @@ describe('platform/widgets — App Group dinámico', () => {
 
 describe('platform/widgets — integración con el store', () => {
   it('sincroniza el snapshot del mes tras restaurar el estado dorado', async () => {
-    useBudgetStore.getState().resetToOctober2026GoldenState();
+    useBudgetStore.getState().resetToSampleWorkspace();
     const result = await useBudgetStore.getState().syncActiveWidget();
 
     expect(result.synced).toBe(true);
@@ -203,7 +203,7 @@ describe('platform/widgets — integración con el store', () => {
   });
 
   it('omite escrituras redundantes (R-19)', async () => {
-    const first = buildWidgetSnapshot(goldenInput({ entries: buildOctober2026SeedPayload().entries.slice(1) }));
+    const first = buildWidgetSnapshot(goldenInput({ entries: buildSampleWorkspace().entries.slice(1) }));
     const second = { ...first, updatedAtIso: '2026-10-28T13:00:00.000Z' };
     expect((await syncWidgetSnapshot(first)).skippedRedundantWrite).toBeUndefined();
     expect((await syncWidgetSnapshot(second)).skippedRedundantWrite).toBe(true);

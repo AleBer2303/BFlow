@@ -11,3 +11,4 @@ export * from './createBudgetSlice';
 export * from './createDebtsSlice';
 export * from './createSavingsSlice';
 export * from './createProvisionsSlice';
+export * from './createAccountsSlice';

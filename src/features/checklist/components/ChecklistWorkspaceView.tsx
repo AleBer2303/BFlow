@@ -16,6 +16,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, View } from 'react-native';
 import {
+  ActionModeToggleRow,
   animateNextLayout,
   AppPressable,
   AppText,
@@ -24,9 +25,9 @@ import {
   estimateTextWidth,
   GlassSurface,
   hapticService,
+  InlineItemActionPill,
   IS_MOTION_STATIC,
   MIN_TOUCH_TARGET_PT,
-  PencilEditIcon,
   resolvePresenceSpec,
   ResponsiveColumns,
   RevealDown,
@@ -35,20 +36,23 @@ import {
   StatusBadge,
   TabLeaveResetter,
   toEasing,
-  TrashBinIcon,
   USE_NATIVE_DRIVER,
+  useAmountPrivacy,
   useBFlowTheme,
   usePrimaryActionLook,
-  useAmountPrivacy,
 } from '../../../design-system';
 import {
+  formatFinancialAccountLabel,
+  type AccountMovementRole,
   type Concept,
   type ConceptGroup,
   type Debt,
+  type FinancialAccount,
   type MonthEntry,
   type MonthlyBudgetSummary,
   type RegisterOrCompleteMovementInput,
   type SavingsBucket,
+  DEFAULT_DEBT_GROUP_KEY,
 } from '../../../domain';
 import type {
   CreateCustomConceptInput,
@@ -59,6 +63,7 @@ import { ChecklistEditEntryForm } from './ChecklistEditEntryForm';
 
 const NO_DEBTS: readonly Debt[] = [];
 const NO_SAVINGS_BUCKETS: readonly SavingsBucket[] = [];
+const NO_ACCOUNTS: readonly FinancialAccount[] = [];
 
 export type ChecklistFilterMode = 'all' | 'pending' | 'completed';
 
@@ -69,11 +74,15 @@ export interface ChecklistWorkspaceViewProps {
   budget: MonthlyBudgetSummary;
   debts?: readonly Debt[];
   savingsBuckets?: readonly SavingsBucket[];
+  /** Credit cards and debit accounts (ADR 0034). */
+  financialAccounts?: readonly FinancialAccount[];
   onToggleEntry: (entry: MonthEntry) => void;
   onAddOrCompleteMovement: (
     input: RegisterOrCompleteMovementInput & {
       targetDebtId?: string | null;
       savingsBucketId?: string | null;
+      accountId?: string | null;
+      accountRole?: AccountMovementRole | null;
     }
   ) => void;
   onCreateCustomMovement?: (input: CreateCustomConceptInput) => void;
@@ -99,6 +108,7 @@ interface ChecklistRowItemProps {
   concept?: Concept;
   linkedDebt?: Debt;
   linkedBucket?: SavingsBucket;
+  linkedAccount?: FinancialAccount;
   isEditMode: boolean;
   isDeleteMode: boolean;
   colors: ReturnType<typeof useBFlowTheme>['colors'];
@@ -125,7 +135,7 @@ export function ActionRevealSlot({
   children: React.ReactNode;
 }): React.JSX.Element | null {
   const skipMotion = IS_MOTION_STATIC;
-  const { skin, reducedMotion } = useBFlowTheme();
+  const { skin, reducedMotion, minTouchTarget } = useBFlowTheme();
   const { open, close } = resolvePresenceSpec({ skin, reducedMotion }, 'control');
   const progress = useRef(new Animated.Value(visible ? 1 : 0)).current;
   const [mounted, setMounted] = useState(visible);
@@ -172,7 +182,7 @@ export function ActionRevealSlot({
   return (
     <Animated.View
       style={{
-        width: MIN_TOUCH_TARGET_PT,
+        width: minTouchTarget,
         opacity: progress,
         justifyContent: 'center',
         transform: [
@@ -196,6 +206,7 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
   concept,
   linkedDebt,
   linkedBucket,
+  linkedAccount,
   isEditMode,
   isDeleteMode,
   colors,
@@ -282,7 +293,7 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
               <StatusBadge label={`→ ${linkedBucket.name}`} status="reserve" />
             ) : concept?.savingsContribution?.bucketId ? (
               <StatusBadge
-                label={`→ ${concept.savingsContribution.bucketId === 'moto' ? 'Fondo de Reserva' : concept.savingsContribution.bucketId}`}
+                label={`→ ${concept.savingsContribution.bucketId === 'reserve' ? 'Fondo de Reserva' : concept.savingsContribution.bucketId}`}
                 status="reserve"
               />
             ) : null}
@@ -290,8 +301,20 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
               <StatusBadge label={`→ ${linkedDebt.name}`} status="debt" />
             ) : concept?.linkedDebtGroup ? (
               <StatusBadge
-                label={`→ Deuda ${concept.linkedDebtGroup !== 'FUNFAMI' ? `(${concept.linkedDebtGroup})` : ''}`.trim()}
+                label={`→ Deuda ${concept.linkedDebtGroup !== DEFAULT_DEBT_GROUP_KEY ? `(${concept.linkedDebtGroup})` : ''}`.trim()}
                 status="debt"
+              />
+            ) : null}
+            {linkedAccount ? (
+              <StatusBadge
+                label={
+                  linkedAccount.type === 'credit' &&
+                  entry.type === 'expense' &&
+                  entry.accountRole === 'payment'
+                    ? `Pago a ${formatFinancialAccountLabel(linkedAccount)}`
+                    : formatFinancialAccountLabel(linkedAccount)
+                }
+                status={linkedAccount.type === 'credit' ? 'savings' : 'provisions'}
               />
             ) : null}
             {concept?.recurrence.kind === 'specific_months' ? (
@@ -320,51 +343,29 @@ const ChecklistRowItem = React.memo(function ChecklistRowItem({
 
       {/* In-situ Edit Action Button (only visible in edit mode) */}
       <ActionRevealSlot visible={isEditMode} gap={spacing.xs}>
-        <AppPressable
-          testID={`edit-entry-${entry.id}`}
-          accessibilityRole="button"
-          accessibilityLabel={`Editar ${entry.conceptName}`}
-          onPress={() => {
+        <InlineItemActionPill
+          iconOnly
+          mode="edit"
+          itemName={entry.conceptName}
+          editTestID={`edit-entry-${entry.id}`}
+          deleteTestID={`delete-entry-${entry.id}`}
+          onEdit={() => {
             hapticService.light();
             onEdit(entry);
           }}
-          style={{
-            minHeight: MIN_TOUCH_TARGET_PT,
-            minWidth: MIN_TOUCH_TARGET_PT,
-            borderRadius: radius.md,
-            borderCurve: 'continuous',
-            backgroundColor: colors.glass.surfaceElevatedTint,
-            borderWidth: 1,
-            borderColor: colors.glass.specularBorder,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <PencilEditIcon size={16} color={colors.semantic.income} />
-        </AppPressable>
+        />
       </ActionRevealSlot>
 
       {/* In-situ Delete Action Button (only visible in delete mode) */}
       <ActionRevealSlot visible={isDeleteMode} gap={spacing.xs}>
-        <AppPressable
-          testID={`delete-entry-${entry.id}`}
-          accessibilityRole="button"
-          accessibilityLabel={`Eliminar ${entry.conceptName}`}
-          onPress={() => onDelete(entry)}
-          style={{
-            minHeight: MIN_TOUCH_TARGET_PT,
-            minWidth: MIN_TOUCH_TARGET_PT,
-            borderRadius: radius.md,
-            borderCurve: 'continuous',
-            backgroundColor: colors.semantic.expense,
-            borderWidth: 1,
-            borderColor: colors.semantic.expense,
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <TrashBinIcon size={16} color={colors.text.inverse} />
-        </AppPressable>
+        <InlineItemActionPill
+          iconOnly
+          mode="delete"
+          itemName={entry.conceptName}
+          editTestID={`edit-entry-${entry.id}`}
+          deleteTestID={`delete-entry-${entry.id}`}
+          onDelete={() => onDelete(entry)}
+        />
       </ActionRevealSlot>
     </View>
   );
@@ -376,6 +377,7 @@ interface ChecklistSectionCardProps {
   debtById: ReadonlyMap<string, Debt>;
   debtByGroupKey: ReadonlyMap<string, Debt>;
   bucketById: ReadonlyMap<string, SavingsBucket>;
+  accountById: ReadonlyMap<string, FinancialAccount>;
   budget: MonthlyBudgetSummary;
   isEditMode: boolean;
   isDeleteMode: boolean;
@@ -392,6 +394,7 @@ const ChecklistIncomesCard = React.memo(function ChecklistIncomesCard({
   debtById,
   debtByGroupKey,
   bucketById,
+  accountById,
   budget,
   isEditMode,
   isDeleteMode,
@@ -425,6 +428,7 @@ const ChecklistIncomesCard = React.memo(function ChecklistIncomesCard({
         concept={concept}
         linkedDebt={linkedDebt}
         linkedBucket={linkedBucket}
+        linkedAccount={entry.accountId ? accountById.get(entry.accountId) : undefined}
         isEditMode={isEditMode}
         isDeleteMode={isDeleteMode}
         colors={colors}
@@ -458,73 +462,20 @@ const ChecklistIncomesCard = React.memo(function ChecklistIncomesCard({
             </View>
 
             {/* Incomes Section Action Controls: Editar & Eliminar */}
-            <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
-              <AppPressable
-                testID="incomes-edit-action-button"
-                accessibilityRole="button"
-                accessibilityLabel="Editar ingresos"
-                onPress={onToggleEdit}
-                style={{
-                  minHeight: 34,
-                  paddingHorizontal: spacing.sm,
-                  paddingVertical: spacing.xxs,
-                  borderRadius: radius.pill,
-                  backgroundColor: isEditMode
-                    ? colors.glass.surfaceElevatedTint
-                    : colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: isEditMode
-                    ? colors.glass.specularBorder
-                    : colors.glass.subtleBorder,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.xxs,
-                }}
-              >
-                <PencilEditIcon
-                  size={14}
-                  color={isEditMode ? colors.semantic.income : colors.text.secondary}
-                />
-                <AppText
-                  variant="micro"
-                  color={isEditMode ? colors.semantic.income : colors.text.secondary}
-                >
-                  {isEditMode ? 'Listo' : 'Editar'}
-                </AppText>
-              </AppPressable>
-
-              <AppPressable
-                testID="incomes-delete-action-button"
-                accessibilityRole="button"
-                accessibilityLabel="Eliminar ingresos"
-                onPress={onToggleDelete}
-                style={{
-                  minHeight: 34,
-                  paddingHorizontal: spacing.sm,
-                  paddingVertical: spacing.xxs,
-                  borderRadius: radius.pill,
-                  backgroundColor: isDeleteMode
-                    ? colors.semantic.expense
-                    : colors.semantic.expenseSoft,
-                  borderWidth: 1,
-                  borderColor: colors.semantic.expense,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.xxs,
-                }}
-              >
-                <TrashBinIcon
-                  size={14}
-                  color={isDeleteMode ? colors.text.inverse : colors.semantic.expense}
-                />
-                <AppText
-                  variant="micro"
-                  color={isDeleteMode ? colors.text.inverse : colors.semantic.expense}
-                >
-                  {isDeleteMode ? 'Listo' : 'Eliminar'}
-                </AppText>
-              </AppPressable>
-            </View>
+            <ActionModeToggleRow
+              compact
+              activeMode={isEditMode ? 'edit' : isDeleteMode ? 'delete' : null}
+              editLabel="Editar"
+              deleteLabel="Eliminar"
+              activeEditLabel="Listo"
+              activeDeleteLabel="Listo"
+              editTestID="incomes-edit-action-button"
+              deleteTestID="incomes-delete-action-button"
+              editAccessibilityLabel="Editar ingresos"
+              deleteAccessibilityLabel="Eliminar ingresos"
+              onToggleEdit={onToggleEdit}
+              onToggleDelete={onToggleDelete}
+            />
           </View>
 
           <AppText variant="caption" color={colors.text.secondary}>
@@ -550,6 +501,7 @@ const ChecklistExpensesCard = React.memo(function ChecklistExpensesCard({
   debtById,
   debtByGroupKey,
   bucketById,
+  accountById,
   budget,
   isEditMode,
   isDeleteMode,
@@ -583,6 +535,7 @@ const ChecklistExpensesCard = React.memo(function ChecklistExpensesCard({
         concept={concept}
         linkedDebt={linkedDebt}
         linkedBucket={linkedBucket}
+        linkedAccount={entry.accountId ? accountById.get(entry.accountId) : undefined}
         isEditMode={isEditMode}
         isDeleteMode={isDeleteMode}
         colors={colors}
@@ -616,73 +569,20 @@ const ChecklistExpensesCard = React.memo(function ChecklistExpensesCard({
             </View>
 
             {/* Expenses Section Action Controls: Editar & Eliminar */}
-            <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
-              <AppPressable
-                testID="expenses-edit-action-button"
-                accessibilityRole="button"
-                accessibilityLabel="Editar gastos"
-                onPress={onToggleEdit}
-                style={{
-                  minHeight: 34,
-                  paddingHorizontal: spacing.sm,
-                  paddingVertical: spacing.xxs,
-                  borderRadius: radius.pill,
-                  backgroundColor: isEditMode
-                    ? colors.glass.surfaceElevatedTint
-                    : colors.glass.surfaceTint,
-                  borderWidth: 1,
-                  borderColor: isEditMode
-                    ? colors.glass.specularBorder
-                    : colors.glass.subtleBorder,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.xxs,
-                }}
-              >
-                <PencilEditIcon
-                  size={14}
-                  color={isEditMode ? colors.semantic.income : colors.text.secondary}
-                />
-                <AppText
-                  variant="micro"
-                  color={isEditMode ? colors.semantic.income : colors.text.secondary}
-                >
-                  {isEditMode ? 'Listo' : 'Editar'}
-                </AppText>
-              </AppPressable>
-
-              <AppPressable
-                testID="expenses-delete-action-button"
-                accessibilityRole="button"
-                accessibilityLabel="Eliminar gastos"
-                onPress={onToggleDelete}
-                style={{
-                  minHeight: 34,
-                  paddingHorizontal: spacing.sm,
-                  paddingVertical: spacing.xxs,
-                  borderRadius: radius.pill,
-                  backgroundColor: isDeleteMode
-                    ? colors.semantic.expense
-                    : colors.semantic.expenseSoft,
-                  borderWidth: 1,
-                  borderColor: colors.semantic.expense,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.xxs,
-                }}
-              >
-                <TrashBinIcon
-                  size={14}
-                  color={isDeleteMode ? colors.text.inverse : colors.semantic.expense}
-                />
-                <AppText
-                  variant="micro"
-                  color={isDeleteMode ? colors.text.inverse : colors.semantic.expense}
-                >
-                  {isDeleteMode ? 'Listo' : 'Eliminar'}
-                </AppText>
-              </AppPressable>
-            </View>
+            <ActionModeToggleRow
+              compact
+              activeMode={isEditMode ? 'edit' : isDeleteMode ? 'delete' : null}
+              editLabel="Editar"
+              deleteLabel="Eliminar"
+              activeEditLabel="Listo"
+              activeDeleteLabel="Listo"
+              editTestID="expenses-edit-action-button"
+              deleteTestID="expenses-delete-action-button"
+              editAccessibilityLabel="Editar gastos"
+              deleteAccessibilityLabel="Eliminar gastos"
+              onToggleEdit={onToggleEdit}
+              onToggleDelete={onToggleDelete}
+            />
           </View>
 
           <AppText variant="caption" color={colors.text.secondary}>
@@ -707,6 +607,7 @@ interface ChecklistSectionsGridProps {
   conceptById: ReadonlyMap<string, Concept>;
   debts: readonly Debt[];
   savingsBuckets: readonly SavingsBucket[];
+  financialAccounts: readonly FinancialAccount[];
   budget: MonthlyBudgetSummary;
   incomesEditMode: boolean;
   incomesDeleteMode: boolean;
@@ -726,6 +627,7 @@ const ChecklistSectionsGrid = React.memo(function ChecklistSectionsGrid({
   conceptById,
   debts,
   savingsBuckets,
+  financialAccounts,
   budget,
   incomesEditMode,
   incomesDeleteMode,
@@ -756,6 +658,10 @@ const ChecklistSectionsGrid = React.memo(function ChecklistSectionsGrid({
     () => new Map(savingsBuckets.map((bucket) => [bucket.id, bucket] as const)),
     [savingsBuckets]
   );
+  const accountById = useMemo(
+    () => new Map(financialAccounts.map((account) => [account.id, account] as const)),
+    [financialAccounts]
+  );
 
   const incomeEntries = useMemo(
     () => filteredEntries.filter((e) => e.type === 'income'),
@@ -774,6 +680,7 @@ const ChecklistSectionsGrid = React.memo(function ChecklistSectionsGrid({
         debtById={debtById}
         debtByGroupKey={debtByGroupKey}
         bucketById={bucketById}
+        accountById={accountById}
         budget={budget}
         isEditMode={incomesEditMode}
         isDeleteMode={incomesDeleteMode}
@@ -789,6 +696,7 @@ const ChecklistSectionsGrid = React.memo(function ChecklistSectionsGrid({
         debtById={debtById}
         debtByGroupKey={debtByGroupKey}
         bucketById={bucketById}
+        accountById={accountById}
         budget={budget}
         isEditMode={expensesEditMode}
         isDeleteMode={expensesDeleteMode}
@@ -821,6 +729,7 @@ export function ChecklistWorkspaceView({
   budget,
   debts = NO_DEBTS,
   savingsBuckets = NO_SAVINGS_BUCKETS,
+  financialAccounts = NO_ACCOUNTS,
   onToggleEntry,
   onAddOrCompleteMovement,
   onCreateCustomMovement,
@@ -1082,6 +991,7 @@ export function ChecklistWorkspaceView({
           concept={activeEditingEntry ? conceptById.get(activeEditingEntry.conceptId) : undefined}
           debts={debts}
           savingsBuckets={savingsBuckets}
+          financialAccounts={financialAccounts}
           onEditEntry={onEditEntry}
           onClose={handleCloseActiveForm}
         />
@@ -1096,6 +1006,7 @@ export function ChecklistWorkspaceView({
           concepts={concepts}
           debts={debts}
           savingsBuckets={savingsBuckets}
+          financialAccounts={financialAccounts}
           onAddOrCompleteMovement={onAddOrCompleteMovement}
           onCreateCustomMovement={onCreateCustomMovement}
           onSubmitted={handleCloseActiveForm}
@@ -1108,6 +1019,7 @@ export function ChecklistWorkspaceView({
         conceptById={conceptById}
         debts={debts}
         savingsBuckets={savingsBuckets}
+        financialAccounts={financialAccounts}
         budget={budget}
         incomesEditMode={incomesEditMode}
         incomesDeleteMode={incomesDeleteMode}

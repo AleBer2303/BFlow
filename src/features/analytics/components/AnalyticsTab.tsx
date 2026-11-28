@@ -1,43 +1,46 @@
 /**
  * src/features/analytics/components/AnalyticsTab.tsx
  *
- * Container of the Analytics & History tab: month close, history and the charts (Phase 6).
+ * Container of the Analytics & History tab: month close, history, the credit cards and debit
+ * accounts of the month (ADR 0034) and the charts (Phase 6).
  */
 
 import React, { useCallback } from 'react';
 import { View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
-import { hapticService, useBFlowTheme } from '../../../design-system';
+import { ScrollRevealSection, hapticService, useBFlowTheme } from '../../../design-system';
 import {
   useActiveMonthKey,
   useBudgetSummary,
   useChecklistProgress,
   useDebtSummary,
+  useFinancialAccountsSummary,
   useSavingsSummary,
 } from '../../budget/hooks/useActiveMonthSummaries';
 import { useChartHistory } from '../../budget/hooks/useChartHistory';
-import { useBudgetStore } from '../../budget/store/useBudgetStore';
+import { useTabStore } from '../../budget/hooks/useTabStore';
+import { AccountsMonthPanel } from './AccountsMonthPanel';
 import { AnalyticsChartsPanel } from './AnalyticsChartsPanel';
 import { AnalyticsAndHistoryView } from './AnalyticsAndHistoryView';
 
 export const AnalyticsTab = React.memo(function AnalyticsTab(): React.JSX.Element {
   const activeMonthKey = useActiveMonthKey();
-  const availableMonths = useBudgetStore((state) => state.availableMonths);
-  const entries = useBudgetStore((state) => state.entries);
-  const closedSnapshots = useBudgetStore((state) => state.closedSnapshots);
+  const availableMonths = useTabStore((state) => state.availableMonths);
+  const entries = useTabStore((state) => state.entries);
+  const closedSnapshots = useTabStore((state) => state.closedSnapshots);
   const budget = useBudgetSummary();
   const checklist = useChecklistProgress();
   const debtSummary = useDebtSummary();
   const savingsSummary = useSavingsSummary(budget);
   const history = useChartHistory();
+  const accountsSummary = useFinancialAccountsSummary();
   const { spacing } = useBFlowTheme();
-  const actions = useBudgetStore(
+  const actions = useTabStore(
     useShallow((state) => ({
       setActiveMonthKey: state.setActiveMonthKey,
       closeCurrentMonth: state.closeCurrentMonth,
       reopenClosedMonth: state.reopenClosedMonth,
       deleteOrRevertMonth: state.deleteOrRevertMonth,
-      resetToOctober2026GoldenState: state.resetToOctober2026GoldenState,
     }))
   );
 
@@ -74,8 +77,12 @@ export const AnalyticsTab = React.memo(function AnalyticsTab(): React.JSX.Elemen
         onCloseCurrentMonth={handleCloseMonth}
         onReopenClosedMonth={handleReopenClosedMonth}
         onDeleteOrRevertMonth={handleDeleteOrRevertMonth}
-        onResetOctoberSeed={actions.resetToOctober2026GoldenState}
       />
+      {accountsSummary.hasAccounts ? (
+        <ScrollRevealSection>
+          <AccountsMonthPanel summary={accountsSummary} />
+        </ScrollRevealSection>
+      ) : null}
       <AnalyticsChartsPanel
         activeMonthKey={activeMonthKey}
         history={history}

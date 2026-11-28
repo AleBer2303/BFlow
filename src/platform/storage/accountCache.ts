@@ -12,9 +12,13 @@
  */
 
 import type { FullCloudAccountData } from '../../data/repositories/budgetRepository';
-import { persistentStorage } from './persistentStorageAdapter';
+import { getStorageGeneration, persistentStorage } from './persistentStorageAdapter';
 
-export const ACCOUNT_CACHE_SCHEMA_VERSION = 2;
+/**
+ * 3: names of ADR 0037 (`reserve` bucket, `reserveClosingBalance`, `provisionCategoryKey`). A cache
+ * of an older version is dropped and the account is downloaded again through the mappers.
+ */
+export const ACCOUNT_CACHE_SCHEMA_VERSION = 3;
 export const ACCOUNT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 const LEGACY_ACCOUNT_CACHE_PREFIX_V1 = 'bflow.account.cache.v1.';
@@ -85,6 +89,7 @@ export function isEquivalentCloudAccount(
     if (!hasSameKeyCount(a.debtsByMonth, b.debtsByMonth)) return false;
     if (!hasSameKeyCount(a.savingsBucketsByMonth, b.savingsBucketsByMonth)) return false;
     if (!hasSameKeyCount(a.closedSnapshots, b.closedSnapshots)) return false;
+    if ((a.financialAccounts?.length ?? 0) !== (b.financialAccounts?.length ?? 0)) return false;
 
     // Every cloud write stamps a new `dataRevision` (ADR 0018), so two payloads of the same
     // shape that carry the same revision hold the same cloud data.
@@ -98,7 +103,8 @@ export function isEquivalentCloudAccount(
       JSON.stringify(a.debtPayments) === JSON.stringify(b.debtPayments) &&
       JSON.stringify(a.savingsBucketsByMonth) === JSON.stringify(b.savingsBucketsByMonth) &&
       JSON.stringify(a.provisionPlan) === JSON.stringify(b.provisionPlan) &&
-      JSON.stringify(a.closedSnapshots) === JSON.stringify(b.closedSnapshots)
+      JSON.stringify(a.closedSnapshots) === JSON.stringify(b.closedSnapshots) &&
+      JSON.stringify(a.financialAccounts ?? []) === JSON.stringify(b.financialAccounts ?? [])
     );
   } catch {
     return false;
@@ -108,8 +114,34 @@ export function isEquivalentCloudAccount(
 let pendingSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingSaveEntry: { uid: string; data: FullCloudAccountData; dataRevision?: string } | null = null;
 
+/**
+ * Last envelope written or read for each user (OPT-02): its metadata (`dataRevision`,
+ * `historySyncedAt`, `savedAt`) and a reference to its data, which is store state and never
+ * mutated. `savePersistedAccount` and `updatePersistedAccountRevision` use it instead of
+ * reading the cache again, which decrypts on a cold read and always parses the whole account.
+ * It is keyed by uid (one user's metadata never reaches another) and is dropped when the cache
+ * is cleared, found invalid, or the storage underneath changes (`getStorageGeneration`).
+ */
+const knownEnvelopes = new Map<string, { generation: number; envelope: PersistedAccountEnvelope }>();
+
+function rememberEnvelope(envelope: PersistedAccountEnvelope): void {
+  knownEnvelopes.set(envelope.uid, { generation: getStorageGeneration(), envelope });
+}
+
+/** The known envelope, or undefined when it has to be read from storage. */
+function getKnownEnvelope(uid: string): PersistedAccountEnvelope | undefined {
+  const known = knownEnvelopes.get(uid);
+  if (!known) return undefined;
+  if (known.generation !== getStorageGeneration()) {
+    knownEnvelopes.delete(uid);
+    return undefined;
+  }
+  return known.envelope;
+}
+
 function readValidatedEnvelope(uid: string): PersistedAccountEnvelope | null {
   if (!uid) return null;
+  knownEnvelopes.delete(uid);
   try {
     const raw = persistentStorage.getItem<unknown>(getAccountCacheKey(uid));
     if (!raw || typeof raw !== 'object') {
@@ -134,7 +166,9 @@ function readValidatedEnvelope(uid: string): PersistedAccountEnvelope | null {
       return null;
     }
 
-    return candidate as PersistedAccountEnvelope;
+    const envelope = candidate as PersistedAccountEnvelope;
+    rememberEnvelope(envelope);
+    return envelope;
   } catch {
     return null;
   }
@@ -155,7 +189,7 @@ export function savePersistedAccount(
 ): void {
   if (!uid) return;
   try {
-    const existingEnvelope = readValidatedEnvelope(uid);
+    const existingEnvelope = getKnownEnvelope(uid) ?? readValidatedEnvelope(uid);
     const resolvedRevision =
       dataRevision ?? data.dataRevision ?? existingEnvelope?.dataRevision;
     // Saves made from the store do not carry the marker: keep the one of the last cloud load.
@@ -175,6 +209,7 @@ export function savePersistedAccount(
     };
     persistentStorage.setItem(getAccountCacheKey(uid), envelope);
     persistentStorage.removeItem(getLegacyAccountCacheKeyV1(uid));
+    rememberEnvelope(envelope);
   } catch {
     // Gracefully handle storage errors
   }
@@ -198,7 +233,7 @@ export function updatePersistedAccountRevision(
         data: { ...pendingSaveEntry.data, dataRevision },
       };
     }
-    const existingEnvelope = readValidatedEnvelope(uid);
+    const existingEnvelope = getKnownEnvelope(uid) ?? readValidatedEnvelope(uid);
     if (!existingEnvelope) return;
     const updatedEnvelope: PersistedAccountEnvelope = {
       ...existingEnvelope,
@@ -210,6 +245,7 @@ export function updatePersistedAccountRevision(
       },
     };
     persistentStorage.setItem(getAccountCacheKey(uid), updatedEnvelope);
+    rememberEnvelope(updatedEnvelope);
   } catch {
     // Gracefully handle storage errors
   }
@@ -294,6 +330,7 @@ export function loadPersistedAccount(uid: string): FullCloudAccountData | null {
 export function clearPersistedAccount(uid: string): void {
   if (!uid) return;
   cancelPendingPersistedAccountSave(uid);
+  knownEnvelopes.delete(uid);
   try {
     persistentStorage.removeItem(getAccountCacheKey(uid));
     persistentStorage.removeItem(getLegacyAccountCacheKeyV1(uid));

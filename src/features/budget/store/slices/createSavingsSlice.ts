@@ -6,11 +6,11 @@
 
 import {
   ensureStandardSavingsBuckets,
-  FirestoreBudgetRepository,
 } from '../../../../data/repositories/budgetRepository';
-import { type SavingsBucket } from '../../../../domain';
+import { toSlugId, type SavingsBucket } from '../../../../domain';
 import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
+  getBudgetRepository,
   getStoreInitialState,
   isRealAuthUser,
   triggerWidgetSync,
@@ -75,7 +75,7 @@ export const createSavingsSlice: SliceCreator<SavingsSlice> = (set, get) => {
           },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveSavingsBucket(
             uid,
             bucketId,
@@ -101,10 +101,7 @@ export const createSavingsSlice: SliceCreator<SavingsSlice> = (set, get) => {
     if (!trimmedName) return null;
 
     const safeAmount = Math.max(0, Math.round(openingBalanceCop));
-    const slug = trimmedName
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_|_$/g, '');
+    const slug = toSlugId(trimmedName);
     const bucketId = `bucket_${slug || 'ahorro'}_${Date.now().toString(36)}`;
     const newBucket: SavingsBucket = {
       id: bucketId,
@@ -141,7 +138,7 @@ export const createSavingsSlice: SliceCreator<SavingsSlice> = (set, get) => {
           },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveSavingsBucket(
             uid,
             bucketId,
@@ -197,7 +194,7 @@ export const createSavingsSlice: SliceCreator<SavingsSlice> = (set, get) => {
           payload: { bucketId },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.deleteSavingsBucket(uid, bucketId);
         },
         rollback: () => {

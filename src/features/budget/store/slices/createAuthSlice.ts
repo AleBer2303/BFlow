@@ -7,20 +7,23 @@
 import {
   EMPTY_PROVISION_PLAN,
   ensureStandardSavingsBuckets,
-  FirestoreBudgetRepository,
-  isOwnerCanonicalEmail,
   type InitialAccountSetupPayload,
 } from '../../../../data/repositories/budgetRepository';
 import {
   addMonthsToMonthKey,
+  annualToMonthlyRate,
+  applyEntryAccountLink,
   buildDebtPaymentsForInstallment,
   getMonthNumberFromMonthKey,
+  monthlyToAnnualRate,
   toAppIsoDate,
   toAppMonthKey,
+  toSlugId,
   type Concept,
   type Debt,
   type DebtInterestRateType,
   type DebtPayment,
+  type FinancialAccount,
   type MonthEntry,
   type ProvisionItemSpec,
   type SavingsBucket,
@@ -41,19 +44,21 @@ import {
 import {
   clearOfflineWriteQueue,
   executeOptimisticCloudWrite,
-  isPermanentCloudError,
 } from '../../../../platform/storage/offlineWriteQueue';
 import {
+  getBudgetRepository,
   buildCleanEmptyWorkspaceState,
   buildHydratedWorkspaceState,
   buildInitialState,
   getStoreInitialState,
   isRealAuthUser,
+  isSampleWorkspaceUser,
   recalculateProvisionPlan,
   triggerWidgetSync,
   type AuthSlice,
   type SliceCreator,
 } from './sliceTypes';
+import { buildFinancialAccount } from './createAccountsSlice';
 
 export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
   const initial = getStoreInitialState();
@@ -73,7 +78,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       (prevUser.email ?? '').trim().toLowerCase() !== (user.email ?? '').trim().toLowerCase();
 
     const cachedAccount =
-      user.uid && user.uid !== 'local-owner' && user.uid !== 'local-demo'
+      user.uid && user.uid !== 'local-demo'
         ? loadPersistedAccount(user.uid)
         : null;
 
@@ -82,7 +87,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
         set(buildHydratedWorkspaceState(user, cachedAccount));
       } else if (
         (process.env.NODE_ENV === 'test' || isDemoModeEnabled()) &&
-        isOwnerCanonicalEmail(user.email)
+        isSampleWorkspaceUser(user)
       ) {
         set(buildInitialState(user));
       } else {
@@ -164,7 +169,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       uid,
       operation: { type: 'save_user_profile', payload: profile },
       performCloudWrite: async () => {
-        await new FirestoreBudgetRepository().saveUserProfile(uid, profile);
+        await getBudgetRepository().saveUserProfile(uid, profile);
       },
       rollback: () => {
         applyProfile({
@@ -206,11 +211,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
     const rawBuckets: SavingsBucket[] = input.savingsBuckets
       .filter((b) => b.name.trim().length > 0)
       .map((b, idx) => {
-        const slug = b.name
-          .trim()
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '_')
-          .replace(/^_|_$/g, '');
+        const slug = toSlugId(b.name);
         return {
           id: b.id ?? `bucket_${slug || idx}_${idx + 1}`,
           name: b.name.trim(),
@@ -218,25 +219,21 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
           monthKey,
         };
       });
-    const savingsBuckets = ensureStandardSavingsBuckets(rawBuckets, 0, 0);
+    const savingsBuckets = ensureStandardSavingsBuckets(rawBuckets);
 
     // 2. Build debts
     const debtIdByKey = new Map<string, Debt>();
     const debts: Debt[] = input.debts
       .filter((d) => d.name.trim().length > 0 && d.openingBalanceCop > 0)
       .map((d, idx) => {
-        const slug = d.name
-          .trim()
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '_')
-          .replace(/^_|_$/g, '');
+        const slug = toSlugId(d.name);
         const id = d.key || `debt_${slug || 'personal'}_${idx + 1}`;
         const rateType: DebtInterestRateType = d.interestRateType ?? 'monthly';
         const rawRate = d.interestRate ?? 0;
         const monthlyInterestRate =
-          rateType === 'annual' ? Number((rawRate / 12).toFixed(4)) : rawRate;
+          rateType === 'annual' ? annualToMonthlyRate(rawRate) : rawRate;
         const annualInterestRate =
-          rateType === 'annual' ? rawRate : Number((rawRate * 12).toFixed(4));
+          rateType === 'annual' ? rawRate : monthlyToAnnualRate(rawRate);
         const monthlyInstallment = Math.max(0, Math.round(d.monthlyInstallmentCop ?? 0));
 
         const built: Debt = {
@@ -258,6 +255,28 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
         return built;
       });
 
+    // 2b. Build credit cards and debit accounts (ADR 0034): the balance given is the one at
+    // the start of the setup month. Same rules as createFinancialAccount: name and entity.
+    const financialAccounts: FinancialAccount[] = [];
+    const accountIdByKey = new Map<string, string>();
+    (input.financialAccounts ?? []).forEach((a, idx) => {
+      if (!a.name.trim() || !a.institution.trim()) return;
+      const fallbackId = `acc_${toSlugId(a.name) || a.type}_${idx + 1}`;
+      const id =
+        a.key && !financialAccounts.some((acc) => acc.id === a.key) ? a.key : fallbackId;
+      financialAccounts.push(buildFinancialAccount(id, monthKey, a));
+      if (a.key && !accountIdByKey.has(a.key)) accountIdByKey.set(a.key, id);
+    });
+    const linkEntryToAccount = (
+      entry: MonthEntry,
+      accountKey: string | null | undefined,
+      accountRole?: 'purchase' | 'payment'
+    ): MonthEntry => {
+      const accountId = accountKey ? accountIdByKey.get(accountKey) : undefined;
+      if (!accountId) return entry;
+      return applyEntryAccountLink(entry, { accountId, accountRole }, financialAccounts);
+    };
+
     // 3. Build income and expense concepts & entries
     const concepts: Concept[] = [];
     const entries: MonthEntry[] = [];
@@ -269,10 +288,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       const safeAmount = Math.max(0, Math.round(inc.amountCop));
       if (!trimmedName || safeAmount <= 0) continue;
 
-      const slug = trimmedName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^_|_$/g, '');
+      const slug = toSlugId(trimmedName);
       const conceptId = `inc_${slug || orderCounter}_${orderCounter}`;
       const concept: Concept = {
         id: conceptId,
@@ -290,18 +306,23 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       concepts.push(concept);
 
       const isCompleted = inc.completed === true;
-      entries.push({
-        id: `${monthKey}_${conceptId}`,
-        monthKey,
-        conceptId,
-        conceptName: trimmedName,
-        type: 'income',
-        group: inc.group,
-        plannedAmount: safeAmount,
-        actualAmount: safeAmount,
-        status: isCompleted ? 'completed' : 'pending',
-        ...(isCompleted ? { completedAt: toAppIsoDate() } : {}),
-      });
+      entries.push(
+        linkEntryToAccount(
+          {
+            id: `${monthKey}_${conceptId}`,
+            monthKey,
+            conceptId,
+            conceptName: trimmedName,
+            type: 'income',
+            group: inc.group,
+            plannedAmount: safeAmount,
+            actualAmount: safeAmount,
+            status: isCompleted ? 'completed' : 'pending',
+            ...(isCompleted ? { completedAt: toAppIsoDate() } : {}),
+          },
+          inc.accountKey
+        )
+      );
     }
 
     const explicitlyLinkedDebtIds = new Set<string>();
@@ -311,10 +332,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       const safeAmount = Math.max(0, Math.round(exp.amountCop));
       if (!trimmedName || safeAmount <= 0) continue;
 
-      const slug = trimmedName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^_|_$/g, '');
+      const slug = toSlugId(trimmedName);
       const conceptId = `exp_${slug || orderCounter}_${orderCounter}`;
 
       const linkedDebt = exp.targetDebtKey ? debtIdByKey.get(exp.targetDebtKey) : undefined;
@@ -352,18 +370,22 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       concepts.push(concept);
 
       const isCompleted = exp.completed === true;
-      const entry: MonthEntry = {
-        id: `${monthKey}_${conceptId}`,
-        monthKey,
-        conceptId,
-        conceptName: trimmedName,
-        type: 'expense',
-        group: exp.group,
-        plannedAmount: safeAmount,
-        actualAmount: safeAmount,
-        status: isCompleted ? 'completed' : 'pending',
-        ...(isCompleted ? { completedAt: toAppIsoDate() } : {}),
-      };
+      const entry: MonthEntry = linkEntryToAccount(
+        {
+          id: `${monthKey}_${conceptId}`,
+          monthKey,
+          conceptId,
+          conceptName: trimmedName,
+          type: 'expense',
+          group: exp.group,
+          plannedAmount: safeAmount,
+          actualAmount: safeAmount,
+          status: isCompleted ? 'completed' : 'pending',
+          ...(isCompleted ? { completedAt: toAppIsoDate() } : {}),
+        },
+        exp.accountKey,
+        exp.accountRole
+      );
       entries.push(entry);
 
       if (linkedDebt) {
@@ -429,7 +451,6 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
         const trimmedName = p.name.trim();
         return {
           id: `prov_${idx + 1}_${Date.now().toString(36)}`,
-          excelRawName: trimmedName,
           displayName: trimmedName,
           monthlyAmountCop: monthlyContribution,
           cycleCostCop: safeAmount,
@@ -441,7 +462,6 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
                 targetMonthKey: addMonthsToMonthKey(monthKey, safeMonths),
               }
             : {}),
-          includedInExcelTotalB43: p.kind === 'recurring',
           kind: p.kind === 'target_goal' ? 'target_goal' : 'recurring_provision',
           ...(p.notes?.trim() ? { notes: p.notes.trim() } : {}),
         };
@@ -456,6 +476,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       debtPayments,
       savingsBuckets,
       provisionPlan,
+      financialAccounts,
     };
 
     const previousState = {
@@ -467,8 +488,9 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       debtsByMonth: state.debtsByMonth,
       debtPayments: state.debtPayments,
       savingsBucketsByMonth: state.savingsBucketsByMonth,
-      idealMotoPlan: state.idealMotoPlan,
+      provisionPlan: state.provisionPlan,
       closedSnapshots: state.closedSnapshots,
+      financialAccounts: state.financialAccounts,
       needsOnboarding: state.needsOnboarding,
     };
 
@@ -489,8 +511,9 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       savingsBucketsByMonth: {
         [monthKey]: savingsBuckets,
       },
-      idealMotoPlan: provisionPlan,
+      provisionPlan: provisionPlan,
       closedSnapshots: {},
+      financialAccounts,
       isAccountHydrated: true,
       needsOnboarding: false,
       ...(updatedUser ? { authUser: updatedUser } : {}),
@@ -500,23 +523,23 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
     }
     triggerWidgetSync(get());
 
-    if (isRealAuthUser(state.authUser)) {
-      try {
-        const repo = new FirestoreBudgetRepository();
-        await repo.saveInitialAccountSetup(state.authUser.uid, payload);
-      } catch (err) {
-        if (isPermanentCloudError(err)) {
-          set({
-            ...previousState,
-            syncMessage: 'No se pudo guardar la configuración inicial en la nube.',
-          });
-          triggerWidgetSync(get());
-        } else {
-          set({
-            syncMessage: 'Configuración guardada localmente. Se sincronizará al conectar.',
-          });
-        }
-      }
+    const setupUser = state.authUser;
+    if (isRealAuthUser(setupUser)) {
+      const uid = setupUser.uid;
+      // BUG-03: same path as every other write, so an offline setup is queued and replayed.
+      await executeOptimisticCloudWrite({
+        uid,
+        operation: { type: 'save_initial_account_setup', payload },
+        performCloudWrite: async () => {
+          await getBudgetRepository().saveInitialAccountSetup(uid, payload);
+        },
+        rollback: () => {
+          set(previousState);
+        },
+        friendlyErrorMessage: 'No se pudo guardar la configuración inicial en la nube.',
+        setStoreState: set,
+        onWidgetSync: () => triggerWidgetSync(get()),
+      });
     }
   },
 
@@ -531,8 +554,9 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       debtsByMonth: state.debtsByMonth,
       debtPayments: state.debtPayments,
       savingsBucketsByMonth: state.savingsBucketsByMonth,
-      idealMotoPlan: state.idealMotoPlan,
+      provisionPlan: state.provisionPlan,
       closedSnapshots: state.closedSnapshots,
+      financialAccounts: state.financialAccounts,
       needsOnboarding: state.needsOnboarding,
     };
 
@@ -540,7 +564,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       newStartMonthKey && /^\d{4}-(0[1-9]|1[0-2])$/.test(newStartMonthKey)
         ? newStartMonthKey
         : `${toAppMonthKey().slice(0, 4)}-01`;
-    const emptyBuckets = ensureStandardSavingsBuckets([], 0, 0);
+    const emptyBuckets = ensureStandardSavingsBuckets([]);
     const updatedUser = state.authUser
       ? { ...state.authUser, activeMonthKey: startMonth }
       : null;
@@ -563,8 +587,9 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       savingsBucketsByMonth: {
         [startMonth]: emptyBuckets,
       },
-      idealMotoPlan: { ...EMPTY_PROVISION_PLAN, items: [] },
+      provisionPlan: { ...EMPTY_PROVISION_PLAN, items: [] },
       closedSnapshots: {},
+      financialAccounts: [],
       isAccountHydrated: true,
       needsOnboarding: true,
       ...(updatedUser ? { authUser: updatedUser } : {}),
@@ -580,7 +605,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
 
     if (isRealAuthUser(state.authUser)) {
       try {
-        const repo = new FirestoreBudgetRepository();
+        const repo = getBudgetRepository();
         await repo.resetFullAccountInCloud(state.authUser.uid, startMonth);
       } catch {
         set({

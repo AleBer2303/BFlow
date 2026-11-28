@@ -7,11 +7,17 @@
  */
 
 import { z } from 'zod';
+import {
+  migrateRawConcept,
+  migrateRawMonthSnapshot,
+  migrateRawSavingsBucket,
+} from '../migrations/legacyFieldMigration';
 import type {
   ChecklistProgress,
   Concept,
   Debt,
   DebtPayment,
+  FinancialAccount,
   MonthEntry,
   MonthNumber,
   MonthSnapshot,
@@ -76,7 +82,6 @@ export const conceptSchema: z.ZodType<Concept, unknown> = z.object({
   defaultTargetDebtId: z.string().min(1).optional(),
   savingsContribution: savingsContributionRuleSchema.optional(),
   provisionCategoryKey: z.string().min(1).optional(),
-  idealMotoCategoryKey: z.string().min(1).optional(),
   archived: z.boolean(),
   order: z.number().int(),
 });
@@ -96,6 +101,28 @@ export const monthEntrySchema: z.ZodType<MonthEntry> = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'completedAt must be YYYY-MM-DD')
     .optional(),
   note: z.string().optional(),
+  accountId: z.string().min(1).max(120).optional(),
+  accountRole: z.enum(['purchase', 'payment']).optional(),
+});
+
+const accountDaySchema = z.number().int().min(1).max(31);
+
+export const financialAccountSchema: z.ZodType<FinancialAccount> = z.object({
+  id: z.string().min(1).max(120),
+  type: z.enum(['credit', 'debit']),
+  name: z.string().min(1).max(120),
+  institution: z.string().min(1).max(120),
+  lastFourDigits: z
+    .string()
+    .regex(/^\d{4}$/, 'lastFourDigits must be 4 digits')
+    .optional(),
+  openingBalance: nonNegativeIntSchema,
+  openingMonthKey: monthKeyStringSchema,
+  creditLimit: nonNegativeIntSchema.optional(),
+  statementDay: accountDaySchema.optional(),
+  paymentDueDay: accountDaySchema.optional(),
+  monthlyInterestRate: z.number().min(0).max(100).optional(),
+  debitKind: z.enum(['savings', 'checking']).optional(),
 });
 
 export const debtSchema: z.ZodType<Debt> = z.object({
@@ -139,7 +166,6 @@ export const savingsBucketSchema: z.ZodType<SavingsBucket> = z.object({
 
 export const provisionItemSpecSchema: z.ZodType<ProvisionItemSpec> = z.object({
   id: z.string().min(1),
-  excelRawName: z.string().min(1).optional(),
   displayName: z.string().min(1),
   monthlyAmountCop: nonNegativeIntSchema,
   monthlyAmount: nonNegativeIntSchema.optional(),
@@ -153,7 +179,6 @@ export const provisionItemSpecSchema: z.ZodType<ProvisionItemSpec> = z.object({
   targetAmount: nonNegativeIntSchema.optional(),
   targetMonthKey: monthKeyStringSchema.optional(),
   targetDateIso: z.string().min(1).optional(),
-  includedInExcelTotalB43: z.boolean().optional(),
   kind: z.enum(['recurring_provision', 'target_goal']),
   notes: z.string().optional(),
 });
@@ -166,8 +191,6 @@ export const provisionPlanSchema: z.ZodType<ProvisionPlan> = z.object({
   totalWithTargetGoal: nonNegativeIntSchema.optional(),
 });
 
-/** @deprecated use provisionPlanSchema */
-export const idealMotoPlanSchema = provisionPlanSchema;
 
 const groupBudgetBreakdownSchema = z.object({
   planned: nonNegativeIntSchema,
@@ -227,8 +250,7 @@ export const monthSnapshotSchema: z.ZodType<MonthSnapshot> = z.object({
   ),
   totalClosingDebt: nonNegativeIntSchema,
   closingSavings: z.object({
-    reserveClosingBalance: signedIntSchema.optional(),
-    motoClosingBalance: signedIntSchema,
+    reserveClosingBalance: signedIntSchema,
     savingsClosingBalance: signedIntSchema,
     totalClosingSavings: signedIntSchema,
     buckets: z
@@ -258,12 +280,12 @@ export function stripUndefinedFields(obj: Record<string, unknown>): Record<strin
 }
 
 export function serializeConceptForFirestore(concept: Concept): Record<string, unknown> {
-  const validated = conceptSchema.parse(concept);
+  const validated = conceptSchema.parse(migrateRawConcept(concept));
   return stripUndefinedFields({ ...validated }) as Record<string, unknown>;
 }
 
 export function parseConceptFromFirestore(raw: unknown): Concept {
-  return conceptSchema.parse(raw);
+  return conceptSchema.parse(migrateRawConcept(raw));
 }
 
 export function serializeMonthEntryForFirestore(entry: MonthEntry): Record<string, unknown> {
@@ -284,6 +306,17 @@ export function parseDebtFromFirestore(raw: unknown): Debt {
   return debtSchema.parse(raw);
 }
 
+export function serializeFinancialAccountForFirestore(
+  account: FinancialAccount
+): Record<string, unknown> {
+  const validated = financialAccountSchema.parse(account);
+  return stripUndefinedFields({ ...validated }) as Record<string, unknown>;
+}
+
+export function parseFinancialAccountFromFirestore(raw: unknown): FinancialAccount {
+  return financialAccountSchema.parse(raw);
+}
+
 export function serializeDebtPaymentForFirestore(payment: DebtPayment): Record<string, unknown> {
   const validated = debtPaymentSchema.parse(payment);
   return stripUndefinedFields({ ...validated }) as Record<string, unknown>;
@@ -294,12 +327,12 @@ export function parseDebtPaymentFromFirestore(raw: unknown): DebtPayment {
 }
 
 export function serializeSavingsBucketForFirestore(bucket: SavingsBucket): Record<string, unknown> {
-  const validated = savingsBucketSchema.parse(bucket);
+  const validated = savingsBucketSchema.parse(migrateRawSavingsBucket(bucket));
   return stripUndefinedFields({ ...validated }) as Record<string, unknown>;
 }
 
 export function parseSavingsBucketFromFirestore(raw: unknown): SavingsBucket {
-  return savingsBucketSchema.parse(raw);
+  return savingsBucketSchema.parse(migrateRawSavingsBucket(raw));
 }
 
 export function serializeProvisionPlanForFirestore(plan: ProvisionPlan): Record<string, unknown> {
@@ -311,16 +344,12 @@ export function parseProvisionPlanFromFirestore(raw: unknown): ProvisionPlan {
   return provisionPlanSchema.parse(raw);
 }
 
-/** @deprecated use serializeProvisionPlanForFirestore */
-export const serializeIdealMotoPlanForFirestore = serializeProvisionPlanForFirestore;
-/** @deprecated use parseProvisionPlanFromFirestore */
-export const parseIdealMotoPlanFromFirestore = parseProvisionPlanFromFirestore;
 
 export function serializeMonthSnapshotForFirestore(snapshot: MonthSnapshot): Record<string, unknown> {
-  const validated = monthSnapshotSchema.parse(snapshot);
+  const validated = monthSnapshotSchema.parse(migrateRawMonthSnapshot(snapshot));
   return stripUndefinedFields({ ...validated }) as Record<string, unknown>;
 }
 
 export function parseMonthSnapshotFromFirestore(raw: unknown): MonthSnapshot {
-  return monthSnapshotSchema.parse(raw);
+  return monthSnapshotSchema.parse(migrateRawMonthSnapshot(raw));
 }

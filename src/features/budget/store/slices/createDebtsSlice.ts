@@ -1,18 +1,18 @@
 /**
  * src/features/budget/store/slices/createDebtsSlice.ts
  *
- * Debts, interest rate conversions and debt installment cascading slice.
+ * Debts and interest rate conversions slice.
  */
 
-import { FirestoreBudgetRepository } from '../../../../data/repositories/budgetRepository';
 import {
-  buildDebtPaymentsForInstallment,
+  annualToMonthlyRate,
+  monthlyToAnnualRate,
   type Debt,
   type DebtInterestRateType,
-  type MonthEntry,
 } from '../../../../domain';
 import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
+  getBudgetRepository,
   getStoreInitialState,
   isRealAuthUser,
   triggerWidgetSync,
@@ -33,13 +33,13 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
     const rateType: DebtInterestRateType = input.interestRateType ?? 'monthly';
     const resolvedMonthlyRate =
       rateType === 'annual' && input.annualInterestRate !== undefined
-        ? Number((input.annualInterestRate / 12).toFixed(4))
+        ? annualToMonthlyRate(input.annualInterestRate)
         : input.monthlyInterestRate;
     const resolvedAnnualRate =
       rateType === 'annual' && input.annualInterestRate !== undefined
         ? input.annualInterestRate
         : input.monthlyInterestRate !== undefined
-          ? Number((input.monthlyInterestRate * 12).toFixed(4))
+          ? monthlyToAnnualRate(input.monthlyInterestRate)
           : undefined;
     const safeInstallment =
       input.monthlyInstallment !== undefined && input.monthlyInstallment >= 0
@@ -85,7 +85,7 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
           payload: { debt: newDebt },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveDebt(uid, newDebt);
         },
         rollback: () => {
@@ -112,7 +112,7 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
         updates.interestRateType ?? d.interestRateType ?? 'monthly';
       const resolvedMonthlyRate =
         rateType === 'annual' && updates.annualInterestRate !== undefined
-          ? Number((updates.annualInterestRate / 12).toFixed(4))
+          ? annualToMonthlyRate(updates.annualInterestRate)
           : updates.monthlyInterestRate !== undefined
             ? updates.monthlyInterestRate
             : d.monthlyInterestRate;
@@ -120,7 +120,7 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
         rateType === 'annual' && updates.annualInterestRate !== undefined
           ? updates.annualInterestRate
           : updates.monthlyInterestRate !== undefined
-            ? Number((updates.monthlyInterestRate * 12).toFixed(4))
+            ? monthlyToAnnualRate(updates.monthlyInterestRate)
             : d.annualInterestRate;
       const resolvedInstallment =
         updates.monthlyInstallment !== undefined
@@ -199,7 +199,7 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
           payload: { debt: nonNullDebt },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveDebt(uid, nonNullDebt);
         },
         rollback: () => {
@@ -215,6 +215,8 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
   deleteDebt: async (monthKey, debtId) => {
     const state = get();
     const previousDebtsByMonth = state.debtsByMonth;
+    const previousConcepts = state.concepts;
+    const previousDebtPayments = state.debtPayments;
     const nextDebtsByMonth: Record<string, Debt[]> = {};
     for (const [mk, list] of Object.entries(state.debtsByMonth)) {
       nextDebtsByMonth[mk] = list.filter((d) => d.id !== debtId);
@@ -223,8 +225,18 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
       nextDebtsByMonth[monthKey] = [];
     }
 
+    // ADR 0035: the same cascade the repository applies in Firestore.
+    const nextConcepts = state.concepts.map((c) => {
+      if (c.defaultTargetDebtId !== debtId) return c;
+      const { defaultTargetDebtId: _removed, ...rest } = c;
+      return rest;
+    });
+    const nextDebtPayments = state.debtPayments.filter((dp) => dp.debtId !== debtId);
+
     set({
       debtsByMonth: nextDebtsByMonth,
+      concepts: nextConcepts,
+      debtPayments: nextDebtPayments,
     });
     triggerWidgetSync(get());
 
@@ -238,89 +250,17 @@ export const createDebtsSlice: SliceCreator<DebtsSlice> = (set, get) => {
           payload: { debtId },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.deleteDebt(uid, debtId);
         },
         rollback: () => {
-          set({ debtsByMonth: previousDebtsByMonth });
-        },
-        friendlyErrorMessage: 'No se pudo eliminar la deuda en la nube.',
-        setStoreState: set,
-        onWidgetSync: () => triggerWidgetSync(get()),
-      });
-    }
-  },
-
-  updateInstallmentAmount: async (monthKey, newAmount) => {
-    return get().updateFunfamiInstallmentAmount(monthKey, newAmount);
-  },
-
-  updateFunfamiInstallmentAmount: async (monthKey, newAmountCop) => {
-    const state = get();
-    const previousEntries = state.entries;
-    const previousDebtPayments = state.debtPayments;
-
-    const safeAmount = Math.max(0, Math.round(newAmountCop));
-    if (safeAmount <= 0) return;
-
-    const installmentEntry = state.entries.find(
-      (e) =>
-        e.monthKey === monthKey &&
-        (e.conceptId === 'exp_cuota_funfami' ||
-          e.conceptName.toLowerCase().includes('cuota') ||
-          e.conceptId.includes('cuota'))
-    );
-    if (!installmentEntry) return;
-
-    const updatedEntry: MonthEntry = {
-      ...installmentEntry,
-      plannedAmount: safeAmount,
-      actualAmount: safeAmount,
-    };
-
-    const nextEntries = state.entries.map((e) => (e.id === installmentEntry.id ? updatedEntry : e));
-    const monthDebts = state.debtsByMonth[monthKey] ?? state.debtsByMonth['2026-10'] ?? [];
-    const cascadedPayments = buildDebtPaymentsForInstallment(updatedEntry, monthDebts);
-
-    const nextDebtPayments = [
-      ...state.debtPayments.filter((dp) => dp.entryId !== installmentEntry.id),
-      ...cascadedPayments,
-    ];
-
-    set({
-      entries: nextEntries,
-      debtPayments: nextDebtPayments,
-    });
-    triggerWidgetSync(get());
-
-    const authUser = state.authUser;
-    if (isRealAuthUser(authUser)) {
-      const uid = authUser.uid;
-      await executeOptimisticCloudWrite({
-        uid,
-        operation: {
-          type: 'save_or_update_entry',
-          payload: {
-            entry: updatedEntry,
-            debtPayments: cascadedPayments,
-          },
-        },
-        performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
-          await repo.saveOrUpdateEntry(
-            uid,
-            updatedEntry,
-            undefined,
-            cascadedPayments
-          );
-        },
-        rollback: () => {
           set({
-            entries: previousEntries,
+            debtsByMonth: previousDebtsByMonth,
+            concepts: previousConcepts,
             debtPayments: previousDebtPayments,
           });
         },
-        friendlyErrorMessage: 'No se pudo actualizar la cuota en la nube.',
+        friendlyErrorMessage: 'No se pudo eliminar la deuda en la nube.',
         setStoreState: set,
         onWidgetSync: () => triggerWidgetSync(get()),
       });

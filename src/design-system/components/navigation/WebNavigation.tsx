@@ -42,7 +42,7 @@ export function resolveWebHeaderHeight(width: number): number {
 
 export interface WebAppHeaderProps {
   layout: ResponsiveLayout;
-  /** Month shown beside the right header control ("Octubre 2026"). */
+  /** Month shown beside the right header control ("Marzo 2027"). */
   contextLabel?: string;
   /** When given (and the window is wide enough) the destinations render in the bar. */
   navigation?: WorkspaceNavigationProps;

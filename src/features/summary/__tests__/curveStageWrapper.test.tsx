@@ -12,7 +12,7 @@ import { useBudgetStore } from '../../budget/store/useBudgetStore';
 
 describe('month curve stage wrapper', () => {
   beforeEach(() => {
-    useBudgetStore.getState().resetToOctober2026GoldenState();
+    useBudgetStore.getState().resetToSampleWorkspace();
   });
 
   it('keeps the curve out of the scroll reveal wrapper', () => {

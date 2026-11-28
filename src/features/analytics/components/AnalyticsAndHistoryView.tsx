@@ -32,10 +32,7 @@ import {
 import {
   formatMonthKeyLabelEs,
   type ChecklistProgress,
-  type Concept,
   type DebtSummaryResult,
-  type FunfamiDebtSummary,
-  type MonthEntry,
   type MonthSnapshot,
   type MonthlyBudgetSummary,
   type MonthlySavingsSummary,
@@ -46,18 +43,15 @@ export type HistoryActionMode = 'edit' | 'delete' | null;
 export interface AnalyticsAndHistoryViewProps {
   activeMonthKey: string;
   availableMonths: readonly string[];
-  concepts?: readonly Concept[];
-  entries?: readonly MonthEntry[];
   budget?: MonthlyBudgetSummary;
   checklist: ChecklistProgress;
-  debtSummary: DebtSummaryResult | FunfamiDebtSummary;
+  debtSummary: DebtSummaryResult;
   savingsSummary: MonthlySavingsSummary;
   closedSnapshots: Readonly<Record<string, MonthSnapshot>>;
   onSelectMonth: (monthKey: string) => void;
   onCloseCurrentMonth: () => void;
   onReopenClosedMonth?: (monthKey: string) => void;
   onDeleteOrRevertMonth?: (monthKey: string) => void;
-  onResetOctoberSeed?: () => void;
 }
 
 interface HistoryMonthRowItemProps {
@@ -118,8 +112,10 @@ const HistoryMonthRowItem = React.memo(function HistoryMonthRowItem({
         testID={`history-month-pill-${mk}`}
         accessibilityRole="button"
         accessibilityLabel={`${formatMonthKeyLabelEs(mk)}, ${isClosed ? 'Mes Cerrado' : 'Mes Abierto'}${isSelected ? ', Seleccionado' : ''}`}
-        onPressIn={() => hapticService.light()}
-        onPress={() => onSelectMonth(mk)}
+        onPress={() => {
+          hapticService.light();
+          onSelectMonth(mk);
+        }}
         style={{
           flex: 1,
           minHeight: MIN_TOUCH_TARGET_PT,
@@ -221,8 +217,6 @@ const HistoryMonthRowItem = React.memo(function HistoryMonthRowItem({
 export function AnalyticsAndHistoryView({
   activeMonthKey,
   availableMonths,
-  concepts: _concepts,
-  entries: _entries,
   budget,
   checklist,
   debtSummary,
@@ -232,7 +226,6 @@ export function AnalyticsAndHistoryView({
   onCloseCurrentMonth,
   onReopenClosedMonth,
   onDeleteOrRevertMonth,
-  onResetOctoberSeed: _onResetOctoberSeed,
 }: AnalyticsAndHistoryViewProps): React.JSX.Element {
   const { formatAmount } = useAmountPrivacy();
   const { colors, spacing, radius } = useBFlowTheme();
@@ -312,7 +305,7 @@ export function AnalyticsAndHistoryView({
               >
                 {hasPendingChecklist
                   ? `Aviso: Tienes ${checklist.pendingCount} ${checklist.pendingCount === 1 ? 'movimiento pendiente' : 'movimientos pendientes'} por completar.`
-                  : '✨ Todos los movimientos del checklist están completados y al día.'}
+                  : 'Todos los movimientos del checklist están completados y al día.'}
               </AppText>
             </View>
 
@@ -395,7 +388,7 @@ export function AnalyticsAndHistoryView({
                   tone="reserve"
                 />
                 <AppText variant="micro" color={colors.text.muted}>
-                  {`${savingsSummary.moto.name || 'Reserva'}: ${formatAmount(savingsSummary.moto.currentBalance)} · Ahorro: ${formatAmount(savingsSummary.savings.currentBalance)}`}
+                  {`${savingsSummary.reserve.name || 'Reserva'}: ${formatAmount(savingsSummary.reserve.currentBalance)} · Ahorro: ${formatAmount(savingsSummary.savings.currentBalance)}`}
                 </AppText>
               </View>
             </View>

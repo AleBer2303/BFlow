@@ -2,16 +2,22 @@
  * src/features/debts/components/DebtsTab.tsx
  *
  * Container of the Debts tab: reads only the active month's debt summary, plus the
- * month-by-month history for the debt chart (Phase 6).
+ * month-by-month history for the debt chart (Phase 6), and the credit cards and checking
+ * accounts with their month summary (ADR 0034).
  */
 
 import React, { useCallback } from 'react';
 import { View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 import { ScrollRevealSection, hapticService, useBFlowTheme } from '../../../design-system';
-import { useActiveMonthKey, useDebtSummary } from '../../budget/hooks/useActiveMonthSummaries';
+import {
+  useActiveMonthKey,
+  useDebtSummary,
+  useFinancialAccounts,
+  useFinancialAccountsSummary,
+} from '../../budget/hooks/useActiveMonthSummaries';
 import { useChartHistory } from '../../budget/hooks/useChartHistory';
-import { useBudgetStore } from '../../budget/store/useBudgetStore';
+import { useTabStore } from '../../budget/hooks/useTabStore';
 import { DebtTrendChart } from './DebtTrendChart';
 import { DebtsWorkspaceView, type DebtsWorkspaceViewProps } from './DebtsWorkspaceView';
 
@@ -21,12 +27,18 @@ export const DebtsTab = React.memo(function DebtsTab(): React.JSX.Element {
   const monthKey = useActiveMonthKey();
   const debtSummary = useDebtSummary();
   const history = useChartHistory();
+  // Savings accounts are shown in Ahorros; Deudas keeps the cards and checking accounts.
+  const financialAccounts = useFinancialAccounts('debts');
+  const accountsSummary = useFinancialAccountsSummary('debts');
   const { spacing } = useBFlowTheme();
-  const actions = useBudgetStore(
+  const actions = useTabStore(
     useShallow((state) => ({
       createDebt: state.createDebt,
       updateDebt: state.updateDebt,
       deleteDebt: state.deleteDebt,
+      createFinancialAccount: state.createFinancialAccount,
+      updateFinancialAccount: state.updateFinancialAccount,
+      deleteFinancialAccount: state.deleteFinancialAccount,
     }))
   );
 
@@ -52,6 +64,28 @@ export const DebtsTab = React.memo(function DebtsTab(): React.JSX.Element {
     [actions, monthKey]
   );
 
+  const handleCreateAccount = useCallback<NonNullable<Props['onCreateAccount']>>(
+    (input) => {
+      hapticService.trigger('success');
+      void actions.createFinancialAccount(monthKey, input);
+    },
+    [actions, monthKey]
+  );
+  const handleUpdateAccount = useCallback<NonNullable<Props['onUpdateAccount']>>(
+    (accountId, updates) => {
+      hapticService.trigger('success');
+      void actions.updateFinancialAccount(accountId, updates);
+    },
+    [actions]
+  );
+  const handleDeleteAccount = useCallback<NonNullable<Props['onDeleteAccount']>>(
+    (accountId) => {
+      hapticService.trigger('warning');
+      void actions.deleteFinancialAccount(accountId);
+    },
+    [actions]
+  );
+
   return (
     <View style={{ gap: spacing.md }}>
       <DebtsWorkspaceView
@@ -59,6 +93,11 @@ export const DebtsTab = React.memo(function DebtsTab(): React.JSX.Element {
         onCreateDebt={handleCreateDebt}
         onUpdateDebt={handleUpdateDebt}
         onDeleteDebt={handleDeleteDebt}
+        financialAccounts={financialAccounts}
+        accountsSummary={accountsSummary}
+        onCreateAccount={handleCreateAccount}
+        onUpdateAccount={handleUpdateAccount}
+        onDeleteAccount={handleDeleteAccount}
       />
       <ScrollRevealSection>
         <DebtTrendChart history={history} projection={debtSummary.projection} />

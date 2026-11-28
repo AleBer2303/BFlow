@@ -18,7 +18,7 @@ rules_version = '2';
 //      - authProvider: 'password' | 'google.com' | 'local' | null (optional, <= 40 chars)
 //      - createdAt: timestamp | string | null (optional, <= 64 chars)
 //      - lastLoginAt: timestamp | string | null (optional, <= 64 chars)
-//      - seededOctober2026: bool (optional)
+//      - seededOctober2026: bool (optional, legacy: removed by the next load, ADR 0037)
 //      - onboardingCompleted: bool | null (optional)
 //      - accountResetByUser: bool | null (optional)
 //      - activeMonthKey: string (optional, YYYY-MM)
@@ -36,6 +36,9 @@ rules_version = '2';
 //    Caché derivada que leen los widgets de iOS y Android por REST.
 //    Fields: schemaVersion (int == 2), monthKey (YYYY-MM),
 //            payload (string JSON WidgetSnapshotV2, 2..16000 chars), updatedAt (== request.time)
+// 10. Collection: /users/{uid}/financialAccounts/{accountId} (ADR 0034)
+//    Tarjetas de crédito y cuentas débito. Los entries las referencian con accountId
+//    (y accountRole 'purchase' | 'payment' para gastos con tarjeta de crédito).
 // ===============================================================
 
 service cloud.firestore {
@@ -153,6 +156,7 @@ service cloud.firestore {
           'authProvider',
           'createdAt',
           'lastLoginAt',
+          // Legacy field (ADR 0037): the next load of the account deletes it.
           'seededOctober2026',
           'onboardingCompleted',
           'accountResetByUser',
@@ -206,6 +210,8 @@ service cloud.firestore {
           'linkedDebtGroup',
           'defaultTargetDebtId',
           'savingsContribution',
+          'provisionCategoryKey',
+          // Legacy name (ADR 0037): still in documents a load has not rewritten yet.
           'idealMotoCategoryKey',
           'archived',
           'order',
@@ -228,6 +234,7 @@ service cloud.firestore {
         isOptionalString(data, 'linkedDebtGroup', 64) &&
         isOptionalString(data, 'defaultTargetDebtId', 120) &&
         isValidSavingsContribution(data) &&
+        isOptionalString(data, 'provisionCategoryKey', 64) &&
         isOptionalString(data, 'idealMotoCategoryKey', 64) &&
         isValidUpdatedAt(data);
     }
@@ -256,6 +263,8 @@ service cloud.firestore {
           'status',
           'completedAt',
           'note',
+          'accountId',
+          'accountRole',
           'updatedAt'
         ]) &&
         data.id is string &&
@@ -270,6 +279,67 @@ service cloud.firestore {
         isValidEntryStatus(data.status) &&
         isOptionalString(data, 'completedAt', 64) &&
         isOptionalString(data, 'note', 500) &&
+        (!('accountId' in data) || data.accountId == null || isNonEmptyString(data.accountId, 120)) &&
+        (!('accountRole' in data) ||
+          data.accountRole == null ||
+          (data.accountRole is string && data.accountRole in ['purchase', 'payment'])) &&
+        isValidUpdatedAt(data);
+    }
+
+    function isOptionalAccountDay(data, field) {
+      return !(field in data) ||
+        data[field] == null ||
+        (data[field] is int && data[field] >= 1 && data[field] <= 31);
+    }
+
+    // ADR 0034: tarjeta de crédito o cuenta débito. El saldo no se guarda: se deriva de
+    // openingBalance y de los entries con accountId.
+    function isValidFinancialAccount(data, accountId) {
+      return hasRequiredFields(data, [
+          'id',
+          'type',
+          'name',
+          'institution',
+          'openingBalance',
+          'openingMonthKey'
+        ]) &&
+        hasOnlyAllowedFields(data, [
+          'id',
+          'type',
+          'name',
+          'institution',
+          'lastFourDigits',
+          'openingBalance',
+          'openingMonthKey',
+          'creditLimit',
+          'statementDay',
+          'paymentDueDay',
+          'monthlyInterestRate',
+          'debitKind',
+          'updatedAt'
+        ]) &&
+        data.id is string &&
+        data.id == accountId &&
+        data.id.size() <= 120 &&
+        data.type in ['credit', 'debit'] &&
+        isNonEmptyString(data.name, 120) &&
+        isNonEmptyString(data.institution, 120) &&
+        (!('lastFourDigits' in data) ||
+          data.lastFourDigits == null ||
+          (data.lastFourDigits is string && data.lastFourDigits.matches('^[0-9]{4}$'))) &&
+        isNonNegativeInt(data.openingBalance) &&
+        isValidMonthKey(data.openingMonthKey) &&
+        (!('creditLimit' in data) || data.creditLimit == null || isNonNegativeInt(data.creditLimit)) &&
+        isOptionalAccountDay(data, 'statementDay') &&
+        isOptionalAccountDay(data, 'paymentDueDay') &&
+        (!('monthlyInterestRate' in data) ||
+          data.monthlyInterestRate == null ||
+          (data.monthlyInterestRate is number &&
+            data.monthlyInterestRate >= 0 &&
+            data.monthlyInterestRate <= 100)) &&
+        (!('debitKind' in data) ||
+          data.debitKind == null ||
+          (data.debitKind is string && data.debitKind in ['savings', 'checking'])) &&
         isValidUpdatedAt(data);
     }
 
@@ -491,6 +561,16 @@ service cloud.firestore {
           isValidDebt(request.resource.data, debtId) &&
           request.resource.data.id == resource.data.id &&
           request.resource.data.groupKey == resource.data.groupKey;
+        allow delete: if isOwner(uid);
+      }
+
+      match /financialAccounts/{accountId} {
+        allow read: if isOwner(uid);
+        allow create: if isOwner(uid) && isValidFinancialAccount(request.resource.data, accountId);
+        allow update: if isOwner(uid) &&
+          isValidFinancialAccount(request.resource.data, accountId) &&
+          request.resource.data.id == resource.data.id &&
+          request.resource.data.type == resource.data.type;
         allow delete: if isOwner(uid);
       }
 

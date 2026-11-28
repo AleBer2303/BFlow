@@ -3,7 +3,8 @@
  *
  * Local showcase mode (`EXPO_PUBLIC_BFLOW_DEMO=1`, see `npm run web:demo`).
  *
- * The app boots signed in as the local demo owner with the October 2026 seed, never talks to
+ * The app boots signed in as the local demo user with the example budget of the current month
+ * (`src/data/sample/sampleWorkspace.ts`), never talks to
  * Firebase (the demo user is not a "real" auth user, so the store skips every cloud write) and
  * accepts `?skin=ios|android|web` and `?theme=dark|light` in the URL. It exists so the three
  * platform skins can be reviewed and tested from a browser on Windows without credentials.

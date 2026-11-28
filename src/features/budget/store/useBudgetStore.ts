@@ -2,7 +2,7 @@
  * src/features/budget/store/useBudgetStore.ts
  *
  * Reactive Zustand store for BFlow orchestrating domain calculators,
- * Authentication Gate, persistent cloud session, October 2026 golden seed data,
+ * Authentication Gate, persistent cloud session, example budget for the showcase mode,
  * month rollover and real-time Cloud Firestore synchronization.
  *
  * Modularized into focused domain slices:
@@ -12,10 +12,13 @@
  * - createDebtsSlice: debts by month, installment cascading, interest calculation
  * - createSavingsSlice: savings buckets, opening balances, savings linkages
  * - createProvisionsSlice: provisions plan, recurring funds, target goals
+ * - createAccountsSlice: credit cards and debit accounts linked to movements (ADR 0034)
  */
 
 import { create } from 'zustand';
+import { startPersistedAccountAutoSave } from './persistedAccountFields';
 import {
+  createAccountsSlice,
   createAuthSlice,
   createBudgetSlice,
   createDebtsSlice,
@@ -36,4 +39,8 @@ export const useBudgetStore = create<BudgetStoreState>((set, get, store) => ({
   ...createDebtsSlice(set, get, store),
   ...createSavingsSlice(set, get, store),
   ...createProvisionsSlice(set, get, store),
+  ...createAccountsSlice(set, get, store),
 }));
+
+// Single trigger of the device cache save (OPT-02).
+startPersistedAccountAutoSave(useBudgetStore);

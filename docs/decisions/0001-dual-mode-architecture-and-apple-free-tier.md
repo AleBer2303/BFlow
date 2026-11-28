@@ -1,8 +1,14 @@
 # ADR 0001: Arquitectura de Doble Modo (Modo A / Modo B) y Viabilidad con Cuenta Apple Gratuita
 
-- **Estado:** Propuesto (Fase 0)
+- **Estado:** Aceptado. El doble modo, el target único de extensión y el límite de 2 App IDs siguen vigentes; algunas piezas se sustituyeron después (notas de abajo).
 - **Fecha:** 2026-10-28
 - **Contexto:** Desarrollo en Windows 11 + VS Code sin Mac local, probando en iPhone 16 Pro Max (iOS 26) mediante Expo Go y `.ipa` compilado en GitHub Actions (macOS runner) e instalado vía `iloader` con Apple ID gratuito (Personal Team).
+
+> **Notas de sustitución (comprobadas el 2026-11-27).** El texto que sigue es el de la Fase 0 y no se reescribe:
+> - Los widgets de iOS y Android, su contrato (`WidgetSnapshotV2`) y el puente con la app los fija el [ADR 0021](0021-home-screen-widgets-ios-android.md), dentro del mismo target único de extensión.
+> - La Live Activity (Isla Dinámica) no se ha implementado: `targets/widgets` solo contiene widgets.
+> - El inicio de sesión nativo con `@react-native-google-signin/google-signin` no se instaló (no está en `package.json`). Google funciona con Firebase Auth (`GoogleAuthProvider` en `src/platform/auth/authAdapter.ts`).
+> - La firma e instalación con `iloader` está en la guía [`iloader-signing-guide.md`](../guides/iloader-signing-guide.md).
 
 ---
 

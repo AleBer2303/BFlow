@@ -3,7 +3,7 @@ name: Maestro E2E Tests (Android Emulator)
 # Pruebas de extremo a extremo con Maestro en un emulador Android (ADR 0023).
 #
 # El APK que se compila aquí lleva EXPO_PUBLIC_BFLOW_DEMO=1 (modo vitrina: sesión demo con el
-# seed de octubre 2026, sin Firebase ni credenciales). Existe SOLO para estas pruebas:
+# presupuesto de ejemplo del mes actual, sin Firebase ni credenciales). Existe SOLO para estas pruebas:
 #   - no se sube como artefacto,
 #   - no se adjunta a ningún GitHub Release,
 #   - este workflow solo tiene permiso de lectura sobre el repositorio.

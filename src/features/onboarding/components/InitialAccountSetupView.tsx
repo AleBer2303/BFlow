@@ -2,47 +2,50 @@
  * src/features/onboarding/components/InitialAccountSetupView.tsx
  *
  * Guided initial account setup wizard for first-time users and after an account reset.
- * Reuses the modernized forms of the main workspace (`NewSavingsBucketForm`, `DebtForm`,
- * `ChecklistAddMovementForm`, `ProvisionItemForm`) inside smooth `RevealDown` containers,
- * with responsive two-column layout on wide screens and full parity across iOS, Android,
- * and Web skins.
+ * Holds what the user configures and the single open form; each step is its own component
+ * (`OnboardingPeriodStep`, `OnboardingSavingsStep`, `OnboardingDebtsStep`,
+ * `OnboardingMovementsStep`, `OnboardingProvisionsStep`) and reuses the workspace forms inside
+ * `RevealDown`, with a two-column layout on wide screens and parity across iOS, Android and Web.
+ * Credit cards and checking accounts are registered in the debts step and savings accounts in
+ * the savings step, as in the Deudas and Ahorros tabs; movements can be linked to them (ADR 0034).
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import {
-  AdaptiveSelectField,
   AppPressable,
   AppText,
-  CurrencyText,
   GlassSurface,
   hapticService,
   ResponsiveColumns,
-  RevealDown,
   ScrollDepthHero,
   StatusBadge,
-  TrashBinIcon,
   useBFlowTheme,
   usePrimaryActionLook,
 } from '../../../design-system';
 import {
-  formatCurrency,
   formatMonthKeyLabelEs,
+  isSavingsAccount,
   toAppMonthKey,
-  type Concept,
+  toSlugId,
   type Debt,
-  type MonthEntry,
+  type FinancialAccount,
   type SavingsBucket,
 } from '../../../domain';
-import type {
-  InitialOnboardingConfigInput,
-  SaveProvisionItemInput,
+import {
+  buildFinancialAccount,
+  type FinancialAccountInput,
+  type InitialOnboardingConfigInput,
+  type OnboardingFinancialAccountInput,
+  type SaveProvisionItemInput,
 } from '../../budget/store/useBudgetStore';
-import { ChecklistAddMovementForm } from '../../checklist/components/ChecklistAddMovementForm';
 import type { ChecklistWorkspaceViewProps } from '../../checklist/components/ChecklistWorkspaceView';
-import { DebtForm, type CreateDebtInput } from '../../debts/components/DebtForm';
-import { ProvisionItemForm } from '../../savings/components/ProvisionItemForm';
-import { NewSavingsBucketForm } from '../../savings/components/SavingsBucketForms';
+import type { CreateDebtInput } from '../../debts/components/DebtForm';
+import { OnboardingDebtsStep } from './OnboardingDebtsStep';
+import { OnboardingMovementsStep } from './OnboardingMovementsStep';
+import { OnboardingPeriodStep } from './OnboardingPeriodStep';
+import { OnboardingProvisionsStep } from './OnboardingProvisionsStep';
+import { OnboardingSavingsStep } from './OnboardingSavingsStep';
 
 export interface InitialAccountSetupViewProps {
   defaultMonthKey?: string;
@@ -52,33 +55,8 @@ export interface InitialAccountSetupViewProps {
 
 type ActiveOnboardingForm = 'bucket' | 'debt' | 'movement' | 'provision' | null;
 
-const MONTH_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: '01', label: 'Enero' },
-  { value: '02', label: 'Febrero' },
-  { value: '03', label: 'Marzo' },
-  { value: '04', label: 'Abril' },
-  { value: '05', label: 'Mayo' },
-  { value: '06', label: 'Junio' },
-  { value: '07', label: 'Julio' },
-  { value: '08', label: 'Agosto' },
-  { value: '09', label: 'Septiembre' },
-  { value: '10', label: 'Octubre' },
-  { value: '11', label: 'Noviembre' },
-  { value: '12', label: 'Diciembre' },
-];
-
-const EMPTY_ENTRIES: readonly MonthEntry[] = [];
-const EMPTY_CONCEPTS: readonly Concept[] = [];
-const NOOP_COMPLETE_MOVEMENT: ChecklistWorkspaceViewProps['onAddOrCompleteMovement'] = () => {};
-
 function buildBucketSlug(name: string, existingIds: ReadonlySet<string>): string {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
+  const slug = toSlugId(name);
   const base = `bucket_${slug || Date.now().toString(36)}`;
   if (!existingIds.has(base)) return base;
   let suffix = 2;
@@ -87,93 +65,6 @@ function buildBucketSlug(name: string, existingIds: ReadonlySet<string>): string
   }
   return `${base}_${suffix}`;
 }
-
-interface SectionToggleButtonProps {
-  testID: string;
-  isOpen: boolean;
-  openLabel: string;
-  closeAccessibilityLabel: string;
-  openAccessibilityLabel: string;
-  tintBackground: string;
-  tintText: string;
-  onPress: () => void;
-}
-
-const SectionToggleButton = React.memo(function SectionToggleButton({
-  testID,
-  isOpen,
-  openLabel,
-  closeAccessibilityLabel,
-  openAccessibilityLabel,
-  tintBackground,
-  tintText,
-  onPress,
-}: SectionToggleButtonProps): React.JSX.Element {
-  const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
-
-  return (
-    <AppPressable
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={isOpen ? closeAccessibilityLabel : openAccessibilityLabel}
-      onPress={onPress}
-      style={{
-        width: '100%',
-        minHeight: minTouchTarget,
-        paddingVertical: spacing.xs,
-        paddingHorizontal: spacing.md,
-        borderRadius: radius.md,
-        borderCurve: 'continuous',
-        backgroundColor: isOpen ? colors.glass.surfaceElevatedTint : tintBackground,
-        borderWidth: 1,
-        borderColor: colors.glass.specularBorder,
-        justifyContent: 'center',
-        alignItems: 'center',
-      }}
-    >
-      <AppText variant="headline" color={isOpen ? colors.text.primary : tintText}>
-        {isOpen ? 'Cerrar' : openLabel}
-      </AppText>
-    </AppPressable>
-  );
-});
-
-interface RemoveItemButtonProps {
-  testID?: string;
-  itemName: string;
-  onPress: () => void;
-}
-
-const RemoveItemButton = React.memo(function RemoveItemButton({
-  testID,
-  itemName,
-  onPress,
-}: RemoveItemButtonProps): React.JSX.Element {
-  const { colors, spacing, radius, minTouchTarget } = useBFlowTheme();
-
-  return (
-    <AppPressable
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel={`Eliminar ${itemName}`}
-      onPress={onPress}
-      style={{
-        minWidth: minTouchTarget,
-        minHeight: minTouchTarget,
-        paddingHorizontal: spacing.sm,
-        borderRadius: radius.pill,
-        borderCurve: 'continuous',
-        backgroundColor: colors.semantic.expenseSoft,
-        borderWidth: 1,
-        borderColor: colors.glass.subtleBorder,
-        justifyContent: 'center',
-        alignItems: 'center',
-      }}
-    >
-      <TrashBinIcon size={16} color={colors.semantic.expense} />
-    </AppPressable>
-  );
-});
 
 export function InitialAccountSetupView({
   defaultMonthKey,
@@ -211,8 +102,6 @@ export function InitialAccountSetupView({
   const [selectedMonth, setSelectedMonth] = useState(initialMk.slice(5, 7));
 
   const computedMonthKey = `${selectedYear}-${selectedMonth}`;
-  const activeMonthOption =
-    MONTH_OPTIONS.find((m) => m.value === selectedMonth) ?? { value: '01', label: 'Enero' };
 
   useEffect(() => {
     onMonthKeyChange?.(computedMonthKey);
@@ -228,11 +117,15 @@ export function InitialAccountSetupView({
   const [provisions, setProvisions] = useState<
     NonNullable<InitialOnboardingConfigInput['provisions']>
   >([]);
+  const [financialAccounts, setFinancialAccounts] = useState<OnboardingFinancialAccountInput[]>(
+    []
+  );
 
   // Single active form slot + remount key so every form starts clean and isolated
   const [activeForm, setActiveForm] = useState<ActiveOnboardingForm>(null);
   const [formKey, setFormKey] = useState(0);
   const debtSeqRef = useRef(0);
+  const accountSeqRef = useRef(0);
 
   const toggleForm = useCallback((target: Exclude<ActiveOnboardingForm, null>) => {
     hapticService.light();
@@ -242,6 +135,11 @@ export function InitialAccountSetupView({
       return target;
     });
   }, []);
+
+  const toggleBucketForm = useCallback(() => toggleForm('bucket'), [toggleForm]);
+  const toggleDebtForm = useCallback(() => toggleForm('debt'), [toggleForm]);
+  const toggleMovementForm = useCallback(() => toggleForm('movement'), [toggleForm]);
+  const toggleProvisionForm = useCallback(() => toggleForm('provision'), [toggleForm]);
 
   const handleCloseActiveForm = useCallback(() => {
     setActiveForm(null);
@@ -269,6 +167,20 @@ export function InitialAccountSetupView({
         openingBalance: b.openingBalanceCop,
       })),
     [savingsBuckets]
+  );
+
+  // Cards and accounts as they will be stored, for the movement form's account selector.
+  const formAccounts = useMemo<FinancialAccount[]>(
+    () => financialAccounts.map((a) => buildFinancialAccount(a.key, computedMonthKey, a)),
+    [computedMonthKey, financialAccounts]
+  );
+  const savingsAccounts = useMemo(
+    () => financialAccounts.filter((a) => isSavingsAccount(a)),
+    [financialAccounts]
+  );
+  const debtsStepAccounts = useMemo(
+    () => financialAccounts.filter((a) => !isSavingsAccount(a)),
+    [financialAccounts]
   );
 
   const debtNameByKey = useMemo(
@@ -338,12 +250,37 @@ export function InitialAccountSetupView({
     }
   }, []);
 
+  // Same rule as createFinancialAccount: an account needs a name and an entity.
+  const handleCreateAccount = useCallback((input: FinancialAccountInput) => {
+    if (!input.name.trim() || !input.institution.trim()) return;
+    hapticService.trigger('success');
+    accountSeqRef.current += 1;
+    const key = `acc_${Date.now().toString(36)}_${accountSeqRef.current}`;
+    setFinancialAccounts((prev) => [...prev, { ...input, key }]);
+  }, []);
+
+  const handleRemoveAccount = useCallback((removedKey: string) => {
+    hapticService.trigger('warning');
+    setFinancialAccounts((prev) => prev.filter((a) => a.key !== removedKey));
+    setIncomes((prev) =>
+      prev.map((inc) => (inc.accountKey === removedKey ? { ...inc, accountKey: null } : inc))
+    );
+    setExpenses((prev) =>
+      prev.map((exp) => {
+        if (exp.accountKey !== removedKey) return exp;
+        const { accountRole: _role, ...rest } = exp;
+        return { ...rest, accountKey: null };
+      })
+    );
+  }, []);
+
   const handleCreateMovement = useCallback<
     NonNullable<ChecklistWorkspaceViewProps['onCreateCustomMovement']>
   >((input) => {
     hapticService.trigger('success');
     const amountCop = input.amount ?? input.amountCop ?? 0;
     const persistMonthly = input.persistMonthly !== false;
+    const accountKey = input.accountId ?? null;
 
     if (input.type === 'income') {
       setIncomes((prev) => [
@@ -353,6 +290,7 @@ export function InitialAccountSetupView({
           amountCop,
           group: input.group,
           persistMonthly,
+          ...(accountKey ? { accountKey } : {}),
         },
       ]);
       return;
@@ -367,8 +305,21 @@ export function InitialAccountSetupView({
         persistMonthly,
         targetDebtKey: input.targetDebtId ?? null,
         savingsBucketKey: input.savingsBucketId ?? null,
+        ...(accountKey
+          ? { accountKey, ...(input.accountRole ? { accountRole: input.accountRole } : {}) }
+          : {}),
       },
     ]);
+  }, []);
+
+  const handleRemoveIncome = useCallback((idx: number) => {
+    hapticService.trigger('warning');
+    setIncomes((prev) => prev.filter((_, i) => i !== idx));
+  }, []);
+
+  const handleRemoveExpense = useCallback((idx: number) => {
+    hapticService.trigger('warning');
+    setExpenses((prev) => prev.filter((_, i) => i !== idx));
   }, []);
 
   const handleSaveProvision = useCallback((input: SaveProvisionItemInput) => {
@@ -386,6 +337,11 @@ export function InitialAccountSetupView({
     ]);
   }, []);
 
+  const handleRemoveProvision = useCallback((idx: number) => {
+    hapticService.trigger('warning');
+    setProvisions((prev) => prev.filter((_, i) => i !== idx));
+  }, []);
+
   const handleFinishSetup = useCallback(() => {
     onCompleteSetup({
       monthKey: computedMonthKey,
@@ -394,21 +350,46 @@ export function InitialAccountSetupView({
       debts,
       savingsBuckets,
       provisions,
+      financialAccounts,
     });
-  }, [computedMonthKey, debts, expenses, incomes, onCompleteSetup, provisions, savingsBuckets]);
+  }, [
+    computedMonthKey,
+    debts,
+    expenses,
+    financialAccounts,
+    incomes,
+    onCompleteSetup,
+    provisions,
+    savingsBuckets,
+  ]);
 
   const totalMovementsCount = incomes.length + expenses.length;
   const totalConfiguredItems =
-    savingsBuckets.length + debts.length + totalMovementsCount + provisions.length;
+    savingsBuckets.length +
+    debts.length +
+    financialAccounts.length +
+    totalMovementsCount +
+    provisions.length;
 
   const summaryPills = useMemo(
     () => [
       { id: 'buckets', label: `Fondos (${savingsBuckets.length})`, status: 'savings' as const },
       { id: 'debts', label: `Deudas (${debts.length})`, status: 'debt' as const },
+      {
+        id: 'accounts',
+        label: `Tarjetas y cuentas (${financialAccounts.length})`,
+        status: 'provisions' as const,
+      },
       { id: 'movements', label: `Movimientos (${totalMovementsCount})`, status: 'info' as const },
       { id: 'provisions', label: `Metas (${provisions.length})`, status: 'provisions' as const },
     ],
-    [debts.length, provisions.length, savingsBuckets.length, totalMovementsCount]
+    [
+      debts.length,
+      financialAccounts.length,
+      provisions.length,
+      savingsBuckets.length,
+      totalMovementsCount,
+    ]
   );
 
   return (
@@ -450,545 +431,67 @@ export function InitialAccountSetupView({
       <ResponsiveColumns testID="onboarding-panels">
         {/* Left Column: Start Month, Savings Funds, Debts */}
         <View style={{ gap: spacing.md }}>
-          {/* Step 1: Month & Year */}
-          <GlassSurface elevated testID="onboarding-month-section">
-            <View style={{ gap: spacing.sm }}>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: spacing.xs,
-                  flexWrap: 'wrap',
-                }}
-              >
-                <StatusBadge label="PASO 1" status="info" />
-                <AppText variant="headline">Mes y Año de Inicio</AppText>
-              </View>
-
-              <View
-                style={{
-                  flexDirection: 'row',
-                  flexWrap: 'wrap',
-                  gap: spacing.md,
-                  alignItems: 'flex-start',
-                }}
-              >
-                <AdaptiveSelectField
-                  label="Año"
-                  title="Año de Inicio"
-                  options={yearOptions}
-                  selectedValue={selectedYear}
-                  onSelect={setSelectedYear}
-                  triggerTestID="onboarding-year-dropdown-trigger"
-                  valueTestID="onboarding-year-input"
-                  pickerTestID="onboarding-year-picker"
-                  accessibilityLabel={`Año actual: ${selectedYear}. Toca para abrir el selector de año.`}
-                  containerStyle={{ flex: 1, minWidth: 112 }}
-                />
-
-                <AdaptiveSelectField
-                  label="Mes de inicio"
-                  title="Mes de Inicio"
-                  options={MONTH_OPTIONS}
-                  selectedValue={selectedMonth}
-                  onSelect={setSelectedMonth}
-                  triggerTestID="onboarding-month-dropdown-trigger"
-                  pickerTestID="onboarding-month-picker"
-                  accessibilityLabel={`Mes actual: ${activeMonthOption.label}. Toca para abrir el selector.`}
-                  containerStyle={{ flex: 1.5, minWidth: 148 }}
-                />
-              </View>
-            </View>
-          </GlassSurface>
-
-          {/* Step 2: Savings Funds */}
-          <GlassSurface elevated testID="onboarding-savings-section">
-            <View style={{ gap: spacing.sm }}>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: spacing.xs,
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                  <StatusBadge label="PASO 2" status="savings" />
-                  <AppText variant="headline">Fondos de Ahorro</AppText>
-                </View>
-                {savingsBuckets.length > 0 ? (
-                  <AppText variant="micro" color={colors.text.secondary}>
-                    {`${savingsBuckets.length} ${savingsBuckets.length === 1 ? 'fondo' : 'fondos'}`}
-                  </AppText>
-                ) : null}
-              </View>
-
-              <SectionToggleButton
-                testID="onboarding-toggle-add-bucket"
-                isOpen={activeForm === 'bucket'}
-                openLabel="+ Nuevo Fondo"
-                openAccessibilityLabel="Abrir formulario de nuevo fondo de ahorro"
-                closeAccessibilityLabel="Cerrar formulario de nuevo fondo de ahorro"
-                tintBackground={colors.semantic.savingsSoft}
-                tintText={colors.semantic.savings}
-                onPress={() => toggleForm('bucket')}
-              />
-
-              <RevealDown visible={activeForm === 'bucket'}>
-                <NewSavingsBucketForm
-                  key={`bucket-${formKey}`}
-                  onCreateSavingsBucket={handleCreateBucket}
-                  onClose={handleCloseActiveForm}
-                />
-              </RevealDown>
-
-              {savingsBuckets.length === 0 ? (
-                <View
-                  style={{
-                    padding: spacing.sm,
-                    borderRadius: radius.md,
-                    borderCurve: 'continuous',
-                    backgroundColor: colors.glass.surfaceTint,
-                    borderWidth: 1,
-                    borderColor: colors.glass.subtleBorder,
-                  }}
-                >
-                  <AppText variant="caption" color={colors.text.muted}>
-                    Sin fondos registrados. Si no tienes fondos de ahorro, puedes omitir este paso.
-                  </AppText>
-                </View>
-              ) : (
-                <View style={{ gap: spacing.xs }}>
-                  {savingsBuckets.map((bucket, idx) => (
-                    <View
-                      key={bucket.id ?? `${bucket.name}-${idx}`}
-                      testID={`onboarding-bucket-item-${bucket.id ?? idx}`}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: spacing.sm,
-                        paddingHorizontal: spacing.md,
-                        paddingVertical: spacing.sm,
-                        borderRadius: radius.md,
-                        borderCurve: 'continuous',
-                        backgroundColor: colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                      }}
-                    >
-                      <View style={{ flex: 1, minWidth: 120, gap: spacing.xxs }}>
-                        <AppText variant="body">{bucket.name}</AppText>
-                        <CurrencyText
-                          amount={bucket.openingBalanceCop}
-                          variant="callout"
-                          tone="savings"
-                        />
-                      </View>
-                      <RemoveItemButton
-                        testID={`onboarding-remove-bucket-${bucket.id ?? idx}`}
-                        itemName={bucket.name}
-                        onPress={() => handleRemoveBucket(idx, bucket.id)}
-                      />
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-          </GlassSurface>
-
-          {/* Step 3: Debts */}
-          <GlassSurface elevated testID="onboarding-debts-section">
-            <View style={{ gap: spacing.sm }}>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: spacing.xs,
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                  <StatusBadge label="PASO 3" status="debt" />
-                  <AppText variant="headline">Deudas y Obligaciones</AppText>
-                </View>
-                {debts.length > 0 ? (
-                  <AppText variant="micro" color={colors.text.secondary}>
-                    {`${debts.length} ${debts.length === 1 ? 'deuda' : 'deudas'}`}
-                  </AppText>
-                ) : null}
-              </View>
-
-              <SectionToggleButton
-                testID="onboarding-toggle-add-debt"
-                isOpen={activeForm === 'debt'}
-                openLabel="+ Nueva Deuda"
-                openAccessibilityLabel="Abrir formulario de nueva deuda"
-                closeAccessibilityLabel="Cerrar formulario de nueva deuda"
-                tintBackground={colors.semantic.debtSoft}
-                tintText={colors.semantic.debt}
-                onPress={() => toggleForm('debt')}
-              />
-
-              <RevealDown visible={activeForm === 'debt'}>
-                <DebtForm
-                  key={`debt-${formKey}`}
-                  debt={null}
-                  onCreateDebt={handleCreateDebt}
-                  onClose={handleCloseActiveForm}
-                />
-              </RevealDown>
-
-              {debts.length === 0 ? (
-                <View
-                  style={{
-                    padding: spacing.sm,
-                    borderRadius: radius.md,
-                    borderCurve: 'continuous',
-                    backgroundColor: colors.glass.surfaceTint,
-                    borderWidth: 1,
-                    borderColor: colors.glass.subtleBorder,
-                  }}
-                >
-                  <AppText variant="caption" color={colors.text.muted}>
-                    Sin deudas registradas. Si estás libre de deudas, puedes omitir este paso.
-                  </AppText>
-                </View>
-              ) : (
-                <View style={{ gap: spacing.xs }}>
-                  {debts.map((d, idx) => (
-                    <View
-                      key={d.key ?? `${d.name}-${idx}`}
-                      testID={`onboarding-debt-item-${d.key ?? idx}`}
-                      style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        gap: spacing.sm,
-                        paddingHorizontal: spacing.md,
-                        paddingVertical: spacing.sm,
-                        borderRadius: radius.md,
-                        borderCurve: 'continuous',
-                        backgroundColor: colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                      }}
-                    >
-                      <View style={{ flex: 1, minWidth: 120, gap: spacing.xxs }}>
-                        <AppText variant="body">{`${d.name} (${d.lender})`}</AppText>
-                        <CurrencyText amount={d.openingBalanceCop} variant="callout" tone="debt" />
-                        {d.interestRate !== undefined || d.monthlyInstallmentCop ? (
-                          <AppText variant="micro" color={colors.text.secondary}>
-                            {[
-                              d.interestRate !== undefined
-                                ? `Interés ${d.interestRateType === 'annual' ? 'anual' : 'mensual'}: ${d.interestRate}%`
-                                : null,
-                              d.monthlyInstallmentCop
-                                ? `Cuota: ${formatCurrency(d.monthlyInstallmentCop)}/mes`
-                                : null,
-                            ]
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </AppText>
-                        ) : null}
-                      </View>
-                      <RemoveItemButton
-                        testID={`onboarding-remove-debt-${d.key ?? idx}`}
-                        itemName={d.name}
-                        onPress={() => handleRemoveDebt(idx, d.key)}
-                      />
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-          </GlassSurface>
+          <OnboardingPeriodStep
+            yearOptions={yearOptions}
+            selectedYear={selectedYear}
+            selectedMonth={selectedMonth}
+            onSelectYear={setSelectedYear}
+            onSelectMonth={setSelectedMonth}
+          />
+          <OnboardingSavingsStep
+            savingsBuckets={savingsBuckets}
+            savingsAccounts={savingsAccounts}
+            isFormOpen={activeForm === 'bucket'}
+            formKey={formKey}
+            onToggleForm={toggleBucketForm}
+            onCloseForm={handleCloseActiveForm}
+            onCreateBucket={handleCreateBucket}
+            onRemoveBucket={handleRemoveBucket}
+            onCreateAccount={handleCreateAccount}
+            onRemoveAccount={handleRemoveAccount}
+          />
+          <OnboardingDebtsStep
+            debts={debts}
+            accounts={debtsStepAccounts}
+            isFormOpen={activeForm === 'debt'}
+            formKey={formKey}
+            onToggleForm={toggleDebtForm}
+            onCloseForm={handleCloseActiveForm}
+            onCreateDebt={handleCreateDebt}
+            onRemoveDebt={handleRemoveDebt}
+            onCreateAccount={handleCreateAccount}
+            onRemoveAccount={handleRemoveAccount}
+          />
         </View>
 
         {/* Right Column: Movements (Incomes + Expenses) & Provisions/Goals */}
         <View style={{ gap: spacing.md }}>
-          {/* Step 4: Movements (Unified Incomes & Expenses via ChecklistAddMovementForm) */}
-          <GlassSurface elevated testID="onboarding-movements-section">
-            <View style={{ gap: spacing.sm }}>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: spacing.xs,
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                  <StatusBadge label="PASO 4" status="completed" />
-                  <AppText variant="headline">Movimientos del Mes</AppText>
-                </View>
-                {totalMovementsCount > 0 ? (
-                  <AppText variant="micro" color={colors.text.secondary}>
-                    {`${incomes.length} ing. · ${expenses.length} gas.`}
-                  </AppText>
-                ) : null}
-              </View>
-
-              <SectionToggleButton
-                testID="onboarding-toggle-add-movement"
-                isOpen={activeForm === 'movement'}
-                openLabel="+ Nuevo Movimiento"
-                openAccessibilityLabel="Abrir formulario de nuevo movimiento"
-                closeAccessibilityLabel="Cerrar formulario de nuevo movimiento"
-                tintBackground={colors.accent.container}
-                tintText={colors.accent.onContainer}
-                onPress={() => toggleForm('movement')}
-              />
-
-              <RevealDown visible={activeForm === 'movement'}>
-                <ChecklistAddMovementForm
-                  key={`movement-${formKey}`}
-                  monthKey={computedMonthKey}
-                  monthEntries={EMPTY_ENTRIES}
-                  concepts={EMPTY_CONCEPTS}
-                  debts={formDebts}
-                  savingsBuckets={formSavingsBuckets}
-                  onAddOrCompleteMovement={NOOP_COMPLETE_MOVEMENT}
-                  onCreateCustomMovement={handleCreateMovement}
-                  onSubmitted={handleCloseActiveForm}
-                />
-              </RevealDown>
-
-              {totalMovementsCount === 0 ? (
-                <View
-                  style={{
-                    padding: spacing.sm,
-                    borderRadius: radius.md,
-                    borderCurve: 'continuous',
-                    backgroundColor: colors.glass.surfaceTint,
-                    borderWidth: 1,
-                    borderColor: colors.glass.subtleBorder,
-                  }}
-                >
-                  <AppText variant="caption" color={colors.text.muted}>
-                    Sin movimientos registrados. Agrega tus ingresos y gastos habituales, y
-                    vincúlalos a tus deudas o fondos.
-                  </AppText>
-                </View>
-              ) : (
-                <View style={{ gap: spacing.xs }}>
-                  {incomes.map((inc, idx) => (
-                    <View
-                      key={`inc-${inc.name}-${idx}`}
-                      testID={`onboarding-income-item-${idx}`}
-                      style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        gap: spacing.sm,
-                        paddingHorizontal: spacing.md,
-                        paddingVertical: spacing.sm,
-                        borderRadius: radius.md,
-                        borderCurve: 'continuous',
-                        backgroundColor: colors.glass.surfaceTint,
-                        borderWidth: 1,
-                        borderColor: colors.glass.subtleBorder,
-                      }}
-                    >
-                      <View style={{ flex: 1, minWidth: 120, gap: spacing.xxs }}>
-                        <AppText variant="body">{inc.name}</AppText>
-                        <CurrencyText amount={inc.amountCop} variant="callout" tone="income" />
-                        <AppText variant="micro" color={colors.text.secondary}>
-                          {`${inc.group === 'fixed' ? 'Ingreso fijo' : 'Ingreso variable'} · ${
-                            inc.persistMonthly ? 'Cada mes' : 'Solo este mes'
-                          }`}
-                        </AppText>
-                      </View>
-                      <RemoveItemButton
-                        testID={`onboarding-remove-income-${idx}`}
-                        itemName={inc.name}
-                        onPress={() => {
-                          hapticService.trigger('warning');
-                          setIncomes((prev) => prev.filter((_, i) => i !== idx));
-                        }}
-                      />
-                    </View>
-                  ))}
-
-                  {expenses.map((exp, idx) => {
-                    const linkedDebt = exp.targetDebtKey
-                      ? debtNameByKey.get(exp.targetDebtKey)
-                      : undefined;
-                    const linkedBucket = exp.savingsBucketKey
-                      ? bucketNameById.get(exp.savingsBucketKey)
-                      : undefined;
-
-                    return (
-                      <View
-                        key={`exp-${exp.name}-${idx}`}
-                        testID={`onboarding-expense-item-${idx}`}
-                        style={{
-                          flexDirection: 'row',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          gap: spacing.sm,
-                          paddingHorizontal: spacing.md,
-                          paddingVertical: spacing.sm,
-                          borderRadius: radius.md,
-                          borderCurve: 'continuous',
-                          backgroundColor: colors.glass.surfaceTint,
-                          borderWidth: 1,
-                          borderColor: colors.glass.subtleBorder,
-                        }}
-                      >
-                        <View style={{ flex: 1, minWidth: 120, gap: spacing.xxs }}>
-                          <AppText variant="body">{exp.name}</AppText>
-                          <CurrencyText amount={exp.amountCop} variant="callout" tone="expense" />
-                          <AppText variant="micro" color={colors.text.secondary}>
-                            {[
-                              exp.group === 'fixed' ? 'Gasto fijo' : 'Gasto variable',
-                              exp.persistMonthly ? 'Cada mes' : 'Solo este mes',
-                              linkedDebt ? `Abona a: ${linkedDebt}` : null,
-                              linkedBucket ? `Aporta a: ${linkedBucket}` : null,
-                            ]
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </AppText>
-                        </View>
-                        <RemoveItemButton
-                          testID={`onboarding-remove-expense-${idx}`}
-                          itemName={exp.name}
-                          onPress={() => {
-                            hapticService.trigger('warning');
-                            setExpenses((prev) => prev.filter((_, i) => i !== idx));
-                          }}
-                        />
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
-          </GlassSurface>
-
-          {/* Step 5: Provisions & Target Goals */}
-          <GlassSurface elevated testID="onboarding-provisions-section">
-            <View style={{ gap: spacing.sm }}>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: spacing.xs,
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                  <StatusBadge label="PASO 5" status="provisions" />
-                  <AppText variant="headline">Metas y Provisiones</AppText>
-                </View>
-                {provisions.length > 0 ? (
-                  <AppText variant="micro" color={colors.text.secondary}>
-                    {`${provisions.length} ${provisions.length === 1 ? 'meta' : 'metas'}`}
-                  </AppText>
-                ) : null}
-              </View>
-
-              <SectionToggleButton
-                testID="onboarding-toggle-add-provision"
-                isOpen={activeForm === 'provision'}
-                openLabel="+ Agregar Metas"
-                openAccessibilityLabel="Abrir formulario de metas y provisiones"
-                closeAccessibilityLabel="Cerrar formulario de metas y provisiones"
-                tintBackground={colors.semantic.provisionsSoft}
-                tintText={colors.semantic.provisions}
-                onPress={() => toggleForm('provision')}
-              />
-
-              <RevealDown visible={activeForm === 'provision'}>
-                <ProvisionItemForm
-                  key={`provision-${formKey}`}
-                  item={null}
-                  onSaveProvisionItem={handleSaveProvision}
-                  onClose={handleCloseActiveForm}
-                />
-              </RevealDown>
-
-              {provisions.length === 0 ? (
-                <View
-                  style={{
-                    padding: spacing.sm,
-                    borderRadius: radius.md,
-                    borderCurve: 'continuous',
-                    backgroundColor: colors.glass.surfaceTint,
-                    borderWidth: 1,
-                    borderColor: colors.glass.subtleBorder,
-                  }}
-                >
-                  <AppText variant="caption" color={colors.text.muted}>
-                    Sin provisiones registradas. Si tienes metas personales o gastos periódicos,
-                    agrégalos aquí.
-                  </AppText>
-                </View>
-              ) : (
-                <View style={{ gap: spacing.xs }}>
-                  {provisions.map((p, idx) => {
-                    const monthlyQuota = Math.ceil(p.amountCop / Math.max(1, p.periodMonths));
-                    return (
-                      <View
-                        key={`${p.name}-${idx}`}
-                        testID={`onboarding-provision-item-${idx}`}
-                        style={{
-                          flexDirection: 'row',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          gap: spacing.sm,
-                          paddingHorizontal: spacing.md,
-                          paddingVertical: spacing.sm,
-                          borderRadius: radius.md,
-                          borderCurve: 'continuous',
-                          backgroundColor: colors.glass.surfaceTint,
-                          borderWidth: 1,
-                          borderColor: colors.glass.subtleBorder,
-                        }}
-                      >
-                        <View style={{ flex: 1, minWidth: 120, gap: spacing.xxs }}>
-                          <View
-                            style={{
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              flexWrap: 'wrap',
-                              gap: spacing.xs,
-                            }}
-                          >
-                            <AppText variant="body">{p.name}</AppText>
-                            <StatusBadge
-                              label={p.kind === 'target_goal' ? 'Meta' : 'Provisión'}
-                              status="provisions"
-                            />
-                          </View>
-                          <AppText variant="callout" tabularNums color={colors.semantic.provisions}>
-                            {`${formatCurrency(monthlyQuota)}/mes`}
-                          </AppText>
-                          <AppText variant="micro" color={colors.text.secondary}>
-                            {`${formatCurrency(p.amountCop)} · ${p.periodMonths} ${
-                              p.periodMonths === 1 ? 'mes' : 'meses'
-                            }`}
-                          </AppText>
-                        </View>
-                        <RemoveItemButton
-                          testID={`onboarding-remove-provision-${idx}`}
-                          itemName={p.name}
-                          onPress={() => {
-                            hapticService.trigger('warning');
-                            setProvisions((prev) => prev.filter((_, i) => i !== idx));
-                          }}
-                        />
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
-          </GlassSurface>
+          <OnboardingMovementsStep
+            monthKey={computedMonthKey}
+            incomes={incomes}
+            expenses={expenses}
+            formDebts={formDebts}
+            formSavingsBuckets={formSavingsBuckets}
+            formAccounts={formAccounts}
+            debtNameByKey={debtNameByKey}
+            bucketNameById={bucketNameById}
+            isFormOpen={activeForm === 'movement'}
+            formKey={formKey}
+            onToggleForm={toggleMovementForm}
+            onCloseForm={handleCloseActiveForm}
+            onCreateMovement={handleCreateMovement}
+            onRemoveIncome={handleRemoveIncome}
+            onRemoveExpense={handleRemoveExpense}
+          />
+          <OnboardingProvisionsStep
+            provisions={provisions}
+            isFormOpen={activeForm === 'provision'}
+            formKey={formKey}
+            onToggleForm={toggleProvisionForm}
+            onCloseForm={handleCloseActiveForm}
+            onSaveProvision={handleSaveProvision}
+            onRemoveProvision={handleRemoveProvision}
+          />
         </View>
       </ResponsiveColumns>
 

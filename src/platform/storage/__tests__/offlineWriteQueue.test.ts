@@ -6,7 +6,7 @@
  */
 
 import type { FirestoreBudgetRepository } from '../../../data/repositories/budgetRepository';
-import type { MonthEntry } from '../../../domain';
+import type { Concept, Debt, MonthEntry } from '../../../domain';
 import {
   clearOfflineWriteQueue,
   dequeueOfflineWrite,
@@ -26,6 +26,11 @@ import {
   persistentStorage,
   type RawStorageBackend,
 } from '../persistentStorageAdapter';
+
+/** Partial fixtures: the queue only reads the ids of these documents. */
+function stub<T>(value: Partial<T>): T {
+  return value as T;
+}
 
 function createDiskBackend(): {
   backend: RawStorageBackend;
@@ -72,11 +77,11 @@ describe('offlineWriteQueue & optimistic write executor', () => {
 
     const op1 = enqueueOfflineWrite(uid, {
       type: 'save_concept',
-      payload: { concept: { id: 'c1', name: 'Honorarios' } },
+      payload: { concept: stub<Concept>({ id: 'c1', name: 'Honorarios' }) },
     });
     const op2 = enqueueOfflineWrite(uid, {
       type: 'save_debt',
-      payload: { debt: { id: 'd1', name: 'Tarjeta' } },
+      payload: { debt: stub<Debt>({ id: 'd1', name: 'Tarjeta' }) },
     });
 
     expect(hasPendingOfflineWrites(uid)).toBe(true);
@@ -107,19 +112,19 @@ describe('offlineWriteQueue & optimistic write executor', () => {
   it('deduplicates rapid consecutive writes on the same target entity (idempotency)', () => {
     enqueueOfflineWrite(uid, {
       type: 'save_or_update_entry',
-      payload: { entry: { id: 'entry_1', actualAmount: 50000 } },
+      payload: { entry: stub<MonthEntry>({ id: 'entry_1', monthKey: '2026-10', conceptId: 'c1', actualAmount: 50000 }) },
     });
     expect(getPendingOfflineWritesCount(uid)).toBe(1);
 
     // Update the same entry with a new amount
     enqueueOfflineWrite(uid, {
       type: 'save_or_update_entry',
-      payload: { entry: { id: 'entry_1', actualAmount: 60000 } },
+      payload: { entry: stub<MonthEntry>({ id: 'entry_1', monthKey: '2026-10', conceptId: 'c1', actualAmount: 60000 }) },
     });
 
     expect(getPendingOfflineWritesCount(uid)).toBe(1);
     const queue = loadOfflineWriteQueue(uid);
-    expect(queue[0]?.payload.entry).toEqual({ id: 'entry_1', actualAmount: 60000 });
+    expect((queue[0]?.payload as { entry?: unknown } | undefined)?.entry).toEqual({ id: 'entry_1', monthKey: '2026-10', conceptId: 'c1', actualAmount: 60000 });
   });
 
   describe('error classification (isPermanentCloudError / isOfflineOrTimeoutError)', () => {
@@ -149,7 +154,7 @@ describe('offlineWriteQueue & optimistic write executor', () => {
         uid,
         operation: {
           type: 'save_concept',
-          payload: { concept: { id: 'c1' } },
+          payload: { concept: stub<Concept>({ id: 'c1' }) },
         },
         performCloudWrite: async () => {
           // Fast resolution
@@ -173,7 +178,7 @@ describe('offlineWriteQueue & optimistic write executor', () => {
         uid,
         operation: {
           type: 'save_or_update_entry',
-          payload: { entry: { id: 'e1', actualAmount: 100000 } },
+          payload: { entry: stub<MonthEntry>({ id: 'e1', monthKey: '2026-10', conceptId: 'c1', actualAmount: 100000 }) },
         },
         performCloudWrite: () =>
           new Promise((resolve) => {
@@ -205,7 +210,7 @@ describe('offlineWriteQueue & optimistic write executor', () => {
         uid,
         operation: {
           type: 'save_debt',
-          payload: { debt: { id: 'd1' } },
+          payload: { debt: stub<Debt>({ id: 'd1' }) },
         },
         performCloudWrite: async () => {
           const err = new Error('Permission denied on debts collection');
@@ -242,11 +247,11 @@ describe('offlineWriteQueue & optimistic write executor', () => {
 
       enqueueOfflineWrite(uid, {
         type: 'save_concept',
-        payload: { concept: { id: 'c1' } },
+        payload: { concept: stub<Concept>({ id: 'c1' }) },
       });
       enqueueOfflineWrite(uid, {
         type: 'save_debt',
-        payload: { debt: { id: 'd1' } },
+        payload: { debt: stub<Debt>({ id: 'd1' }) },
       });
 
       expect(getPendingOfflineWritesCount(uid)).toBe(2);
@@ -270,11 +275,11 @@ describe('offlineWriteQueue & optimistic write executor', () => {
 
       enqueueOfflineWrite(uid, {
         type: 'save_concept',
-        payload: { concept: { id: 'invalid_c' } },
+        payload: { concept: stub<Concept>({ id: 'invalid_c' }) },
       });
       enqueueOfflineWrite(uid, {
         type: 'save_debt',
-        payload: { debt: { id: 'valid_d' } },
+        payload: { debt: stub<Debt>({ id: 'valid_d' }) },
       });
 
       const drainResult = await drainOfflineWriteQueue(uid, mockRepo);
@@ -296,11 +301,11 @@ describe('offlineWriteQueue & optimistic write executor', () => {
 
       enqueueOfflineWrite(uid, {
         type: 'save_concept',
-        payload: { concept: { id: 'c1' } },
+        payload: { concept: stub<Concept>({ id: 'c1' }) },
       });
       enqueueOfflineWrite(uid, {
         type: 'save_debt',
-        payload: { debt: { id: 'd1' } },
+        payload: { debt: stub<Debt>({ id: 'd1' }) },
       });
 
       const drainResult = await drainOfflineWriteQueue(uid, mockRepo);

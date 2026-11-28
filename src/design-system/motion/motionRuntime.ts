@@ -8,7 +8,7 @@
 import { Easing, Platform, type EasingFunction } from 'react-native';
 import { motionDuration, type CubicBezier } from '../tokens';
 
-/** Under Jest every primitive renders its final state at once, like `TactilePressable`. */
+/** Under Jest every motion primitive renders its final state at once. */
 export const IS_MOTION_STATIC = process.env.NODE_ENV === 'test';
 
 /** Opacity and transforms run on the UI thread; the browser has no native driver. */

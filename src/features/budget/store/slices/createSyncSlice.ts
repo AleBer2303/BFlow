@@ -4,10 +4,6 @@
  * Workspace navigation, active month selection and cloud synchronization slice.
  */
 
-import {
-  ensureStandardSavingsBuckets,
-  FirestoreBudgetRepository,
-} from '../../../../data/repositories/budgetRepository';
 import { savePersistedSession } from '../../../../platform/auth/authAdapter';
 import {
   isEquivalentCloudAccount,
@@ -17,16 +13,24 @@ import {
 } from '../../../../platform/storage/accountCache';
 import {
   drainOfflineWriteQueue,
+  formatDiscardedOfflineWritesNotice,
   getPendingOfflineWritesCount,
   hasPendingOfflineWrites,
 } from '../../../../platform/storage/offlineWriteQueue';
 import {
+  getBudgetRepository,
   getStoreInitialState,
   isRealAuthUser,
   triggerWidgetSync,
   type SliceCreator,
   type SyncSlice,
 } from './sliceTypes';
+
+/** Appends the notice for stored offline writes dropped as invalid (ADR 0035). */
+function withDiscardedNotice(message: string, discarded: number): string {
+  const notice = formatDiscardedOfflineWritesNotice(discarded);
+  return notice ? `${message}. ${notice}` : message;
+}
 
 export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
   const initial = getStoreInitialState();
@@ -61,7 +65,7 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
     triggerWidgetSync(get());
 
     if (isRealAuthUser(state.authUser)) {
-      const repo = new FirestoreBudgetRepository();
+      const repo = getBudgetRepository();
       void repo.saveActiveMonthKey(state.authUser.uid, monthKey).catch(() => {
         // Non-fatal if offline
       });
@@ -69,38 +73,6 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
   },
 
   setSyncStatus: (message, isSyncing = false) => set({ syncMessage: message, isSyncing }),
-
-  applyCloudWorkspace: (payload) => {
-    set((state) => ({
-      activeMonthKey: payload.monthKey,
-      availableMonths: state.availableMonths.includes(payload.monthKey)
-        ? state.availableMonths
-        : [...state.availableMonths, payload.monthKey],
-      concepts: payload.concepts,
-      entries: [
-        ...state.entries.filter((e) => e.monthKey !== payload.monthKey),
-        ...payload.entries,
-      ],
-      debtsByMonth: {
-        ...state.debtsByMonth,
-        [payload.monthKey]: payload.debts,
-      },
-      debtPayments: [
-        ...state.debtPayments.filter((dp) => dp.monthKey !== payload.monthKey),
-        ...payload.debtPayments,
-      ],
-      savingsBucketsByMonth: {
-        ...state.savingsBucketsByMonth,
-        [payload.monthKey]: ensureStandardSavingsBuckets(payload.savingsBuckets),
-      },
-      idealMotoPlan: payload.provisionPlan,
-      closedSnapshots: payload.closedSnapshot
-        ? { ...state.closedSnapshots, [payload.monthKey]: payload.closedSnapshot }
-        : state.closedSnapshots,
-      isAccountHydrated: true,
-    }));
-    triggerWidgetSync(get());
-  },
 
   applyFullCloudAccount: (payload) => {
     const currentUser = get().authUser;
@@ -116,8 +88,9 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
       debtsByMonth: payload.debtsByMonth,
       debtPayments: payload.debtPayments,
       savingsBucketsByMonth: payload.savingsBucketsByMonth,
-      idealMotoPlan: payload.provisionPlan,
+      provisionPlan: payload.provisionPlan,
       closedSnapshots: payload.closedSnapshots,
+      financialAccounts: payload.financialAccounts ?? [],
       isAccountHydrated: true,
       needsOnboarding: payload.needsOnboarding ?? false,
       ...(updatedUser ? { authUser: updatedUser } : {}),
@@ -135,14 +108,16 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
   flushOfflineWrites: async () => {
     const user = get().authUser;
     if (!isRealAuthUser(user)) return;
-    const repo = new FirestoreBudgetRepository();
+    const repo = getBudgetRepository();
     const result = await drainOfflineWriteQueue(user.uid, repo);
     set({
       pendingOfflineWritesCount: result.remaining,
-      syncMessage:
+      syncMessage: withDiscardedNotice(
         result.remaining === 0
           ? 'Todos los cambios locales se sincronizaron con la nube'
           : `${result.remaining} cambios pendientes por sincronizar`,
+        result.discarded
+      ),
     });
     triggerWidgetSync(get());
   },
@@ -165,15 +140,18 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
     }
 
     try {
-      const repo = new FirestoreBudgetRepository();
+      const repo = getBudgetRepository();
 
       // Drain any pending offline writes first so cloud receives our local changes
-      await drainOfflineWriteQueue(user.uid, repo);
+      const { discarded } = await drainOfflineWriteQueue(user.uid, repo);
       get().refreshPendingOfflineWritesCount();
 
       // R-09: If pending offline writes remain, DO NOT overwrite local state with outdated cloud data
       if (hasPendingOfflineWrites(user.uid)) {
-        set({ syncMessage: 'Cambios locales pendientes por sincronizar', isSyncing: false });
+        set({
+          syncMessage: withDiscardedNotice('Cambios locales pendientes por sincronizar', discarded),
+          isSyncing: false,
+        });
         triggerWidgetSync(get());
         return;
       }
@@ -205,7 +183,7 @@ export const createSyncSlice: SliceCreator<SyncSlice> = (set, get) => {
       if (!isEquivalentCloudAccount(cached, fullAccount)) {
         get().applyFullCloudAccount(fullAccount);
       }
-      set({ syncMessage: 'Sincronizado', isSyncing: false });
+      set({ syncMessage: withDiscardedNotice('Sincronizado', discarded), isSyncing: false });
       triggerWidgetSync(get());
     } catch {
       const hasLocalData = loadPersistedAccount(user.uid) !== null;

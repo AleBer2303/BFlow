@@ -16,9 +16,8 @@ import { calculateMonthlyProvisionCeil, sumMoneyIntegers } from '../money/money'
 export interface EvaluatedProvisionItem {
   id: string;
   displayName: string;
-  excelRawName?: string;
   monthlyAmount: number;
-  excelMonthlyAmountCop: number;
+  monthlyAmountCop: number;
   strictCeilMonthly: number;
   strictCeilMonthlyCop: number;
   cycleCost: number;
@@ -49,19 +48,17 @@ export interface ProvisionPlanComparisonSummary {
   recurringItems: EvaluatedProvisionItem[];
   targetGoals: EvaluatedTargetGoal[];
   recurringMonthlyTotal: number;
-  excelRecurringMonthlyTotalCop: number;
+  recurringMonthlyTotalCop: number;
   strictCeilRecurringMonthlyTotal: number;
   strictCeilRecurringMonthlyTotalCop: number;
   totalWithTargetGoals: number;
   totalWithTargetGoalsCop: number;
   actualContribution: number;
-  actualMotoContributionCop: number;
-  monthlyGapAgainstIdeal: number;
-  monthlyGapAgainstIdealCop: number;
+  actualContributionCop: number;
+  monthlyGapAgainstPlan: number;
+  monthlyGapAgainstPlanCop: number;
 }
 
-/** @deprecated use ProvisionPlanComparisonSummary */
-export type MotoIdealComparisonSummary = ProvisionPlanComparisonSummary;
 
 function countMonthsBetween(startMonthKey: string, endMonthKey: string): number {
   assertValidMonthKey(startMonthKey);
@@ -110,8 +107,7 @@ export function calculateProvisionPlanSummary(
     const item: EvaluatedProvisionItem = {
       id: spec.id,
       displayName: spec.displayName,
-      excelRawName: spec.excelRawName,
-      excelMonthlyAmountCop: monthlyAmount,
+      monthlyAmountCop: monthlyAmount,
       strictCeilMonthlyCop: strictCeilMonthly,
       cycleCostCop: cycleCost,
       periodMonths,
@@ -178,36 +174,34 @@ export function calculateProvisionPlanSummary(
     return goal;
   });
 
-  const excelRecurringMonthlyTotal =
+  const recurringMonthlyTotal =
     plan.recurringMonthlyTotal ??
     plan.recurringMonthlyTotalCop ??
-    sumMoneyIntegers(recurringItems.map((i) => i.excelMonthlyAmountCop));
+    sumMoneyIntegers(recurringItems.map((i) => i.monthlyAmountCop));
 
   const strictCeilRecurringMonthlyTotal = sumMoneyIntegers(
     recurringItems.map((i) => i.strictCeilMonthlyCop)
   );
 
   const goalsTotal = sumMoneyIntegers(targetGoals.map((g) => g.targetAmountCop));
-  const totalWithTargetGoals = plan.totalWithTargetGoal ?? plan.totalWithTargetGoalCop ?? excelRecurringMonthlyTotal + goalsTotal;
+  const totalWithTargetGoals = plan.totalWithTargetGoal ?? plan.totalWithTargetGoalCop ?? recurringMonthlyTotal + goalsTotal;
 
-  const monthlyGapAgainstIdeal = actualContribution - excelRecurringMonthlyTotal;
+  const monthlyGapAgainstPlan = actualContribution - recurringMonthlyTotal;
 
   return {
     monthKey: currentMonthKey,
     recurringItems,
     targetGoals,
-    recurringMonthlyTotal: excelRecurringMonthlyTotal,
-    excelRecurringMonthlyTotalCop: excelRecurringMonthlyTotal,
+    recurringMonthlyTotal: recurringMonthlyTotal,
+    recurringMonthlyTotalCop: recurringMonthlyTotal,
     strictCeilRecurringMonthlyTotal,
     strictCeilRecurringMonthlyTotalCop: strictCeilRecurringMonthlyTotal,
     totalWithTargetGoals,
     totalWithTargetGoalsCop: totalWithTargetGoals,
     actualContribution,
-    actualMotoContributionCop: actualContribution,
-    monthlyGapAgainstIdeal,
-    monthlyGapAgainstIdealCop: monthlyGapAgainstIdeal,
+    actualContributionCop: actualContribution,
+    monthlyGapAgainstPlan,
+    monthlyGapAgainstPlanCop: monthlyGapAgainstPlan,
   };
 }
 
-/** @deprecated use calculateProvisionPlanSummary */
-export const calculateMotoIdealSummary = calculateProvisionPlanSummary;

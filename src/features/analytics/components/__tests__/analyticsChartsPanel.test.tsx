@@ -1,11 +1,11 @@
 /**
- * Phase 6 charts of the month-close tab, fed with the golden October 2026 seed, on the
+ * Phase 6 charts of the month-close tab, fed with the sample month sample, on the
  * three skins.
  */
 
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
-import seedFixture from '../../../../../fixtures/seed-october-2026.json';
+import { buildSampleWorkspace } from '../../../../data/sample/sampleWorkspace';
 import { BFlowThemeProvider } from '../../../../design-system/theme/ThemeContext';
 import { PLATFORM_SKIN_IDS, type PlatformSkinId } from '../../../../design-system/tokens';
 import {
@@ -20,20 +20,23 @@ import {
 } from '../../../../domain';
 import { AnalyticsChartsPanel } from '../AnalyticsChartsPanel';
 
-const ENTRIES = seedFixture.entries as unknown as MonthEntry[];
-const OCTOBER_HISTORY = buildMonthlyHistory({
+/** The example budget of the showcase mode, in the month the tests pin. */
+const sample = buildSampleWorkspace();
+
+const ENTRIES = sample.entries as unknown as MonthEntry[];
+const SAMPLE_MONTH_HISTORY = buildMonthlyHistory({
   monthKeys: ['2026-10'],
   activeMonthKey: '2026-10',
-  concepts: seedFixture.concepts as unknown as Concept[],
+  concepts: sample.concepts as unknown as Concept[],
   entries: ENTRIES,
-  debtPayments: seedFixture.debtPayments as unknown as DebtPayment[],
-  debtsByMonth: { '2026-10': seedFixture.debts as unknown as Debt[] },
-  savingsBucketsByMonth: { '2026-10': seedFixture.savingsBuckets as unknown as SavingsBucket[] },
+  debtPayments: sample.debtPayments as unknown as DebtPayment[],
+  debtsByMonth: { '2026-10': sample.debts as unknown as Debt[] },
+  savingsBucketsByMonth: { '2026-10': sample.savingsBuckets as unknown as SavingsBucket[] },
   closedSnapshots: {},
 });
-const OCTOBER = OCTOBER_HISTORY[0] as MonthlyHistoryPoint;
+const SAMPLE_MONTH = SAMPLE_MONTH_HISTORY[0] as MonthlyHistoryPoint;
 const SEPTEMBER: MonthlyHistoryPoint = {
-  ...OCTOBER,
+  ...SAMPLE_MONTH,
   monthKey: '2026-09',
   isClosed: true,
   plannedIncome: 4_000_000,
@@ -46,7 +49,7 @@ const SEPTEMBER: MonthlyHistoryPoint = {
 const BUDGET = calculateMonthlyBudgetSummary(ENTRIES, '2026-10');
 
 function renderPanel(
-  history: readonly MonthlyHistoryPoint[] = OCTOBER_HISTORY,
+  history: readonly MonthlyHistoryPoint[] = SAMPLE_MONTH_HISTORY,
   skin: PlatformSkinId = 'ios',
   hasClosedMonths = false
 ) {
@@ -65,7 +68,7 @@ function renderPanel(
 
 describe.each(PLATFORM_SKIN_IDS)('AnalyticsChartsPanel on the %s skin', (skin) => {
   it('shows the six charts with the golden October figures', () => {
-    renderPanel(OCTOBER_HISTORY, skin);
+    renderPanel(SAMPLE_MONTH_HISTORY, skin);
 
     for (const id of [
       'analytics-chart-cash-flow',
@@ -92,7 +95,7 @@ describe.each(PLATFORM_SKIN_IDS)('AnalyticsChartsPanel on the %s skin', (skin) =
     // A single series: the readout is the month and the amount, without the series name.
     expect(screen.getByTestId('balance-chart-readout')).toHaveTextContent('Octubre 2026$ 1.080.000');
     expect(screen.getByTestId('paid-pending-chart-legend')).toHaveTextContent(/Pagado.*87 %/);
-    expect(screen.getByTestId('distribution-chart-legend')).toHaveTextContent(/Cuota FUNFAMI/);
+    expect(screen.getByTestId('distribution-chart-legend')).toHaveTextContent(/Cuota de préstamo/);
     expect(screen.getByTestId('distribution-chart-legend')).toHaveTextContent(/Otros/);
   });
 });
@@ -108,7 +111,7 @@ describe('AnalyticsChartsPanel', () => {
   });
 
   it('does not invite to close a month when an older one was already closed', () => {
-    renderPanel(OCTOBER_HISTORY, 'ios', true);
+    renderPanel(SAMPLE_MONTH_HISTORY, 'ios', true);
     expect(screen.getByTestId('analytics-charts-panel')).toHaveTextContent(/No hay meses anteriores registrados/);
     expect(screen.getByTestId('comparison-chart-empty')).toHaveTextContent(
       'No hay un mes anterior registrado para comparar.'
@@ -136,7 +139,7 @@ describe('AnalyticsChartsPanel', () => {
   });
 
   it('compares the month with the previous one and lets the user read any month', () => {
-    renderPanel([SEPTEMBER, OCTOBER]);
+    renderPanel([SEPTEMBER, SAMPLE_MONTH]);
 
     expect(screen.getByTestId('analytics-charts-panel')).toHaveTextContent(/Últimos 2 meses/);
     expect(screen.getByTestId('analytics-chart-comparison')).toHaveTextContent(
@@ -156,7 +159,7 @@ describe('AnalyticsChartsPanel', () => {
   });
 
   it('states each month to screen readers', () => {
-    renderPanel([SEPTEMBER, OCTOBER]);
+    renderPanel([SEPTEMBER, SAMPLE_MONTH]);
     expect(screen.getByTestId('balance-chart-point-0').props.accessibilityLabel).toBe(
       'Septiembre 2026: Flujo neto $ 1.500.000'
     );
@@ -167,7 +170,7 @@ describe('AnalyticsChartsPanel', () => {
       <BFlowThemeProvider>
         <AnalyticsChartsPanel
           activeMonthKey="2026-10"
-          history={OCTOBER_HISTORY}
+          history={SAMPLE_MONTH_HISTORY}
           budget={calculateMonthlyBudgetSummary([], '2026-10')}
           entries={[]}
           hasClosedMonths={false}

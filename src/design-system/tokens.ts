@@ -46,9 +46,18 @@ export interface PlatformSkinSpec {
    * vectorial en una piel, basta poner `vector` aquí (ADR 0014 explica por qué Android la usó).
    */
   curveStage: CurveStage;
+  /**
+   * Top padding of a full-screen page presented as a sheet (profile settings). iOS page sheets
+   * start below the status bar, so they only leave room for the sheet's navigation bar; null
+   * means the skin presents it edge to edge and the content uses the safe-area inset.
+   */
+  pageSheetTopInset: number | null;
 }
 
 export const MIN_TOUCH_TARGET_PT = 44 as const;
+
+/** Height of the navigation bar of an iOS page sheet (Apple HIG). */
+const IOS_PAGE_SHEET_TOP_INSET = 44;
 
 export const platformSkins: Record<PlatformSkinId, PlatformSkinSpec> = {
   ios: {
@@ -59,6 +68,7 @@ export const platformSkins: Record<PlatformSkinId, PlatformSkinSpec> = {
     pressFeedback: 'spring',
     minTouchTarget: MIN_TOUCH_TARGET_PT,
     curveStage: 'scene-3d',
+    pageSheetTopInset: IOS_PAGE_SHEET_TOP_INSET,
   },
   android: {
     id: 'android',
@@ -68,6 +78,7 @@ export const platformSkins: Record<PlatformSkinId, PlatformSkinSpec> = {
     pressFeedback: 'sink',
     minTouchTarget: 48,
     curveStage: 'scene-3d',
+    pageSheetTopInset: null,
   },
   web: {
     id: 'web',
@@ -77,6 +88,7 @@ export const platformSkins: Record<PlatformSkinId, PlatformSkinSpec> = {
     pressFeedback: 'step',
     minTouchTarget: MIN_TOUCH_TARGET_PT,
     curveStage: 'scene-3d',
+    pageSheetTopInset: null,
   },
 };
 
@@ -276,10 +288,6 @@ export interface ColorPalette {
     reserveSoft: string;
     provisions: string;
     provisionsSoft: string;
-    /** @deprecated use reserve */
-    moto: string;
-    /** @deprecated use reserveSoft */
-    motoSoft: string;
     savings: string;
     savingsSoft: string;
   };
@@ -337,8 +345,6 @@ export const palettes: Record<ThemeMode, ColorPalette> = {
       reserveSoft: 'rgba(79, 143, 234, 0.10)',
       provisions: '#4F8FEA',
       provisionsSoft: 'rgba(79, 143, 234, 0.10)',
-      moto: '#4F8FEA',
-      motoSoft: 'rgba(79, 143, 234, 0.10)',
       savings: '#9D7FE6',
       savingsSoft: 'rgba(157, 127, 230, 0.10)',
     },
@@ -388,8 +394,6 @@ export const palettes: Record<ThemeMode, ColorPalette> = {
       reserveSoft: 'rgba(36, 95, 159, 0.10)',
       provisions: '#245F9F',
       provisionsSoft: 'rgba(36, 95, 159, 0.10)',
-      moto: '#245F9F',
-      motoSoft: 'rgba(36, 95, 159, 0.10)',
       savings: '#5F3DA6',
       savingsSoft: 'rgba(95, 61, 166, 0.10)',
     },
@@ -446,8 +450,6 @@ export const androidPalettes: Record<ThemeMode, ColorPalette> = {
       reserveSoft: 'rgba(79, 143, 234, 0.10)',
       provisions: '#4F8FEA',
       provisionsSoft: 'rgba(79, 143, 234, 0.10)',
-      moto: '#4F8FEA',
-      motoSoft: 'rgba(79, 143, 234, 0.10)',
       savings: '#9D7FE6',
       savingsSoft: 'rgba(157, 127, 230, 0.10)',
     },
@@ -497,8 +499,6 @@ export const androidPalettes: Record<ThemeMode, ColorPalette> = {
       reserveSoft: 'rgba(36, 95, 159, 0.10)',
       provisions: '#245F9F',
       provisionsSoft: 'rgba(36, 95, 159, 0.10)',
-      moto: '#245F9F',
-      motoSoft: 'rgba(36, 95, 159, 0.10)',
       savings: '#5F3DA6',
       savingsSoft: 'rgba(95, 61, 166, 0.10)',
     },
@@ -556,8 +556,6 @@ export const webPalettes: Record<ThemeMode, ColorPalette> = {
       reserveSoft: 'rgba(111, 164, 240, 0.12)',
       provisions: '#6FA4F0',
       provisionsSoft: 'rgba(111, 164, 240, 0.12)',
-      moto: '#6FA4F0',
-      motoSoft: 'rgba(111, 164, 240, 0.12)',
       savings: '#E08FB8',
       savingsSoft: 'rgba(224, 143, 184, 0.12)',
     },
@@ -607,8 +605,6 @@ export const webPalettes: Record<ThemeMode, ColorPalette> = {
       reserveSoft: 'rgba(31, 85, 144, 0.10)',
       provisions: '#1F5590',
       provisionsSoft: 'rgba(31, 85, 144, 0.10)',
-      moto: '#1F5590',
-      motoSoft: 'rgba(31, 85, 144, 0.10)',
       savings: '#8A3A66',
       savingsSoft: 'rgba(138, 58, 102, 0.10)',
     },

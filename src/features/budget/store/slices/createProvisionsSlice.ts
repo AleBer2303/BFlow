@@ -5,15 +5,15 @@
  */
 
 import {
-  EMPTY_PROVISION_PLAN,
-  FirestoreBudgetRepository,
-} from '../../../../data/repositories/budgetRepository';
-import { addMonthsToMonthKey, type ProvisionItemSpec } from '../../../../domain';
+  addMonthsToMonthKey,
+  toSlugId,
+  type ProvisionItemSpec,
+} from '../../../../domain';
 import { executeOptimisticCloudWrite } from '../../../../platform/storage/offlineWriteQueue';
 import {
+  getBudgetRepository,
   getStoreInitialState,
   isRealAuthUser,
-  persistHydratedAccountSnapshot,
   recalculateProvisionPlan,
   type ProvisionsSlice,
   type SliceCreator,
@@ -22,7 +22,7 @@ import {
 export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) => {
   const initial = getStoreInitialState();
   return {
-    idealMotoPlan: initial.idealMotoPlan,
+    provisionPlan: initial.provisionPlan,
 
   saveProvisionItem: async (input) => {
     const state = get();
@@ -38,14 +38,10 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
         : undefined;
     const itemId =
       input.id ??
-      `prov_${trimmedName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^_|_$/g, '')}_${Date.now().toString(36)}`;
+      `prov_${toSlugId(trimmedName)}_${Date.now().toString(36)}`;
 
     const nextItem: ProvisionItemSpec = {
       id: itemId,
-      excelRawName: trimmedName,
       displayName: trimmedName,
       monthlyAmountCop: monthlyContribution,
       cycleCostCop: safeAmount,
@@ -54,21 +50,19 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
       ...(input.kind === 'target_goal'
         ? { targetAmountCop: safeAmount, targetMonthKey }
         : {}),
-      includedInExcelTotalB43: input.kind === 'recurring',
       kind: input.kind === 'target_goal' ? 'target_goal' : 'recurring_provision',
       ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
     };
 
-    const existingItems = state.idealMotoPlan.items;
-    const previousPlan = state.idealMotoPlan;
+    const existingItems = state.provisionPlan.items;
+    const previousPlan = state.provisionPlan;
     const exists = existingItems.some((i) => i.id === itemId);
     const nextItems = exists
       ? existingItems.map((i) => (i.id === itemId ? nextItem : i))
       : [...existingItems, nextItem];
 
     const nextPlan = recalculateProvisionPlan(nextItems);
-    set({ idealMotoPlan: nextPlan });
-    persistHydratedAccountSnapshot(get());
+    set({ provisionPlan: nextPlan });
 
     const authUser = state.authUser;
     if (isRealAuthUser(authUser)) {
@@ -80,12 +74,11 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
           payload: { plan: nextPlan },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveProvisionPlan(uid, nextPlan);
         },
         rollback: () => {
-          set({ idealMotoPlan: previousPlan });
-          persistHydratedAccountSnapshot(get());
+          set({ provisionPlan: previousPlan });
         },
         friendlyErrorMessage: 'No se pudo guardar la provisión en la nube.',
         setStoreState: set,
@@ -95,11 +88,10 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
 
   deleteProvisionItem: async (itemId) => {
     const state = get();
-    const previousPlan = state.idealMotoPlan;
-    const nextItems = state.idealMotoPlan.items.filter((i) => i.id !== itemId);
+    const previousPlan = state.provisionPlan;
+    const nextItems = state.provisionPlan.items.filter((i) => i.id !== itemId);
     const nextPlan = recalculateProvisionPlan(nextItems);
-    set({ idealMotoPlan: nextPlan });
-    persistHydratedAccountSnapshot(get());
+    set({ provisionPlan: nextPlan });
 
     const authUser = state.authUser;
     if (isRealAuthUser(authUser)) {
@@ -111,12 +103,11 @@ export const createProvisionsSlice: SliceCreator<ProvisionsSlice> = (set, get) =
           payload: { plan: nextPlan },
         },
         performCloudWrite: async () => {
-          const repo = new FirestoreBudgetRepository();
+          const repo = getBudgetRepository();
           await repo.saveProvisionPlan(uid, nextPlan);
         },
         rollback: () => {
-          set({ idealMotoPlan: previousPlan });
-          persistHydratedAccountSnapshot(get());
+          set({ provisionPlan: previousPlan });
         },
         friendlyErrorMessage: 'No se pudo eliminar la provisión en la nube.',
         setStoreState: set,

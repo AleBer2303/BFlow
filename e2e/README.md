@@ -10,7 +10,7 @@ Todos arrancan la app con el estado limpio y esperan el espacio de trabajo (`sub
 
 | Flujo | Qué comprueba | `testID` que usa |
 | :--- | :--- | :--- |
-| `flows/01-launch-summary.yaml` | La app abre con la sesión demo, sin pantalla de inicio de sesión, y muestra el Resumen de octubre 2026 con «Checklist 6 de 12» | `workspace-shell`, `auth-gate-screen` (ausente), `workspace-tab-summary`, `net-flow-hero-card`, `golden-net-flow`, `checklist-progress-badge`, `income-summary-card`, `expense-summary-card`, `monthly-curve-section` |
+| `flows/01-launch-summary.yaml` | La app abre con la sesión demo, sin pantalla de inicio de sesión, y muestra el Resumen del mes actual con «Checklist 6 de 12» | `workspace-shell`, `auth-gate-screen` (ausente), `workspace-tab-summary`, `net-flow-hero-card`, `golden-net-flow`, `checklist-progress-badge`, `income-summary-card`, `expense-summary-card`, `monthly-curve-section` |
 | `flows/02-navigate-tabs.yaml` | Las 6 pestañas montan su pantalla | `workspace-tab-{summary,checklist,debts,savings,analytics,account}`, `checklist-workspace-view`, `debts-funfami-view`, `savings-and-moto-ideal-view`, `analytics-and-history-view`, `account-profile-workspace-view` |
 | `flows/03-checklist-toggle.yaml` | Marcar «Gemini Pro» lo saca de Pendientes (6 → 5) y lo lleva a Completados (6 → 7); desmarcarlo lo devuelve | `checklist-filter-{all,pending,completed}`, `checklist-workspace-item-2026-10_exp_gemini_pro` |
 | `flows/04-add-movement-cancel.yaml` | El formulario de nuevo movimiento se abre y se cierra sin crear nada (siguen siendo 12 ítems) | `open-add-movement-modal-button`, `add-movement-modal-card`, `modal-type-expense`, `modal-type-income` |
@@ -28,7 +28,7 @@ No cubren: inicio de sesión real, Firestore, onboarding, widgets ni iOS. El mod
 
 ## 1. Compilar el APK de E2E (modo vitrina)
 
-Los flujos necesitan un binario compilado con `EXPO_PUBLIC_BFLOW_DEMO=1`: sesión demo con el seed de octubre 2026, sin Firebase ni credenciales. Con un binario normal, la app se queda en el inicio de sesión y todos los flujos fallan en el arranque.
+Los flujos necesitan un binario compilado con `EXPO_PUBLIC_BFLOW_DEMO=1`: sesión demo con el presupuesto de ejemplo del mes actual (`src/data/sample/sampleWorkspace.ts`), sin Firebase ni credenciales. Con un binario normal, la app se queda en el inicio de sesión y todos los flujos fallan en el arranque.
 
 En PowerShell, desde la raíz del repositorio:
 
@@ -89,4 +89,4 @@ Las capturas (`takeScreenshot`) y los logs de cada ejecución quedan en `%USERPR
 | :--- | :--- |
 | Todos los flujos fallan esperando `workspace-shell` | El APK no se compiló en modo vitrina, o la app se cierra al abrir. Mira `logcat.txt` (ADR 0013 y 0019) |
 | Un `id` no se encuentra | El `testID` cambió en `src/`, o Android no lo expone en esa vista. Compruébalo con `maestro studio` |
-| «Pendientes (6)» no aparece | Cambió el seed de octubre 2026 (`fixtures/seed-october-2026.json`) |
+| «Pendientes (6)» no aparece | Cambió el presupuesto de ejemplo (`src/data/sample/sampleWorkspace.ts`) |

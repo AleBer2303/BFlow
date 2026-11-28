@@ -6,7 +6,7 @@ import { useBudgetStore } from '../budget/store/useBudgetStore';
 
 describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', () => {
   beforeEach(() => {
-    useBudgetStore.getState().resetToOctober2026GoldenState();
+    useBudgetStore.getState().resetToSampleWorkspace();
   });
 
   it('navigates to Checklist tab, filters, completes, edits, and deletes movements', async () => {
@@ -29,7 +29,7 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     // Filter by Pending (6) and Completed (6)
     fireEvent.press(screen.getByTestId('checklist-filter-pending'));
     expect(
-      screen.getByTestId('checklist-workspace-item-2026-10_exp_seguro_tr_sura')
+      screen.getByTestId('checklist-workspace-item-2026-10_exp_insurance')
     ).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('checklist-filter-all'));
@@ -47,15 +47,15 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     fireEvent.press(screen.getByTestId('open-add-movement-modal-button'));
 
     // Catalog chips must NOT appear in the modal (clean direct form without repeated items list)
-    expect(screen.queryByTestId('available-concept-chip-exp_seguro_tr_sura')).toBeNull();
-    expect(screen.queryByTestId('available-concept-chip-exp_otro')).toBeNull();
+    expect(screen.queryByTestId('available-concept-chip-exp_insurance')).toBeNull();
+    expect(screen.queryByTestId('available-concept-chip-exp_other')).toBeNull();
 
-    // Register Seguro TR SURA ($ 130.000) directly via inputs and submit
+    // Register Seguro ($ 130.000) directly via inputs and submit
     const conceptNameInput = screen.getByTestId('custom-concept-name-input');
     const movementAmountInput = screen.getByTestId('movement-amount-input');
     expect(conceptNameInput.props.autoCapitalize).toBe('sentences');
     expect(movementAmountInput.props.keyboardType).toBe('number-pad');
-    fireEvent.changeText(conceptNameInput, 'Seguro TR SURA');
+    fireEvent.changeText(conceptNameInput, 'Seguro');
     fireEvent.changeText(movementAmountInput, '130000');
     expect(screen.getByTestId('movement-amount-input').props.value).toBe('130.000');
     fireEvent.press(screen.getByTestId('submit-movement-button'));
@@ -68,21 +68,21 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
 
     // In-situ Edit mode: activate section edit action button to reveal row edit pencils
     fireEvent.press(screen.getByTestId('expenses-edit-action-button'));
-    fireEvent.press(screen.getByTestId('edit-entry-2026-10_exp_smart_fit'));
+    fireEvent.press(screen.getByTestId('edit-entry-2026-10_exp_gym'));
     expect(screen.getByTestId('edit-entry-modal-card')).toBeTruthy();
-    fireEvent.changeText(screen.getByTestId('edit-entry-name-input'), 'Smart Fit Black');
+    fireEvent.changeText(screen.getByTestId('edit-entry-name-input'), 'Gimnasio Black');
     fireEvent.changeText(screen.getByTestId('edit-entry-amount-input'), '100000');
     fireEvent.press(screen.getByTestId('save-edit-entry-button'));
-    expect(screen.getByText('Smart Fit Black')).toBeTruthy();
+    expect(screen.getByText('Gimnasio Black')).toBeTruthy();
     fireEvent.press(screen.getByTestId('expenses-edit-action-button')); // toggle off edit mode
 
     // In-situ Delete mode: activate section delete action button (always styled in red)
     fireEvent.press(screen.getByTestId('expenses-delete-action-button'));
     // Tapping the row itself must NOT delete (only the trash button does)
-    fireEvent.press(screen.getByTestId('checklist-workspace-item-2026-10_exp_smart_fit'));
-    expect(screen.getByText('Smart Fit Black')).toBeTruthy();
-    fireEvent.press(screen.getByTestId('delete-entry-2026-10_exp_smart_fit'));
-    expect(screen.queryByText('Smart Fit Black')).toBeNull();
+    fireEvent.press(screen.getByTestId('checklist-workspace-item-2026-10_exp_gym'));
+    expect(screen.getByText('Gimnasio Black')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('delete-entry-2026-10_exp_gym'));
+    expect(screen.queryByText('Gimnasio Black')).toBeNull();
     fireEvent.press(screen.getByTestId('expenses-delete-action-button')); // toggle off delete mode
 
     // Open Add Movement modal and register a custom expense
@@ -104,13 +104,13 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     );
 
     fireEvent.press(screen.getByTestId('workspace-tab-debts'));
-    expect(screen.getByTestId('debts-funfami-view')).toBeTruthy();
+    expect(screen.getByTestId('debts-workspace-view')).toBeTruthy();
     expect(screen.getByText('Total Deudas')).toBeTruthy();
-    expect(screen.getByTestId('funfami-hero-remaining')).toHaveTextContent('$ 6.200.000');
-    expect(screen.getByTestId('debt-remaining-debt_cb300f_moto')).toHaveTextContent(
+    expect(screen.getByTestId('debts-hero-remaining')).toHaveTextContent('$ 6.200.000');
+    expect(screen.getByTestId('debt-remaining-debt_auto_loan')).toHaveTextContent(
       '$ 2.600.000'
     );
-    expect(screen.getByTestId('debt-remaining-debt_esp_ia')).toHaveTextContent('$ 3.600.000');
+    expect(screen.getByTestId('debt-remaining-debt_education_loan')).toHaveTextContent('$ 3.600.000');
 
     // Create a new debt with monthly interest rate
     fireEvent.press(screen.getByTestId('debts-add-new-debt-button'));
@@ -120,17 +120,17 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     fireEvent.press(screen.getByTestId('debts-add-new-debt-button'));
     expect(screen.queryByTestId('debt-form-modal')).toBeNull();
     fireEvent.press(screen.getByTestId('debts-add-new-debt-button'));
-    fireEvent.changeText(screen.getByTestId('debt-form-name-input'), 'Tarjeta Nu');
+    fireEvent.changeText(screen.getByTestId('debt-form-name-input'), 'Tarjeta de crédito');
     fireEvent.changeText(screen.getByTestId('debt-form-lender-input'), 'Nu Colombia');
     fireEvent.changeText(screen.getByTestId('debt-form-amount-input'), '1000000');
     fireEvent.changeText(screen.getByTestId('debt-form-interest-rate-input'), '0.9');
     fireEvent.press(screen.getByTestId('debt-form-submit-button'));
 
     expect(screen.queryByTestId('debt-form-modal')).toBeNull();
-    expect(screen.getByText('Tarjeta Nu')).toBeTruthy();
+    expect(screen.getByText('Tarjeta de crédito')).toBeTruthy();
   });
 
-  it('renders Ahorros & Moto IDEAL screens without Excel cell references', () => {
+  it('renders Ahorros & Provisiones screens without spreadsheet cell references', () => {
     render(
       <BFlowThemeProvider initialMode="dark">
         <PhaseOneHomeScreen />
@@ -138,22 +138,22 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     );
 
     fireEvent.press(screen.getByTestId('workspace-tab-savings'));
-    expect(screen.getByTestId('savings-and-moto-ideal-view')).toBeTruthy();
+    expect(screen.getByTestId('savings-and-provisions-view')).toBeTruthy();
 
     expect(screen.getByTestId('savings-hero-total')).toHaveTextContent('$ 4.380.000');
-    expect(screen.getByTestId('bucket-moto-current')).toHaveTextContent('$ 2.300.000');
+    expect(screen.getByTestId('bucket-reserve-current')).toHaveTextContent('$ 2.300.000');
     expect(screen.getByTestId('bucket-savings-current')).toHaveTextContent('$ 2.080.000');
     expect(screen.getByText('Tras pendientes: $ 1.630.000')).toBeTruthy();
 
-    expect(screen.getByText('Cuota ideal: $ 872.667/mes')).toBeTruthy();
+    expect(screen.getByText('Cuota mensual: $ 872.667/mes')).toBeTruthy();
     expect(
-      screen.getByTestId('moto-target-goal-ideal_kit_de_arrastre_honda_original')
+      screen.getByTestId('provision-target-goal-goal_planned_purchase')
     ).toBeTruthy();
     expect(screen.getByText('Meta: 2027-08')).toBeTruthy();
 
     // Adjust opening balance individually in savings tab via global Editar Fondo mode
     fireEvent.press(screen.getByTestId('bucket-action-edit-button'));
-    fireEvent.press(screen.getByTestId('edit-savings-bucket-moto'));
+    fireEvent.press(screen.getByTestId('edit-savings-bucket-reserve'));
     expect(screen.getByTestId('edit-savings-bucket-card')).toBeTruthy();
     expect(screen.getByTestId('edit-bucket-balance-input').props.value).toBe('1.600.000');
     fireEvent.press(screen.getByTestId('save-edit-bucket-button'));
@@ -181,8 +181,8 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     fireEvent.press(screen.getByTestId('open-add-movement-modal-button'));
     expect(screen.getByTestId('add-movement-modal-card')).toBeTruthy();
 
-    // Enter Seguro TR SURA ($ 130.000) and submit
-    fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Seguro TR SURA');
+    // Enter Seguro ($ 130.000) and submit
+    fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Seguro');
     fireEvent.changeText(screen.getByTestId('movement-amount-input'), '130000');
     await act(async () => {
       fireEvent.press(screen.getByTestId('submit-movement-button'));
@@ -233,21 +233,21 @@ describe('Phase 4: Liquid Glass Workspace Tabs & 12 Functional Screens (RNTL)', 
     // Tab label is "Ahorros"
     expect(screen.getByTestId('workspace-tab-savings')).toHaveTextContent('Ahorros');
 
-    // Link Smart Fit ($ 90.000 pending) to debt_esp_ia and complete it
+    // Link Gimnasio ($ 90.000 pending) to debt_education_loan and complete it
     fireEvent.press(screen.getByTestId('workspace-tab-checklist'));
     fireEvent.press(screen.getByTestId('expenses-edit-action-button')); // enable in-situ edit mode
-    fireEvent.press(screen.getByTestId('edit-entry-2026-10_exp_smart_fit'));
+    fireEvent.press(screen.getByTestId('edit-entry-2026-10_exp_gym'));
     fireEvent.press(screen.getByTestId('edit-entry-more-options-toggle'));
     fireEvent.press(screen.getByTestId('edit-entry-debt-select'));
-    fireEvent.press(screen.getByTestId('edit-entry-debt-picker-option-debt_esp_ia'));
+    fireEvent.press(screen.getByTestId('edit-entry-debt-picker-option-debt_education_loan'));
     fireEvent.press(screen.getByTestId('edit-entry-debt-picker-confirm'));
     fireEvent.press(screen.getByTestId('save-edit-entry-button'));
     fireEvent.press(screen.getByTestId('expenses-edit-action-button')); // disable in-situ edit mode
 
-    // Mark Smart Fit ($ 100.000) as completed -> should deduct $ 100.000 from ESP. IA ($ 3.600.000 -> $ 3.500.000)
-    fireEvent.press(screen.getByTestId('checklist-workspace-item-2026-10_exp_smart_fit'));
+    // Mark Gimnasio ($ 100.000) as completed -> should deduct $ 100.000 from Crédito educativo ($ 3.600.000 -> $ 3.500.000)
+    fireEvent.press(screen.getByTestId('checklist-workspace-item-2026-10_exp_gym'));
     fireEvent.press(screen.getByTestId('workspace-tab-debts'));
-    expect(screen.getByTestId('debt-remaining-debt_esp_ia')).toHaveTextContent('$ 3.500.000');
+    expect(screen.getByTestId('debt-remaining-debt_education_loan')).toHaveTextContent('$ 3.500.000');
 
     // Create a custom savings fund and a custom provision in Ahorros tab
     fireEvent.press(screen.getByTestId('workspace-tab-savings'));

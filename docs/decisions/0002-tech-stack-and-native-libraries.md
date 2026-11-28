@@ -1,8 +1,15 @@
 # ADR 0002: Selección de Stack Tecnológico y Librerías Nativas (Expo SDK)
 
-- **Estado:** Propuesto (Fase 0)
+- **Estado:** Aceptado, con sustituciones posteriores (notas de abajo).
 - **Fecha:** 2026-10-28
 - **Contexto:** Selección y verificación de librerías compatibles con Expo SDK moderno, Modo A (Expo Go en iPhone / Web en Windows) y Modo B (Build nativo `.ipa` en GitHub Actions para iOS 26).
+
+> **Notas de sustitución (comprobadas el 2026-11-27).** La matriz que sigue es la de la Fase 0 y no se reescribe:
+> - **Estado y Firestore:** no hay suscripciones `onSnapshot` en `src/`. La cuenta se carga completa y se valida la caché con `dataRevision` ([ADR 0018](0018-account-data-revision-and-cache-validation.md)); las escrituras sin conexión van a una cola persistente ([ADR 0017](0017-offline-writes-persistent-queue-and-rollback.md)).
+> - **Gráficos:** `react-native-gifted-charts` no se instaló. Los gráficos son propios sobre `react-native-svg` ([ADR 0020](0020-animated-charts.md)).
+> - **Widgets:** no existe `modules/bflow-native-bridge`. iOS comparte datos por App Group con `@bacons/apple-targets` y Android usa el módulo local `modules/bflow-widgets` ([ADR 0021](0021-home-screen-widgets-ios-android.md)).
+> - **TypeScript:** `exactOptionalPropertyTypes` no se activó. `tsconfig.json` usa `strict`, `noUncheckedIndexedAccess`, `noImplicitReturns` y `noFallthroughCasesInSwitch`.
+> - **Google:** `@react-native-google-signin/google-signin` no se instaló; Google funciona con `GoogleAuthProvider` de Firebase Auth.
 
 ---
 

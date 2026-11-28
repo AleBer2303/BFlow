@@ -1,5 +1,7 @@
 # Guía de Descarga, Firma e Instalación del `.ipa` con `iloader` (Ciclo de 7 Días)
 
+> **Tipo Diátaxis:** How-To Guide. Objetivo: instalar en el iPhone el `.ipa` sin firmar que compila GitHub Actions y renovarlo cada 7 días con un Apple ID gratuito. Por qué se distribuye así (doble modo, cuenta gratuita y límite de 2 App IDs): [ADR 0001](../decisions/0001-dual-mode-architecture-and-apple-free-tier.md).
+
 Como el repositorio `https://github.com/AleBer2303/BFlow` es **público**, GitHub Actions ejecuta el workflow `.github/workflows/build-ios.yml` en un runner **macOS** de forma **100% gratuita e ilimitada** en cada push a `main` o tag `v*`.
 
 ---

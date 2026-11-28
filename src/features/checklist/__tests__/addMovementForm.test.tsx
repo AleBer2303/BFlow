@@ -18,8 +18,8 @@ import { ChecklistWorkspaceView } from '../components/ChecklistWorkspaceView';
 
 const SAMPLE_CONCEPTS: readonly Concept[] = [
   {
-    id: 'exp_seguro_tr_sura',
-    name: 'Seguro TR SURA',
+    id: 'exp_insurance',
+    name: 'Seguro',
     type: 'expense',
     group: 'fixed',
     defaultAmount: 130_000,
@@ -29,8 +29,8 @@ const SAMPLE_CONCEPTS: readonly Concept[] = [
     order: 1,
   },
   {
-    id: 'exp_cuota_moto',
-    name: 'Cuota Moto CB300F',
+    id: 'exp_vehicle_payment',
+    name: 'Cuota Carro vehículo',
     type: 'expense',
     group: 'fixed',
     defaultAmount: 550_000,
@@ -38,7 +38,7 @@ const SAMPLE_CONCEPTS: readonly Concept[] = [
     allowMultiplePerMonth: false,
     archived: false,
     order: 2,
-    defaultTargetDebtId: 'debt_cb300f_moto',
+    defaultTargetDebtId: 'debt_auto_loan',
   },
   {
     id: 'inc_freelance',
@@ -55,10 +55,10 @@ const SAMPLE_CONCEPTS: readonly Concept[] = [
 
 const SAMPLE_ENTRIES: readonly MonthEntry[] = [
   {
-    id: '2026-10_exp_seguro_tr_sura',
+    id: '2026-10_exp_insurance',
     monthKey: '2026-10',
-    conceptId: 'exp_seguro_tr_sura',
-    conceptName: 'Seguro TR SURA',
+    conceptId: 'exp_insurance',
+    conceptName: 'Seguro',
     type: 'expense',
     group: 'fixed',
     plannedAmount: 130_000,
@@ -66,10 +66,10 @@ const SAMPLE_ENTRIES: readonly MonthEntry[] = [
     status: 'pending',
   },
   {
-    id: '2026-10_exp_cuota_moto',
+    id: '2026-10_exp_vehicle_payment',
     monthKey: '2026-10',
-    conceptId: 'exp_cuota_moto',
-    conceptName: 'Cuota Moto CB300F',
+    conceptId: 'exp_vehicle_payment',
+    conceptName: 'Cuota Carro vehículo',
     type: 'expense',
     group: 'fixed',
     plannedAmount: 550_000,
@@ -91,10 +91,10 @@ const SAMPLE_ENTRIES: readonly MonthEntry[] = [
 
 const SAMPLE_DEBTS: readonly Debt[] = [
   {
-    id: 'debt_cb300f_moto',
-    name: 'Moto CB300F',
+    id: 'debt_auto_loan',
+    name: 'Carro vehículo',
     lender: 'Banco',
-    groupKey: 'MOTO',
+    groupKey: 'CARRO',
     openingBalance: 2_600_000,
     monthKey: '2026-10',
     monthlyInterestRate: 0,
@@ -201,16 +201,16 @@ describe('ChecklistAddMovementForm & HeroAmountField', () => {
     const { onAddOrCompleteMovement, onSubmitted } = renderAddForm();
 
     // Empty name must not render catalog/pending suggestion chips.
-    expect(screen.queryByTestId('add-movement-suggestion-2026-10_exp_cuota_moto')).toBeNull();
+    expect(screen.queryByTestId('add-movement-suggestion-2026-10_exp_vehicle_payment')).toBeNull();
     expect(screen.queryByTestId('add-movement-pending-match-hint')).toBeNull();
 
     // Typing >= 2 matching characters offers inline suggestion for pending entry.
     fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Cuota');
-    const suggestion = screen.getByTestId('add-movement-suggestion-2026-10_exp_cuota_moto');
+    const suggestion = screen.getByTestId('add-movement-suggestion-2026-10_exp_vehicle_payment');
     expect(suggestion).toBeTruthy();
 
     fireEvent.press(suggestion);
-    expect(screen.getByTestId('custom-concept-name-input').props.value).toBe('Cuota Moto CB300F');
+    expect(screen.getByTestId('custom-concept-name-input').props.value).toBe('Cuota Carro vehículo');
     expect(screen.getByTestId('movement-amount-input').props.value).toBe('550.000');
     expect(screen.getByTestId('add-movement-pending-match-hint')).toBeTruthy();
 
@@ -219,7 +219,7 @@ describe('ChecklistAddMovementForm & HeroAmountField', () => {
     const payload = onAddOrCompleteMovement.mock.calls[0][0];
     expect(payload).toMatchObject({
       monthKey: '2026-10',
-      conceptId: 'exp_cuota_moto',
+      conceptId: 'exp_vehicle_payment',
       actualAmount: 550_000,
     });
     // Preserves existing concept debt linkage instead of overwriting with null.
@@ -249,11 +249,11 @@ describe('ChecklistAddMovementForm & HeroAmountField', () => {
 
       // Select debt via AdaptiveSelectField (wheel modal on mobile, dropdown on web)
       fireEvent.press(screen.getByTestId('add-movement-debt-select'));
-      fireEvent.press(screen.getByTestId('add-movement-debt-picker-option-debt_cb300f_moto'));
+      fireEvent.press(screen.getByTestId('add-movement-debt-picker-option-debt_auto_loan'));
       if (skin !== 'web') {
         fireEvent.press(screen.getByTestId('add-movement-debt-picker-confirm'));
       }
-      expect(screen.getByTestId('add-movement-debt-value')).toHaveTextContent('Moto CB300F');
+      expect(screen.getByTestId('add-movement-debt-value')).toHaveTextContent('Carro vehículo');
 
       // Select savings bucket via AdaptiveSelectField
       fireEvent.press(screen.getByTestId('add-movement-bucket-select'));
@@ -268,7 +268,7 @@ describe('ChecklistAddMovementForm & HeroAmountField', () => {
       // Collapsing again keeps a concise summary on the toggle row.
       fireEvent.press(screen.getByTestId('add-movement-more-options-toggle'));
       expect(screen.queryByTestId('add-movement-more-options-panel')).toBeNull();
-      expect(screen.getByText('Nota · Moto CB300F · Fondo Emergencia')).toBeTruthy();
+      expect(screen.getByText('Nota · Carro vehículo · Fondo Emergencia')).toBeTruthy();
 
       fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Abono Extra');
       fireEvent.changeText(screen.getByTestId('movement-amount-input'), '200000');
@@ -283,7 +283,7 @@ describe('ChecklistAddMovementForm & HeroAmountField', () => {
         group: 'variable',
         amount: 200_000,
         amountCop: 200_000,
-        targetDebtId: 'debt_cb300f_moto',
+        targetDebtId: 'debt_auto_loan',
         savingsBucketId: 'bucket_emergency',
         persistMonthly: false,
         note: 'Factura 102',
@@ -295,9 +295,9 @@ describe('ChecklistAddMovementForm & HeroAmountField', () => {
   it('masks suggestion amounts when privacy mode hides amounts', () => {
     renderAddForm({ amountsHidden: true });
 
-    fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Seguro');
-    expect(screen.getByTestId('add-movement-suggestion-2026-10_exp_seguro_tr_sura')).toHaveTextContent(
-      `Seguro TR SURA · ${HIDDEN_AMOUNT_TEXT}`
+    fireEvent.changeText(screen.getByTestId('custom-concept-name-input'), 'Segu');
+    expect(screen.getByTestId('add-movement-suggestion-2026-10_exp_insurance')).toHaveTextContent(
+      `Seguro · ${HIDDEN_AMOUNT_TEXT}`
     );
   });
 
@@ -353,7 +353,7 @@ describe('ChecklistAddMovementForm & HeroAmountField', () => {
 
       fireEvent.changeText(screen.getByTestId('edit-entry-note-input'), 'Renovación anual');
       fireEvent.press(screen.getByTestId('edit-entry-debt-select'));
-      fireEvent.press(screen.getByTestId('edit-entry-debt-picker-option-debt_cb300f_moto'));
+      fireEvent.press(screen.getByTestId('edit-entry-debt-picker-option-debt_auto_loan'));
       if (skin !== 'web') {
         fireEvent.press(screen.getByTestId('edit-entry-debt-picker-confirm'));
       }
@@ -366,16 +366,16 @@ describe('ChecklistAddMovementForm & HeroAmountField', () => {
       }
 
       fireEvent.press(screen.getByTestId('edit-entry-more-options-toggle'));
-      expect(screen.getByText('Nota · Moto CB300F · Fondo Emergencia')).toBeTruthy();
+      expect(screen.getByText('Nota · Carro vehículo · Fondo Emergencia')).toBeTruthy();
 
       fireEvent.press(screen.getByTestId('edit-entry-persist-once'));
       fireEvent.press(screen.getByTestId('save-edit-entry-button'));
 
-      expect(onEditEntry).toHaveBeenCalledWith('2026-10_exp_seguro_tr_sura', {
-        conceptName: 'Seguro TR SURA',
+      expect(onEditEntry).toHaveBeenCalledWith('2026-10_exp_insurance', {
+        conceptName: 'Seguro',
         actualAmount: 130_000,
         plannedAmount: 130_000,
-        targetDebtId: 'debt_cb300f_moto',
+        targetDebtId: 'debt_auto_loan',
         savingsBucketId: 'bucket_emergency',
         persistMonthly: false,
         note: 'Renovación anual',
@@ -430,10 +430,10 @@ describe('ChecklistAddMovementForm & HeroAmountField', () => {
 
       fireEvent.press(screen.getByTestId('expenses-delete-action-button'));
       expect(screen.queryByTestId('edit-entry-2026-10_inc_freelance')).toBeNull();
-      expect(screen.getByTestId('delete-entry-2026-10_exp_seguro_tr_sura')).toBeTruthy();
+      expect(screen.getByTestId('delete-entry-2026-10_exp_insurance')).toBeTruthy();
 
       fireEvent.press(screen.getByTestId('incomes-delete-action-button'));
-      expect(screen.queryByTestId('delete-entry-2026-10_exp_seguro_tr_sura')).toBeNull();
+      expect(screen.queryByTestId('delete-entry-2026-10_exp_insurance')).toBeNull();
       expect(screen.getByTestId('delete-entry-2026-10_inc_freelance')).toBeTruthy();
 
       // Open add movement form, then enable expenses edit mode -> add form closes
@@ -443,10 +443,10 @@ describe('ChecklistAddMovementForm & HeroAmountField', () => {
 
       fireEvent.press(screen.getByTestId('expenses-edit-action-button'));
       expect(screen.queryByTestId('add-movement-modal-card')).toBeNull();
-      expect(screen.getByTestId('edit-entry-2026-10_exp_seguro_tr_sura')).toBeTruthy();
+      expect(screen.getByTestId('edit-entry-2026-10_exp_insurance')).toBeTruthy();
 
       // Open edit form, then toggle "+ Nuevo Movimiento" -> edit form closes and add form opens
-      fireEvent.press(screen.getByTestId('edit-entry-2026-10_exp_seguro_tr_sura'));
+      fireEvent.press(screen.getByTestId('edit-entry-2026-10_exp_insurance'));
       expect(screen.getByTestId('edit-entry-modal-card')).toBeTruthy();
 
       fireEvent.press(screen.getByTestId('open-add-movement-modal-button'));

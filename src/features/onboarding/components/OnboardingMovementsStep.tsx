@@ -3,7 +3,7 @@
  *
  * Step 4 of the onboarding: the month's incomes and expenses. One form (the checklist's
  * `ChecklistAddMovementForm`) adds both; the step lists incomes first, then expenses with the
- * debt or fund each one feeds.
+ * debt or fund each one feeds and the card or account it goes through (ADR 0034).
  */
 
 import React from 'react';
@@ -15,8 +15,15 @@ import {
   RevealDown,
   useBFlowTheme,
 } from '../../../design-system';
-import type { Concept, Debt, MonthEntry, SavingsBucket } from '../../../domain';
+import type {
+  Concept,
+  Debt,
+  FinancialAccount,
+  MonthEntry,
+  SavingsBucket,
+} from '../../../domain';
 import type { InitialOnboardingConfigInput } from '../../budget/store/useBudgetStore';
+import { describeAccountLink } from '../../checklist/components/AccountLinkFields';
 import { ChecklistAddMovementForm } from '../../checklist/components/ChecklistAddMovementForm';
 import type { ChecklistWorkspaceViewProps } from '../../checklist/components/ChecklistWorkspaceView';
 import {
@@ -33,13 +40,28 @@ const NOOP_COMPLETE_MOVEMENT: ChecklistWorkspaceViewProps['onAddOrCompleteMoveme
 
 type CreateMovementHandler = NonNullable<ChecklistWorkspaceViewProps['onCreateCustomMovement']>;
 
+/** "Con: Visa ·· 1234", "En: Ahorros ·· 9876" or "Pago a Visa ·· 1234". */
+function linkedAccountText(
+  accounts: readonly FinancialAccount[],
+  type: 'income' | 'expense',
+  accountKey: string | null | undefined,
+  accountRole: 'purchase' | 'payment' | undefined
+): string | null {
+  const label = describeAccountLink(accounts, type, accountKey ?? null, accountRole ?? 'purchase');
+  if (!label) return null;
+  if (label.startsWith('Pago a ')) return label;
+  return type === 'income' ? `En: ${label}` : `Con: ${label}`;
+}
+
 interface OnboardingIncomesListProps {
   incomes: InitialOnboardingConfigInput['incomes'];
+  formAccounts: readonly FinancialAccount[];
   onRemoveIncome: (idx: number) => void;
 }
 
 function OnboardingIncomesList({
   incomes,
+  formAccounts,
   onRemoveIncome,
 }: OnboardingIncomesListProps): React.JSX.Element {
   const { colors } = useBFlowTheme();
@@ -57,9 +79,13 @@ function OnboardingIncomesList({
           <AppText variant="body">{inc.name}</AppText>
           <CurrencyText amount={inc.amountCop} variant="callout" tone="income" />
           <AppText variant="micro" color={colors.text.secondary}>
-            {`${inc.group === 'fixed' ? 'Ingreso fijo' : 'Ingreso variable'} · ${
-              inc.persistMonthly ? 'Cada mes' : 'Solo este mes'
-            }`}
+            {[
+              inc.group === 'fixed' ? 'Ingreso fijo' : 'Ingreso variable',
+              inc.persistMonthly ? 'Cada mes' : 'Solo este mes',
+              linkedAccountText(formAccounts, 'income', inc.accountKey, undefined),
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </AppText>
         </OnboardingItemRow>
       ))}
@@ -71,6 +97,7 @@ interface OnboardingExpensesListProps {
   expenses: InitialOnboardingConfigInput['expenses'];
   debtNameByKey: ReadonlyMap<string, string>;
   bucketNameById: ReadonlyMap<string, string>;
+  formAccounts: readonly FinancialAccount[];
   onRemoveExpense: (idx: number) => void;
 }
 
@@ -78,6 +105,7 @@ function OnboardingExpensesList({
   expenses,
   debtNameByKey,
   bucketNameById,
+  formAccounts,
   onRemoveExpense,
 }: OnboardingExpensesListProps): React.JSX.Element {
   const { colors } = useBFlowTheme();
@@ -106,6 +134,7 @@ function OnboardingExpensesList({
                 exp.persistMonthly ? 'Cada mes' : 'Solo este mes',
                 linkedDebt ? `Abona a: ${linkedDebt}` : null,
                 linkedBucket ? `Aporta a: ${linkedBucket}` : null,
+                linkedAccountText(formAccounts, 'expense', exp.accountKey, exp.accountRole),
               ]
                 .filter(Boolean)
                 .join(' · ')}
@@ -124,6 +153,8 @@ export interface OnboardingMovementsStepProps extends OnboardingFormSlotProps {
   /** The step's debts and funds, shaped for the form's selectors. */
   formDebts: readonly Debt[];
   formSavingsBuckets: readonly SavingsBucket[];
+  /** The step's cards and accounts, shaped as stored, for the account selector. */
+  formAccounts: readonly FinancialAccount[];
   debtNameByKey: ReadonlyMap<string, string>;
   bucketNameById: ReadonlyMap<string, string>;
   onCreateMovement: CreateMovementHandler;
@@ -137,6 +168,7 @@ export const OnboardingMovementsStep = React.memo(function OnboardingMovementsSt
   expenses,
   formDebts,
   formSavingsBuckets,
+  formAccounts,
   debtNameByKey,
   bucketNameById,
   isFormOpen,
@@ -181,6 +213,7 @@ export const OnboardingMovementsStep = React.memo(function OnboardingMovementsSt
             concepts={EMPTY_CONCEPTS}
             debts={formDebts}
             savingsBuckets={formSavingsBuckets}
+            financialAccounts={formAccounts}
             onAddOrCompleteMovement={NOOP_COMPLETE_MOVEMENT}
             onCreateCustomMovement={onCreateMovement}
             onSubmitted={onCloseForm}
@@ -188,14 +221,19 @@ export const OnboardingMovementsStep = React.memo(function OnboardingMovementsSt
         </RevealDown>
 
         {totalMovementsCount === 0 ? (
-          <OnboardingEmptyNotice text="Sin movimientos registrados. Agrega tus ingresos y gastos habituales, y vincúlalos a tus deudas o fondos." />
+          <OnboardingEmptyNotice text="Sin movimientos registrados. Agrega tus ingresos y gastos habituales, y vincúlalos a tus deudas, fondos, tarjetas o cuentas." />
         ) : (
           <View style={{ gap: spacing.xs }}>
-            <OnboardingIncomesList incomes={incomes} onRemoveIncome={onRemoveIncome} />
+            <OnboardingIncomesList
+              incomes={incomes}
+              formAccounts={formAccounts}
+              onRemoveIncome={onRemoveIncome}
+            />
             <OnboardingExpensesList
               expenses={expenses}
               debtNameByKey={debtNameByKey}
               bucketNameById={bucketNameById}
+              formAccounts={formAccounts}
               onRemoveExpense={onRemoveExpense}
             />
           </View>

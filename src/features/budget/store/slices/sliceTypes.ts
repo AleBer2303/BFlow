@@ -120,6 +120,9 @@ export interface SaveProvisionItemInput {
   notes?: string;
 }
 
+/** A credit card or debit account registered in the onboarding; `key` becomes its id. */
+export type OnboardingFinancialAccountInput = FinancialAccountInput & { key: string };
+
 export interface InitialOnboardingConfigInput {
   monthKey: string;
   incomes: Array<{
@@ -128,6 +131,8 @@ export interface InitialOnboardingConfigInput {
     group: ConceptGroup;
     persistMonthly: boolean;
     completed?: boolean;
+    /** Key of the onboarding account where it is received (ADR 0034). */
+    accountKey?: string | null;
   }>;
   expenses: Array<{
     name: string;
@@ -137,7 +142,13 @@ export interface InitialOnboardingConfigInput {
     targetDebtKey?: string | null;
     savingsBucketKey?: string | null;
     completed?: boolean;
+    /** Key of the onboarding account it is paid with (ADR 0034). */
+    accountKey?: string | null;
+    /** With a credit card: a purchase (default) or a payment to the card. */
+    accountRole?: AccountMovementRole;
   }>;
+  /** Credit cards, checking accounts and savings accounts (ADR 0034). */
+  financialAccounts?: OnboardingFinancialAccountInput[];
   debts: Array<{
     key?: string;
     name: string;

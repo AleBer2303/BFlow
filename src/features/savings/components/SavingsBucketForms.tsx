@@ -4,8 +4,8 @@
  * Forms to create a savings fund and to edit an existing one. Each owns its field state, so
  * typing re-renders only the open form and never the fund cards or the provisions list
  * (same pattern as the checklist forms, R-17). The parent mounts them with a new `key` each
- * time they open. `SavingsBucketFields` is the body of a new fund, shared by the onboarding
- * (`NewSavingsBucketForm`) and the "+ Nuevo Ahorro" form of the Savings tab (`SavingsForm`).
+ * time they open. `SavingsBucketFields` is the body of a new fund inside "+ Nuevo Ahorro" (`SavingsForm`),
+ * used by the Savings tab and by the onboarding.
  */
 
 import React, { useState } from 'react';
@@ -156,27 +156,6 @@ export function SavingsFormHeader({
     </View>
   );
 }
-
-/** New savings fund card (onboarding). */
-export const NewSavingsBucketForm = React.memo(function NewSavingsBucketForm({
-  onCreateSavingsBucket,
-  onClose,
-}: NewSavingsBucketFormProps): React.JSX.Element {
-  const { colors, spacing } = useBFlowTheme();
-  return (
-    <GlassSurface elevated testID="add-savings-bucket-card">
-      <View style={{ gap: spacing.md }}>
-        <SavingsFormHeader
-          title="Nuevo Fondo de Ahorro"
-          badge="Ahorro"
-          color={colors.semantic.savings}
-          softColor={colors.semantic.savingsSoft}
-        />
-        <SavingsBucketFields onCreateSavingsBucket={onCreateSavingsBucket} onClose={onClose} />
-      </View>
-    </GlassSurface>
-  );
-});
 
 export interface EditableSavingsBucket {
   id: string;

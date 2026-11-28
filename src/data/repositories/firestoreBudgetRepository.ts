@@ -1245,6 +1245,15 @@ export class FirestoreBudgetRepository implements BudgetRepository {
           ...serializeProvisionPlanForFirestore(payload.provisionPlan),
           updatedAt,
         });
+
+        // ADR 0034: same full write as saveFinancialAccount; ids are fixed, so a replay is idempotent.
+        for (const account of payload.financialAccounts ?? []) {
+          const ref = doc(this.db, 'users', uid, 'financialAccounts', account.id);
+          batch.set(ref, {
+            ...serializeFinancialAccountForFirestore(account),
+            updatedAt,
+          });
+        }
       },
       {
         activeMonthKey: payload.monthKey,

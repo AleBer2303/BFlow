@@ -580,7 +580,11 @@ export class InMemoryBudgetRepository implements BudgetRepository {
     this.debtPayments.clear();
     this.savingsBucketsByMonth.clear();
     this.snapshots.clear();
+    this.financialAccounts.clear();
 
+    for (const a of payload.financialAccounts ?? []) {
+      this.financialAccounts.set(a.id, { ...a });
+    }
     for (const c of payload.concepts) {
       this.concepts.set(c.id, { ...c });
     }

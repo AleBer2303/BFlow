@@ -55,6 +55,11 @@ export interface InitialAccountSetupPayload {
   debtPayments: DebtPayment[];
   savingsBuckets: SavingsBucket[];
   provisionPlan: ProvisionPlan;
+  /**
+   * Credit cards and debit accounts registered in the onboarding (ADR 0034). Optional: setups
+   * queued offline before this field existed have none.
+   */
+  financialAccounts?: FinancialAccount[];
 }
 
 /**

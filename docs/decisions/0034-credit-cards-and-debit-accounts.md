@@ -1,6 +1,6 @@
 # 0034. Tarjetas de crédito y cuentas débito vinculadas a los movimientos
 
-- **Estado:** Aceptado
+- **Estado:** Aceptado. Enmendado el 2026-11-27: el onboarding también registra tarjetas y cuentas (§2.5).
 - **Fecha:** Noviembre 2026
 - **Contexto:** Extiende los ADR [0003](0003-domain-model-and-firestore-schema.md), [0017](0017-offline-writes-persistent-queue-and-rollback.md), [0018](0018-account-data-revision-and-cache-validation.md) y [0028](0028-archived-history-window-and-widget-sync-coalescing.md).
 - **Autores:** Architect, Domain Engineer, UI Builder y QA Engineer
@@ -61,7 +61,7 @@
    - Los movimientos (`AccountLinkFields`) y Cierre siguen viendo todas las cuentas, con la etiqueta `financialAccountKindLabel` (Crédito, Débito o Ahorros).
 2. **+ Nueva Deuda** (`DebtForm`): al registrar aparece un control segmentado **Deuda · Crédito · Débito**, con el mismo estilo que Gasto / Ingreso. **Débito** registra solo cuentas corrientes («Registrar Cuenta Corriente»). Los campos de deuda no cambian (`DebtFormFields`). Tonos: deuda `debt`, crédito `savings` y débito `provisions`. Al editar, el tipo queda fijo y el selector no aparece.
 3. **+ Nuevo Ahorro** (`SavingsForm`, antes «+ Nuevo Fondo»): un control segmentado **Fondo · Cuenta de ahorros** con el mismo estilo.
-   - **Fondo** usa los campos de siempre (`SavingsBucketFields`, compartidos con el onboarding, que conserva su «+ Nuevo Fondo»).
+   - **Fondo** usa los campos de siempre (`SavingsBucketFields`). Desde la enmienda del 2026-11-27 el onboarding usa este mismo formulario (§2.5).
    - **Cuenta de ahorros** registra una cuenta débito de ahorros.
    - Los botones de modo pasan a **Editar Ahorro** / **Eliminar Ahorro** y actúan sobre fondos y cuentas.
    - La sección **Cuentas de ahorro** va debajo de los fondos, con el saldo total y los depósitos del mes.
@@ -71,6 +71,13 @@
 5. **Movimientos:** en **Más opciones** de Nuevo Movimiento y de Editar, `AccountLinkFields` pregunta con qué tarjeta o cuenta se pagó o dónde se recibió. En un gasto con tarjeta de crédito pregunta además si fue **Compra con la tarjeta** o **Pago a la tarjeta**. La fila del checklist muestra la cuenta vinculada como insignia.
 6. **Cierre:** `AccountsMonthPanel` muestra lo gastado con tarjetas, lo pagado a tarjetas, lo pendiente por pagar y el cupo disponible, una frase sobre si la deuda en tarjetas subió o bajó, las salidas, entradas y saldo de las cuentas débito y de ahorros, y una fila por cuenta con barras de gastado y pagado. Solo aparece si hay cuentas en el mes.
 7. Todas las cifras pasan por `useAmountPrivacy` (el ojo del Resumen las oculta) y los objetivos táctiles usan `minTouchTarget`.
+
+### 2.5. Onboarding (enmienda del 2026-11-27)
+
+1. **Mismos formularios que las pestañas.** El paso 2 («Fondos y Cuentas de Ahorro») abre `SavingsForm` (**+ Nuevo Ahorro**: Fondo · Cuenta de ahorros) y el paso 3 («Deudas, Tarjetas y Cuentas») abre `DebtForm` con `onCreateAccount` (**+ Nueva Deuda**: Deuda · Crédito · Débito). Como en las pestañas, las tarjetas y las cuentas corrientes se listan en el paso de deudas y las cuentas de ahorros en el de ahorros. `NewSavingsBucketForm` («+ Nuevo Fondo») se retiró: ya nadie lo usaba.
+2. **Vínculo de los movimientos.** El paso 4 pasa las cuentas a `ChecklistAddMovementForm`, así que **Más opciones** muestra `AccountLinkFields` (y Compra / Pago a la tarjeta en un gasto con tarjeta de crédito). Cada fila dice con qué cuenta va («Con: …», «En: …», «Pago a …»). Eliminar una cuenta del onboarding quita el vínculo de sus movimientos.
+3. **Guardado.** `InitialOnboardingConfigInput.financialAccounts` lleva cada cuenta con su `key`, que pasa a ser su id, y los movimientos llevan `accountKey` y `accountRole`. `completeInitialAccountSetup` construye las cuentas con `buildFinancialAccount`, igual que `createFinancialAccount`: descarta las que no tienen nombre o entidad, y su `openingMonthKey` es el mes elegido, así que el saldo escrito es el del inicio de ese mes. Los movimientos se vinculan con `applyEntryAccountLink`, y un `accountKey` sin cuenta queda sin vínculo.
+4. **Nube y cola offline.** `InitialAccountSetupPayload.financialAccounts` es opcional, y `saveInitialAccountSetup` lo escribe en el mismo lote que el resto, con la misma escritura completa que `saveFinancialAccount`. Los ids son fijos, así que repetir la operación desde la cola no duplica documentos. El esquema Zod de `save_initial_account_setup` acepta la lista o su ausencia: las configuraciones encoladas antes de la enmienda siguen siendo válidas. Las reglas no cambian, porque cada documento pasa por `isValidFinancialAccount` como cualquier otra cuenta.
 
 ---
 

@@ -125,6 +125,47 @@ describe('BUG-01 · borrado completo de un movimiento', () => {
   });
 });
 
+describe('ADR 0034 · cuentas en la configuración inicial encolada', () => {
+  const setup = {
+    monthKey: '2026-11',
+    concepts: [],
+    entries: [],
+    debts: [],
+    debtPayments: [],
+    savingsBuckets: [],
+    provisionPlan: { items: [], recurringMonthlyTotalCop: 0, totalWithTargetGoalCop: 0 },
+  };
+
+  it('acepta la configuración guardada antes de las cuentas (sin financialAccounts)', () => {
+    persistentStorage.setItem(getOfflineQueueStorageKey(uid), [
+      legacyOp('save_initial_account_setup', setup),
+    ]);
+
+    const queue = loadOfflineWriteQueue(uid);
+    expect(queue.map((op) => op.type)).toEqual(['save_initial_account_setup']);
+    expect(consumeDiscardedOfflineWritesCount(uid)).toBe(0);
+  });
+
+  it('conserva las cuentas de la configuración y descarta una lista mal formada', () => {
+    const account = {
+      id: 'acc_visa',
+      type: 'credit',
+      name: 'Visa',
+      institution: 'Banco',
+      openingBalance: 0,
+      openingMonthKey: '2026-11',
+    };
+    persistentStorage.setItem(getOfflineQueueStorageKey(uid), [
+      legacyOp('save_initial_account_setup', { ...setup, financialAccounts: [account] }, 'op_ok'),
+      legacyOp('save_initial_account_setup', { ...setup, financialAccounts: 'x' }, 'op_bad'),
+    ]);
+
+    const queue = loadOfflineWriteQueue(uid);
+    expect(queue.map((op) => op.id)).toEqual(['op_ok']);
+    expect(queue[0]?.payload).toEqual(expect.objectContaining({ financialAccounts: [account] }));
+  });
+});
+
 describe('BUG-02 · claves por objetivo y compactación', () => {
   it('editar y luego borrar el mismo movimiento deja una sola operación sobre el movimiento', () => {
     enqueueOfflineWrite(uid, {

@@ -168,6 +168,7 @@ const PAYLOAD_SCHEMAS: { [K in QueuedWriteType]: z.ZodType } = {
     debtPayments: entityList,
     savingsBuckets: entityList,
     provisionPlan: z.looseObject({ items: z.array(z.unknown()) }),
+    financialAccounts: entityList.optional(),
   }),
 };
 

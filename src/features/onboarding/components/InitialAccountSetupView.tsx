@@ -6,6 +6,8 @@
  * (`OnboardingPeriodStep`, `OnboardingSavingsStep`, `OnboardingDebtsStep`,
  * `OnboardingMovementsStep`, `OnboardingProvisionsStep`) and reuses the workspace forms inside
  * `RevealDown`, with a two-column layout on wide screens and parity across iOS, Android and Web.
+ * Credit cards and checking accounts are registered in the debts step and savings accounts in
+ * the savings step, as in the Deudas and Ahorros tabs; movements can be linked to them (ADR 0034).
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -23,14 +25,19 @@ import {
 } from '../../../design-system';
 import {
   formatMonthKeyLabelEs,
+  isSavingsAccount,
   toAppMonthKey,
   toSlugId,
   type Debt,
+  type FinancialAccount,
   type SavingsBucket,
 } from '../../../domain';
-import type {
-  InitialOnboardingConfigInput,
-  SaveProvisionItemInput,
+import {
+  buildFinancialAccount,
+  type FinancialAccountInput,
+  type InitialOnboardingConfigInput,
+  type OnboardingFinancialAccountInput,
+  type SaveProvisionItemInput,
 } from '../../budget/store/useBudgetStore';
 import type { ChecklistWorkspaceViewProps } from '../../checklist/components/ChecklistWorkspaceView';
 import type { CreateDebtInput } from '../../debts/components/DebtForm';
@@ -110,11 +117,15 @@ export function InitialAccountSetupView({
   const [provisions, setProvisions] = useState<
     NonNullable<InitialOnboardingConfigInput['provisions']>
   >([]);
+  const [financialAccounts, setFinancialAccounts] = useState<OnboardingFinancialAccountInput[]>(
+    []
+  );
 
   // Single active form slot + remount key so every form starts clean and isolated
   const [activeForm, setActiveForm] = useState<ActiveOnboardingForm>(null);
   const [formKey, setFormKey] = useState(0);
   const debtSeqRef = useRef(0);
+  const accountSeqRef = useRef(0);
 
   const toggleForm = useCallback((target: Exclude<ActiveOnboardingForm, null>) => {
     hapticService.light();
@@ -156,6 +167,20 @@ export function InitialAccountSetupView({
         openingBalance: b.openingBalanceCop,
       })),
     [savingsBuckets]
+  );
+
+  // Cards and accounts as they will be stored, for the movement form's account selector.
+  const formAccounts = useMemo<FinancialAccount[]>(
+    () => financialAccounts.map((a) => buildFinancialAccount(a.key, computedMonthKey, a)),
+    [computedMonthKey, financialAccounts]
+  );
+  const savingsAccounts = useMemo(
+    () => financialAccounts.filter((a) => isSavingsAccount(a)),
+    [financialAccounts]
+  );
+  const debtsStepAccounts = useMemo(
+    () => financialAccounts.filter((a) => !isSavingsAccount(a)),
+    [financialAccounts]
   );
 
   const debtNameByKey = useMemo(
@@ -225,12 +250,37 @@ export function InitialAccountSetupView({
     }
   }, []);
 
+  // Same rule as createFinancialAccount: an account needs a name and an entity.
+  const handleCreateAccount = useCallback((input: FinancialAccountInput) => {
+    if (!input.name.trim() || !input.institution.trim()) return;
+    hapticService.trigger('success');
+    accountSeqRef.current += 1;
+    const key = `acc_${Date.now().toString(36)}_${accountSeqRef.current}`;
+    setFinancialAccounts((prev) => [...prev, { ...input, key }]);
+  }, []);
+
+  const handleRemoveAccount = useCallback((removedKey: string) => {
+    hapticService.trigger('warning');
+    setFinancialAccounts((prev) => prev.filter((a) => a.key !== removedKey));
+    setIncomes((prev) =>
+      prev.map((inc) => (inc.accountKey === removedKey ? { ...inc, accountKey: null } : inc))
+    );
+    setExpenses((prev) =>
+      prev.map((exp) => {
+        if (exp.accountKey !== removedKey) return exp;
+        const { accountRole: _role, ...rest } = exp;
+        return { ...rest, accountKey: null };
+      })
+    );
+  }, []);
+
   const handleCreateMovement = useCallback<
     NonNullable<ChecklistWorkspaceViewProps['onCreateCustomMovement']>
   >((input) => {
     hapticService.trigger('success');
     const amountCop = input.amount ?? input.amountCop ?? 0;
     const persistMonthly = input.persistMonthly !== false;
+    const accountKey = input.accountId ?? null;
 
     if (input.type === 'income') {
       setIncomes((prev) => [
@@ -240,6 +290,7 @@ export function InitialAccountSetupView({
           amountCop,
           group: input.group,
           persistMonthly,
+          ...(accountKey ? { accountKey } : {}),
         },
       ]);
       return;
@@ -254,6 +305,9 @@ export function InitialAccountSetupView({
         persistMonthly,
         targetDebtKey: input.targetDebtId ?? null,
         savingsBucketKey: input.savingsBucketId ?? null,
+        ...(accountKey
+          ? { accountKey, ...(input.accountRole ? { accountRole: input.accountRole } : {}) }
+          : {}),
       },
     ]);
   }, []);
@@ -296,21 +350,46 @@ export function InitialAccountSetupView({
       debts,
       savingsBuckets,
       provisions,
+      financialAccounts,
     });
-  }, [computedMonthKey, debts, expenses, incomes, onCompleteSetup, provisions, savingsBuckets]);
+  }, [
+    computedMonthKey,
+    debts,
+    expenses,
+    financialAccounts,
+    incomes,
+    onCompleteSetup,
+    provisions,
+    savingsBuckets,
+  ]);
 
   const totalMovementsCount = incomes.length + expenses.length;
   const totalConfiguredItems =
-    savingsBuckets.length + debts.length + totalMovementsCount + provisions.length;
+    savingsBuckets.length +
+    debts.length +
+    financialAccounts.length +
+    totalMovementsCount +
+    provisions.length;
 
   const summaryPills = useMemo(
     () => [
       { id: 'buckets', label: `Fondos (${savingsBuckets.length})`, status: 'savings' as const },
       { id: 'debts', label: `Deudas (${debts.length})`, status: 'debt' as const },
+      {
+        id: 'accounts',
+        label: `Tarjetas y cuentas (${financialAccounts.length})`,
+        status: 'provisions' as const,
+      },
       { id: 'movements', label: `Movimientos (${totalMovementsCount})`, status: 'info' as const },
       { id: 'provisions', label: `Metas (${provisions.length})`, status: 'provisions' as const },
     ],
-    [debts.length, provisions.length, savingsBuckets.length, totalMovementsCount]
+    [
+      debts.length,
+      financialAccounts.length,
+      provisions.length,
+      savingsBuckets.length,
+      totalMovementsCount,
+    ]
   );
 
   return (
@@ -361,21 +440,27 @@ export function InitialAccountSetupView({
           />
           <OnboardingSavingsStep
             savingsBuckets={savingsBuckets}
+            savingsAccounts={savingsAccounts}
             isFormOpen={activeForm === 'bucket'}
             formKey={formKey}
             onToggleForm={toggleBucketForm}
             onCloseForm={handleCloseActiveForm}
             onCreateBucket={handleCreateBucket}
             onRemoveBucket={handleRemoveBucket}
+            onCreateAccount={handleCreateAccount}
+            onRemoveAccount={handleRemoveAccount}
           />
           <OnboardingDebtsStep
             debts={debts}
+            accounts={debtsStepAccounts}
             isFormOpen={activeForm === 'debt'}
             formKey={formKey}
             onToggleForm={toggleDebtForm}
             onCloseForm={handleCloseActiveForm}
             onCreateDebt={handleCreateDebt}
             onRemoveDebt={handleRemoveDebt}
+            onCreateAccount={handleCreateAccount}
+            onRemoveAccount={handleRemoveAccount}
           />
         </View>
 
@@ -387,6 +472,7 @@ export function InitialAccountSetupView({
             expenses={expenses}
             formDebts={formDebts}
             formSavingsBuckets={formSavingsBuckets}
+            formAccounts={formAccounts}
             debtNameByKey={debtNameByKey}
             bucketNameById={bucketNameById}
             isFormOpen={activeForm === 'movement'}

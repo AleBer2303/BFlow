@@ -151,7 +151,8 @@ src/app/index.tsx  ──(hooks/props)──>  features/*/components
   - Las tarjetas no suman al "Total Deudas" ni a los snapshots: los tests dorados no cambian.
   - Eliminar una cuenta deja el `accountId` en los movimientos; el dominio ignora los ids sin cuenta.
   - Deudas muestra las tarjetas y las cuentas corrientes; Ahorros, las cuentas de ahorros (`debitKind: 'savings'`). Filtrar con `useFinancialAccounts(scope)` / `useFinancialAccountsSummary(scope)` (`'debts' | 'savings' | 'all'`); movimientos y Cierre usan `'all'`. Una cuenta débito sin `debitKind` es corriente.
-  - En **+ Nueva Deuda** (`DebtForm`), el selector Deuda / Crédito / Débito (solo corriente) aparece al registrar y si se pasa `onCreateAccount`. En Ahorros, **+ Nuevo Ahorro** (`SavingsForm`) elige Fondo o Cuenta de ahorros. El onboarding sigue usando `NewSavingsBucketForm` («+ Nuevo Fondo»).
+  - En **+ Nueva Deuda** (`DebtForm`), el selector Deuda / Crédito / Débito (solo corriente) aparece al registrar y si se pasa `onCreateAccount`. En Ahorros, **+ Nuevo Ahorro** (`SavingsForm`) elige Fondo o Cuenta de ahorros.
+  - El onboarding usa los mismos dos formularios (ADR 0034 §2.5): tarjetas y cuentas corrientes en el paso de deudas, cuentas de ahorros en el de ahorros, y sus movimientos se vinculan con `accountKey`/`accountRole`. `completeInitialAccountSetup` las construye con `buildFinancialAccount` y las envía en `InitialAccountSetupPayload.financialAccounts` (opcional, para leer colas guardadas antes).
   - `FinancialAccountFormFields` y `FinancialAccountCard` viven en `src/features/accounts/components/`. El tipo de débito lo fija quien abre el formulario (prop `debitKind`).
   - El saldo de las cuentas de ahorros no suma a `totalCurrentSavings`: la tarjeta principal de Ahorros lo muestra aparte.
   - Cierre muestra lo gastado y lo pagado por cuenta en `AccountsMonthPanel`, solo si hay cuentas en el mes.

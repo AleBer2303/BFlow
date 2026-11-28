@@ -12,6 +12,7 @@ import {
 import {
   addMonthsToMonthKey,
   annualToMonthlyRate,
+  applyEntryAccountLink,
   buildDebtPaymentsForInstallment,
   getMonthNumberFromMonthKey,
   monthlyToAnnualRate,
@@ -22,6 +23,7 @@ import {
   type Debt,
   type DebtInterestRateType,
   type DebtPayment,
+  type FinancialAccount,
   type MonthEntry,
   type ProvisionItemSpec,
   type SavingsBucket,
@@ -56,6 +58,7 @@ import {
   type AuthSlice,
   type SliceCreator,
 } from './sliceTypes';
+import { buildFinancialAccount } from './createAccountsSlice';
 
 export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
   const initial = getStoreInitialState();
@@ -252,6 +255,28 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
         return built;
       });
 
+    // 2b. Build credit cards and debit accounts (ADR 0034): the balance given is the one at
+    // the start of the setup month. Same rules as createFinancialAccount: name and entity.
+    const financialAccounts: FinancialAccount[] = [];
+    const accountIdByKey = new Map<string, string>();
+    (input.financialAccounts ?? []).forEach((a, idx) => {
+      if (!a.name.trim() || !a.institution.trim()) return;
+      const fallbackId = `acc_${toSlugId(a.name) || a.type}_${idx + 1}`;
+      const id =
+        a.key && !financialAccounts.some((acc) => acc.id === a.key) ? a.key : fallbackId;
+      financialAccounts.push(buildFinancialAccount(id, monthKey, a));
+      if (a.key && !accountIdByKey.has(a.key)) accountIdByKey.set(a.key, id);
+    });
+    const linkEntryToAccount = (
+      entry: MonthEntry,
+      accountKey: string | null | undefined,
+      accountRole?: 'purchase' | 'payment'
+    ): MonthEntry => {
+      const accountId = accountKey ? accountIdByKey.get(accountKey) : undefined;
+      if (!accountId) return entry;
+      return applyEntryAccountLink(entry, { accountId, accountRole }, financialAccounts);
+    };
+
     // 3. Build income and expense concepts & entries
     const concepts: Concept[] = [];
     const entries: MonthEntry[] = [];
@@ -281,18 +306,23 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       concepts.push(concept);
 
       const isCompleted = inc.completed === true;
-      entries.push({
-        id: `${monthKey}_${conceptId}`,
-        monthKey,
-        conceptId,
-        conceptName: trimmedName,
-        type: 'income',
-        group: inc.group,
-        plannedAmount: safeAmount,
-        actualAmount: safeAmount,
-        status: isCompleted ? 'completed' : 'pending',
-        ...(isCompleted ? { completedAt: toAppIsoDate() } : {}),
-      });
+      entries.push(
+        linkEntryToAccount(
+          {
+            id: `${monthKey}_${conceptId}`,
+            monthKey,
+            conceptId,
+            conceptName: trimmedName,
+            type: 'income',
+            group: inc.group,
+            plannedAmount: safeAmount,
+            actualAmount: safeAmount,
+            status: isCompleted ? 'completed' : 'pending',
+            ...(isCompleted ? { completedAt: toAppIsoDate() } : {}),
+          },
+          inc.accountKey
+        )
+      );
     }
 
     const explicitlyLinkedDebtIds = new Set<string>();
@@ -340,18 +370,22 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       concepts.push(concept);
 
       const isCompleted = exp.completed === true;
-      const entry: MonthEntry = {
-        id: `${monthKey}_${conceptId}`,
-        monthKey,
-        conceptId,
-        conceptName: trimmedName,
-        type: 'expense',
-        group: exp.group,
-        plannedAmount: safeAmount,
-        actualAmount: safeAmount,
-        status: isCompleted ? 'completed' : 'pending',
-        ...(isCompleted ? { completedAt: toAppIsoDate() } : {}),
-      };
+      const entry: MonthEntry = linkEntryToAccount(
+        {
+          id: `${monthKey}_${conceptId}`,
+          monthKey,
+          conceptId,
+          conceptName: trimmedName,
+          type: 'expense',
+          group: exp.group,
+          plannedAmount: safeAmount,
+          actualAmount: safeAmount,
+          status: isCompleted ? 'completed' : 'pending',
+          ...(isCompleted ? { completedAt: toAppIsoDate() } : {}),
+        },
+        exp.accountKey,
+        exp.accountRole
+      );
       entries.push(entry);
 
       if (linkedDebt) {
@@ -442,6 +476,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       debtPayments,
       savingsBuckets,
       provisionPlan,
+      financialAccounts,
     };
 
     const previousState = {
@@ -478,7 +513,7 @@ export const createAuthSlice: SliceCreator<AuthSlice> = (set, get) => {
       },
       provisionPlan: provisionPlan,
       closedSnapshots: {},
-      financialAccounts: [],
+      financialAccounts,
       isAccountHydrated: true,
       needsOnboarding: false,
       ...(updatedUser ? { authUser: updatedUser } : {}),

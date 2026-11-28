@@ -6,8 +6,8 @@
 [![TypeScript Strict](https://img.shields.io/badge/TypeScript-5.9.2_Strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Cloud Firestore](https://img.shields.io/badge/Cloud_Firestore-Firebase_11-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)](https://firebase.google.com/)
 [![iOS 26 Liquid Glass](https://img.shields.io/badge/Apple-iOS_26_Liquid_Glass-000000?style=for-the-badge&logo=apple&logoColor=white)](https://developer.apple.com/ios/)
-[![Jest Tests](https://img.shields.io/badge/Tests-123_Passing_100%25-brightgreen?style=for-the-badge&logo=jest&logoColor=white)](https://jestjs.io/)
-[![Domain Coverage](https://img.shields.io/badge/Domain_Coverage-99.4%25-success?style=for-the-badge)](https://jestjs.io/)
+[![Jest Tests](https://img.shields.io/badge/Tests-1542_Passing_100%25-brightgreen?style=for-the-badge&logo=jest&logoColor=white)](https://jestjs.io/)
+[![Domain Coverage](https://img.shields.io/badge/Domain_Coverage-99.0%25-success?style=for-the-badge)](https://jestjs.io/)
 [![License: Private](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](#)
 
 > **BFlow** es una aplicación financiera móvil y web de alto rendimiento diseñada con estética **Apple iOS 26 Liquid Glass**, optimizada para iPhone 16 Pro Max y pensada para resolver el control de presupuesto personal mes a mes, amortizaciones de deuda y provisiones vehiculares. Reemplaza hojas de cálculo manuales de Excel mediante cálculo matemático determinístico, sincronización en tiempo real con Cloud Firestore y widgets nativos para iOS.
@@ -92,7 +92,7 @@ graph TD
 
 ## 📐 Fuente de Verdad & Invariantes Matemáticas (Excel vs BFlow)
 
-El archivo [`fixtures/october-2026.json`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/fixtures/october-2026.json), extraído mediante `scripts/extract-excel-fixture.mjs` del libro Excel original, constituye la **Fuente de Verdad Dorada**. 
+El archivo [`fixtures/october-2026.json`](fixtures/october-2026.json), extraído mediante `scripts/extract-excel-fixture.mjs` del libro Excel original, constituye la **Fuente de Verdad Dorada**. 
 
 ### Resolución Confirmada de las 9 Inconsistencias del Excel
 En la Fase 0 del proyecto se auditaron y resolvieron formalmente las 9 inconsistencias detectadas en la hoja `Octubre 2026`:
@@ -112,7 +112,7 @@ En la Fase 0 del proyecto se auditaron y resolvieron formalmente las 9 inconsist
 ### Regla de Hierro del Dinero (Integer Math)
 - En BFlow está **estrictamente prohibido el uso de flotantes o decimales** para almacenar, transportar o sumar dinero.
 - Todo monto es un entero seguro en COP validado con `Number.isSafeInteger(amount) && amount >= 0`.
-- El formateador monetario en [`src/domain/money/money.ts`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/src/domain/money/money.ts) garantiza renderizado idéntico al Excel (`"$ 1.080.000"`).
+- El formateador monetario en [`src/domain/money/money.ts`](src/domain/money/money.ts) garantiza renderizado idéntico al Excel (`"$ 1.080.000"`).
 
 ### Regla de Zona Horaria
 - Toda clave de mes (`monthKey`) y fecha de completado se procesa de forma inmutable en **`America/Bogota` (`UTC-05:00`)**, garantizando consistencia en cambios de año o de mes sin importar el huso del cliente.
@@ -156,9 +156,9 @@ Para permitir el desarrollo diario sin fricción en **Windows 11 sin Mac local**
 
 ## 🎨 Sistema de Diseño Visual: Liquid Glass & SF Pro
 
-> **Multiplataforma con tres pieles (ADR 0010 y 0011).** Lo que sigue describe la piel **iOS**. **Android** usa Material 3 (superficies tonales opacas, el mismo dock flotante con una píldora plana en lugar del lente, ADR 0024; sin Liquid Glass ni ripple) y **Web** un sistema plano (paleta arena y negro con acento petróleo, tipografía Geist, cabecera fija, composición de escritorio a dos columnas y curva del mes vectorial animada, ADR 0012). La curva del mes es una escena three.js solo en iOS; Android usa la misma curva vectorial animada que Web, con gesto táctil (ADR 0014). Los tokens de cada piel y el contrato responsive están en `DESIGN.md` §10 y §11.
+> **Multiplataforma con tres pieles (ADR 0010 y 0011).** Lo que sigue describe la piel **iOS**. **Android** usa Material 3 (superficies tonales opacas, el mismo dock flotante con una píldora plana en lugar del lente, ADR 0024; sin Liquid Glass ni ripple) y **Web** un sistema plano (paleta arena y negro con acento petróleo, tipografía Geist, cabecera fija y composición de escritorio a dos columnas, ADR 0012). Desde el ADR 0032 la curva del mes es una escena three.js en las tres pieles (Web la carga como fragmento aparte); si la escena no puede dibujar, se usa la curva vectorial animada con gesto táctil o puntero (ADR 0014). Los tokens de cada piel y el contrato responsive están en `DESIGN.md` §10 y §11.
 
-Documentado a profundidad en [`DESIGN.md`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/DESIGN.md) y centralizado en [`src/design-system/tokens.ts`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/src/design-system/tokens.ts):
+Documentado a profundidad en [`DESIGN.md`](DESIGN.md) y centralizado en [`src/design-system/tokens.ts`](src/design-system/tokens.ts):
 
 - **Estética Sobria y Amigable:** Lenguaje financiero de alta gama (Apple Wallet, Linear, Stripe). Cero marcos de neón perimetrales o brillos estilo videojuego.
 - **Paleta de Superficies:**
@@ -168,7 +168,7 @@ Documentado a profundidad en [`DESIGN.md`](file:///c:/Users/ALEJO%20BERNAL/Docum
 - **Tipografía SF Pro con Números Tabulares:** Toda cifra monetaria utiliza obligatoriamente `fontVariant: ['tabular-nums']` para erradicar el baile horizontal de dígitos en animaciones de conteo.
 - **Soporte Dynamic Type:** Todos los componentes respetan `allowFontScaling={true}`.
 - **Ergonomía Táctil:** Botones con área táctil mínima de `44pt` (`MIN_TOUCH_TARGET_PT`) y `hitSlop` perimetral.
-- **Micro-interacciones y Háptica:** `TactilePressable` con amortiguación física de resorte y retroalimentación háptica calibrada mediante `hapticService`.
+- **Micro-interacciones y Háptica:** `AppPressable` responde al toque según la piel (se hunde con resorte en iOS) y la háptica sale de `hapticService`, una por acción y en `onPress` (`DESIGN.md` §6.3).
 
 ---
 
@@ -195,8 +195,8 @@ users/{uid}
   - Operación diaria normal: **< 100 lecturas/día (< 0,2% del límite)** y **< 30 escrituras/día (< 0,15% del límite)**.
 - **Margen de seguridad:** Superior al **99,8% dentro de la capa gratuita**.
 
-### Reglas de Seguridad en [`firestore.rules`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/firestore.rules)
-- **503 líneas de validación estricta:**
+### Reglas de Seguridad en [`firestore.rules`](firestore.rules)
+- **627 líneas de validación estricta** (`wc -l`, 2026-11-27):
   - `isOwner(uid)` obligatorio en cada nodo.
   - Comprobación de campos obligatorios (`hasRequiredFields`) y bloqueo de campos extraños (`hasOnlyAllowedFields`).
   - Validación de enteros positivos (`isNonNegativeInt`), expresiones regulares para `monthKey` (`^\d{4}-(0[1-9]|1[0-2])$`), enumeraciones cerradas de estados (`pending`, `completed`) y cadenas con límite de longitud.
@@ -231,58 +231,74 @@ BFlow/
 │   └── workflows/                # CI/CD (ci.yml, build-ios.yml, build-android.yml, e2e.yml, release.yml)
 ├── assets/                       # Iconos y splash screens de la aplicación
 ├── docs/
-│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0029)
+│   ├── decisions/                # Architecture Decision Records (ADR 0001 a 0039)
 │   ├── guides/                   # Guías operativas (firma con iloader, validación multiplataforma, seguridad de Firebase Auth)
-│   └── Improvements/             # Guías de auditoría de rendimiento
+│   └── Improvements/             # Auditorías (AUDITS/), plan consolidado y guías de rendimiento
+├── e2e/                          # Flujos de Maestro sobre el APK del modo vitrina (ADR 0023)
+│   ├── flows/                    # Arranque, pestañas, Checklist, nuevo movimiento y tema
+│   └── subflows/                 # Arranque compartido del modo vitrina (launch-demo.yaml)
 ├── fixtures/                     # Datos dorados de prueba (october-2026.json)
-├── scripts/                      # Scripts de utilidad (linting, guardias CI, start-demo.mjs del modo vitrina)
+├── modules/
+│   └── bflow-widgets/            # Widgets de Android: módulo Expo local con RemoteViews y WorkManager (ADR 0021)
+├── plugins/                      # Config plugins locales del prebuild (reglas keep de R8 para Android, ADR 0013)
+├── scripts/                      # Linting, guardias de CI (tests, workflows, worklets, enlaces de los Markdown), release y start-demo.mjs del modo vitrina
 ├── src/
 │   ├── app/                      # Expo Router (punto de entrada _layout.tsx, index.tsx)
 │   ├── data/                     # Repositorios Firestore, esquemas Zod, datos de ejemplo
 │   │   ├── firebase/             # Configuración Firebase SDK, persistencia Auth por plataforma y emulador
 │   │   ├── mappers/              # Esquemas de validación Zod
-│   │   ├── repositories/         # budgetRepository.ts (fachada), firestoreBudgetRepository.ts, accountHydration.ts (pasos de la carga completa) y historyWindow.ts (historial archivado, ADR 0028)
 │   │   ├── migrations/           # legacyFieldMigration.ts: nombres guardados por versiones anteriores (ADR 0037)
+│   │   ├── repositories/         # budgetRepository.ts (fachada), firestoreBudgetRepository.ts, accountHydration.ts (pasos de la carga completa) y historyWindow.ts (historial archivado, ADR 0028)
 │   │   └── sample/               # Presupuesto de ejemplo del modo vitrina y los tests
-│   ├── design-system/            # Tokens por piel (iOS / Android / Web), tema, componentes base y movimiento (motion/)
+│   ├── design-system/            # Tokens por piel (iOS / Android / Web), tema y componentes base
 │   │   ├── components/           # AppPressable, AppText, CurrencyText, ResponsiveColumns…
 │   │   │   ├── charts/           # Gráficos animados SVG: barras, línea y dona (ADR 0020)
-│   │   │   └── navigation/       # Pestañas compartidas, cabecera y barra Web (el dock de iOS y Android está en components/)
+│   │   │   ├── dock/             # Dock flotante: LiquidGlassDock (iOS, ADR 0030) y FlatPillDock (Android, ADR 0024)
+│   │   │   └── navigation/       # Pestañas compartidas, cabecera y barra Web
 │   │   ├── layout/               # Contrato responsive (useResponsiveLayout) y ancho de cifras
+│   │   ├── motion/               # Especificaciones de movimiento, entradas y partículas de ambiente (ADR 0022)
 │   │   ├── platform/             # Resolución de la piel y preferencia de Reducir Movimiento
+│   │   ├── privacy/              # Ocultar montos con el ojo del Resumen (AmountPrivacyContext)
 │   │   └── theme/                # BFlowThemeProvider / useBFlowTheme
-│   ├── domain/                   # 100% PURO: Fórmulas matemáticas, checklist, deudas, ahorros, política de contraseñas
+│   ├── domain/                   # 100% PURO: fórmulas, checklist, deudas, ahorros, cuentas y política de contraseñas
+│   │   ├── accounts/             # Saldos de tarjetas de crédito y cuentas débito (ADR 0034)
 │   │   ├── analytics/            # Series de los gráficos: historial de 6 meses, distribución, comparativa
+│   │   ├── auth/                 # Política de contraseñas del registro (ADR 0026)
 │   │   ├── budget/               # Cálculos de ingresos, gastos y flujos netos
 │   │   ├── checklist/            # Reglas de disponibilidad, progreso y autogeneración
 │   │   ├── date/                 # Manejo inmutable de monthKey y zona horaria Bogotá
 │   │   ├── debts/                # Derivación de saldos y abonos de deuda
+│   │   ├── models/               # Tipos del dominio (types.ts)
 │   │   ├── money/                # Operaciones enteras en COP y formateo
 │   │   ├── month-close/          # Lógica de cierre de mes y arrastre a apertura siguiente
-│   │   ├── moto-ideal/           # Provisiones y metas del cuadro IDEAL
 │   │   ├── overview/             # Reconstrucción diaria de la curva del mes
-│   │   └── savings/              # Fondos de ahorro y proyecciones
+│   │   ├── provisions/           # Plan de provisiones y metas (cuotas con Math.ceil)
+│   │   ├── savings/              # Fondos de ahorro y proyecciones
+│   │   └── text/                 # toSlugId: ids nuevos a partir de un nombre
 │   ├── features/                 # Pantallas y componentes por dominio funcional
+│   │   ├── accounts/             # Formulario y tarjeta de las cuentas financieras (ADR 0034)
 │   │   ├── analytics/            # Cierre de mes, historial y sección «Gráficos»
 │   │   ├── auth/                 # Login, registro con política de contraseñas, verificación de correo, perfil y recuperación
-│   │   ├── budget/               # Resumen mensual y modal de agregar movimiento
+│   │   ├── budget/               # Store global (Zustand, por slices) y hooks que lo leen (useTabStore, useActiveMonthSummaries, useChartHistory)
 │   │   ├── checklist/            # Lista de movimientos y filtros
 │   │   ├── debts/                # Amortización de deudas, abonos, formulario de deuda (DebtForm) y gráfico de evolución
 │   │   ├── onboarding/           # Configuración inicial de usuario nuevo
 │   │   ├── savings/              # Tarjetas de fondos, provisiones, sus formularios (SavingsBucketForms, ProvisionItemForm) y gráfico de evolución
 │   │   ├── shell/                # WorkspaceShell: cabecera, columna y navegación de cada piel
-│   │   └── summary/              # Resumen y curva del mes: three.js (iOS; el cargador .android no lo importa), SVG animado (Android, Web y respaldo de iOS)
+│   │   └── summary/              # Resumen y curva del mes: escena three.js en las tres pieles (ADR 0032) y respaldo SVG animado
 │   └── platform/                 # Adaptadores Modo A vs Modo B
 │       ├── appCheck/             # Firebase App Check: reCAPTCHA Enterprise en Web y enganche para un proveedor nativo (ADR 0038)
 │       ├── auth/                 # Adaptador de autenticación y correos de cuenta de Firebase Auth (verificación, contraseña, cambio de correo; ADR 0025) y límites de uso: 5 intentos de contraseña y esperas entre envíos (ADR 0026)
+│       ├── dialogs/              # confirmDestructive: confirmación de borrados en iOS, Android y Web
 │       ├── glass/                # GlassSurface: vidrio (iOS), tonal (Android), plano (Web)
 │       ├── haptics/              # Servicio unificado de vibración háptica
 │       ├── insets/               # Áreas seguras (borde a borde en Android)
+│       ├── media/                # Selección y validación de la foto de perfil
 │       ├── mode/                 # Detección de entorno (runtimeMode.ts) y modo vitrina (demoMode.ts)
-│       ├── storage/              # Persistencia KV síncrona cifrada (AES-256 + HMAC-SHA256, expo-secure-store + expo-sqlite/kv-store en iOS/Android, localStorage cifrado en Web con el token en sessionStorage; CSPRNG de WebCrypto o expo-crypto, ADR 0027) y caché v2
+│       ├── perf/                 # Marcas de rendimiento del arranque y la sincronización (perfMarks.ts)
+│       ├── storage/              # Persistencia KV síncrona cifrada (AES-256 + HMAC-SHA256, expo-secure-store + expo-sqlite/kv-store en iOS/Android, localStorage cifrado en Web con el token en sessionStorage; CSPRNG de WebCrypto o expo-crypto, ADR 0027), caché v2 y cola offline
 │       ├── system/               # Fondo de la ventana nativa / documento HTML según el tema
-│       └── widgets/              # Serialización y puente de sincronización con WidgetKit
-├── plugins/                      # Config plugins locales del prebuild (reglas keep de R8 para Android, ADR 0013)
+│       └── widgets/              # Contrato WidgetSnapshotV2 y puente con los widgets de iOS y Android
 ├── targets/
 │   └── widgets/                  # Target nativo SwiftUI para Widgets de iOS 26
 ├── AGENTS.md                     # Reglas de ingeniería, roles y Definición de Terminado
@@ -321,22 +337,12 @@ BFlow/
    ```bash
    cp .env.example .env
    ```
-   Rellena en `.env` la configuración de tu proyecto de Firebase (Consola de Firebase → Configuración del proyecto → Tus apps). El código no trae ningún proyecto por defecto (ADR 0027):
-
-   | Variable | Obligatoria | Uso |
-   | :--- | :--- | :--- |
-   | `EXPO_PUBLIC_FIREBASE_API_KEY`, `EXPO_PUBLIC_FIREBASE_PROJECT_ID`, `EXPO_PUBLIC_FIREBASE_APP_ID` | Sí | Sin ellas la app no se conecta a Firebase y lo indica al iniciar sesión |
-   | `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN`, `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET`, `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | No | Resto de la configuración del cliente (`AUTH_DOMAIN` hace falta para entrar con Google en Web) |
-   | `EXPO_PUBLIC_LOCAL_CIPHER_PEPPER` | No | *Pepper* del cifrado local (ADR 0016). **No es un secreto**: va incrustado en el bundle; la protección es el token del dispositivo (ADR 0027 §2.6). Déjala vacía: cambiarla no aporta seguridad |
-   | `EXPO_PUBLIC_FIREBASE_APPCHECK_RECAPTCHA_SITE_KEY` | No | Clave de sitio de reCAPTCHA Enterprise: activa App Check en Web (ADR 0038). Es pública |
-   | `EXPO_PUBLIC_FIREBASE_APPCHECK_NATIVE` | No | `1` activa el enganche de App Check en iOS y Android. Déjala vacía: aún no hay módulo nativo que emita tokens (ADR 0038 §3.2) |
-
-   Los tests y `npm run web:demo` no necesitan ninguna: usan un proyecto ficticio sin conexión. Los workflows de build leen las mismas variables de GitHub (Settings → Secrets and variables → Actions → Variables) y fallan si faltan las obligatorias.
+   Rellena en `.env` las variables obligatorias de [Variables de Entorno](#-variables-de-entorno) con la configuración de tu proyecto de Firebase (Consola de Firebase → Configuración del proyecto → Tus apps). Los tests y `npm run web:demo` no necesitan ninguna.
 
 4. **Ejecutar verificaciones de calidad:**
    ```bash
    npm run typecheck       # Verificación estricta de TypeScript (0 errores)
-   npm run lint            # Linting y chequeo de arquitectura
+   npm run lint            # Chequeo de arquitectura y de enlaces de los Markdown
    npm test                # Suite de tests unitarios, de integración y funcionales por plataforma
    npm run test:domain     # Solo la lógica contable de src/domain
    npm run test:changed    # Solo los tests afectados por los cambios sin confirmar
@@ -370,7 +376,7 @@ Toda la automatización de BFlow se ejecuta en **GitHub Actions**:
 
 ### 1. `ci.yml` (Puerta de Enlace de Calidad en Linux)
 Se ejecuta en cada `push` a las ramas `main` o `develop`, y en cada Pull Request hacia `main` (con `concurrency` cancelando ejecuciones obsoletas):
-- Comprueba paridad con el fixture dorado (`scripts/verify-phase0-fixture.test.mjs`) y las guardias de release y workflows (`scripts/release.test.mjs`, `scripts/workflow-guards.test.mjs`).
+- Comprueba paridad con el fixture dorado (`scripts/verify-phase0-fixture.test.mjs`) y corre `npm run test:scripts`: release, guardias de workflows y de worklets, compresión de iconos y guardia de enlaces de los Markdown.
 - Evalúa la guardia heurística en PRs: cualquier cambio en `src/` debe incluir tests nuevos o actualizados (`scripts/check-src-tests-guard.mjs`).
 - Ejecuta `npm run typecheck`, `npm run lint`, restaura/guarda `.jest-cache` con `actions/cache@v4` y corre `npm test -- --coverage --ci`.
 
@@ -381,7 +387,7 @@ Se ejecutan en `push` a `main` (ignorando cambios exclusivos en `docs/**` y `*.m
 - **Android (`build-android.yml` en `ubuntu-latest`):** configura JDK 17 y Gradle (`gradle/actions/setup-gradle@v4`), genera el proyecto nativo y compila `BFlow-test.apk` y `BFlow.aab` en **una sola invocación de Gradle** (`./gradlew assembleRelease bundleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a`) con `org.gradle.caching=true` y `org.gradle.parallel=true`.
 
 ### 3. Instalación en iPhone con `iloader` (Ciclo de 7 Días)
-Sigue la guía detallada en [`docs/guides/iloader-signing-guide.md`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/docs/guides/iloader-signing-guide.md):
+Sigue la guía detallada en [`docs/guides/iloader-signing-guide.md`](docs/guides/iloader-signing-guide.md):
 1. Descarga el último `BFlow-unsigned.ipa` desde [GitHub Releases](https://github.com/AleBer2303/BFlow/releases).
 2. Conecta tu iPhone por cable a tu PC con Windows 11 y abre **iloader** (o Sideloadly).
 3. Selecciona el archivo `.ipa`, ingresa tu Apple ID gratuito e inicia la instalación.
@@ -394,8 +400,8 @@ Sigue la guía detallada en [`docs/guides/iloader-signing-guide.md`](file:///c:/
 Como parte de la evaluación técnica exhaustiva requerida antes de un lanzamiento masivo en tiendas de aplicaciones (App Store / Google Play / Web PWA), se clasifican los aspectos del proyecto en tres niveles de madurez:
 
 ### ✅ Aspectos que Cumplen al 100% con Estándares de Producción
-1. **Lógica de Dominio y Cobertura:** Cobertura de tests superior al **99%** en `src/domain/` (123 tests pasando), verificación con fixture de datos reales y tolerancia cero a flotantes financieros.
-2. **Seguridad en Firestore:** Reglas declarativas completas (503 líneas) con validación granular de esquemas, tipos, longitudes y permisos de lectura/escritura cerrados por `request.auth.uid`.
+1. **Lógica de Dominio y Cobertura:** Cobertura de `src/domain/` del **98,9 %** en sentencias y **99,0 %** en líneas; **1.542 tests en 124 suites** pasando (medido el 2026-11-27 con `npm test -- --coverage --ci`), verificación con fixture de datos reales y tolerancia cero a flotantes financieros.
+2. **Seguridad en Firestore:** Reglas declarativas completas (627 líneas) con validación granular de esquemas, tipos, longitudes y permisos de lectura/escritura cerrados por `request.auth.uid`.
 3. **Resiliencia de Red y Optimistic Rollback:** Reversión automática de estado local en Zustand si falla la conexión con Firebase, acompañada de feedback al usuario.
 4. **Eficiencia en Capa Gratuita:** Consumo menor a 100 lecturas diarias en Cloud Firestore Spark (< 0,2% del cupo diario).
 5. **Doble Modo Estricto:** Capacidad comprobada de correr sin crasheos en Expo Go / Web (Modo A) y compilar binarios nativos con extensiones WidgetKit (Modo B).
@@ -414,8 +420,9 @@ Como parte de la evaluación técnica exhaustiva requerida antes de un lanzamien
    - *Impacto:* Evita re-renderizados masivos en listas de movimientos al marcar o editar ítems, asegurando 60/120 fps constantes.
 4. **Optimización y Compresión de Assets Gráficos (2.2.4):**
    - *Solución:* Creación del script `scripts/optimize-assets.mjs` con filtrado adaptativo PNG (Paeth, Sub, Up, Average) y compresión Deflate nivel 9.
-   - *Impacto:* Reducción de más de **1.8 MB** (ahorro del **51%** en `icon.png` y `adaptive-icon.png`, 27% en `favicon.png`) manteniendo 100% la paridad de píxeles.
+   - *Impacto (ADR 0006):* 1.774 KB → 869 KB en `icon.png` y en `adaptive-icon.png` (−51 %) y 6,4 KB → 4,6 KB en `favicon.png` (−27 %), con píxeles idénticos.
    - *Fase 5 (AUD-07):* `npm run compress:icons` (`scripts/compress-icons.mjs`) comprime casi sin pérdida `icon.png` y `adaptive-icon.png`: **890.512 → 213.164 bytes** cada uno (−76,1 %), 1024 × 1024 sin cambios, error máximo de 3/255 por canal y PSNR de 43,2 dB. `npm run test:scripts` falla si algún icono supera 250 KB.
+   - *Hoy (medido el 2026-11-27):* `icon.png` y `adaptive-icon.png` pesan 213.164 bytes cada uno y `favicon.png` 4.741 bytes. Cada icono pesa un 88 % menos que los 1.774 KB de partida.
 
 ### 🚀 Aspectos Faltantes para Publicación en Tiendas (App Store / Google Play)
 1. ✅ **Configuración de Android en `app.json`** (ADR 0009): bloque `android` con `package`, `versionCode` y `adaptiveIcon`.
@@ -432,9 +439,25 @@ Como parte de la evaluación técnica exhaustiva requerida antes de un lanzamien
 
 ---
 
+## 🔑 Variables de Entorno
+
+La plantilla es [`.env.example`](.env.example); `.env` no se versiona. El código no trae ningún proyecto de Firebase por defecto: el proyecto es el que definan estas variables (ADR 0027).
+
+| Variable | Obligatoria | Uso |
+| :--- | :--- | :--- |
+| `EXPO_PUBLIC_FIREBASE_API_KEY`, `EXPO_PUBLIC_FIREBASE_PROJECT_ID`, `EXPO_PUBLIC_FIREBASE_APP_ID` | Sí | Sin ellas la app no se conecta a Firebase y lo indica al iniciar sesión |
+| `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN`, `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET`, `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | No | Resto de la configuración del cliente (`AUTH_DOMAIN` hace falta para entrar con Google en Web) |
+| `EXPO_PUBLIC_LOCAL_CIPHER_PEPPER` | No | *Pepper* del cifrado local (ADR 0016). **No es un secreto**: va incrustado en el bundle; la protección es el token del dispositivo (ADR 0027 §2.6). Déjala vacía: cambiarla no aporta seguridad |
+| `EXPO_PUBLIC_FIREBASE_APPCHECK_RECAPTCHA_SITE_KEY` | No | Clave de sitio de reCAPTCHA Enterprise: activa App Check en Web (ADR 0038). Es pública |
+| `EXPO_PUBLIC_FIREBASE_APPCHECK_NATIVE` | No | `1` activa el enganche de App Check en iOS y Android. Déjala vacía: aún no hay módulo nativo que emita tokens (ADR 0038 §3.2) |
+
+Los tests y `npm run web:demo` no necesitan ninguna: usan un proyecto ficticio sin conexión. Los workflows de build leen las mismas variables de GitHub (Settings → Secrets and variables → Actions → Variables) y fallan si faltan las obligatorias.
+
+---
+
 ## 📜 Reglas para Futuros Cambios y Documentación
 
-Todas las contribuciones y cambios en el código deben regirse estrictamente por [`AGENTS.md`](file:///c:/Users/ALEJO%20BERNAL/Documents/PROYECTOS/BFlow/AGENTS.md):
+Todas las contribuciones y cambios en el código deben regirse estrictamente por [`AGENTS.md`](AGENTS.md):
 - **Docs-as-Code:** Toda alteración en contratos, modelos o interfaces debe acompañarse de su correspondiente actualización documental en el mismo commit.
 - **Criterios de ADR:** Cambios arquitectónicos o de dependencias exigen un nuevo documento en `docs/decisions/`.
 - **Definition of Done:** `npm run typecheck` (0 errores), `npm run lint` (0 errores) y `npm test` (100% tests pasando y cobertura de dominio $\ge 90\%$).

@@ -1,8 +1,13 @@
 # ADR 0003: Modelo de Dominio, Mejoras Propuestas y Esquema Firestore (Plan Spark)
 
-- **Estado:** Propuesto (Fase 0)
+- **Estado:** Aceptado, con cambios posteriores en el esquema (notas de abajo).
 - **Fecha:** 2026-10-28
 - **Contexto:** Diseño del dominio puro en `src/domain/` y modelado en Cloud Firestore bajo los límites gratuitos del Plan Spark (50.000 lecturas/día, 20.000 escrituras/día, 20.000 borrados/día, 1 GiB de almacenamiento).
+
+> **Notas de sustitución (comprobadas el 2026-11-27).** El modelo y el esquema que siguen son los de la Fase 0 y no se reescriben:
+> - El plan de provisiones vive en `provisionPlans/default`, no en `provisionPlans/moto_ideal`, y los nombres tomados del Excel ya no se guardan; los documentos antiguos se migran al leerlos ([ADR 0037](0037-remove-seed-account-and-neutral-stored-names.md)).
+> - El esquema tiene dos colecciones más bajo `users/{uid}/`: `financialAccounts` ([ADR 0034](0034-credit-cards-and-debit-accounts.md)) y `widgetSnapshots/current` ([ADR 0021](0021-home-screen-widgets-ios-android.md)).
+> - La carga de la cuenta y su presupuesto de lecturas cambiaron con la validación por `dataRevision` ([ADR 0018](0018-account-data-revision-and-cache-validation.md)) y la ventana de historial archivado ([ADR 0028](0028-archived-history-window-and-widget-sync-coalescing.md)).
 
 ---
 

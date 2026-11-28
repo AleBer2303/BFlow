@@ -22,29 +22,33 @@
 
 ## 2. Detección de Stack, Base de Datos, Librerías y Versiones
 
+> **Fecha de corte: 2026-11-27.** Versiones leídas de `package.json` sobre `audit` en `c4b18df` (Node `v24.14.0`, npm `11.19.1`). Entre paréntesis, el valor de la línea base del 2026-11-07 cuando cambió. Las demás secciones conservan la fecha y el commit de su propia medición.
+
 ### Framework y Runtime
-- **Framework Principal:** Expo SDK `~58.0.21` con `expo-router ~58.0.28`.
+- **Framework Principal:** Expo SDK `~58.0.26` (línea base: `~58.0.21`) con `expo-router ~58.0.32` (línea base: `~58.0.28`).
 - **Motor Móvil:** React Native `0.88.1` con **Nueva Arquitectura habilitada** (`newArchEnabled: true`).
 - **Librería de Renderizado:** React `19.3.0`, React DOM `19.3.0`, React Native Web `~0.21.4`.
 - **Tipado & Compilador:** TypeScript `~5.9.2`.
 
 ### Base de Datos & Backend
 - **Base de Datos:** Google Cloud Firestore JS SDK `^11.10.0`.
-- **Proyecto Firebase:** `bflow-deaeb`.
-- **Región Cloud Firestore:** `nam5` (`us-central`).
+- **Proyecto Firebase:** el que definan las variables `EXPO_PUBLIC_FIREBASE_*` del entorno ([ADR 0027](docs/decisions/0027-local-crypto-hardening-env-config-and-dependencies.md) §2.3). El código no trae ninguno por defecto: sin ellas, un build real no inicia Firebase. Los tests y el modo vitrina usan el proyecto ficticio `demo-bflow`, sin conexión. Las mediciones de la línea base se hicieron contra el proyecto `bflow-deaeb`.
+- **Región Cloud Firestore:** `nam5` (`us-central`) en el proyecto de la línea base.
 - **Autenticación:** Firebase Auth (Email/Contraseña). Los correos de verificación, restablecimiento de contraseña y cambio de correo los envía Firebase Auth (ADR 0025; antes, códigos de 6 dígitos vía Resend API).
 - **Modelo de Datos:** Multi-inquilino aislado bajo `users/{uid}/...` (colecciones: `concepts`, `entries`, `debts`, `debtPayments`, `savingsBuckets`, `provisionPlans`, `monthSnapshots`).
 
 ### Librerías Clave & Estado
 - **Gestor de Estado Global:** Zustand `^5.0.3` (`useBudgetStore`).
-- **Validación de Esquemas:** Zod `^3.24.2`.
-- **Animaciones & Gestos:** React Native Reanimated `4.7.1`, React Native Gesture Handler `~3.3.0`, React Native Screens `~4.30.0`, React Native Safe Area Context `~5.10.1`, React Native Worklets `0.13.0`.
-- **Componentes Nativos & Estilo:** Expo Blur `~58.0.5`, Expo Haptics `~58.0.7`, React Native SVG `15.16.0`, `@bacons/apple-targets ^5.0.0` (Soporte iOS 26 Liquid Glass & Widgets).
+- **Validación de Esquemas:** Zod `^4.6.7` (línea base: `^3.24.2`; versión mayor, [ADR 0027](docs/decisions/0027-local-crypto-hardening-env-config-and-dependencies.md) §2.5).
+- **Animaciones & Gestos:** React Native Reanimated `4.7.1`, React Native Gesture Handler `~3.3.0`, React Native Screens `~4.30.0`, React Native Safe Area Context `~5.11.1` (línea base: `~5.10.1`), React Native Worklets `0.13.0`.
+- **Componentes Nativos & Estilo:** Expo Blur `~58.0.6` (línea base: `~58.0.5`), Expo Glass Effect `~58.0.5`, Expo Haptics `~58.0.8` (línea base: `~58.0.7`), React Native SVG `15.16.0`, `@bacons/apple-targets ^5.0.0` (Soporte iOS 26 Liquid Glass & Widgets).
+- **Escena 3D de la curva del mes:** `three 0.187.0` y `expo-gl ~58.0.4` (posteriores a la línea base; §9).
+- **Persistencia y cifrado local:** `expo-sqlite ~58.0.18`, `expo-secure-store ~58.0.3` y `expo-crypto ~58.0.7` (posteriores a la línea base; §12 y ADR 0027).
 
 ### Herramientas de Pruebas & Calidad
-- **Runner de Pruebas:** Jest `^29.7.0` con `jest-expo ~58.0.13`.
+- **Runner de Pruebas:** Jest `^29.7.0` (instalado `29.7.0`) con `jest-expo ~58.0.15` (línea base: `~58.0.13`).
 - **Librería de Componentes:** `@testing-library/react-native ^13.2.0`.
-- **Cobertura de Dominio (`src/domain/`):** **99.03%** de sentencias, **99.44%** de líneas (19 suites, 115 tests pasando).
+- **Cobertura de Dominio (`src/domain/`):** línea base **99.03%** de sentencias y **99.44%** de líneas (19 suites, 115 tests pasando). El 2026-11-27 (`npm test -- --coverage --ci`): **98,88 %** de sentencias, **89,01 %** de ramas, **98,70 %** de funciones y **99,03 %** de líneas; 13 suites y 157 tests en `src/domain/`, dentro de 124 suites y 1.542 tests en total, todos pasando.
 
 ---
 
@@ -78,12 +82,14 @@ Medición obtenida mediante exportación de producción con el empaquetador Metr
 
 ### Archivos Estáticos & Assets
 
-| Archivo | Tamaño | Observación |
-| :--- | :---: | :--- |
-| `assets/icon.png` | 1,774.2 KB (1.73 MB) | Icono de aplicación sin comprimir |
-| `assets/adaptive-icon.png` | 1,774.2 KB (1.73 MB) | Icono adaptativo Android sin comprimir |
-| `assets/favicon.png` | 6.4 KB | Favicon web |
-| **TOTAL ASSETS** | **3,554.8 KB (3.47 MB)** | Oportunidad de optimización en formato WebP / compresión |
+Los bundles de arriba son los de la línea base: no se volvieron a exportar. Los PNG se midieron otra vez el **2026-11-27** (fecha de corte) con `stat -c %s`:
+
+| Archivo | Línea base (2026-11-07) | 2026-11-27 | Observación |
+| :--- | :---: | :---: | :--- |
+| `assets/icon.png` | 1,774.2 KB (1.73 MB) | 208.2 KB (213,164 bytes) | Sin pérdida en el ADR 0006 (869 KB) y casi sin pérdida con `npm run compress:icons` (Fase 5 de las auditorías: error máximo 3/255, PSNR 43,2 dB) |
+| `assets/adaptive-icon.png` | 1,774.2 KB (1.73 MB) | 208.2 KB (213,164 bytes) | El mismo archivo que `icon.png` |
+| `assets/favicon.png` | 6.4 KB | 4.6 KB (4,741 bytes) | Sin pérdida en el ADR 0006 |
+| **TOTAL ASSETS** | **3,554.8 KB (3.47 MB)** | **421.0 KB (431,069 bytes)** | **−88.2 %**. `npm run test:scripts` falla si un icono llega a 250,000 bytes |
 
 ---
 

@@ -84,6 +84,7 @@ Es mandatorio crear un archivo ADR numerado (`docs/decisions/NNNN-<slug>.md`) an
 - Si se alteran breakpoints, márgenes o columnas: Actualizar el contrato responsive de `DESIGN.md` §11.
 - Si se agregan rutas o vistas en `src/app/` o `src/features/`: Actualizar el mapa arquitectónico de `README.md`.
 - Si se optimizan consultas o estado: Registrar la evidencia antes/después en `PERF_BASELINE.md`.
+- Los enlaces de los `.md` son rutas relativas al archivo, nunca `file:///`. `npm run lint` falla si un enlace apunta a un archivo que no está en el repositorio o a un ancla que no existe (`scripts/docs-link-guard.mjs`).
 
 ### 5.4. Prohibición de Suposiciones y Regla de Evidencia
 - Prohibido asentar métricas de rendimiento, compatibilidad de Expo SDK o tiempos de compilación sin haberlos medido o validado con el entorno real o documentación oficial vigente.

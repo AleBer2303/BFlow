@@ -273,6 +273,7 @@ BFlow/
 │   │   ├── shell/                # WorkspaceShell: cabecera, columna y navegación de cada piel
 │   │   └── summary/              # Resumen y curva del mes: three.js (iOS; el cargador .android no lo importa), SVG animado (Android, Web y respaldo de iOS)
 │   └── platform/                 # Adaptadores Modo A vs Modo B
+│       ├── appCheck/             # Firebase App Check: reCAPTCHA Enterprise en Web y enganche para un proveedor nativo (ADR 0038)
 │       ├── auth/                 # Adaptador de autenticación y correos de cuenta de Firebase Auth (verificación, contraseña, cambio de correo; ADR 0025) y límites de uso: 5 intentos de contraseña y esperas entre envíos (ADR 0026)
 │       ├── glass/                # GlassSurface: vidrio (iOS), tonal (Android), plano (Web)
 │       ├── haptics/              # Servicio unificado de vibración háptica
@@ -326,7 +327,9 @@ BFlow/
    | :--- | :--- | :--- |
    | `EXPO_PUBLIC_FIREBASE_API_KEY`, `EXPO_PUBLIC_FIREBASE_PROJECT_ID`, `EXPO_PUBLIC_FIREBASE_APP_ID` | Sí | Sin ellas la app no se conecta a Firebase y lo indica al iniciar sesión |
    | `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN`, `EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET`, `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | No | Resto de la configuración del cliente (`AUTH_DOMAIN` hace falta para entrar con Google en Web) |
-   | `EXPO_PUBLIC_LOCAL_CIPHER_PEPPER` | No | Palabra secreta del cifrado local (ADR 0016) |
+   | `EXPO_PUBLIC_LOCAL_CIPHER_PEPPER` | No | *Pepper* del cifrado local (ADR 0016). **No es un secreto**: va incrustado en el bundle; la protección es el token del dispositivo (ADR 0027 §2.6). Déjala vacía: cambiarla no aporta seguridad |
+   | `EXPO_PUBLIC_FIREBASE_APPCHECK_RECAPTCHA_SITE_KEY` | No | Clave de sitio de reCAPTCHA Enterprise: activa App Check en Web (ADR 0038). Es pública |
+   | `EXPO_PUBLIC_FIREBASE_APPCHECK_NATIVE` | No | `1` activa el enganche de App Check en iOS y Android. Déjala vacía: aún no hay módulo nativo que emita tokens (ADR 0038 §3.2) |
 
    Los tests y `npm run web:demo` no necesitan ninguna: usan un proyecto ficticio sin conexión. Los workflows de build leen las mismas variables de GitHub (Settings → Secrets and variables → Actions → Variables) y fallan si faltan las obligatorias.
 
@@ -401,7 +404,7 @@ Como parte de la evaluación técnica exhaustiva requerida antes de un lanzamien
 
 ### ✅ Aspectos Existentes Mejorados y Optimizados (Implementado - ADR 0006, ADR 0015 y ADR 0016)
 1. **Persistencia Local Cifrada y Caché de Cuenta Offline (2.2.1):**
-   - *Solución:* Implementación de `persistentStorageAdapter` con cifrado simétrico autenticado **AES-256-CTR + HMAC-SHA256 (`storageCipher.ts`, ADR 0016)** cuya llave se deriva de una palabra secreta de aplicación (`EXPO_PUBLIC_LOCAL_CIPHER_PEPPER`) más un token aleatorio de 256 bits generado y custodiado en **`expo-secure-store` (iOS Keychain / Android Keystore)**; custodia directa del token de sesión activa en `expo-secure-store` en nativo (`storageBackend.native.ts` y `authPersistence.native.ts`); almacenamiento del presupuesto cifrado en `expo-sqlite/kv-store` (iOS/Android) y `localStorage` (Web); sobre versionado `v2` en `accountCache` (`{ schemaVersion, uid, savedAt, data }`) con borrado y rotación de llave al cerrar sesión o reiniciar cuenta.
+   - *Solución:* Implementación de `persistentStorageAdapter` con cifrado simétrico autenticado **AES-256-CTR + HMAC-SHA256 (`storageCipher.ts`, ADR 0016)** cuya llave se deriva de un *pepper* de aplicación público (`EXPO_PUBLIC_LOCAL_CIPHER_PEPPER` o el de por defecto; ADR 0027 §2.6) más un token aleatorio de 256 bits generado y custodiado en **`expo-secure-store` (iOS Keychain / Android Keystore)**; custodia directa del token de sesión activa en `expo-secure-store` en nativo (`storageBackend.native.ts` y `authPersistence.native.ts`); almacenamiento del presupuesto cifrado en `expo-sqlite/kv-store` (iOS/Android) y `localStorage` (Web); sobre versionado `v2` en `accountCache` (`{ schemaVersion, uid, savedAt, data }`) con borrado y rotación de llave al cerrar sesión o reiniciar cuenta.
    - *Impacto:* La sesión y la caché de cuenta sobreviven al cierre de la app en iOS, Android y Web hidratando desde el frame 0 sin plantillas ni valores en `$ 0`, y manteniendo el 100% de los datos y tokens locales cifrados e ilegibles fuera de la sesión autenticada.
 2. **Modularización del Store Global en Slices (2.2.2):**
    - *Solución:* Descomposición de `useBudgetStore.ts` (originalmente de 1.984 líneas) en 6 slices en `src/features/budget/store/slices/`: `createAuthSlice`, `createSyncSlice`, `createBudgetSlice`, `createDebtsSlice`, `createSavingsSlice` y `createProvisionsSlice`.
@@ -412,6 +415,7 @@ Como parte de la evaluación técnica exhaustiva requerida antes de un lanzamien
 4. **Optimización y Compresión de Assets Gráficos (2.2.4):**
    - *Solución:* Creación del script `scripts/optimize-assets.mjs` con filtrado adaptativo PNG (Paeth, Sub, Up, Average) y compresión Deflate nivel 9.
    - *Impacto:* Reducción de más de **1.8 MB** (ahorro del **51%** en `icon.png` y `adaptive-icon.png`, 27% en `favicon.png`) manteniendo 100% la paridad de píxeles.
+   - *Fase 5 (AUD-07):* `npm run compress:icons` (`scripts/compress-icons.mjs`) comprime casi sin pérdida `icon.png` y `adaptive-icon.png`: **890.512 → 213.164 bytes** cada uno (−76,1 %), 1024 × 1024 sin cambios, error máximo de 3/255 por canal y PSNR de 43,2 dB. `npm run test:scripts` falla si algún icono supera 250 KB.
 
 ### 🚀 Aspectos Faltantes para Publicación en Tiendas (App Store / Google Play)
 1. ✅ **Configuración de Android en `app.json`** (ADR 0009): bloque `android` con `package`, `versionCode` y `adaptiveIcon`.

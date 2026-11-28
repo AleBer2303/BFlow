@@ -5,9 +5,11 @@
  * for BFlow local persistence across iOS, Android, and Web (ADR 0016).
  *
  * Key derivation (HKDF-SHA256) combines:
- *   1. Application passphrase/pepper (`EXPO_PUBLIC_LOCAL_CIPHER_PEPPER` or built-in vault pepper)
+ *   1. Application pepper (`EXPO_PUBLIC_LOCAL_CIPHER_PEPPER` or the built-in default). It is NOT a
+ *      secret: Babel inlines every `EXPO_PUBLIC_*` value into the bundle (ADR 0027 §2.6).
  *   2. A 256-bit generated device/session secret token (`deviceSecretToken` stored in
  *      `expo-secure-store` on iOS Keychain / Android Keystore, or `sessionStorage` on Web).
+ *      This token is the real protection of the local data.
  *
  * Keys and IVs come only from a CSPRNG (`secureRandom.ts`, ADR 0027).
  *
@@ -19,7 +21,12 @@ import { resolveSecureRandomFill, SecureRandomUnavailableError } from './secureR
 
 export const ENCRYPTED_PAYLOAD_PREFIX = 'enc:v1:';
 
-const DEFAULT_APPLICATION_PEPPER =
+/**
+ * Pepper of every build that does not define `EXPO_PUBLIC_LOCAL_CIPHER_PEPPER` (all of them up to
+ * ADR 0027 §2.6). Public by design. Never change it: data stored on devices was encrypted with it,
+ * and `decryptStorageValue` keeps it as the fallback key when a build sets another pepper.
+ */
+export const DEFAULT_APPLICATION_PEPPER =
   'BFlow-Sovereign-Vault-Pepper-2026#AES256-HMAC-SHA256';
 
 // ============================================================================
@@ -423,7 +430,9 @@ interface DerivedKeyPair {
   macKey: Uint8Array;
 }
 
-let cachedKeyPair: DerivedKeyPair | null = null;
+/** Two slots: the active pepper and, while old data is read, the default pepper. */
+const MAX_CACHED_KEY_PAIRS = 2;
+const cachedKeyPairs = new Map<string, DerivedKeyPair>();
 
 export function resolveApplicationPepper(customPepper?: string): string {
   if (customPepper && customPepper.trim().length > 0) {
@@ -437,22 +446,31 @@ export function resolveApplicationPepper(customPepper?: string): string {
 }
 
 function getDerivedKeyPair(secretToken: string, customPepper?: string): DerivedKeyPair {
-  const pepper = resolveApplicationPepper(customPepper);
+  return deriveKeyPairForPepper(secretToken, resolveApplicationPepper(customPepper));
+}
+
+function deriveKeyPairForPepper(secretToken: string, pepper: string): DerivedKeyPair {
   const cacheId = `${pepper}::${secretToken}`;
-  if (cachedKeyPair && cachedKeyPair.cacheId === cacheId) {
-    return cachedKeyPair;
+  const cached = cachedKeyPairs.get(cacheId);
+  if (cached) {
+    return cached;
   }
 
   const prk = hmacSha256(utf8ToBytes(pepper), utf8ToBytes(secretToken));
   const encKey = hmacSha256(prk, utf8ToBytes('bflow-aes256-enc-v1'));
   const macKey = hmacSha256(prk, utf8ToBytes('bflow-hmac-sha256-v1'));
 
-  cachedKeyPair = {
+  const keyPair: DerivedKeyPair = {
     cacheId,
     roundKeys: expandAes256Key(encKey),
     macKey,
   };
-  return cachedKeyPair;
+  if (cachedKeyPairs.size >= MAX_CACHED_KEY_PAIRS) {
+    const oldest = cachedKeyPairs.keys().next().value;
+    if (oldest !== undefined) cachedKeyPairs.delete(oldest);
+  }
+  cachedKeyPairs.set(cacheId, keyPair);
+  return keyPair;
 }
 
 export function timingSafeEqualHex(a: string, b: string): boolean {
@@ -469,6 +487,17 @@ export function timingSafeEqualHex(a: string, b: string): boolean {
 // ============================================================================
 // Public Encrypt / Decrypt Envelope API
 // ============================================================================
+
+function findAuthenticatingKeyPair(
+  authenticatedPayload: string,
+  macHex: string,
+  secretToken: string,
+  pepper: string
+): DerivedKeyPair | null {
+  const keyPair = deriveKeyPairForPepper(secretToken, pepper);
+  const expectedMacHex = bytesToHex(hmacSha256(keyPair.macKey, utf8ToBytes(authenticatedPayload)));
+  return timingSafeEqualHex(macHex, expectedMacHex) ? keyPair : null;
+}
 
 export function isEncryptedStoragePayload(value: string): boolean {
   return typeof value === 'string' && value.startsWith(ENCRYPTED_PAYLOAD_PREFIX);
@@ -514,13 +543,26 @@ export function decryptStorageValue(
     return null;
   }
 
-  const { roundKeys, macKey } = getDerivedKeyPair(secretToken, customPepper);
   const authenticatedPayload = `${ENCRYPTED_PAYLOAD_PREFIX}${ivHex}:${cipherHex}`;
-  const expectedMacHex = bytesToHex(hmacSha256(macKey, utf8ToBytes(authenticatedPayload)));
-
-  if (!timingSafeEqualHex(macHex.toLowerCase(), expectedMacHex)) {
+  const normalizedMacHex = macHex.toLowerCase();
+  const activePepper = resolveApplicationPepper(customPepper);
+  const keyPair =
+    findAuthenticatingKeyPair(authenticatedPayload, normalizedMacHex, secretToken, activePepper) ??
+    // Migration (ADR 0027 §2.6): a build that sets a new pepper still reads what the previous
+    // builds stored with the default one. The next write re-encrypts it with the active pepper.
+    // An explicit `customPepper` never falls back.
+    (customPepper === undefined && activePepper !== DEFAULT_APPLICATION_PEPPER
+      ? findAuthenticatingKeyPair(
+          authenticatedPayload,
+          normalizedMacHex,
+          secretToken,
+          DEFAULT_APPLICATION_PEPPER
+        )
+      : null);
+  if (!keyPair) {
     return null;
   }
+  const { roundKeys } = keyPair;
 
   const iv = hexToBytes(ivHex);
   const cipherBytes = hexToBytes(cipherHex);

@@ -6,6 +6,9 @@
  * The project configuration comes only from `EXPO_PUBLIC_FIREBASE_*` (ADR 0027): the source
  * carries no project credentials. Tests and the showcase mode use an offline placeholder
  * project; a real build without the variables fails with an explicit error.
+ *
+ * App Check (ADR 0038) se instala justo después de `initializeApp` y antes de Auth y Firestore,
+ * para que sus llamadas ya lleven el token. Solo con un proyecto real y su variable definida.
  */
 
 import { getApp, getApps, initializeApp, type FirebaseApp, type FirebaseOptions } from 'firebase/app';
@@ -24,6 +27,7 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import { Platform } from 'react-native';
+import { installAppCheck, type AppCheckStatus } from '../../platform/appCheck/installAppCheck';
 import { isDemoModeEnabled } from '../../platform/mode/demoMode';
 import { resolveFirebaseAuthPersistence } from './authPersistence';
 
@@ -141,6 +145,12 @@ export function requireFirebaseOptions(
 let cachedApp: FirebaseApp | null = null;
 let cachedDb: Firestore | null = null;
 let cachedAuth: Auth | null = null;
+let appCheckStatus: AppCheckStatus = { state: 'disabled', reason: 'no-firebase-project' };
+
+/** Estado de App Check en este proceso (diagnóstico y tests). */
+export function getAppCheckStatus(): AppCheckStatus {
+  return appCheckStatus;
+}
 
 export function getFirebaseApp(): FirebaseApp {
   if (cachedApp) {
@@ -151,7 +161,9 @@ export function getFirebaseApp(): FirebaseApp {
     cachedApp = existing[0];
     return cachedApp;
   }
-  cachedApp = initializeApp(requireFirebaseOptions());
+  const environment = resolveFirebaseEnvironment();
+  cachedApp = initializeApp(requireFirebaseOptions(environment));
+  appCheckStatus = installAppCheck(cachedApp, environment.source);
   return cachedApp;
 }
 
